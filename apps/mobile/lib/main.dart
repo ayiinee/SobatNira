@@ -7,6 +7,7 @@ const apiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
   defaultValue: 'http://127.0.0.1:3000',
 );
+const useLocalFixture = bool.fromEnvironment('USE_LOCAL_FIXTURE');
 
 void main() => runApp(const SobatNiraApp());
 
@@ -23,6 +24,16 @@ class _SobatNiraAppState extends State<SobatNiraApp> {
   late Future<Map<String, dynamic>> _draft = _loadDraft();
 
   Future<Map<String, dynamic>> _loadDraft() async {
+    if (useLocalFixture) {
+      return const {
+        'synthetic': true,
+        'lotCode': 'DEMO-261114-01',
+        'stage': 'Penerimaan Tebu',
+        'supplier': 'Pemasok Demo',
+        'netWeightKg': 1250,
+      };
+    }
+
     final uri = Uri.parse('$apiBaseUrl/demo/draft');
     final response = await (widget.client?.get(uri) ?? http.get(uri)).timeout(
       const Duration(seconds: 5),
