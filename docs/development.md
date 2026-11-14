@@ -1,13 +1,40 @@
 # Setup development lokal
 
-Gunakan Git, Node.js 24 dengan npm, Python 3.13 dengan uv, Flutter stable 3.44.6 (Dart 3.12.2), dan Chrome. Untuk Android, pasang Android SDK dan siapkan emulator melalui Android Studio. Cek instalasi Flutter dengan `flutter doctor`.
+Pasang Git dan alat sesuai area yang kamu kerjakan. Untuk menjalankan integrasi, siapkan alat dari ketiga baris.
+
+| Area | Alat | Titik awal |
+| --- | --- | --- |
+| Flutter | Flutter stable 3.44.6 (Dart 3.12.2) dan Chrome | `apps/mobile/lib/main.dart`. Mulai dari tampilan draf atau daftar pekerjaan dengan data sintetis. |
+| API bisnis | Node.js 24 dengan npm | `apps/api/src/app.module.ts`. Mulai dari kontrak dan validasi dokumen atau data kloter dan batch. |
+| AI | Python 3.13 dengan uv | `apps/ai/main.py`. Mulai dari pemetaan field dan fixture draf ekstraksi. |
+
+Untuk Android, gunakan Android SDK dan JDK 21, lalu siapkan emulator atau HP dengan USB debugging. Cek perangkat dan lisensi lewat `flutter doctor -v`.
 
 ```sh
 git clone https://github.com/ayiinee/SobatNira.git
 cd SobatNira
 ```
 
-## Jalankan di tiga terminal
+Gunakan [panduan kontribusi](contributing.md) untuk membuat branch dan membuka PR. Clone dari GitHub bisa diakses publik. Anggota tim perlu izin tulis dari pemilik repo untuk push branch langsung dan akses ke sumber internal untuk aturan kerja serta desain yang relevan.
+
+## Flutter dengan data sintetis lokal
+
+Jalankan dari akar repo untuk mulai mengembangkan UI. Draf sintetis dimuat dari Flutter sehingga pekerjaan layar bisa berjalan selama kontrak API sedang dikerjakan.
+
+```sh
+cd apps/mobile
+flutter pub get --enforce-lockfile
+flutter run -d chrome --web-hostname 127.0.0.1 --web-port 8080 --dart-define=USE_LOCAL_FIXTURE=true
+```
+
+`USE_LOCAL_FIXTURE` default-nya `false`. Gunakan konfigurasi default untuk menguji integrasi.
+
+## Kerjakan satu layanan
+
+- **NestJS.** Di `apps/api`, jalankan `npm ci`, `npm test`, lalu `npm run dev`. Cek `http://127.0.0.1:3000/health`. Tes API memakai upstream lokal khusus tes. Endpoint `/demo/draft` memerlukan FastAPI yang sedang berjalan.
+- **FastAPI.** Di `apps/ai`, jalankan `uv sync --locked --python 3.13`, `uv run --locked python -m unittest`, lalu `uv run --locked uvicorn main:app --host 127.0.0.1 --port 8000 --reload`. Cek `http://127.0.0.1:8000/docs` dan coba `GET /demo/draft` dari dokumentasi API lokal.
+
+## Jalankan integrasi di tiga terminal
 
 **1. FastAPI** dari akar repo.
 
@@ -35,7 +62,22 @@ flutter run -d chrome --web-hostname 127.0.0.1 --web-port 8080
 
 Chrome menampilkan **Draf sintetis**, `DEMO-261114-01`, dan berat 1250 kg. Jika API belum berjalan, nyalakan kembali kedua layanan dan tekan **Coba lagi**.
 
-Untuk Android emulator, selesaikan persyaratan Android SDK yang dilaporkan `flutter doctor`, jalankan `flutter devices`, lalu ganti `<emulator-id>` dengan ID yang tampil.
+## Jalankan di Android
+
+Tinjau lisensi yang dilaporkan oleh `flutter doctor --android-licenses`. Buka emulator atau hubungkan HP dengan USB debugging. Jalankan `flutter devices`, lalu gunakan ID yang tampil. Untuk mengerjakan UI dengan draf lokal, jalankan dari `apps/mobile`.
+
+```sh
+flutter run -d <device-id> --dart-define=USE_LOCAL_FIXTURE=true
+```
+
+Untuk menguji integrasi dari emulator atau HP, jalankan kedua backend. Dengan satu perangkat Android terhubung, teruskan port API memakai ADB dan jalankan Flutter dengan URL bawaan.
+
+```sh
+adb reverse tcp:3000 tcp:3000
+flutter run -d <device-id>
+```
+
+Jika beberapa perangkat terhubung, gunakan `adb -s <device-id> reverse tcp:3000 tcp:3000`. Emulator juga dapat mengakses loopback laptop menggunakan `10.0.2.2`.
 
 ```sh
 flutter run -d <emulator-id> --dart-define=API_BASE_URL=http://10.0.2.2:3000
@@ -57,5 +99,15 @@ Setup ini memakai satu fixture yang dilayani FastAPI, diteruskan NestJS, dan dit
 
 - Instal dependency dari direktori masing-masing. Jalankan `npm.cmd` sebagai pengganti `npm` bila PowerShell memblokir `npm.ps1`.
 - Jalankan `flutter doctor -v` untuk masalah SDK, Chrome atau Android. Gunakan browser lokal untuk verifikasi awal jika emulator belum siap.
+- Jika C: sempit di Windows, gunakan cache di D:. Contoh untuk PowerShell sebelum instalasi dependency atau build Android.
+
+  ```powershell
+  $env:PUB_CACHE = 'D:\DevCache\pub'
+  $env:GRADLE_USER_HOME = 'D:\DevCache\gradle'
+  $env:UV_CACHE_DIR = 'D:\DevCache\uv'
+  $env:npm_config_cache = 'D:\DevCache\npm'
+  ```
+
+- Jika ekstensi Gradle VS Code memakai Java 8, tutup VS Code, set `JAVA_HOME` ke folder JDK 21, lalu buka ulang VS Code dari PowerShell yang sama. Untuk instalasi Android Studio di lokasi default, folder JDK 21 yang terpasang di mesin audit adalah `C:\Program Files\Android\Android Studio\jbr`.
 - Health NestJS dapat sukses ketika FastAPI mati. Periksa `/demo/draft` untuk mengecek transaksi antarservice.
 - API lokal mendengarkan loopback. Android emulator menggunakan host khusus `10.0.2.2`. Panduan ini mengasumsikan API dan Flutter berjalan pada mesin yang sama.
