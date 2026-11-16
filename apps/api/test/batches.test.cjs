@@ -67,3 +67,18 @@ test('nira reservation rejects reuse beyond synthetic source balance', async () 
   response = await request(`/batches/${secondBatch.id}/contributions`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-dev-role': 'admin' }, body: JSON.stringify({ kloterId: 'kloter-reserve', volumeMl: 20000 }) });
   assert.equal(response.status, 409);
 });
+
+test('tracks sugar stock and allocates mixed economics with exact rupiah totals', async () => {
+  let response = await request('/stock/sugar?grade=A');
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).balances[0].weightGrams, 1200000);
+  response = await request('/stock/sugar/movements', { method: 'POST', headers: { 'content-type': 'application/json', 'x-dev-role': 'admin', 'idempotency-key': 'stock-add-1' }, body: JSON.stringify({ gradeCode: 'A', deltaGrams: -100000, reason: 'BATCH_SALE', batchId: 'batch-graded' }) });
+  assert.equal(response.status, 201);
+  response = await request('/stock/sugar/movements', { method: 'POST', headers: { 'content-type': 'application/json', 'x-dev-role': 'admin' }, body: JSON.stringify({ gradeCode: 'A', deltaGrams: -2000000, reason: 'OVERDRAW' }) });
+  assert.equal(response.status, 409);
+  response = await request('/batches/batch-graded/economics/allocation', { method: 'POST', headers: { 'content-type': 'application/json', 'x-dev-role': 'admin' }, body: JSON.stringify({ totalCostRupiah: 100001, totalRevenueRupiah: 150001 }) });
+  assert.equal(response.status, 201);
+  const result = await response.json();
+  assert.equal(result.totals.marginRupiah, 50000);
+  assert.equal(result.allocations.reduce((sum, item) => sum + item.costRupiah, 0), 100001);
+});
