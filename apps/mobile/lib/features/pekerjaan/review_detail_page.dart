@@ -5,6 +5,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import '../../sobatnira_ui.dart';
+
 import 'review_api.dart';
 import 'manual_note_form.dart';
 
@@ -187,7 +189,10 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
         final actions = task['actions'] as List;
         final confirmation = task['operator_confirmation'] as Json?;
         return ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(
+            horizontal: niraInset,
+            vertical: NiraSpace.lg,
+          ),
           children: [
             Text(
               documentType(task['document_type']),

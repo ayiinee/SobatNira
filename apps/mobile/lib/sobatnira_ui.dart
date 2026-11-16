@@ -12,6 +12,84 @@ const niraPaper = Color(0xFFFEFDF9);
 const niraMuted = Color(0xFFB1BFC2);
 const niraLine = Color(0xFFD8DEDB);
 const niraInset = 30.0;
+const niraRadius = 8.0;
+
+abstract final class NiraType {
+  static const caption = 12.0;
+  static const body = 14.0;
+  static const section = 16.0;
+  static const title = 20.0;
+  static const metric = 24.0;
+  static const hero = 32.0;
+}
+
+abstract final class NiraSpace {
+  static const xs = 4.0;
+  static const sm = 8.0;
+  static const md = 12.0;
+  static const lg = 16.0;
+  static const xl = 24.0;
+}
+
+ThemeData niraTheme() {
+  final theme = ThemeData(
+    fontFamily: 'Inter',
+    useMaterial3: true,
+    scaffoldBackgroundColor: niraPaper,
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: niraGreen,
+    ).copyWith(primary: niraGreen, surface: niraPaper),
+  );
+  return theme.copyWith(
+    textTheme: theme.textTheme.copyWith(
+      headlineSmall: niraText(NiraType.title, weight: FontWeight.w700),
+      titleLarge: niraText(NiraType.section, weight: FontWeight.w600),
+      titleMedium: niraText(NiraType.section, weight: FontWeight.w600),
+      titleSmall: niraText(NiraType.body, weight: FontWeight.w600),
+      bodyLarge: niraText(NiraType.body),
+      bodyMedium: niraText(NiraType.body),
+      bodySmall: niraText(NiraType.caption, color: niraLeaf),
+      labelLarge: niraText(NiraType.body, weight: FontWeight.w600),
+      labelMedium: niraText(NiraType.caption, weight: FontWeight.w600),
+      labelSmall: niraText(NiraType.caption, weight: FontWeight.w600),
+    ),
+    appBarTheme: AppBarTheme(
+      backgroundColor: niraPaper,
+      foregroundColor: niraGreen,
+      titleTextStyle: niraText(NiraType.title, weight: FontWeight.w700),
+      scrolledUnderElevation: 0,
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.all(NiraSpace.lg),
+      labelStyle: niraText(NiraType.body, color: niraLeaf),
+      hintStyle: niraText(NiraType.body, color: niraLeaf),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(niraRadius),
+        borderSide: const BorderSide(color: niraLine),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(niraRadius),
+        borderSide: const BorderSide(color: niraLine),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(niraRadius),
+        borderSide: const BorderSide(color: niraGreen, width: 2),
+      ),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(48, 48),
+        textStyle: niraText(NiraType.body, weight: FontWeight.w600),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(niraRadius),
+        ),
+      ),
+    ),
+  );
+}
+
 const niraPanelWidth = 314.0;
 const niraShadow = BoxShadow(
   color: Color(0x40000000),
@@ -23,13 +101,13 @@ TextStyle niraText(
   double size, {
   FontWeight weight = FontWeight.w400,
   Color color = niraGreen,
-  double height = 1.15,
+  double? height,
 }) => TextStyle(
   fontFamily: 'Inter',
   fontSize: size,
   fontWeight: weight,
   color: color,
-  height: height,
+  height: height ?? (size >= NiraType.title ? 1.2 : 1.4),
   letterSpacing: 0,
 );
 
@@ -57,7 +135,7 @@ class NiraIcon extends StatelessWidget {
   );
 }
 
-enum NiraTab { beranda, kloter, pekerjaan, laporan, pengaturan }
+enum NiraTab { beranda, kloter, laporan, pengaturan }
 
 class NiraScaffold extends StatelessWidget {
   const NiraScaffold({
@@ -101,13 +179,20 @@ class NiraScaffold extends StatelessWidget {
                 children: [
                   SizedBox(height: padding.top + 12),
                   Expanded(
-                    child: ClipRect(child: RepaintBoundary(child: body)),
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        bottom: floatingNavigation && !keyboard
+                            ? navigationHeight + navigationBottom + NiraSpace.md
+                            : 0,
+                      ),
+                      child: ClipRect(child: RepaintBoundary(child: body)),
+                    ),
                   ),
                   if (!keyboard && bottomAction != null)
                     Padding(
                       padding: EdgeInsets.fromLTRB(
                         niraInset,
-                        6,
+                        NiraSpace.sm,
                         niraInset,
                         actionGap,
                       ),
@@ -155,7 +240,6 @@ class _BottomNavigation extends StatelessWidget {
   static const _items = [
     (NiraTab.beranda, 'Beranda', 'home', 23.0),
     (NiraTab.kloter, 'Kloter', 'truck', 26.0),
-    (NiraTab.pekerjaan, 'Pekerjaan', 'clip', 20.0),
     (NiraTab.laporan, 'Laporan', 'report', 20.0),
     (NiraTab.pengaturan, 'Pengaturan', 'settings', 26.0),
   ];
@@ -166,7 +250,7 @@ class _BottomNavigation extends StatelessWidget {
     borderRadius: BorderRadius.circular(28),
     clipBehavior: Clip.antiAlias,
     child: Padding(
-      padding: const EdgeInsets.only(right: 12),
+      padding: const EdgeInsets.only(right: NiraSpace.md),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 330),
@@ -253,7 +337,7 @@ class _BottomNavigation extends StatelessWidget {
         child: SizedBox(
           height: 52,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 5),
+            padding: const EdgeInsets.symmetric(horizontal: NiraSpace.xs),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -270,12 +354,15 @@ class _BottomNavigation extends StatelessWidget {
                       child: Opacity(
                         opacity: emphasis,
                         child: Padding(
-                          padding: const EdgeInsets.only(left: 4),
+                          padding: const EdgeInsets.only(left: NiraSpace.xs),
                           child: Text(
                             label,
                             maxLines: 1,
                             overflow: TextOverflow.clip,
-                            style: niraText(10.5, weight: FontWeight.w700),
+                            style: niraText(
+                              NiraType.caption,
+                              weight: FontWeight.w700,
+                            ),
                           ),
                         ),
                       ),
@@ -299,8 +386,8 @@ class NiraTabs extends StatelessWidget {
     this.badgeIndex,
     this.badgeCount = 0,
     this.wideIndicator = false,
-    this.height = 44,
-    this.fontSize = 12,
+    this.height = 48,
+    this.fontSize = NiraType.body,
     this.inset = 22,
     super.key,
   });
@@ -375,7 +462,10 @@ class NiraTabs extends StatelessWidget {
             alignment: Alignment.center,
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: NiraSpace.xs,
+                  vertical: NiraSpace.sm,
+                ),
                 child: Wrap(
                   alignment: WrapAlignment.center,
                   crossAxisAlignment: WrapCrossAlignment.center,
@@ -405,7 +495,10 @@ class NiraTabs extends StatelessWidget {
                           color: niraGold,
                           shape: BoxShape.circle,
                         ),
-                        child: Text('$badgeCount', style: niraText(10)),
+                        child: Text(
+                          '$badgeCount',
+                          style: niraText(NiraType.caption),
+                        ),
                       ),
                   ],
                 ),
@@ -436,11 +529,16 @@ class NiraButton extends StatelessWidget {
         disabledBackgroundColor: const Color(0xFFE6EFE5),
         disabledForegroundColor: niraGreen,
         minimumSize: const Size(0, 48),
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
+        padding: const EdgeInsets.symmetric(
+          vertical: NiraSpace.md,
+          horizontal: NiraSpace.lg,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(niraRadius),
+        ),
         elevation: shadow && onPressed != null ? 3 : 0,
         shadowColor: Colors.black54,
-        textStyle: niraText(14.5, weight: FontWeight.w600),
+        textStyle: niraText(NiraType.body, weight: FontWeight.w600),
       ),
       child: Text(label, textAlign: TextAlign.center),
     ),
@@ -457,7 +555,7 @@ class NiraOutline extends StatelessWidget {
   Widget build(BuildContext context) => Material(
     color: color,
     shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(7),
+      borderRadius: BorderRadius.circular(niraRadius),
       side: const BorderSide(color: niraGreen, width: 1.2),
     ),
     clipBehavior: Clip.antiAlias,

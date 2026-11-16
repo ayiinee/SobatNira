@@ -53,7 +53,7 @@ class _KloterProcessPageState extends State<KloterProcessPage> {
               labels: const ['Tebu masuk', 'Penggilingan'],
               selected: _selected,
               height: 50,
-              fontSize: 14.5,
+              fontSize: NiraType.body,
               wideIndicator: true,
               inset: 27,
               onSelected: (value) => setState(() => _selected = value),
@@ -61,12 +61,17 @@ class _KloterProcessPageState extends State<KloterProcessPage> {
             Expanded(
               child: ListView(
                 key: ValueKey(_selected),
-                padding: const EdgeInsets.fromLTRB(niraInset, 16, niraInset, 8),
+                padding: const EdgeInsets.fromLTRB(
+                  niraInset,
+                  NiraSpace.lg,
+                  niraInset,
+                  NiraSpace.sm,
+                ),
                 children: [
                   const DocumentPreview(batch: false),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: NiraSpace.xl),
                   const DetailSectionTitle('Ringkasan proses'),
-                  const SizedBox(height: 9),
+                  const SizedBox(height: NiraSpace.sm),
                   DetailMetrics(
                     intake
                         ? const [
@@ -75,7 +80,7 @@ class _KloterProcessPageState extends State<KloterProcessPage> {
                           ]
                         : const [('Nira dihasilkan', '360L')],
                   ),
-                  const SizedBox(height: 17),
+                  const SizedBox(height: NiraSpace.lg),
                   EditableFields(
                     fields: review.fields,
                     onEdit: (field) async {

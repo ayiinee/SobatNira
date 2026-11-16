@@ -46,16 +46,21 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
           children: [
             const DetailTitle('Detail batch'),
             Padding(
-              padding: const EdgeInsets.fromLTRB(niraInset, 2, niraInset, 0),
+              padding: const EdgeInsets.fromLTRB(
+                niraInset,
+                NiraSpace.xs,
+                niraInset,
+                0,
+              ),
               child: Row(
                 children: [
                   Expanded(
                     child: Text(
                       'Batch ${_batch.number}',
-                      style: niraText(20.5, weight: FontWeight.w700),
+                      style: niraText(NiraType.title, weight: FontWeight.w700),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: NiraSpace.sm),
                   _ReviewBadge(reviewed: reviewed),
                 ],
               ),
@@ -70,7 +75,12 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
             Expanded(
               child: ListView(
                 key: ValueKey(_tab),
-                padding: const EdgeInsets.fromLTRB(niraInset, 9, niraInset, 5),
+                padding: const EdgeInsets.fromLTRB(
+                  niraInset,
+                  NiraSpace.sm,
+                  niraInset,
+                  NiraSpace.xs,
+                ),
                 children: switch (_tab) {
                   0 => _summary(),
                   1 => _cooking(),
@@ -86,30 +96,33 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
 
   List<Widget> _summary() => [
     const DocumentPreview(batch: true),
-    const SizedBox(height: 10),
+    const SizedBox(height: NiraSpace.md),
     const DetailSectionTitle('Ringkasan proses'),
-    const SizedBox(height: 8),
+    const SizedBox(height: NiraSpace.sm),
     EditableFields(fields: _batch.review.fields, onEdit: _editField),
-    const SizedBox(height: 9),
+    const SizedBox(height: NiraSpace.sm),
     const DetailSectionTitle('Harga pengesahan'),
     _priceHeader(),
     for (final entry in DemoBatch.gradePrices.entries)
       _PriceRow(
-        grade: Text(entry.key, style: niraText(11.3)),
+        grade: Text(entry.key, style: niraText(NiraType.body)),
         weight: Text(
           _batch.grade == entry.key ? '${_batch.gradeWeight}Kg' : '–',
-          style: niraText(11.3),
+          style: niraText(NiraType.body),
         ),
-        price: Text(entry.value, style: niraText(11.3)),
+        price: Text(entry.value, style: niraText(NiraType.body)),
         height: 30,
       ),
     _PriceRow(
       grade: Text(
         'Margin Produksi',
-        style: niraText(11.2, weight: FontWeight.w700),
+        style: niraText(NiraType.caption, weight: FontWeight.w700),
       ),
-      weight: Text('${_batch.gradeWeight}Kg', style: niraText(11.3)),
-      price: Text('Rp670.000', style: niraText(15, weight: FontWeight.w700)),
+      weight: Text('${_batch.gradeWeight}Kg', style: niraText(NiraType.body)),
+      price: Text(
+        'Rp670.000',
+        style: niraText(NiraType.section, weight: FontWeight.w700),
+      ),
       height: 32,
       line: niraGold,
     ),
@@ -117,9 +130,9 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
 
   List<Widget> _cooking() => [
     const DetailSectionTitle('Data pemasakan'),
-    const SizedBox(height: 7),
+    const SizedBox(height: NiraSpace.sm),
     EditableFields(fields: _batch.cooking, onEdit: _editField),
-    const SizedBox(height: 13),
+    const SizedBox(height: NiraSpace.md),
     DocumentLink(
       'Foto pemasakan',
       () => DocumentPreview.open(context, batch: true),
@@ -128,18 +141,18 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
 
   List<Widget> _grade() => [
     const DetailSectionTitle('Hasil dan Grade'),
-    const SizedBox(height: 3),
-    Text('Hasil timbang', style: niraText(11.7, color: niraMuted)),
-    const SizedBox(height: 10),
+    const SizedBox(height: NiraSpace.xs),
+    Text('Hasil timbang', style: niraText(NiraType.caption, color: niraMuted)),
+    const SizedBox(height: NiraSpace.md),
     const DetailMetrics([
       ('Tebu bersih', '1.500Kg'),
       ('Nira tercatat', '360L'),
     ], separate: true),
-    const SizedBox(height: 7),
+    const SizedBox(height: NiraSpace.sm),
     _priceHeader(),
     for (final grade in const ['A', 'B'])
       _PriceRow(
-        grade: Text(grade, style: niraText(11.3)),
+        grade: Text(grade, style: niraText(NiraType.body)),
         weight: _GradeWeight(
           grade: grade,
           weight: _batch.grade == grade ? _batch.gradeWeight : '–',
@@ -147,7 +160,7 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
         ),
         price: Text(
           '${DemoBatch.gradePrices[grade]}/Kg',
-          style: niraText(11.3),
+          style: niraText(NiraType.body),
         ),
         height: 35,
       ),
@@ -155,9 +168,9 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
   ];
 
   Widget _priceHeader() => _PriceRow(
-    grade: Text('Grade', style: niraText(11.3, color: niraLeaf)),
-    weight: Text('Berat', style: niraText(11.3, color: niraLeaf)),
-    price: Text('Harga', style: niraText(11.3, color: niraLeaf)),
+    grade: Text('Grade', style: niraText(NiraType.caption, color: niraLeaf)),
+    weight: Text('Berat', style: niraText(NiraType.caption, color: niraLeaf)),
+    price: Text('Harga', style: niraText(NiraType.caption, color: niraLeaf)),
     height: 29,
     line: Colors.transparent,
   );
@@ -201,7 +214,7 @@ class _PriceRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     constraints: BoxConstraints(minHeight: height),
-    padding: const EdgeInsets.symmetric(vertical: 4),
+    padding: const EdgeInsets.symmetric(vertical: NiraSpace.xs),
     decoration: BoxDecoration(
       border: Border(top: BorderSide(color: line)),
     ),
@@ -228,15 +241,18 @@ class _ReviewBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textColor = reviewed || MediaQuery.highContrastOf(context)
-        ? niraGreen
-        : Colors.white;
+    const textColor = niraGreen;
     return Container(
-      padding: const EdgeInsets.fromLTRB(6, 5, 6, 5),
+      padding: const EdgeInsets.fromLTRB(
+        NiraSpace.sm,
+        NiraSpace.xs,
+        NiraSpace.sm,
+        NiraSpace.xs,
+      ),
       constraints: const BoxConstraints(maxWidth: 153),
       decoration: BoxDecoration(
         color: reviewed ? const Color(0xFFE6EFE5) : const Color(0xFFDCB95B),
-        borderRadius: BorderRadius.circular(7),
+        borderRadius: BorderRadius.circular(niraRadius),
         border: Border.all(
           color: reviewed ? niraLeaf : const Color(0xFFB79845),
         ),
@@ -249,11 +265,15 @@ class _ReviewBadge extends StatelessWidget {
             size: 14,
             color: textColor,
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: NiraSpace.xs),
           Flexible(
             child: Text(
               reviewed ? 'Tervalidasi' : 'Perlu ditinjau',
-              style: niraText(13.5, color: textColor, weight: FontWeight.w700),
+              style: niraText(
+                NiraType.body,
+                color: textColor,
+                weight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -280,7 +300,7 @@ class _GradeWeight extends StatelessWidget {
     child: Material(
       color: Colors.white,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(7),
+        borderRadius: BorderRadius.circular(niraRadius),
         side: const BorderSide(color: niraMuted),
       ),
       clipBehavior: Clip.antiAlias,
@@ -291,14 +311,23 @@ class _GradeWeight extends StatelessWidget {
           children: [
             Flexible(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-                child: Text(weight, style: niraText(11.3)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: NiraSpace.sm,
+                  vertical: NiraSpace.xs,
+                ),
+                child: Text(weight, style: niraText(NiraType.body)),
               ),
             ),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              padding: const EdgeInsets.symmetric(
+                horizontal: NiraSpace.sm,
+                vertical: NiraSpace.xs,
+              ),
               color: niraMuted,
-              child: Text('Kg', style: niraText(11.3, color: Colors.white)),
+              child: Text(
+                'Kg',
+                style: niraText(NiraType.caption, color: Colors.white),
+              ),
             ),
           ],
         ),

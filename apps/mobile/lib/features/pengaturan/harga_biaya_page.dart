@@ -70,39 +70,41 @@ class _HargaBiayaPageState extends State<HargaBiayaPage> {
     onNavigate: widget.onNavigate,
     bottomAction: NiraButton('Simpan perubahan', _save),
     body: ListView(
-      padding: const EdgeInsets.fromLTRB(niraInset, 6, niraInset, 8),
+      padding: const EdgeInsets.fromLTRB(
+        niraInset,
+        NiraSpace.sm,
+        niraInset,
+        NiraSpace.sm,
+      ),
       children: [
-        const DetailTitle('Harga & Biaya'),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: niraInset),
-          child: Text(
-            'Berlaku untuk seluruh kloter dan batch',
-            style: niraText(11.5, color: niraLeaf),
-          ),
+        const DetailTitle('Harga & Biaya', inset: 0),
+        Text(
+          'Berlaku untuk seluruh kloter dan batch',
+          style: niraText(NiraType.caption, color: niraLeaf),
         ),
-        const SizedBox(height: 17),
+        const SizedBox(height: NiraSpace.lg),
         const _SectionLabel('Harga per grade', 'Harga jual gula per kilogram'),
-        const SizedBox(height: 13),
+        const SizedBox(height: NiraSpace.xs),
         _MoneyField('Grade A', _a, '/kg'),
         _MoneyField('Grade B', _b, '/kg'),
         _MoneyField('Grade C', _c, '/kg'),
-        const SizedBox(height: 14),
+        const SizedBox(height: NiraSpace.lg),
         _MoneyField('Biaya Operasional', _cost, '/kloter'),
-        const SizedBox(height: 7),
+        const SizedBox(height: NiraSpace.sm),
         Text(
           'Dikenakan satu kali setiap kloter',
-          style: niraText(10, color: niraMuted),
+          style: niraText(NiraType.caption, color: niraLeaf),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: NiraSpace.lg),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Icon(Icons.info_outline, size: 17, color: niraLeaf),
-            const SizedBox(width: 5),
+            const SizedBox(width: NiraSpace.xs),
             Expanded(
               child: Text(
                 'Perubahan berlaku untuk produksi selanjutnya. Data terdahulu tetap menggunakan nilai sebelumnya.',
-                style: niraText(9.5, color: niraLeaf),
+                style: niraText(NiraType.caption, color: niraLeaf),
               ),
             ),
           ],
@@ -121,9 +123,9 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(title, style: niraText(14, weight: FontWeight.w700)),
-      const SizedBox(height: 3),
-      Text(subtitle, style: niraText(11, color: niraLeaf)),
+      Text(title, style: niraText(NiraType.section, weight: FontWeight.w600)),
+      const SizedBox(height: NiraSpace.xs),
+      Text(subtitle, style: niraText(NiraType.caption, color: niraLeaf)),
     ],
   );
 }
@@ -136,34 +138,34 @@ class _MoneyField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 11),
+    padding: const EdgeInsets.only(top: NiraSpace.md),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: niraText(11.5, weight: FontWeight.w600)),
-        const SizedBox(height: 5),
+        Text(label, style: niraText(NiraType.body, weight: FontWeight.w600)),
+        const SizedBox(height: NiraSpace.xs),
         TextField(
           controller: controller,
           keyboardType: TextInputType.number,
-          style: niraText(13, weight: FontWeight.w600),
+          style: niraText(NiraType.body, weight: FontWeight.w600),
           decoration: InputDecoration(
             prefixText: 'Rp  ',
             suffixText: suffix,
-            prefixStyle: niraText(12, color: niraLeaf),
-            suffixStyle: niraText(11, color: niraLeaf),
+            prefixStyle: niraText(NiraType.body, color: niraLeaf),
+            suffixStyle: niraText(NiraType.caption, color: niraLeaf),
             filled: true,
             fillColor: Colors.white,
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 10,
-              vertical: 12,
+              horizontal: NiraSpace.lg,
+              vertical: NiraSpace.lg,
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(niraRadius),
               borderSide: const BorderSide(color: niraGreen, width: 1.2),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(niraRadius),
               borderSide: const BorderSide(color: niraGreen, width: 2),
             ),
           ),

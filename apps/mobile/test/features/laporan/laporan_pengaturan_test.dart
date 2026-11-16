@@ -3,8 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sobatnira/main.dart';
 
-import '../../support/demo_login.dart';
-
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -23,12 +21,11 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(const SobatNiraApp());
     await tester.pumpAndSettle();
-    await openDemoLogin(tester);
-    await submitDemoLogin(tester);
   }
 
   Future<void> tap(WidgetTester tester, Finder finder) async {
     await tester.ensureVisible(finder);
+    await tester.pumpAndSettle();
     await tester.tap(finder);
     await tester.pumpAndSettle();
   }

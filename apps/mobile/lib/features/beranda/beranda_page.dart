@@ -34,14 +34,19 @@ class _BerandaPageState extends State<BerandaPage> {
           child: CustomPaint(
             painter: const _BerandaGeometryPainter(),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(niraInset, 0, niraInset, 15),
+              padding: const EdgeInsets.fromLTRB(
+                niraInset,
+                0,
+                niraInset,
+                NiraSpace.lg,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: const [
                   _Profile(),
-                  SizedBox(height: 15),
+                  SizedBox(height: NiraSpace.lg),
                   _ProductionSummary(),
-                  SizedBox(height: 17),
+                  SizedBox(height: NiraSpace.lg),
                   _QuickActions(),
                 ],
               ),
@@ -49,9 +54,7 @@ class _BerandaPageState extends State<BerandaPage> {
           ),
         ),
         SliverPadding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.viewPaddingOf(context).bottom + 82,
-          ),
+          padding: EdgeInsets.only(bottom: NiraSpace.lg),
           sliver: SliverFillRemaining(
             hasScrollBody: false,
             child: DecoratedBox(
@@ -70,7 +73,7 @@ class _BerandaPageState extends State<BerandaPage> {
                     labels: const ['Tinjau', 'Tuntas'],
                     selected: _selected,
                     height: 50,
-                    fontSize: 14.5,
+                    fontSize: NiraType.body,
                     inset: 27,
                     wideIndicator: true,
                     onSelected: (value) => setState(() => _selected = value),
@@ -78,15 +81,17 @@ class _BerandaPageState extends State<BerandaPage> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(
                       niraInset,
-                      15,
+                      NiraSpace.lg,
                       niraInset,
-                      13,
+                      NiraSpace.md,
                     ),
                     child: Column(
                       children: [
                         for (final item in recent)
                           Padding(
-                            padding: const EdgeInsets.only(bottom: 9),
+                            padding: const EdgeInsets.only(
+                              bottom: NiraSpace.sm,
+                            ),
                             child: KloterCard(
                               kloter: item,
                               onTap: () => widget.onOpenKloter(item),
@@ -95,7 +100,7 @@ class _BerandaPageState extends State<BerandaPage> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 82),
+                  const SizedBox(height: NiraSpace.lg),
                 ],
               ),
             ),
@@ -118,7 +123,10 @@ class _ProfileState extends State<_Profile> {
   @override
   Widget build(BuildContext context) => Container(
     constraints: const BoxConstraints(minHeight: 57),
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+    padding: const EdgeInsets.symmetric(
+      horizontal: NiraSpace.md,
+      vertical: NiraSpace.sm,
+    ),
     decoration: BoxDecoration(
       color: niraGreen,
       borderRadius: BorderRadius.circular(33),
@@ -141,18 +149,21 @@ class _ProfileState extends State<_Profile> {
             excludeFromSemantics: true,
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: NiraSpace.md),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(_factory, style: niraText(10.5, color: Colors.white)),
+              Text(
+                _factory,
+                style: niraText(NiraType.caption, color: Colors.white),
+              ),
               const SizedBox(height: 1),
               Text(
                 'Admin Demo',
                 style: niraText(
-                  16,
+                  NiraType.section,
                   color: Colors.white,
                   weight: FontWeight.w600,
                 ),
@@ -181,11 +192,16 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.fromLTRB(9, 9, 9, 15),
+    padding: const EdgeInsets.fromLTRB(
+      NiraSpace.sm,
+      NiraSpace.sm,
+      NiraSpace.sm,
+      NiraSpace.lg,
+    ),
     decoration: BoxDecoration(
       color: Colors.white,
       border: Border.all(color: niraGreen, width: 1.35),
-      borderRadius: BorderRadius.circular(9),
+      borderRadius: BorderRadius.circular(niraRadius),
       boxShadow: const [niraShadow],
     ),
     child: Column(
@@ -195,7 +211,7 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: niraGreen,
-            borderRadius: BorderRadius.circular(9),
+            borderRadius: BorderRadius.circular(niraRadius),
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -228,7 +244,12 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(17, 9, 12, 17),
+                padding: const EdgeInsets.fromLTRB(
+                  NiraSpace.lg,
+                  NiraSpace.sm,
+                  NiraSpace.md,
+                  NiraSpace.lg,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -238,7 +259,7 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                           child: Text(
                             'Keuntungan',
                             style: niraText(
-                              17,
+                              NiraType.section,
                               color: Colors.white,
                               weight: FontWeight.w700,
                             ),
@@ -271,13 +292,13 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                       child: Text(
                         _showProfit ? 'Rp -' : 'Rp ••••••',
                         style: niraText(
-                          33,
+                          NiraType.hero,
                           color: niraYellow,
                           weight: FontWeight.w700,
                         ),
                       ),
                     ),
-                    const SizedBox(height: 9),
+                    const SizedBox(height: NiraSpace.sm),
                     Row(
                       children: [
                         const Icon(
@@ -285,11 +306,14 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                           size: 12,
                           color: Colors.white,
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: NiraSpace.sm),
                         Flexible(
                           child: Text(
                             '20 Oktober 2026',
-                            style: niraText(11.8, color: Colors.white),
+                            style: niraText(
+                              NiraType.caption,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ],
@@ -300,16 +324,34 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
             ],
           ),
         ),
-        const SizedBox(height: 10),
-        const Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _SummaryTile('Tebu diterima', '8.200Kg', boxes: true),
-            ),
-            SizedBox(width: 9),
-            Expanded(child: _SummaryTile('Jumlah kloter', '3')),
-          ],
+        const SizedBox(height: NiraSpace.md),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final stacked =
+                constraints.maxWidth <
+                MediaQuery.textScalerOf(context).scale(NiraType.metric) * 9 +
+                    56;
+            const tiles = [
+              _SummaryTile('Tebu diterima', '8.200Kg', boxes: true),
+              _SummaryTile('Jumlah kloter', '3'),
+            ];
+            return stacked
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      tiles[0],
+                      const SizedBox(height: NiraSpace.sm),
+                      tiles[1],
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(child: tiles[0]),
+                      const SizedBox(width: NiraSpace.sm),
+                      Expanded(child: tiles[1]),
+                    ],
+                  );
+          },
         ),
       ],
     ),
@@ -327,7 +369,7 @@ class _SummaryTile extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     clipBehavior: Clip.antiAlias,
     decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(7),
+      borderRadius: BorderRadius.circular(niraRadius),
       gradient: const LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
@@ -354,7 +396,10 @@ class _SummaryTile extends StatelessWidget {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 15),
+          padding: const EdgeInsets.symmetric(
+            horizontal: NiraSpace.md,
+            vertical: NiraSpace.lg,
+          ),
           child: SizedBox(
             width: double.infinity,
             child: Column(
@@ -363,17 +408,17 @@ class _SummaryTile extends StatelessWidget {
                   label,
                   textAlign: TextAlign.center,
                   style: niraText(
-                    12,
+                    NiraType.caption,
                     color: Colors.white,
                     weight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 5),
+                const SizedBox(height: NiraSpace.xs),
                 Text(
                   value,
                   textAlign: TextAlign.center,
                   style: niraText(
-                    23,
+                    NiraType.metric,
                     color: niraYellow,
                     weight: FontWeight.w700,
                   ),
@@ -539,18 +584,27 @@ class _QuickActions extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) => Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      for (final (label, icon) in _actions)
-        Flexible(
-          child: SizedBox(
-            width: 63,
-            child: _QuickActionTile(label: label, icon: icon),
-          ),
-        ),
-    ],
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final columns =
+          constraints.maxWidth >=
+              MediaQuery.textScalerOf(context).scale(NiraType.caption) * 24
+          ? 4
+          : 2;
+      final width =
+          (constraints.maxWidth - NiraSpace.md * (columns - 1)) / columns;
+      return Wrap(
+        spacing: NiraSpace.md,
+        runSpacing: NiraSpace.lg,
+        children: [
+          for (final (label, icon) in _actions)
+            SizedBox(
+              width: width,
+              child: _QuickActionTile(label: label, icon: icon),
+            ),
+        ],
+      );
+    },
   );
 }
 
@@ -589,7 +643,7 @@ class _QuickActionTileState extends State<_QuickActionTile> {
         onHover: (value) => setState(() => _hovered = value),
         onFocusChange: (value) => setState(() => _focused = value),
         onHighlightChanged: (value) => setState(() => _pressed = value),
-        borderRadius: BorderRadius.circular(7),
+        borderRadius: BorderRadius.circular(niraRadius),
         child: Column(
           children: [
             AnimatedSlide(
@@ -601,11 +655,12 @@ class _QuickActionTileState extends State<_QuickActionTile> {
               child: AnimatedContainer(
                 duration: duration,
                 curve: Curves.easeOutCubic,
-                height: 62,
+                height: 64,
+                width: 64,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: active ? const Color(0xFFF4F8F1) : Colors.white,
-                  borderRadius: BorderRadius.circular(7),
+                  borderRadius: BorderRadius.circular(niraRadius),
                   border: Border.all(color: niraGreen, width: 1.3),
                   boxShadow: [
                     BoxShadow(
@@ -632,12 +687,12 @@ class _QuickActionTileState extends State<_QuickActionTile> {
                 ),
               ),
             ),
-            const SizedBox(height: 3),
+            const SizedBox(height: NiraSpace.xs),
             Text(
               widget.label,
               textAlign: TextAlign.center,
               style: niraText(
-                11.5,
+                NiraType.caption,
                 color: Colors.black,
                 weight: FontWeight.w600,
               ),

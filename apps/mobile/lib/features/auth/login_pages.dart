@@ -56,10 +56,10 @@ class _LoginFormPageState extends State<LoginFormPage> {
         final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
         return SafeArea(
           minimum: EdgeInsets.only(
-            top: keyboardVisible ? 16 : constraints.maxHeight * .267,
+            top: keyboardVisible ? NiraSpace.lg : constraints.maxHeight * .267,
           ),
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(32, 0, 32, 24),
+            padding: const EdgeInsets.fromLTRB(32, 0, 32, NiraSpace.xl),
             child: Form(
               key: _form,
               child: Column(
@@ -72,7 +72,7 @@ class _LoginFormPageState extends State<LoginFormPage> {
                     icon: Icons.person_outline,
                     error: 'Masukkan nama pengguna.',
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: NiraSpace.lg),
                   _field(
                     label: 'Kata sandi',
                     icon: Icons.lock_outline,
@@ -88,14 +88,14 @@ class _LoginFormPageState extends State<LoginFormPage> {
                         style: TextButton.styleFrom(
                           foregroundColor: niraLeaf,
                           padding: EdgeInsets.zero,
-                          textStyle: niraText(13),
+                          textStyle: niraText(NiraType.body),
                         ),
                         onPressed: () => showUnavailable(context),
                         child: const Text('Lupa kata sandi?'),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 15),
+                  const SizedBox(height: NiraSpace.lg),
                   SizedBox(
                     height: 50,
                     child: NiraButton('Masuk', _submit, shadow: false),
@@ -122,7 +122,10 @@ class _LoginFormPageState extends State<LoginFormPage> {
         GestureDetector(
           onTap: () => setState(() => _rememberMe = !_rememberMe),
           excludeFromSemantics: true,
-          child: Text('Ingat saya', style: niraText(13, color: Colors.black87)),
+          child: Text(
+            'Ingat saya',
+            style: niraText(NiraType.body, color: Colors.black87),
+          ),
         ),
       ],
     ),
@@ -135,7 +138,7 @@ class _LoginFormPageState extends State<LoginFormPage> {
     bool isPassword = false,
   }) {
     final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(7),
+      borderRadius: BorderRadius.circular(niraRadius),
       borderSide: const BorderSide(color: niraGreen, width: 1.2),
     );
     return TextFormField(
@@ -146,19 +149,19 @@ class _LoginFormPageState extends State<LoginFormPage> {
       onFieldSubmitted: isPassword ? (_) => _submit() : null,
       validator: (value) =>
           value == null || value.trim().isEmpty ? error : null,
-      style: niraText(13),
+      style: niraText(NiraType.body),
       decoration: InputDecoration(
         labelText: label,
         floatingLabelBehavior: FloatingLabelBehavior.never,
-        labelStyle: niraText(13, color: niraLeaf),
+        labelStyle: niraText(NiraType.body, color: niraLeaf),
         prefixIcon: Icon(icon, size: 19, color: niraMuted),
         prefixIconConstraints: const BoxConstraints(
           minWidth: 44,
           minHeight: 50,
         ),
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 16,
+          horizontal: NiraSpace.lg,
+          vertical: NiraSpace.lg,
         ),
         enabledBorder: border,
         focusedBorder: border.copyWith(

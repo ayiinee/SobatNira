@@ -19,34 +19,45 @@ class SettingsPlaceholderPage extends StatelessWidget {
     tab: NiraTab.pengaturan,
     onNavigate: onNavigate,
     body: ListView(
-      padding: const EdgeInsets.fromLTRB(niraInset, 6, niraInset, 14),
+      padding: const EdgeInsets.fromLTRB(
+        niraInset,
+        NiraSpace.sm,
+        niraInset,
+        NiraSpace.lg,
+      ),
       children: [
-        DetailTitle(entry.title),
-        const SizedBox(height: 12),
+        DetailTitle(entry.title, inset: 0),
+        const SizedBox(height: NiraSpace.md),
         NiraOutline(
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(NiraSpace.lg),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(entry.title, style: niraText(18, weight: FontWeight.w700)),
-                const SizedBox(height: 5),
-                Text(entry.subtitle, style: niraText(12, color: niraLeaf)),
-                const SizedBox(height: 16),
+                Text(
+                  entry.title,
+                  style: niraText(NiraType.section, weight: FontWeight.w700),
+                ),
+                const SizedBox(height: NiraSpace.xs),
+                Text(
+                  entry.subtitle,
+                  style: niraText(NiraType.caption, color: niraLeaf),
+                ),
+                const SizedBox(height: NiraSpace.lg),
                 const Icon(
                   Icons.construction_outlined,
                   size: 30,
                   color: niraGreen,
                 ),
-                const SizedBox(height: 7),
+                const SizedBox(height: NiraSpace.sm),
                 Text(
                   'Detail konfigurasi tersedia pada tahap berikutnya.',
-                  style: niraText(12.5),
+                  style: niraText(NiraType.body),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: NiraSpace.xs),
                 Text(
                   'Tampilan ini mengikuti navigasi Pengaturan dan memakai data sintetis.',
-                  style: niraText(11, color: niraLeaf),
+                  style: niraText(NiraType.caption, color: niraLeaf),
                 ),
               ],
             ),
