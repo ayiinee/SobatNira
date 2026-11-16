@@ -50,6 +50,8 @@ Endpoint produksi B1 memakai header identitas development saat `NODE_ENV=develop
 
 Endpoint tambahan B1: `GET/POST /production-masters/{pans,grades,additives,configs}`, `GET /batches/nira/:kloterId/availability`, dan `GET /batches/closure-check/:kloterId`. B2 menyediakan `GET /stock/sugar`, `POST /stock/sugar/movements`, `POST /stock/sugar/corrections`, dan alokasi `POST /batches/:id/economics/allocation`. B3 menyediakan `GET /dashboard/production`, `GET /analytics/production`, dan `GET /exports/batches.csv`. Perubahan master, stok, dan produksi membutuhkan role `admin`; pembacaan dapat memakai `owner`.
 
+Mode `supabase` memakai tabel stok/alokasi/audit dari migrasi yang sama. Isi `DEFAULT_PRODUCTION_CONFIG_ID` dan `DEFAULT_PRICE_VERSION_ID` sebelum membuat batch; operasi koreksi stok selalu membuat movement baru dan audit event.
+
 ## Jalankan integrasi di tiga terminal
 
 **1. FastAPI** dari akar repo.
