@@ -1,5 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { object, Pagination, parsePage, text, timestamp, uuid } from '../production/production.dto';
+import { decimal } from '../production/decimal';
+export { decimal } from '../production/decimal';
 
 export interface IntakeFields {
   lotId: string;
@@ -16,16 +18,6 @@ export interface DraftUpdate {
   changes: Partial<Omit<IntakeFields, 'supplierId'>>;
 }
 export interface DocumentQuery extends Pagination { status?: string; lotId?: string }
-
-// Decimal strings cross JSON without floating-point conversion or rounding.
-export function decimal(input: unknown, field: string, allowZero = false): string {
-  if (typeof input !== 'string' || input.length > 64 || !/^(0|[1-9]\d*)(\.\d+)?$/.test(input)) {
-    throw new BadRequestException(`${field} harus berupa string desimal tanpa eksponen/pemisah ribuan (maksimum 64 karakter).`);
-  }
-  const result = input.includes('.') ? input.replace(/0+$/, '').replace(/\.$/, '') : input;
-  if (!allowZero && result === '0') throw new BadRequestException(`${field} harus lebih besar dari nol.`);
-  return result;
-}
 
 function brix(input: unknown): string {
   const result = decimal(input, 'brix', true);
