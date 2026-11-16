@@ -88,6 +88,13 @@ class ReviewApi {
   Future<Json> detail(String id) =>
       _json(_client.get(_url('review-tasks/$id'), headers: _headers));
 
+  Future<Json> intakeLots(String taskId, int offset) => _json(
+    _client.get(
+      _url('review-tasks/$taskId/intake-lots?offset=$offset'),
+      headers: _headers,
+    ),
+  );
+
   Future<int> unreadNotifications() async {
     final response = await _json(
       _client.get(_url('review-notifications'), headers: _headers),

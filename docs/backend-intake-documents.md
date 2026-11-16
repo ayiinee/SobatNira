@@ -184,4 +184,16 @@ Tes lokal tidak memuat kredensial asli. Tes integrasi memakai PostgreSQL develop
 
 Pemeriksaan mencakup draf tidak lengkap, koreksi setelah konfirmasi, audit/revisi, replay request, pengesahan ganda, dua dokumen untuk satu kloter, dua edit bersamaan, race perubahan metadata dengan pengesahan, rollback ketika audit gagal, desimal presisi tinggi, batas tenant/pabrik dan pemisahan saldo sintetis.
 
-Flutter masih memakai data lokal untuk Beranda/Kloter. Penyambungan layar Pekerjaan/detail bukti dan login dilakukan terpisah; kontrak FastAPI existing tidak berubah.
+Flutter masih memakai data lokal untuk Beranda/Kloter.
+
+## Penerimaan dari nota OCR
+
+Untuk nota truk, pengesahan di Pekerjaan juga mencatat penerimaan resmi. Jalankan `npm run db:migrate` dan `npm run db:migrate:ocr` dari `apps/api` pada database PostgreSQL yang sama. Akun peninjau memerlukan membership aktif di workflow OCR dan akses produksi pada pabrik yang sama.
+
+Di Pekerjaan, buka nota truk yang sudah dikonfirmasi operator. Koreksi berat bersih dalam kg dan kode jenis tebu bila perlu, lalu pilih kloter penerimaan yang sudah terdaftar beserta pemasoknya. API memakai pemasok dan waktu penerimaan yang tersimpan pada kloter pilihan. Bandingkan tanggal pada nota dengan waktu yang ditampilkan sebelum mengesahkan.
+
+- `GET /api/v1/mobile/review-tasks/{taskId}/intake-lots?offset=0` memberi kloter pada pabrik nota yang belum punya penerimaan, beserta `supplierId`, nama pemasok, waktu penerimaan dan `next_offset`.
+- `POST /api/v1/mobile/documents/{documentId}/validate` untuk nota truk mewajibkan `lot_id` dan `supplier_id` selain `revision_id`, `expected_version`, `decision: "VALIDATED"`, dan header `Idempotency-Key`. Draf, konfirmasi operator, dan koreksi admin tetap merupakan langkah sebelum pengesahan.
+- Respons pengesahan dan detail tugas memuat `intake` dengan ID penerimaan, kloter, pemasok, berat, waktu dan UUID dokumen/revisi OCR. Stok tebu riil dapat dibaca di `GET /tenants/{tenantId}/factories/{factoryId}/stock/sugarcane?lotId={lotId}`.
+- Pengesahan, satu penerimaan per kloter dan nota, kredit stok, serta audit disimpan dalam satu transaksi. Jika relasi berubah atau stok gagal dibukukan, tugas tetap menunggu validasi. Retry dengan kunci yang sama mengembalikan hasil tersimpan.
+- Nota yang sudah disahkan sebelum fitur ini tetap ada dalam riwayat. Penerimaan historisnya perlu rekonsiliasi tersendiri.

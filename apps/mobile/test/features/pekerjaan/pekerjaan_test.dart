@@ -53,12 +53,30 @@ void main() {
         if (endpoint == 'review-tasks/task-demo/assets/photo-demo') {
           return http.Response('', 404);
         }
+        if (endpoint == 'review-tasks/task-demo/intake-lots') {
+          return http.Response(
+            jsonEncode({
+              'items': [
+                {
+                  'id': 'lot-demo',
+                  'supplierId': 'supplier-demo',
+                  'supplierName': 'Pemasok Demo',
+                  'displayCode': 'KLOTER-DEMO',
+                  'receivedAt': '2026-11-16T01:00:00Z',
+                },
+              ],
+              'next_offset': null,
+            }),
+            200,
+          );
+        }
         if (endpoint == 'review-tasks/task-demo') {
           return http.Response(
             jsonEncode({
               ...task,
               'role': 'ADMIN',
               'status': validated ? 'VALIDATED' : 'PENDING_VALIDATION',
+              if (validated) 'intake': {'net_weight_kg': '1250'},
               'actions': validated ? [] : ['CORRECT', 'VALIDATE', 'RETURN'],
               'issues': [],
               'extraction': {
@@ -96,6 +114,8 @@ void main() {
           'revision_id': 'revision-demo',
           'expected_version': 2,
           'decision': 'VALIDATED',
+          'lot_id': 'lot-demo',
+          'supplier_id': 'supplier-demo',
         });
         validated = true;
         return http.Response('{"status":"VALIDATED"}', 200);
@@ -124,7 +144,14 @@ void main() {
     await tester.ensureVisible(validate);
     await tester.tap(validate);
     await tester.pumpAndSettle();
+    expect(find.text('Pilih kloter penerimaan'), findsOneWidget);
+    expect(validated, isFalse);
+    await tester.tap(find.text('KLOTER-DEMO'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sahkan dan catat stok'));
+    await tester.pumpAndSettle();
     expect(find.text('Status: VALIDATED'), findsOneWidget);
+    expect(find.text('Stok tebu tercatat: 1250 kg'), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('Belum ada laporan pada status ini.'), findsOneWidget);
