@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import plugin, { createBridge } from '../integrations/openclaw/index.mjs';
 import database from '../dist/documents/database.js';
+import migrations from '../dist/database/migrations.js';
 
 const root = resolve(import.meta.dirname, '../../..');
 const scratch = resolve(root, '.tmp/local-ai');
@@ -23,6 +24,9 @@ const factory = '10000000-0000-4000-8000-000000000001';
 const admin = '10000000-0000-4000-8000-000000000002';
 const outsider = '10000000-0000-4000-8000-000000000003';
 const outsideFactory = '10000000-0000-4000-8000-000000000004';
+const tenant = '10000000-0000-4000-8000-000000000005';
+const supplier = '10000000-0000-4000-8000-000000000006';
+const intakeLot = randomUUID();
 const phone = (suffix) => '+' + [1, 202, 555, String(suffix).padStart(4, '0')].join('');
 const authKey = 'local-synthetic-publishable';
 const passwords = { 'admin@example.invalid': 'sobatnira-demo', 'other@example.invalid': 'sobatnira-demo' };
@@ -62,9 +66,34 @@ function requireExit(proc, message) {
 async function boot() {
   await mkdir(staging, { recursive: true });
   const initial = new Pool({ connectionString: local.href, connectionTimeoutMillis: 5_000 });
-  try { await initial.query(`CREATE SCHEMA IF NOT EXISTS ${schema}`); }
-  finally { await initial.end(); }
+  try {
+    await initial.query(`CREATE SCHEMA IF NOT EXISTS ${schema};
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon') THEN CREATE ROLE anon NOLOGIN; END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF;
+      END $$;
+      CREATE SCHEMA IF NOT EXISTS auth;
+      CREATE TABLE IF NOT EXISTS auth.users(id uuid PRIMARY KEY, aud text, role text, email text)`);
+    const client = await initial.connect();
+    try { await migrations.applyMigrations(client); }
+    finally { client.release(); }
+  } finally { await initial.end(); }
   await db.migrate();
+  await db.transaction(async (client) => {
+    await client.query(`INSERT INTO auth.users (id,aud,role,email)
+      VALUES ($1,'authenticated','authenticated','admin@example.invalid') ON CONFLICT (id) DO NOTHING`, [admin]);
+    await client.query("INSERT INTO sobatnira.tenants (id,name) VALUES ($1,'Tenant Demo') ON CONFLICT DO NOTHING", [tenant]);
+    await client.query("INSERT INTO sobatnira.factories (id,tenant_id,name) VALUES ($1,$2,'Pabrik Demo') ON CONFLICT DO NOTHING",
+      [factory, tenant]);
+    await client.query('INSERT INTO sobatnira.tenant_memberships (tenant_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+      [tenant, admin]);
+    await client.query(`INSERT INTO sobatnira.factory_memberships (tenant_id,factory_id,user_id,role)
+      VALUES ($1,$2,$3,'admin') ON CONFLICT DO NOTHING`, [tenant, factory, admin]);
+    await client.query("INSERT INTO sobatnira.suppliers (id,tenant_id,name) VALUES ($1,$2,'PEMASOK DEMO') ON CONFLICT DO NOTHING",
+      [supplier, tenant]);
+    await client.query(`INSERT INTO sobatnira.lots (id,tenant_id,factory_id,supplier_id,received_at,display_code)
+      VALUES ($1,$2,$3,$4,'2026-11-16T01:00:00Z',$5)`, [intakeLot, tenant, factory, supplier, `TRUK-DEMO-${intakeLot.slice(0,8)}`]);
+  });
   await db.query(`INSERT INTO operator_contacts (factory_id,phone_e164,display_name,active)
     VALUES ($1,$2,'Operator Demo',true),($1,$3,'Operator Demo nonaktif',false) ON CONFLICT DO NOTHING`, [factory, phone(101), phone(102)]);
   await db.query(`INSERT INTO review_memberships (user_id,factory_id,role) VALUES ($1,$2,'ADMIN'),($3,$4,'ADMIN') ON CONFLICT DO NOTHING`,
@@ -193,7 +222,11 @@ async function smoke() {
   console.log(`Smoke adapter + OCR lulus. Validasi Nota Kedatangan Truk di Flutter (task ${task.rows[0].id}).`);
   await waitFor(async () => (await db.query('SELECT status FROM admin_review_tasks WHERE id=$1',[task.rows[0].id])).rows[0]?.status === 'VALIDATED',
     'Smoke menunggu validasi dari Flutter', 300_000);
-  console.log('Smoke Flutter + PostgreSQL lulus. Status VALIDATED tercatat.');
+  const { rows: [receipt] } = await db.query(`SELECT s.quantity_delta_kg::text AS weight
+    FROM sobatnira.intake_records i JOIN sobatnira.sugarcane_stock_movements s ON s.intake_record_id=i.id
+    WHERE i.ocr_document_id=$1 AND i.ocr_revision_id=$2`, [first.document, first.revision]);
+  assert.equal(receipt?.weight, '1250');
+  console.log('Smoke Flutter + PostgreSQL lulus. Nota sah dan 1250 kg tebu tercatat.');
 }
 
 async function stop() {

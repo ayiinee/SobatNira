@@ -222,18 +222,19 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
           await clean.query(`DELETE FROM sobatnira.${table} WHERE tenant_id=$1`, [tenant]);
         }
         await clean.query('DELETE FROM sobatnira.tenants WHERE id=$1', [tenant]);
-        await clean.query('DELETE FROM auth.users WHERE id=$1', [reviewer]);
+        await clean.query('DELETE FROM auth.users WHERE id IN ($1,$2)', [reviewer, owner]);
       } finally { await clean.end(); }
     });
     await db.transaction(async (tx) => {
-      await tx.query("INSERT INTO auth.users(id,aud,role,email) VALUES ($1,'authenticated','authenticated',$2)",
-        [reviewer, `synthetic-${reviewer}@example.invalid`]);
+      await tx.query(`INSERT INTO auth.users(id,aud,role,email)
+        VALUES ($1,'authenticated','authenticated',$2),($3,'authenticated','authenticated',$4)`,
+      [reviewer, `synthetic-${reviewer}@example.invalid`, owner, `synthetic-${owner}@example.invalid`]);
       await tx.query("INSERT INTO sobatnira.tenants(id,name) VALUES ($1,'Synthetic OCR tenant')", [tenant]);
       await tx.query("INSERT INTO sobatnira.factories(id,tenant_id,name) VALUES ($1,$3,'Synthetic factory'),($2,$3,'Other factory')",
         [factory, otherFactory, tenant]);
-      await tx.query('INSERT INTO sobatnira.tenant_memberships(tenant_id,user_id) VALUES ($1,$2)', [tenant, reviewer]);
-      await tx.query("INSERT INTO sobatnira.factory_memberships(tenant_id,factory_id,user_id,role) VALUES ($1,$2,$3,'admin')",
-        [tenant, factory, reviewer]);
+      await tx.query('INSERT INTO sobatnira.tenant_memberships(tenant_id,user_id) VALUES ($1,$2),($1,$3)', [tenant, reviewer, owner]);
+      await tx.query(`INSERT INTO sobatnira.factory_memberships(tenant_id,factory_id,user_id,role)
+        VALUES ($1,$2,$3,'admin'),($1,$2,$4,'owner')`, [tenant, factory, reviewer, owner]);
       await tx.query("INSERT INTO sobatnira.suppliers(id,tenant_id,name) VALUES ($1,$2,'Synthetic supplier')", [supplier, tenant]);
       await tx.query(`INSERT INTO sobatnira.lots(id,tenant_id,factory_id,supplier_id,received_at,display_code)
         VALUES ($1,$3,$4,$6,'2026-11-16T01:00:00Z','SYNTHETIC-TRUCK-1'),($2,$3,$5,$6,'2026-11-16T01:00:00Z','OTHER')`,
@@ -399,7 +400,7 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     assert.equal(detail.revisions.length, 3);
     assert.equal(detail.operator_confirmation.version, 2);
     const choicePath = `review-tasks/${taskId}/intake-lots`;
-    assert.equal((await mobile(choicePath, 'owner')).status, 403);
+    assert.equal((await mobile(choicePath, 'colleague')).status, 403);
     assert.equal((await mobile(choicePath, 'other-user')).status, 404);
     const { items } = await mobile(choicePath).then((response) => response.json());
     assert.deepEqual(items.map(({ id, supplierId }) => ({ id, supplierId })), [{ id: lot, supplierId: supplier }]);
@@ -500,8 +501,14 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
         expected_version: filled.version, field_path, value }, randomUUID(), 'PATCH')).status, 200);
       filled = await mobile(`review-tasks/${manualTask}`).then((response) => response.json());
     }
-    assert.equal((await mobile(`documents/${filled.document_id}/validate`, 'owner', { method: 'POST',
+    const manualLot = randomUUID();
+    await db.query(`INSERT INTO sobatnira.lots(id,tenant_id,factory_id,supplier_id,received_at)
+      VALUES ($1,$2,$3,$4,'2026-11-16T01:00:00Z')`, [manualLot, tenant, factory, supplier]);
+    const manualApproval = await mobile(`documents/${filled.document_id}/validate`, 'owner', { method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Idempotency-Key': randomUUID() },
-      body: JSON.stringify({ revision_id: filled.revision_id, expected_version: filled.version, decision: 'VALIDATED' }),
-    })).status, 200);
+      body: JSON.stringify({ revision_id: filled.revision_id, expected_version: filled.version, decision: 'VALIDATED',
+        lot_id: manualLot, supplier_id: supplier }),
+    });
+    assert.equal(manualApproval.status, 200, await manualApproval.clone().text());
+    assert.equal((await manualApproval.json()).intake.lot_id, manualLot);
   });
