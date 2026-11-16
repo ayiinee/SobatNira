@@ -290,6 +290,7 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     const truck = await fixture('truck-arrival-note');
     truck.header.arrival_date = { ...truck.header.arrival_date, normalized_value: '2026-11-16', status: 'READ' };
     truck.header.vehicle_number = { ...truck.header.vehicle_number, normalized_value: 'SYNTHETIC-TRUCK', status: 'READ' };
+    truck.header.cane_type.normalized_value = 'BL';
     truck.header.net_weight_kg = { ...truck.header.net_weight_kg, status: 'AMBIGUOUS', normalized_value: null };
     notes.push(truck);
     // A new worker picks up a crash-expired lease without losing the photo or replacing the job.
@@ -432,5 +433,16 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     assert.equal(manualDetail.media_asset_id, manual.media_asset_id);
     assert.equal(manualDetail.extraction.header.net_weight_kg.normalized_value, 1250);
     assert.equal((await change(manualDetail, 'validate', { revision_id: manualDetail.revision_id,
-      expected_version: manualDetail.version, decision: 'VALIDATED' }, randomUUID())).status, 200);
+      expected_version: manualDetail.version, decision: 'VALIDATED' }, randomUUID())).status, 409);
+    let filled = manualDetail;
+    for (const [field_path, value] of Object.entries({ 'header.arrival_date': '2026-11-16',
+      'header.supplier_name': 'PEMASOK DEMO', 'header.cane_type': 'BL' })) {
+      assert.equal((await change(filled, 'draft', { revision_id: filled.revision_id,
+        expected_version: filled.version, field_path, value }, randomUUID(), 'PATCH')).status, 200);
+      filled = await mobile(`review-tasks/${manualTask}`).then((response) => response.json());
+    }
+    assert.equal((await mobile(`documents/${filled.document_id}/validate`, 'owner', { method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': randomUUID() },
+      body: JSON.stringify({ revision_id: filled.revision_id, expected_version: filled.version, decision: 'VALIDATED' }),
+    })).status, 200);
   });

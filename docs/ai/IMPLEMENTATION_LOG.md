@@ -35,6 +35,7 @@ Untuk revisi, pencocokan otomatis memakai label blok dan pasangan kode wajan ser
 ## Verifikasi dan pekerjaan akun
 
 - `npm test` lulus 54 tes dengan PostgreSQL lokal. Dua belas tes regresi backend memakai PostgreSQL terpisah dan satu permintaan token invalid ke Supabase. Tujuh tes FastAPI, sepuluh tes Flutter, dan `flutter analyze` lulus. Cakupan meliputi duplikasi, operator nonaktif, scope pabrik, pemulihan lease, retry sampai tinjauan manual, jawaban lama, notice, receipt, efek approval, kontrak request Gemini termasuk respons 429, dan fallback OpenRouter.
+- Smoke mode lokal memproses kedua jenis nota dengan PaddleOCR CPU melalui adapter, NestJS dan PostgreSQL. Flutter di Chrome memvalidasi nota yang telah dikonfirmasi operator dan PostgreSQL mencatat `VALIDATED`. Form Flutter juga menyimpan draf manual dari foto dengan layout yang tidak dikenali. Guard validasi nota kedatangan memeriksa tanggal, pemasok, jenis tebu, dan berat positif. Tes PostgreSQL menolak validasi draf parsial dan menerima revisi yang dilengkapi oleh reviewer pada pabrik yang sama.
 - PostgreSQL Supabase dengan verifikasi TLS, Supabase Auth settings, R2 HeadBucket dan Redis melalui TLS berhasil diperiksa menggunakan konfigurasi tim. Probe R2 mengunggah dan menghapus marker sintetis, dan akses anonim melalui hostname yang diuji ditolak. Migration, login pengguna, dan smoke nota di lingkungan tim masih mengikuti langkah setup.
 - Pairing dan reconnect WhatsApp, pengiriman/receipt melalui Baileys, login akun review Supabase, serta inferensi Gemini dan OpenRouter live perlu smoke test setelah konfigurasi akun dilengkapi. Pemilihan model dan kualitas ekstraksi nota lapangan memerlukan benchmark dengan sampel anonim berlabel.
 
@@ -42,4 +43,5 @@ Untuk revisi, pencocokan otomatis memakai label blok dan pasangan kode wajan ser
 
 - Field mana yang membentuk label tebu, dan kapan label itu dapat dipetakan otomatis ke kloter atau baris wajan jika bukti kurang? Workflow meminta rujukan eksplisit dan mempertahankan label mentah.
 - Kapan Brix produksi diukur, apa fungsi kolom tertutup, dan bagaimana cara baku membaca pecahan satuan gamping? Nilai disimpan dengan tahap `UNKNOWN`, kolom yang belum dipetakan, dan `CUSTOM_MEASURE`.
+- Field produksi apa yang wajib diisi untuk validasi ketika foto baru mencakup tahap pemasakan? Draf tetap dapat menyimpan kolom hasil dan grade yang belum tercatat.
 - Berapa lama foto dan audit perlu disimpan, dan apakah notifikasi harus dikirim saat aplikasi ditutup? Bukti tersimpan privat. Badge admin tersedia di Pekerjaan.

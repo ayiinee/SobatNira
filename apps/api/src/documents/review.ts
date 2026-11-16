@@ -160,6 +160,17 @@ export class Review {
             !fields(base.extraction).some(([, field]) => field.status === 'READ' && field.normalized_value !== null)) {
           throw new ConflictException('Selesaikan konflik hasil ekstraksi sebelum validasi');
         }
+        if (base.extraction.document_type === 'TRUCK_ARRIVAL_NOTE') {
+          const header = new Map(fields(base.extraction.header, 'header'));
+          const value = (path: string) => {
+            const field = header.get(`header.${path}`);
+            return field?.status === 'READ' ? field.normalized_value : null;
+          };
+          const weight = value('net_weight_kg');
+          if (!value('arrival_date') || !value('supplier_name') || !value('cane_type') || typeof weight !== 'number' || weight <= 0) {
+            throw new ConflictException('Lengkapi tanggal kedatangan, pemasok, jenis tebu, dan berat bersih positif sebelum validasi');
+          }
+        }
         await db.query(`INSERT INTO document_approvals (document_id,revision_id,user_id,note) VALUES ($1,$2,$3,$4)`,
           [document, revisionId, user, body.note ?? null]);
         await db.query(`UPDATE admin_review_tasks SET status='VALIDATED' WHERE id=$1`, [task.id]);

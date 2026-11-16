@@ -38,7 +38,7 @@ def generate(folder):
         note.save(folder / f"{name}.png")
     Image.new("RGB", (640, 420), "white").save(folder / "unreadable.png")
     manual = Image.new("RGB", (640, 420), "white")
-    ImageDraw.Draw(manual).text((45, 100), "CATATAN TIMBANG\n1250 KG", fill="black", font=font(39))
+    ImageDraw.Draw(manual).text((45, 60), "CATATAN TIMBANG\n16-11-2026\nPEMASOK DEMO\nBL\n1250 KG", fill="black", font=font(39))
     manual.save(folder / "manual.png")
 
 
