@@ -8,8 +8,8 @@ Dalam tahap ini, nota hasil merepresentasikan penggilingan selesai untuk satu kl
 
 - NestJS menangani validasi, akses, revisi, audit, dan ledger resmi penggilingan. FastAPI/OCR belum dipanggil oleh modul ini.
 - Baris `reportedBatches` adalah rincian batch yang dilaporkan pada nota dan disahkan sebagai snapshot bersama penggilingan. `batchReference` merupakan label dari nota, belum identitas batch pemasakan resmi. `reportedBatchCount` menghitung baris unik yang dilaporkan, bukan perkiraan `total / 115`.
-- Kontribusi nira kloter asal pada batch campuran dapat dicatat tanpa menghitung seluruh volume batch sebagai milik kloter ini. Rekonsiliasi label batch lintas nota, transfer stok, ledger pemasakan, hasil timbang, dan grade resmi perlu modul lanjutan setelah contoh nota tersedia.
-- `stock/juice` saat ini menunjukkan saldo ledger tahap penggilingan (nira dihasilkan). Rincian batch belum mendebit ledger tersebut; jangan mengartikannya sebagai nira tersisa setelah pemasakan. Proses lanjutan harus membukukan pemakaian, sehingga nira tidak dipakai dua kali.
+- Kontribusi nira kloter asal pada batch campuran dapat dicatat tanpa menghitung seluruh volume batch sebagai milik kloter ini. Transfer dan pemakaian stok tercatat melalui API nira. Rekonsiliasi label batch lintas nota, hasil timbang, dan grade resmi perlu disesuaikan dengan contoh nota yang sebenarnya.
+- `stock/juice` menunjukkan total nira dari tahap penggilingan. Gunakan [kontrak nira Backend B](backend-juice-and-closure.md) untuk saldo tersedia, reservasi, pemakaian, dan transfer. Rincian batch pada nota tidak mendebit stok secara otomatis.
 - Upload bukti R2 masih terpasang pada nota penerimaan. Bukti nota kedua dan kontrak lengkap OCR akan mengikuti struktur nota sebenarnya; jangan mengirim nota asli ke Git.
 
 ## Setup dan pemeriksaan

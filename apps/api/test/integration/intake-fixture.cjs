@@ -26,7 +26,7 @@ async function intakeFixture(committed = false, extraEnv = {}) {
         // Only this fixture's freshly inserted, randomly identified tenants are removed.
         await client.query('BEGIN');
         await client.query('SET CONSTRAINTS ALL DEFERRED');
-        for (const table of ['sugarcane_stock_movements', 'juice_stock_movements', 'milling_records', 'milling_document_events',
+        for (const table of ['lot_closures', 'juice_transfers', 'juice_reservations', 'sugarcane_stock_movements', 'juice_stock_movements', 'milling_records', 'milling_document_events',
           'milling_document_revisions', 'milling_documents', 'intake_records', 'intake_document_events', 'intake_document_revisions',
           'intake_evidence', 'intake_documents', 'production_audit_events', 'lots', 'suppliers', 'factory_memberships', 'tenant_memberships', 'factories']) {
           await client.query(`DELETE FROM sobatnira.${table} WHERE tenant_id IN ($1, $2)`, [ids.tenant, ids.otherTenant]);

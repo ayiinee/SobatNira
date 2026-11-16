@@ -16,6 +16,7 @@ export interface BackendConfig {
   timeoutMs: number;
   aiTimeoutMs: number;
   aiBaseUrl: string;
+  batchClosure?: { baseUrl: string; timeoutMs: number };
   supabase?: { url: string; publishableKey: string; secretKey?: string };
   postgres?: { url: string; caFile?: string };
   redis?: { url: string };
@@ -115,6 +116,12 @@ export function loadConfiguration(options: ConfigOptions = {}): BackendConfig {
     aiTimeoutMs: integer('AI_TIMEOUT_MS', 3000, 100, 60000),
     aiBaseUrl,
   };
+
+  if (value('BATCH_API_BASE_URL')) {
+    const baseUrl = value('BATCH_API_BASE_URL');
+    credentialEndpoint('BATCH_API_BASE_URL', baseUrl, true);
+    config.batchClosure = { baseUrl, timeoutMs: integer('BATCH_CLOSURE_TIMEOUT_MS', 3000, 100, 10000) };
+  }
 
   if (value('SUPABASE_URL') || value('SUPABASE_PUBLISHABLE_KEY') || value('SUPABASE_SECRET_KEY')) {
     const supabaseUrl = required('SUPABASE_URL');
