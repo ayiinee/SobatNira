@@ -4,6 +4,7 @@ import '../../sobatnira_ui.dart';
 import 'demo_production.dart';
 import 'kloter_card.dart';
 import 'kloter_date_filter.dart';
+import '../batches/production_batch_list.dart';
 
 class KloterListPage extends StatefulWidget {
   const KloterListPage({
@@ -84,6 +85,13 @@ class _KloterListPageState extends State<KloterListPage> {
                 ),
               ),
               _filterButton(context),
+              IconButton(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => BatchListPage()),
+                ),
+                icon: const Icon(Icons.factory_outlined),
+                tooltip: 'Batch produksi',
+              ),
             ],
           ),
         ),

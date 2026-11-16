@@ -34,6 +34,20 @@ Untuk membuka layar draf sintetis secara mandiri, tambahkan `-t lib/main_demo.da
 - **NestJS.** Di `apps/api`, jalankan `npm ci`, `npm test`, lalu `npm run dev`. Cek `http://127.0.0.1:3000/health`. Tes API memakai upstream lokal khusus tes. Endpoint `/demo/draft` memerlukan FastAPI yang sedang berjalan.
 - **FastAPI.** Di `apps/ai`, jalankan `uv sync --locked --python 3.13`, `uv run --locked python -m unittest`, lalu `uv run --locked uvicorn main:app --host 127.0.0.1 --port 8000 --reload`. Cek `http://127.0.0.1:8000/docs` dan coba `GET /demo/draft` dari dokumentasi API lokal.
 
+### Environment API
+
+Template environment berada di `apps/api/.env.example`. Salin menjadi `apps/api/.env`, lalu isi kredensial saat integrasi layanan Backend A dimulai. Starter lokal hanya memakai:
+
+```env
+API_PORT=3000
+AI_BASE_URL=http://127.0.0.1:8000
+DATA_MODE=fixture
+```
+
+`npm run dev` memuat `apps/api/.env` otomatis. File `.env` tidak boleh di-commit; `.env.example` aman dibagikan tanpa nilai rahasia.
+
+Endpoint produksi B1 memakai header identitas development saat `NODE_ENV=development`: `x-dev-user-id`, `x-dev-tenant-id`, `x-dev-factory-id`, dan `x-dev-role` (`admin` atau `owner`). Mode `fixture` memakai data sintetis; mode `supabase` memakai migrasi `apps/api/migrations/001_b1_production.sql`.
+
 ## Jalankan integrasi di tiga terminal
 
 **1. FastAPI** dari akar repo.

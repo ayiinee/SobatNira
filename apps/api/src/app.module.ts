@@ -1,4 +1,5 @@
 import { Controller, Get, Module, ServiceUnavailableException } from '@nestjs/common';
+import { BatchesModule } from './batches/batches.module';
 
 @Controller()
 class AppController {
@@ -24,5 +25,5 @@ class AppController {
   }
 }
 
-@Module({ controllers: [AppController] })
+@Module({ controllers: [AppController], imports: [BatchesModule] })
 export class AppModule {}
