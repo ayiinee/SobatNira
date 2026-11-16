@@ -34,7 +34,7 @@ const JOINS = `FROM sobatnira.milling_documents d
 
 type MillingSource =
   | { synthetic: true; documentId: string; documentRevision: number }
-  | { synthetic: false; ocrDocumentId: string; ocrRevisionId: string };
+  | { synthetic: false; ocrDocumentId: string; ocrRevisionId: string; caneLabel: string };
 
 @Injectable()
 export class MillingRepository {
@@ -127,17 +127,19 @@ export class MillingRepository {
   }
 
   // The caller holds the lot lock and checks the approved receipt and its balance in this transaction.
-  async postMilling(tx: DatabaseSession, access: FactoryAccess, fields: ReturnType<typeof completeMillingFields>,
+  async postMilling(tx: DatabaseSession, access: FactoryAccess,
+    fields: { lotId: string; occurredAt: string; juiceProducedLiters: string; reportedBatches: readonly unknown[] },
     intake: { id: string; netWeightKg: string }, source: MillingSource) {
     const record = (await tx.query<{ id: string; approvedAt: Date }>(`INSERT INTO sobatnira.milling_records
       (tenant_id, factory_id, lot_id, intake_record_id, document_id, document_revision, cane_consumed_kg,
-        juice_produced_liters, occurred_at, approved_by, is_synthetic, reported_batches, ocr_document_id, ocr_revision_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7::numeric, $8::numeric, $9::timestamptz, $10, $11, $12::jsonb, $13, $14)
+        juice_produced_liters, occurred_at, approved_by, is_synthetic, reported_batches, ocr_document_id, ocr_revision_id, ocr_cane_label)
+      VALUES ($1, $2, $3, $4, $5, $6, $7::numeric, $8::numeric, $9::timestamptz, $10, $11, $12::jsonb, $13, $14, $15)
       RETURNING id, approved_at AS "approvedAt"`,
     [access.tenantId, access.factoryId, fields.lotId, intake.id,
       source.synthetic ? source.documentId : null, source.synthetic ? source.documentRevision : null, intake.netWeightKg,
       fields.juiceProducedLiters, fields.occurredAt, access.userId, source.synthetic, JSON.stringify(fields.reportedBatches),
-      source.synthetic ? null : source.ocrDocumentId, source.synthetic ? null : source.ocrRevisionId])).rows[0];
+      source.synthetic ? null : source.ocrDocumentId, source.synthetic ? null : source.ocrRevisionId,
+      source.synthetic ? null : source.caneLabel])).rows[0];
     await tx.query(`INSERT INTO sobatnira.sugarcane_stock_movements
       (tenant_id, factory_id, lot_id, milling_record_id, movement_type, quantity_delta_kg, occurred_at, is_synthetic)
       VALUES ($1, $2, $3, $4, 'milling', -($5::numeric), $6::timestamptz, $7)`,
@@ -184,7 +186,8 @@ export class MillingRepository {
         'juiceProducedLiters', m.juice_produced_liters::text, 'reportedBatchCount', m.reported_batch_count,
         'reportedBatches', m.reported_batches, 'occurredAt', m.occurred_at, 'approvedAt', m.approved_at, 'synthetic', m.is_synthetic)
         || CASE WHEN m.is_synthetic THEN '{}'::jsonb
-          ELSE jsonb_build_object('ocrDocumentId', m.ocr_document_id, 'ocrRevisionId', m.ocr_revision_id) END
+          ELSE jsonb_build_object('ocrDocumentId', m.ocr_document_id, 'ocrRevisionId', m.ocr_revision_id,
+            'ocrCaneLabel', m.ocr_cane_label) END
         FROM sobatnira.milling_records m WHERE m.tenant_id = l.tenant_id AND m.factory_id = l.factory_id
           AND m.lot_id = l.id AND m.is_synthetic = $5) AS milling
       FROM sobatnira.lots l JOIN authorized_scope scope ON scope."tenantId" = l.tenant_id AND scope."factoryId" = l.factory_id
