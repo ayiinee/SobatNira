@@ -9,10 +9,12 @@ import { manualNote } from './manual-note';
 import { enqueueNotice } from './notices';
 import { supabaseKey } from './config';
 import { PostedIntake, postedIntakeColumns, TruckIntake } from './truck-intake';
+import { ProductionMilling } from './production-milling';
 
 @Injectable()
 export class Review {
-  constructor(private readonly db: Database, private readonly truckIntake: TruckIntake) {}
+  constructor(private readonly db: Database, private readonly truckIntake: TruckIntake,
+    private readonly productionMilling: ProductionMilling) {}
 
   async user(authorization?: string) {
     if (!authorization || !/^Bearer \S{1,8192}$/.test(authorization)) throw new UnauthorizedException();
@@ -75,22 +77,29 @@ export class Review {
         [task.factory_id, task.document_id, task.revision_id]);
         intake = result.rows[0] ?? null;
       }
+      const milling = task.document_type === 'PRODUCTION_NOTE'
+        ? await this.productionMilling.posted(db, task.factory_id, task.document_id, task.version) : [];
       return { ...task, revisions: history, operator_confirmation: history.find((row) => row.confirmed_at) ?? null,
-        intake, audit: auditTrail, actions: task.current_revision_id !== task.revision_id ? [] : task.status === 'PENDING_VALIDATION'
+        intake, milling, audit: auditTrail, actions: task.current_revision_id !== task.revision_id ? [] : task.status === 'PENDING_VALIDATION'
           ? ['CORRECT', 'VALIDATE', 'RETURN'] : task.status === 'MANUAL_REVIEW_REQUIRED' ? ['MANUAL_ENTRY', 'RETURN'] : [] };
     });
   }
 
   intakeLots(user: string, id: string, query: unknown) {
+    return this.productionLots(user, id, query, 'TRUCK_ARRIVAL_NOTE');
+  }
+
+  productionLots(user: string, id: string, query: unknown, documentType: 'TRUCK_ARRIVAL_NOTE' | 'PRODUCTION_NOTE') {
     const page = parsePage(query);
     return this.db.transaction(async (db) => {
       const { rows: [task] } = await db.query<{ factory_id: string }>(`SELECT d.factory_id
         FROM admin_review_tasks t JOIN source_documents d ON d.id=t.document_id
         JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1 AND a.active
-        WHERE t.id=$2 AND d.document_type='TRUCK_ARRIVAL_NOTE' AND t.status='PENDING_VALIDATION'
-          AND d.current_revision_id=t.revision_id FOR SHARE OF a`, [user, id]);
-      if (!task) throw new NotFoundException('Pekerjaan penerimaan tidak ditemukan.');
-      return this.truckIntake.choices(db, user, task.factory_id, page);
+        WHERE t.id=$2 AND d.document_type=$3 AND t.status='PENDING_VALIDATION'
+          AND d.current_revision_id=t.revision_id FOR SHARE OF a`, [user, id, documentType]);
+      if (!task) throw new NotFoundException('Pekerjaan produksi tidak ditemukan.');
+      return documentType === 'TRUCK_ARRIVAL_NOTE' ? this.truckIntake.choices(db, user, task.factory_id, page)
+        : this.productionMilling.choices(db, user, task.factory_id, page);
     });
   }
 
@@ -131,7 +140,8 @@ export class Review {
     const lotSelection = body.lot_id === undefined && body.supplier_id === undefined ? [] : [body.lot_id, body.supplier_id];
     const fingerprint = createHash('sha256').update(JSON.stringify([document, action, revisionId, body.expected_version,
       body.field_path, body.value, body.decision, body.reason_code, body.comment, body.request_operator_follow_up, body.note,
-      ...(action === 'MANUAL_ENTRY' ? [body.document_type, body.values, body.rows_per_block] : []), ...lotSelection])).digest('hex');
+      ...(action === 'MANUAL_ENTRY' ? [body.document_type, body.values, body.rows_per_block] : []), ...lotSelection,
+      ...(body.milling === undefined ? [] : [body.milling])])).digest('hex');
     return this.db.transaction(async (db) => {
       const { rows: [doc] } = await db.query(`SELECT d.* FROM source_documents d
         JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1 AND a.active
@@ -201,9 +211,16 @@ export class Review {
             documentId: document, revisionId, userId: user, factoryId: doc.factory_id,
             lotId: requireUuid(body.lot_id), supplierId: requireUuid(body.supplier_id), note: base.extraction,
           }) : null;
+        const milling = doc.document_type === 'PRODUCTION_NOTE'
+          ? await this.productionMilling.post(db, {
+            documentId: document, revisionId, version: base.version, userId: user, factoryId: doc.factory_id,
+            note: base.extraction, mappings: body.milling,
+          }) : null;
         await db.query(`UPDATE admin_review_tasks SET status='VALIDATED' WHERE id=$1`, [task.id]);
-        await audit(db, base, 'ADMIN_VALIDATED', user, intake ? { intake_record_id: intake.id, lot_id: intake.lot_id } : undefined);
-        outcome = { revision_id: revisionId, version: base.version, status: 'VALIDATED', ...(intake ? { intake } : {}) };
+        await audit(db, base, 'ADMIN_VALIDATED', user, intake ? { intake_record_id: intake.id, lot_id: intake.lot_id }
+          : milling ? { milling_record_ids: milling.map(({ id }) => id) } : undefined);
+        outcome = { revision_id: revisionId, version: base.version, status: 'VALIDATED',
+          ...(intake ? { intake } : {}), ...(milling ? { milling } : {}) };
       } else {
         if (typeof body.reason_code !== 'string' || !/^[A-Z_]{1,64}$/.test(body.reason_code) ||
             typeof body.comment !== 'string' || body.comment.length < 1 || body.comment.length > 1000 ||

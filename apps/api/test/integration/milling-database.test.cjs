@@ -51,7 +51,7 @@ test('real milling can debit an OCR receipt and credit nira while preserving rev
       assert.equal(intake.stockMatches, true);
       await repo.postMilling(tx, access, {
         lotId: ids.lot, occurredAt: '2026-11-16T02:00:00Z', juiceProducedLiters: quantity, reportedBatches: [],
-      }, intake, { synthetic: false, ocrDocumentId, ocrRevisionId });
+      }, intake, { synthetic: false, ocrDocumentId, ocrRevisionId, caneLabel: 'DEMO-A' });
     });
     assert.equal((await request(root + '/stock/sugarcane?lotId=' + ids.lot)).body.quantityKg, '0.00');
     assert.equal((await request(root + '/stock/juice?lotId=' + ids.lot)).body.quantityLiters, quantity);

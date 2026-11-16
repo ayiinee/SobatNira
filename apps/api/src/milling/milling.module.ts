@@ -4,5 +4,10 @@ import { JuiceStockController, MillingController, MillingSummaryController } fro
 import { MillingRepository } from './milling.repository';
 import { MillingService } from './milling.service';
 
-@Module({ imports: [DatabaseModule], controllers: [MillingController, JuiceStockController, MillingSummaryController], providers: [MillingRepository, MillingService] })
+@Module({
+  imports: [DatabaseModule],
+  controllers: [MillingController, JuiceStockController, MillingSummaryController],
+  providers: [MillingRepository, MillingService],
+  exports: [MillingRepository],
+})
 export class MillingModule {}

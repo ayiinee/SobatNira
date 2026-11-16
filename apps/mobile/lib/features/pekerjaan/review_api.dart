@@ -88,9 +88,15 @@ class ReviewApi {
   Future<Json> detail(String id) =>
       _json(_client.get(_url('review-tasks/$id'), headers: _headers));
 
-  Future<Json> intakeLots(String taskId, int offset) => _json(
+  Future<Json> intakeLots(
+    String taskId,
+    int offset, {
+    bool milling = false,
+  }) => _json(
     _client.get(
-      _url('review-tasks/$taskId/intake-lots?offset=$offset'),
+      _url(
+        'review-tasks/$taskId/${milling ? 'milling' : 'intake'}-lots?offset=$offset',
+      ),
       headers: _headers,
     ),
   );

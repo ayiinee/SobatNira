@@ -11,6 +11,8 @@ import { DocumentProcessor } from './processing';
 import { Review } from './review';
 import { Notices } from './notices';
 import { TruckIntake } from './truck-intake';
+import { MillingModule } from '../milling/milling.module';
+import { ProductionMilling } from './production-milling';
 
 @Injectable()
 class AdapterGuard implements CanActivate {
@@ -130,6 +132,12 @@ class MobileReviewController {
     return this.review.intakeLots(await this.review.user(token), requireUuid(id), query);
   }
 
+  @Get('review-tasks/:id/milling-lots')
+  @Header('Cache-Control', 'private, no-store')
+  async millingLots(@Headers('authorization') token: string, @Param('id') id: string, @Query() query: unknown) {
+    return this.review.productionLots(await this.review.user(token), requireUuid(id), query, 'PRODUCTION_NOTE');
+  }
+
   @Get('review-tasks/:id/assets/:asset')
   @Header('Cache-Control', 'private, no-store')
   @Header('X-Content-Type-Options', 'nosniff')
@@ -166,6 +174,9 @@ class MobileReviewController {
   }
 }
 
-@Module({ controllers: [WhatsAppController, OcrMediaController, MobileReviewController],
-  providers: [AdapterGuard, Database, DocumentProcessor, Intake, MediaStorage, Notices, Review, TruckIntake] })
+@Module({
+  imports: [MillingModule],
+  controllers: [WhatsAppController, OcrMediaController, MobileReviewController],
+  providers: [AdapterGuard, Database, DocumentProcessor, Intake, MediaStorage, Notices, Review, TruckIntake, ProductionMilling],
+})
 export class OcrDocumentsModule {}
