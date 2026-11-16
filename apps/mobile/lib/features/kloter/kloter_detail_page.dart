@@ -173,22 +173,12 @@ class _BatchTile extends StatelessWidget {
                   children: [
                     Expanded(
                       flex: 24,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 5,
-                          vertical: 7,
-                        ),
-                        decoration: BoxDecoration(
-                          color: niraPaper,
-                          borderRadius: BorderRadius.circular(5),
-                        ),
-                        child: Text(
-                          'Batch ${batch.number}',
-                          style: niraText(
-                            14.2,
-                            color: pending ? niraGold : niraGreen,
-                            weight: FontWeight.w700,
-                          ),
+                      child: Text(
+                        'Batch ${batch.number}',
+                        style: niraText(
+                          14.2,
+                          color: pending ? foreground : niraYellow,
+                          weight: FontWeight.w700,
                         ),
                       ),
                     ),

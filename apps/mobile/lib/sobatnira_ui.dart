@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -64,6 +66,7 @@ class NiraScaffold extends StatelessWidget {
     required this.body,
     this.bottomAction,
     this.actionGap = 14,
+    this.floatingNavigation = false,
     super.key,
   });
 
@@ -72,13 +75,14 @@ class NiraScaffold extends StatelessWidget {
   final Widget body;
   final Widget? bottomAction;
   final double actionGap;
+  final bool floatingNavigation;
 
   @override
   Widget build(BuildContext context) {
     final padding = MediaQuery.viewPaddingOf(context);
     final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
     const navigationHeight = 52.0;
-    final navigationBottom = padding.bottom + 8;
+    final navigationBottom = math.max(padding.bottom, 16.0);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark.copyWith(
         statusBarColor: Colors.transparent,
@@ -90,28 +94,44 @@ class NiraScaffold extends StatelessWidget {
         body: SafeArea(
           top: false,
           bottom: false,
-          child: Column(
+          child: Stack(
+            fit: StackFit.expand,
             children: [
-              SizedBox(height: padding.top),
-              Expanded(child: ClipRect(child: body)),
-              if (!keyboard && bottomAction != null)
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    niraInset,
-                    6,
-                    niraInset,
-                    actionGap,
-                  ),
-                  child: bottomAction,
-                ),
-              if (!keyboard)
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    niraInset,
-                    14,
-                    niraInset,
-                    math.max(padding.bottom, 30),
-                  ),
+              Column(
+                children: [
+                  SizedBox(height: padding.top + 12),
+                  Expanded(child: ClipRect(child: body)),
+                  if (!keyboard && bottomAction != null)
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        niraInset,
+                        6,
+                        niraInset,
+                        actionGap,
+                      ),
+                      child: bottomAction,
+                    ),
+                  if (!keyboard && !floatingNavigation)
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        niraInset,
+                        14,
+                        niraInset,
+                        math.max(padding.bottom, 30),
+                      ),
+                      child: _BottomNavigation(
+                        tab: tab,
+                        onNavigate: onNavigate,
+                      ),
+                    ),
+                ],
+              ),
+              if (!keyboard && floatingNavigation)
+                Positioned(
+                  left: niraInset,
+                  right: niraInset,
+                  bottom: navigationBottom,
+                  height: navigationHeight,
                   child: _BottomNavigation(tab: tab, onNavigate: onNavigate),
                 ),
             ],

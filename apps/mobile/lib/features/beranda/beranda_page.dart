@@ -40,51 +40,56 @@ class _BerandaPageState extends State<BerandaPage> {
             ],
           ),
         ),
-        SliverFillRemaining(
-          hasScrollBody: false,
-          child: DecoratedBox(
-            decoration: const BoxDecoration(
-              border: Border(
-                top: BorderSide(color: niraLeaf, width: 1),
-                left: BorderSide(color: niraLeaf, width: 1),
-                right: BorderSide(color: niraLeaf, width: 1),
+        SliverPadding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewPaddingOf(context).bottom + 82,
+          ),
+          sliver: SliverFillRemaining(
+            hasScrollBody: false,
+            child: DecoratedBox(
+              decoration: const BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: niraLeaf, width: 1),
+                  left: BorderSide(color: niraLeaf, width: 1),
+                  right: BorderSide(color: niraLeaf, width: 1),
+                ),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(7)),
               ),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(7)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                NiraTabs(
-                  labels: const ['Tinjau', 'Tuntas'],
-                  selected: _selected,
-                  height: 50,
-                  fontSize: 14.5,
-                  inset: 27,
-                  wideIndicator: true,
-                  onSelected: (value) => setState(() => _selected = value),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    niraInset,
-                    15,
-                    niraInset,
-                    13,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  NiraTabs(
+                    labels: const ['Tinjau', 'Tuntas'],
+                    selected: _selected,
+                    height: 50,
+                    fontSize: 14.5,
+                    inset: 27,
+                    wideIndicator: true,
+                    onSelected: (value) => setState(() => _selected = value),
                   ),
-                  child: Column(
-                    children: [
-                      for (final item in recent)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 9),
-                          child: KloterCard(
-                            kloter: item,
-                            onTap: () => widget.onOpenKloter(item),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      niraInset,
+                      15,
+                      niraInset,
+                      13,
+                    ),
+                    child: Column(
+                      children: [
+                        for (final item in recent)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 9),
+                            child: KloterCard(
+                              kloter: item,
+                              onTap: () => widget.onOpenKloter(item),
+                            ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 82),
-              ],
+                  const SizedBox(height: 82),
+                ],
+              ),
             ),
           ),
         ),
