@@ -18,16 +18,28 @@ OpenClaw/Baileys memasok identitas pesan dan file staging ke NestJS. NestJS meng
 
 Untuk revisi, pencocokan otomatis memakai label blok dan pasangan kode wajan serta jam turun yang terbaca dan unik pada blok terkait. Jika bukti tidak cukup, draf diberi blocker dan riwayat tetap dapat diperiksa. Nilai yang masih valid dapat diteruskan bersama evidence dari revisi sumber. Aturan label tebu, satuan gamping operasional, tahap Brix, dan makna kolom yang tidak dikenali masih mengikuti penanganan terbuka di PRD.
 
-## Pekerjaan terbuka
-
-- Pairing dan reconnect WhatsApp/OpenClaw, pengiriman notice lewat gateway, OpenRouter, R2, Supabase proyek, dan Gemini masih memerlukan uji akun live. Model OpenRouter baru perlu dikunci sesudah benchmark sesuai kebijakan provider tim.
-- Ringkasan otomatis bergantung pada sesi gateway. Jika notice tidak tersedia atau gateway restart, operator dapat mengambil draf kembali lewat `STATUS`. Pengembalian mencatat alasan dan membuka revisi koreksi baru. Operator dapat mengambilnya lewat `STATUS` untuk submission yang sama.
-- Parser mendukung layout baseline yang diuji. Sampel anonim berlabel dibutuhkan untuk mengukur akurasi tulisan tangan, layout tidak lazim, pemisahan kolom kosong dan tidak terbaca, dan kecocokan baris yang buktinya belum lengkap. Tinjauan manual menampilkan foto dan alasan ketika OCR gagal. Pengisian hasil manual tanpa draf belum tersedia.
-- Urutan berikutnya adalah uji gateway dan akun pengembangan, benchmark sampel anonim, dan review bersama tim atas pemetaan template, kebutuhan push saat aplikasi tertutup, serta retensi media sebelum pilot.
-
 ## Lanjutan pada baseline `ce73b4f`
 
 - **Bantuan operator.** Plugin OpenClaw memverifikasi rujukan foto terhadap percakapan dan operator aktif melalui NestJS. OpenRouter hanya memilih kategori panduan. Default memakai template dan fallback model terbatas pada kegagalan sementara. Perintah status, penulisan koreksi dan konfirmasi tetap ditangani melalui jalur deterministik.
 - **Notifikasi admin.** Migration `002_review_notifications.sql` menyimpan notifikasi per task dan per admin aktif di pabrik yang sama. Pembuatan notifikasi berada dalam transaksi konfirmasi operator. Flutter membaca badge secara berkala selama Pekerjaan aktif dan menandai notifikasi saat detail berhasil dimuat. Endpoint review tetap dapat digunakan apabila permintaan notifikasi gagal.
 - **Benchmark.** `apps/ai/benchmark_ocr.py` mengukur klasifikasi, kecocokan anotasi field, dan median waktu proses dengan PaddleOCR lokal. Hasil agregat dapat dibagikan tanpa menyertakan nilai nota. Dataset anonim berlabel tetap diperlukan untuk melaporkan akurasi pada nota lapangan.
 - **Verifikasi.** Lima tes NestJS dengan PostgreSQL, tujuh tes FastAPI, sepuluh tes Flutter, dan `flutter analyze` lulus. Chrome dengan autentikasi stub menampilkan satu badge untuk admin, menyimpan `read_at` setelah detail dibuka, dan tetap menampilkan task setelah badge hilang. Benchmark PaddleOCR CPU atas satu nota sintetis mengklasifikasikan tipe dengan benar dan mencocokkan ketiga anotasi field.
+
+## Penyelesaian alur pada `main` 118bbc4
+
+- **Klarifikasi dan foto ulang.** Migration OCR `003` mengikat pertanyaan ke field dan revisi. Jawaban dari operator pada percakapan yang sama membuat revisi baru dan menutup pertanyaan lama. Foto ulang menggunakan ID dokumen dan revisi yang aktif dan mempertahankan foto lama. Foto produksi lanjutan dapat mengutip foto sebelumnya atau receipt pesan bot yang tercatat di PostgreSQL, atau membawa ID eksplisit. Pencocokan baris mempertahankan raw value, normalized value, evidence, dan status ambigu.
+- **Pengiriman WhatsApp.** Plugin memetakan konteks `reply_dispatch` OpenClaw 2026.11.4 untuk akun khusus. Migration OCR `004` menyimpan ringkasan dan permintaan koreksi dalam antrean persisten. Adapter outbound WhatsApp mengembalikan ID pesan untuk kutipan berikutnya. Ada lease, retry, pembatalan jika revisi terganti, dan perintah `STATUS` jika operator perlu mengambil ulang ringkasan. Pengiriman ulang dapat menghasilkan pesan kedua bila gateway berhenti setelah provider menerima pesan dan sebelum receipt disimpan.
+- **Pengecualian OCR.** Admin dapat membuka foto melalui Pekerjaan, membuat draf manual untuk kedua tipe nota, lalu memvalidasi revisi pada tindakan terpisah. Audit menyimpan alasan isian manual, asal revisi, perubahan nilai dan keputusan. Owner dapat membaca tugas, dengan hak perubahan mengikuti role yang ada.
+- **Mode lokal dan terhubung.** [Panduan setup](README.md) mencakup bootstrap fixture dan worker, migration OCR terpisah dari migration produksi, setup akun berpabrik, konfigurasi gateway, pemeriksaan kesiapan, dan urutan smoke test. Mode terhubung memilih adapter Supabase, R2, OpenClaw, OpenRouter dan Gemini secara eksplisit.
+
+## Verifikasi dan pekerjaan akun
+
+- `npm test` lulus 54 tes dengan PostgreSQL lokal. Dua belas tes regresi backend memakai PostgreSQL terpisah dan satu permintaan token invalid ke Supabase. Tujuh tes FastAPI, sepuluh tes Flutter, dan `flutter analyze` lulus. Cakupan meliputi duplikasi, operator nonaktif, scope pabrik, pemulihan lease, retry sampai tinjauan manual, jawaban lama, notice, receipt, efek approval, kontrak request Gemini termasuk respons 429, dan fallback OpenRouter.
+- PostgreSQL Supabase dengan verifikasi TLS, Supabase Auth settings, R2 HeadBucket dan Redis melalui TLS berhasil diperiksa menggunakan konfigurasi tim. Probe R2 mengunggah dan menghapus marker sintetis, dan akses anonim melalui hostname yang diuji ditolak. Migration, login pengguna, dan smoke nota di lingkungan tim masih mengikuti langkah setup.
+- Pairing dan reconnect WhatsApp, pengiriman/receipt melalui Baileys, login akun review Supabase, serta inferensi Gemini dan OpenRouter live perlu smoke test setelah konfigurasi akun dilengkapi. Pemilihan model dan kualitas ekstraksi nota lapangan memerlukan benchmark dengan sampel anonim berlabel.
+
+## Keputusan produk yang masih terbuka
+
+- Field mana yang membentuk label tebu, dan kapan label itu dapat dipetakan otomatis ke kloter atau baris wajan jika bukti kurang? Workflow meminta rujukan eksplisit dan mempertahankan label mentah.
+- Kapan Brix produksi diukur, apa fungsi kolom tertutup, dan bagaimana cara baku membaca pecahan satuan gamping? Nilai disimpan dengan tahap `UNKNOWN`, kolom yang belum dipetakan, dan `CUSTOM_MEASURE`.
+- Berapa lama foto dan audit perlu disimpan, dan apakah notifikasi harus dikirim saat aplikasi ditutup? Bukti tersimpan privat. Badge admin tersedia di Pekerjaan.

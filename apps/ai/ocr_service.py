@@ -10,6 +10,7 @@ import re
 from threading import Lock
 from time import monotonic
 from typing import Literal
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException
@@ -32,6 +33,33 @@ MAX_BYTES = 10 * 1024 * 1024
 MAX_PIXELS = 20_000_000
 PADDLE_LOCK = Lock()
 router = APIRouter()
+
+
+def validate_runtime():
+    mode = os.getenv("SOBATNIRA_MODE")
+    if mode is None:
+        return
+    missing = []
+    if mode not in {"local", "connected"}:
+        missing.append("FastAPI: SOBATNIRA_MODE")
+    if len(os.getenv("AI_SERVICE_INTERNAL_TOKEN", "")) < 32:
+        missing.append("FastAPI: AI_SERVICE_INTERNAL_TOKEN")
+    try:
+        parsed = urlsplit(os.getenv("OCR_MEDIA_BASE_URL", ""))
+        valid_media_url = parsed.scheme in {"http", "https"} and parsed.hostname and not parsed.username and not parsed.password
+    except ValueError:
+        valid_media_url = False
+    if not valid_media_url:
+        missing.append("FastAPI: OCR_MEDIA_BASE_URL")
+    if mode == "connected":
+        if not os.getenv("GEMINI_API_KEY"):
+            missing.append("Gemini: GEMINI_API_KEY")
+        if not re.fullmatch(r"[a-zA-Z0-9._-]+", os.getenv("GEMINI_VISION_MODEL", "")):
+            missing.append("Gemini: GEMINI_VISION_MODEL")
+    elif mode == "local" and os.getenv("GEMINI_API_KEY"):
+        missing.append("Gemini: hapus GEMINI_API_KEY pada mode local")
+    if missing:
+        raise RuntimeError("\n".join(missing))
 
 
 class ImageReference(BaseModel):
@@ -178,13 +206,29 @@ def resolve_ambiguities(note, image, options, processing):
     return issues
 
 
-@router.post("/internal/v1/ocr/extract")
-def run_extraction(request: ExtractionRequest, x_internal_service_token: str = Header(default="")):
+def require_token(provided):
     token = os.getenv("AI_SERVICE_INTERNAL_TOKEN")
     if not token:
         raise HTTPException(503, "OCR service credentials are unavailable")
-    if not compare_digest(x_internal_service_token.encode(), token.encode()):
+    if not compare_digest(provided.encode(), token.encode()):
         raise HTTPException(401, "Unauthorized")
+    return token
+
+
+@router.get("/internal/v1/ocr/ready")
+def ready(x_internal_service_token: str = Header(default="")):
+    require_token(x_internal_service_token)
+    try:
+        with PADDLE_LOCK:
+            paddle_engine()
+    except Exception:
+        raise HTTPException(503, "PaddleOCR: jalankan instalasi extra paddle dan periksa cache model") from None
+    return {"status": "ok", "engine": "PADDLEOCR"}
+
+
+@router.post("/internal/v1/ocr/extract")
+def run_extraction(request: ExtractionRequest, x_internal_service_token: str = Header(default="")):
+    token = require_token(x_internal_service_token)
 
     start = monotonic()
     processing = {"ocr_engine": "PADDLEOCR", "started_at": datetime.now(timezone.utc).isoformat()}

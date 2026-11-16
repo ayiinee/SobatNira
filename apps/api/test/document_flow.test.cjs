@@ -92,6 +92,49 @@ test('OpenClaw bridge rejects multiple attachments and formats revision-bound co
   assert.equal(calls, 1);
 });
 
+test('OpenClaw reply dispatch uses the WhatsApp context and owns only the configured account', async (t) => {
+  const { default: plugin } = await import('../integrations/openclaw/index.mjs');
+  t.mock.method(globalThis, 'fetch', (url, options) => {
+    assert.equal(url.pathname, '/internal/v1/whatsapp/text-events');
+    const { event } = JSON.parse(options.body);
+    assert.equal(event.provider_message_id, 'provider-message');
+    assert.equal(event.quoted_message_id, 'provider-quote');
+    assert.equal(event.chat_id, phone(101));
+    assert.equal(event.sender_phone_e164, phone(101));
+    return Response.json({ operator_status: 'CONFIRMED' });
+  });
+  const names = ['SOBATNIRA_API_URL', 'WHATSAPP_ADAPTER_INTERNAL_TOKEN', 'SOBATNIRA_MODE'];
+  const before = names.map((key) => process.env[key]);
+  t.after(() => names.forEach((key, index) => {
+    if (before[index] === undefined) delete process.env[key];
+    else process.env[key] = before[index];
+  }));
+  Object.assign(process.env, { SOBATNIRA_API_URL: 'http://127.0.0.1', WHATSAPP_ADAPTER_INTERNAL_TOKEN: 'x'.repeat(32), SOBATNIRA_MODE: 'local' });
+  let dispatch;
+  plugin.register({ config: {}, pluginConfig: { accountId: 'work', mediaDir: tmpdir() }, logger: { warn() {} },
+    registerService(service) { assert.equal(service.id, 'sobatnira-notices'); },
+    on(name, callback, opts) {
+      assert.equal(name, 'reply_dispatch');
+      assert.deepEqual(opts.eligibleDispatchKinds, ['agent']);
+      dispatch = callback;
+    },
+    runtime: { channel: { outbound: { loadAdapter() {} } } },
+  });
+  const target = { ctx: { MessageSid: 'provider-message', Timestamp: Date.now(), SenderE164: phone(101),
+    SenderId: '123@lid', ReplyToId: 'provider-quote', BodyForCommands: `KONFIRMASI ${randomUUID()} ${randomUUID()}` },
+    originatingChannel: 'whatsapp', originatingChatType: 'direct', sendPolicy: 'allow' };
+  const sent = [];
+  const context = { recordProcessed() {}, dispatcher: {
+    sendFinalReply({ text }) { sent.push(text); return true; },
+    getQueuedCounts: () => ({ final: sent.length, block: 0, tool: 0 }),
+  } };
+  assert.equal(await dispatch({ ...target, originatingAccountId: 'other' }, context), undefined);
+  assert.equal((await dispatch({ ...target, originatingAccountId: 'work', originatingChatType: 'group' }, context)).queuedFinal, false);
+  assert.equal((await dispatch({ ...target, originatingAccountId: 'work' }, context)).queuedFinal, true);
+  assert.match(sent[0], /masuk antrean/);
+  assert.equal(fetch.mock.callCount(), 1);
+});
+
 test('OpenRouter gives read-only guidance on verified quotes and uses bounded fallback', async () => {
   const { createOperatorAgent } = await import('../integrations/openclaw/operator-agent.mjs');
   const { createBridge } = await import('../integrations/openclaw/index.mjs');
@@ -222,6 +265,14 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     const change = (target, path, body, key, method = 'POST') => mobile(`documents/${target.document_id}/${path}`, 'reviewer', {
       method, headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key }, body: JSON.stringify(body),
     });
+    const status = (target) => fetch(`${base}/internal/v1/whatsapp/documents/${target.document_id}/revisions/${target.revision_id}`,
+      { headers: { ...tokenHeaders, 'X-Operator-Phone': phone(101) } }).then((response) => response.json());
+    const notice = (path, body = {}) => fetch(`${base}/internal/v1/whatsapp/notices/${path}`, {
+      method: 'POST', headers: { ...tokenHeaders, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }).then(async (response) => {
+      assert.equal(response.status, 200, await response.clone().text());
+      return response.json();
+    });
 
     assert.equal((await fetch(`${base}/internal/v1/whatsapp/inbound`, { method: 'POST' })).status, 401);
     assert.equal((await photo(event('inactive', 'IMAGE', phone(103)))).status, 403);
@@ -239,14 +290,37 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     const truck = await fixture('truck-arrival-note');
     truck.header.arrival_date = { ...truck.header.arrival_date, normalized_value: '2026-11-16', status: 'READ' };
     truck.header.vehicle_number = { ...truck.header.vehicle_number, normalized_value: 'SYNTHETIC-TRUCK', status: 'READ' };
-    truck.header.net_weight_kg = { ...truck.header.net_weight_kg, normalized_value: 1250 };
+    truck.header.net_weight_kg = { ...truck.header.net_weight_kg, status: 'AMBIGUOUS', normalized_value: null };
     notes.push(truck);
-    assert.equal(await processor.processOne(), true);
+    // A new worker picks up a crash-expired lease without losing the photo or replacing the job.
+    await db.query(`UPDATE document_jobs SET status='PROCESSING',attempts=1,lease_until=now()-interval '1 second',
+      claim_token=$2 WHERE revision_id=$1`, [a.revision_id, randomUUID()]);
+    assert.equal(await new DocumentProcessor(db).processOne(), true);
+    assert.equal((await db.query('SELECT attempts FROM document_jobs WHERE revision_id=$1', [a.revision_id])).rows[0].attempts, 2);
+    const { pending_question: question } = await status(a);
+    assert.equal(question.field_path, 'header.net_weight_kg');
+    const { notice: delivery } = await notice('claim');
+    assert.equal(delivery.revision_id, a.revision_id);
+    await db.query("UPDATE whatsapp_notices SET lease_until=now()-interval '1 second' WHERE id=$1", [delivery.id]);
+    const { notice: reclaimed } = await notice('claim');
+    assert.equal(reclaimed.id, delivery.id);
+    assert.notEqual(reclaimed.claim_token, delivery.claim_token);
+    assert.deepEqual(await notice(`${delivery.id}/result`, { claim_token: delivery.claim_token, outcome: 'SENT', provider_message_id: 'old-receipt' }),
+      { acknowledged: false });
+    assert.deepEqual(await notice(`${delivery.id}/result`, { claim_token: reclaimed.claim_token, outcome: 'SENT', provider_message_id: 'gateway-receipt' }),
+      { acknowledged: true });
     assert.equal((await mobile('review-tasks').then((response) => response.json())).items.length, 0);
-    const correction = await action(event('truck-correct', 'TEXT'), a, 'CORRECT', { field_path: 'header.net_weight_kg', value: 1251 });
+    const answer = { question_id: question.id, value: 1251 };
+    assert.equal((await action({ ...event('bad-chat', 'TEXT'), chat_id: 'OTHER-CHAT' }, a, 'ANSWER', answer)).status, 404);
+    assert.equal((await action(event('wrong-question', 'TEXT'), a, 'ANSWER', { ...answer, question_id: randomUUID() })).status, 409);
+    const message = event('truck-answer', 'TEXT');
+    const correction = await action(message, a, 'ANSWER', answer);
     assert.equal(correction.status, 200, await correction.clone().text());
     const corrected = await correction.json();
     assert.notEqual(corrected.revision_id, a.revision_id);
+    assert.equal((await action(message, a, 'ANSWER', answer).then((response) => response.json())).duplicate, true);
+    assert.equal((await action(event('late-answer', 'TEXT'), a, 'ANSWER', answer)).status, 409);
+    assert.equal((await db.query('SELECT status FROM clarification_requests WHERE id=$1', [question.id])).rows[0].status, 'ANSWERED');
     assert.equal((await action(event('stale-confirm', 'TEXT'), a)).status, 409);
     const quoted = (sender, chat) => fetch(`${base}/internal/v1/whatsapp/quoted-context`, {
       headers: { ...tokenHeaders, 'X-Operator-Phone': sender, 'X-Chat-Id': chat, 'X-Quoted-Message-Id': 'truck-01' },
@@ -344,4 +418,19 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     assert.deepEqual(job, { status: 'FAILED', attempts: 3 });
     const exceptionQueue = await mobile('review-tasks?status=MANUAL_REVIEW_REQUIRED').then((response) => response.json());
     assert.equal(exceptionQueue.items[0].revision_id, failure.revision_id);
+    const manualTask = exceptionQueue.items[0].id;
+    const manual = await mobile(`review-tasks/${manualTask}`).then((response) => response.json());
+    const manualInput = { revision_id: manual.revision_id, expected_version: manual.version, document_type: 'TRUCK_ARRIVAL_NOTE',
+      values: { 'header.net_weight_kg': 1250 }, note: 'Disalin dari foto sintetis.' };
+    const manualKey = randomUUID();
+    const saved = await change(manual, 'manual-draft', manualInput, manualKey);
+    assert.equal(saved.status, 200, await saved.clone().text());
+    assert.equal((await change(manual, 'manual-draft', manualInput, manualKey)).status, 200);
+    const manualDetail = await mobile(`review-tasks/${manualTask}`).then((response) => response.json());
+    assert.equal(manualDetail.status, 'PENDING_VALIDATION');
+    assert.equal(manualDetail.operator_confirmation, null);
+    assert.equal(manualDetail.media_asset_id, manual.media_asset_id);
+    assert.equal(manualDetail.extraction.header.net_weight_kg.normalized_value, 1250);
+    assert.equal((await change(manualDetail, 'validate', { revision_id: manualDetail.revision_id,
+      expected_version: manualDetail.version, decision: 'VALIDATED' }, randomUUID())).status, 200);
   });

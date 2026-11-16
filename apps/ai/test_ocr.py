@@ -1,4 +1,5 @@
 from io import BytesIO
+import base64
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -7,6 +8,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
+import httpx
 from PIL import Image
 
 from benchmark_ocr import evaluate, load_cases
@@ -47,9 +49,20 @@ class OcrTest(TestCase):
         ])]
         env = {"AI_SERVICE_INTERNAL_TOKEN": self.headers["X-Internal-Service-Token"],
                "GEMINI_API_KEY": "test-key", "GEMINI_VISION_MODEL": "test-model"}
+        url = "https://generativelanguage.googleapis.com/v1beta/models/test-model:generateContent"
+        result = httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": '{"value":"1251"}'}]}}]},
+                                request=httpx.Request("POST", url))
         with (patch.dict("os.environ", env), patch("ocr_service.load_media", return_value=self.image),
-              patch("ocr_service.recognize", return_value=tokens), patch("ocr_service.reread", return_value="1251") as reread):
+              patch("ocr_service.recognize", return_value=tokens), patch("ocr_service.httpx.post", return_value=result) as reread):
             response = self.post()
+            reread.assert_called_once()
+            self.assertEqual(reread.call_args.args[0], url)
+            self.assertEqual(reread.call_args.kwargs["headers"], {"x-goog-api-key": "test-key"})
+            parts = reread.call_args.kwargs["json"]["contents"][0]["parts"]
+            with Image.open(BytesIO(base64.b64decode(parts[1]["inlineData"]["data"]))) as crop:
+                self.assertLess(crop.width * crop.height, 200 * 180)
+            reread.return_value = httpx.Response(429, request=httpx.Request("POST", url))
+            limited = self.post()
         self.assertEqual(response.status_code, 200, response.text)
         data = response.json()
         self.assertEqual(data["status"], "PARTIAL")
@@ -64,7 +77,11 @@ class OcrTest(TestCase):
         self.assertEqual([item["value"] for item in weight["alternatives"]], ["1.250", "1251"])
         self.assertEqual(data["extraction"]["header"]["brix"]["normalized_value"], 12.5)
         self.assertIsNone(data["extraction"]["header"]["brix"]["unit"])
-        reread.assert_called_once()
+        self.assertEqual(limited.status_code, 200)
+        rate_limited = limited.json()
+        self.assertEqual(rate_limited["extraction"]["header"]["net_weight_kg"]["raw_value"], "1.250")
+        self.assertEqual(rate_limited["extraction"]["header"]["net_weight_kg"]["status"], "AMBIGUOUS")
+        self.assertIn("VISION_UNAVAILABLE", [issue["code"] for issue in rate_limited["issues"]])
 
     def test_production_preserves_reused_pan_unmapped_columns_and_units(self):
         tokens = [token("TGL: 16-11-2026", 0.03, 0.04), token("SIF: A", 0.2, 0.04)]

@@ -9,7 +9,10 @@ const reviewApiBase = String.fromEnvironment(
   defaultValue: 'http://127.0.0.1:3000',
 );
 const supabaseProject = String.fromEnvironment('SUPABASE_URL');
-const supabasePublicKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+const supabasePublicKey = String.fromEnvironment(
+  'SUPABASE_PUBLISHABLE_KEY',
+  defaultValue: String.fromEnvironment('SUPABASE_ANON_KEY'),
+);
 
 typedef Json = Map<String, dynamic>;
 

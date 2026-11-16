@@ -4,6 +4,9 @@ import { fields, requireUuid, UUID } from './contracts';
 import { Database } from './database';
 import { audit, editRevision, Revision } from './intake';
 import { correctField } from './revisions';
+import { manualNote } from './manual-note';
+import { enqueueNotice } from './notices';
+import { supabaseKey } from './config';
 
 @Injectable()
 export class Review {
@@ -12,7 +15,7 @@ export class Review {
   async user(authorization?: string) {
     if (!authorization || !/^Bearer \S{1,8192}$/.test(authorization)) throw new UnauthorizedException();
     const project = process.env.SUPABASE_URL;
-    const apiKey = process.env.SUPABASE_ANON_KEY;
+    const apiKey = supabaseKey();
     if (!project || !apiKey) throw new ServiceUnavailableException('Autentikasi mobile belum dikonfigurasi');
     let response: Response;
     try {
@@ -64,8 +67,8 @@ export class Review {
         JOIN document_revisions r ON r.id=e.revision_id WHERE e.document_id=$1 AND r.version<=$2
         ORDER BY e.created_at,e.id`, [task.document_id, task.version]);
       return { ...task, revisions: history, operator_confirmation: history.find((row) => row.confirmed_at) ?? null,
-        audit: auditTrail, actions: task.status === 'PENDING_VALIDATION' && task.current_revision_id === task.revision_id
-          ? ['CORRECT', 'VALIDATE', 'RETURN'] : [] };
+        audit: auditTrail, actions: task.current_revision_id !== task.revision_id ? [] : task.status === 'PENDING_VALIDATION'
+          ? ['CORRECT', 'VALIDATE', 'RETURN'] : task.status === 'MANUAL_REVIEW_REQUIRED' ? ['MANUAL_ENTRY', 'RETURN'] : [] };
     });
   }
 
@@ -97,14 +100,15 @@ export class Review {
     return record as { object_key: string; mime_type: string };
   }
 
-  async change(user: string, document: string, action: 'CORRECT' | 'VALIDATE' | 'RETURN', key: string | undefined,
+  async change(user: string, document: string, action: 'CORRECT' | 'VALIDATE' | 'RETURN' | 'MANUAL_ENTRY', key: string | undefined,
     body: Record<string, unknown> | undefined) {
     if (!body || !key || !/^[A-Za-z0-9_-]{12,128}$/.test(key) || !Number.isSafeInteger(body.expected_version)) {
       throw new BadRequestException('Versi revisi dan Idempotency-Key wajib');
     }
     const revisionId = requireUuid(body.revision_id);
     const fingerprint = createHash('sha256').update(JSON.stringify([document, action, revisionId, body.expected_version,
-      body.field_path, body.value, body.decision, body.reason_code, body.comment, body.request_operator_follow_up, body.note])).digest('hex');
+      body.field_path, body.value, body.decision, body.reason_code, body.comment, body.request_operator_follow_up, body.note,
+      ...(action === 'MANUAL_ENTRY' ? [body.document_type, body.values, body.rows_per_block] : [])])).digest('hex');
     return this.db.transaction(async (db) => {
       const { rows: [doc] } = await db.query(`SELECT d.* FROM source_documents d
         JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1 AND a.active
@@ -119,15 +123,33 @@ export class Review {
       if (doc.current_revision_id !== revisionId) throw new ConflictException('STALE_REVISION');
       const { rows: [base] } = await db.query<Revision>('SELECT * FROM document_revisions WHERE id=$1', [revisionId]);
       if (base.version !== body.expected_version) throw new ConflictException('STALE_REVISION');
-      const { rows: [task] } = await db.query(`SELECT * FROM admin_review_tasks WHERE revision_id=$1 AND status='PENDING_VALIDATION' FOR UPDATE`, [revisionId]);
+      const { rows: [task] } = await db.query(`SELECT * FROM admin_review_tasks WHERE revision_id=$1 AND status IN
+        ('PENDING_VALIDATION','MANUAL_REVIEW_REQUIRED') FOR UPDATE`, [revisionId]);
       if (!task) throw new ConflictException('Revisi tidak berada di antrean terbuka');
+      if ((action === 'MANUAL_ENTRY' && task.status !== 'MANUAL_REVIEW_REQUIRED') ||
+          (['CORRECT','VALIDATE'].includes(action) && task.status !== 'PENDING_VALIDATION')) {
+        throw new ConflictException('Aksi tidak tersedia untuk status tugas ini');
+      }
       let outcome;
-      if (action === 'CORRECT') {
+      if (action === 'MANUAL_ENTRY') {
+        if (base.extraction || typeof body.note !== 'string' || !body.note.trim() || body.note.length > 1000) {
+          throw new BadRequestException('Catatan pemeriksaan foto wajib untuk isian manual');
+        }
+        const note = manualNote(body);
+        if (doc.document_type !== 'UNKNOWN' && note.document_type !== doc.document_type) throw new ConflictException('Jenis nota berbeda dari dokumen sumber');
+        const revision = await editRevision(db, { ...base, issues: [] }, note, '', 'ADMIN');
+        await db.query('UPDATE source_documents SET document_type=$2 WHERE id=$1', [document, note.document_type]);
+        await db.query(`UPDATE admin_review_tasks SET revision_id=$2,status='PENDING_VALIDATION' WHERE id=$1`, [task.id, revision.id]);
+        await audit(db, revision, 'ADMIN_MANUAL_DRAFT', user, { note: body.note.trim(), source_revision_id: base.id });
+        outcome = { revision_id: revision.id, version: revision.version, status: 'PENDING_VALIDATION' };
+      } else if (action === 'CORRECT') {
         if (!base.extraction || typeof body.field_path !== 'string') throw new BadRequestException('Field koreksi wajib');
         const edited = correctField(base.extraction, body.field_path, body.value, 'ADMIN_CORRECTION');
         const revision = await editRevision(db, base, edited, body.field_path, 'ADMIN');
         await db.query('UPDATE admin_review_tasks SET revision_id=$2 WHERE id=$1', [task.id, revision.id]);
-        await audit(db, revision, 'ADMIN_CORRECTED', user, { field_path: body.field_path });
+        const previous = fields(base.extraction).find(([path]) => path === body.field_path)?.[1];
+        await audit(db, revision, 'ADMIN_CORRECTED', user, { field_path: body.field_path,
+          previous_revision_id: base.id, before: previous?.normalized_value ?? null, after: body.value });
         outcome = { revision_id: revision.id, version: revision.version, status: 'PENDING_VALIDATION' };
       } else if (action === 'VALIDATE') {
         if (body.decision !== 'VALIDATED' || (body.note !== undefined && (typeof body.note !== 'string' || body.note.length > 1000))) {
@@ -152,6 +174,10 @@ export class Review {
         if (body.request_operator_follow_up && base.extraction) {
           const revision = await editRevision(db, base, base.extraction, '', 'OPERATOR');
           await audit(db, revision, 'OPERATOR_FOLLOW_UP_REQUESTED', user, { reason_code: body.reason_code, comment: body.comment });
+          await enqueueNotice(db, revision.id, 'ADMIN_RETURNED');
+        } else if (body.request_operator_follow_up) {
+          await audit(db, base, 'OPERATOR_FOLLOW_UP_REQUESTED', user, { reason_code: body.reason_code, comment: body.comment });
+          await enqueueNotice(db, base.id, 'ADMIN_RETURNED');
         }
         await audit(db, base, 'ADMIN_RETURNED', user, { reason_code: body.reason_code, comment: body.comment,
           request_operator_follow_up: body.request_operator_follow_up });

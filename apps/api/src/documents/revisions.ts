@@ -56,10 +56,7 @@ export function mergeProduction(previous: Note, incoming: Note) {
   return { note: next, issues };
 }
 
-export function correctField(note: Note, path: string, value: unknown, source: 'OPERATOR_CORRECTION' | 'ADMIN_CORRECTION') {
-  const edited = structuredClone(note);
-  const match = fields(edited).find(([key]) => key === path);
-  const field = match?.[1];
+export function setCorrectedValue(field: Field | undefined, path: string, value: unknown, source: 'OPERATOR_CORRECTION' | 'ADMIN_CORRECTION') {
   const name = path.split('.').at(-1);
   let valid = typeof value === 'string' && value.trim().length > 0 && value.length <= 300;
   if (field?.unit === 'kg' || name === 'brix') valid = typeof value === 'number' && Number.isFinite(value) && value >= 0;
@@ -73,6 +70,12 @@ export function correctField(note: Note, path: string, value: unknown, source: '
   field.status = 'READ';
   field.source = source;
   field.confidence = null;
+}
+
+export function correctField(note: Note, path: string, value: unknown, source: 'OPERATOR_CORRECTION' | 'ADMIN_CORRECTION') {
+  const edited = structuredClone(note);
+  const field = fields(edited).find(([key]) => key === path)?.[1];
+  setCorrectedValue(field, path, value, source);
   edited.issues = edited.issues.filter((issue) => issue.field_path !== path);
   if (!validNote(edited, note.document_type)) throw new BadRequestException('Koreksi melanggar kontrak nota');
   return edited;

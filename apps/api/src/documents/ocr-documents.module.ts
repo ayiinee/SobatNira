@@ -9,6 +9,7 @@ import { Intake } from './intake';
 import { imageMime, MediaStorage } from './media';
 import { DocumentProcessor } from './processing';
 import { Review } from './review';
+import { Notices } from './notices';
 
 @Injectable()
 class AdapterGuard implements CanActivate {
@@ -23,7 +24,17 @@ class AdapterGuard implements CanActivate {
 @Controller('internal/v1/whatsapp')
 @UseGuards(AdapterGuard)
 class WhatsAppController {
-  constructor(private readonly intake: Intake) {}
+  constructor(private readonly intake: Intake, private readonly notices: Notices) {}
+
+  @Post('notices/claim')
+  @HttpCode(200)
+  claimNotice() { return this.notices.claim(); }
+
+  @Post('notices/:id/result')
+  @HttpCode(200)
+  finishNotice(@Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.notices.result(requireUuid(id), body);
+  }
 
   @Post('inbound')
   @HttpCode(202)
@@ -41,6 +52,7 @@ class WhatsAppController {
   }
 
   @Get('documents/:documentId/revisions/:revisionId')
+  @Header('Cache-Control', 'private, no-store')
   status(@Param('documentId') id: string, @Param('revisionId') revision: string, @Headers('x-operator-phone') sender: string) {
     return this.intake.status(sender, requireUuid(id), requireUuid(revision));
   }
@@ -99,12 +111,14 @@ class MobileReviewController {
   }
 
   @Get('review-tasks')
+  @Header('Cache-Control', 'private, no-store')
   async list(@Headers('authorization') token: string, @Query('status') status = 'PENDING_VALIDATION',
     @Query('page') page = '1', @Query('page_size') limit = '20') {
     return this.review.list(await this.review.user(token), status, Number(page), Number(limit));
   }
 
   @Get('review-tasks/:id')
+  @Header('Cache-Control', 'private, no-store')
   async detail(@Headers('authorization') token: string, @Param('id') id: string) {
     return this.review.detail(await this.review.user(token), requireUuid(id));
   }
@@ -130,6 +144,13 @@ class MobileReviewController {
     return this.review.change(await this.review.user(token), requireUuid(id), 'VALIDATE', key, body);
   }
 
+  @Post('documents/:id/manual-draft')
+  @HttpCode(200)
+  async manualDraft(@Headers('authorization') token: string, @Headers('idempotency-key') key: string,
+    @Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.review.change(await this.review.user(token), requireUuid(id), 'MANUAL_ENTRY', key, body);
+  }
+
   @Post('documents/:id/return')
   @HttpCode(200)
   async return(@Headers('authorization') token: string, @Headers('idempotency-key') key: string,
@@ -139,5 +160,5 @@ class MobileReviewController {
 }
 
 @Module({ controllers: [WhatsAppController, OcrMediaController, MobileReviewController],
-  providers: [AdapterGuard, Database, DocumentProcessor, Intake, MediaStorage, Review] })
+  providers: [AdapterGuard, Database, DocumentProcessor, Intake, MediaStorage, Notices, Review] })
 export class OcrDocumentsModule {}

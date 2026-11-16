@@ -1,7 +1,17 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from ocr_service import router as ocr_router
+from ocr_service import validate_runtime
 
-app = FastAPI(title="SobatNira AI")
+
+@asynccontextmanager
+async def lifespan(_app):
+    validate_runtime()
+    yield
+
+
+app = FastAPI(title="SobatNira AI", lifespan=lifespan)
 app.include_router(ocr_router)
 
 

@@ -2,16 +2,20 @@ import { Injectable, OnModuleDestroy, ServiceUnavailableException } from '@nestj
 import { readFile, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
+import { loadConfiguration } from '../config/backend.config';
+import { postgresClientOptions } from '../database/postgres.config';
 
 @Injectable()
 export class Database implements OnModuleDestroy {
   private pool?: Pool;
 
   private connection() {
-    if (!process.env.DATABASE_URL) {
+    if (this.pool) return this.pool;
+    const config = loadConfiguration({ envFile: false });
+    if (!config.postgres) {
       throw new ServiceUnavailableException('Database dokumen belum dikonfigurasi');
     }
-    return this.pool ??= new Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 5_000 });
+    return this.pool = new Pool(postgresClientOptions(config));
   }
 
   query<T extends QueryResultRow = QueryResultRow>(sql: string, args?: unknown[]): Promise<QueryResult<T>> {

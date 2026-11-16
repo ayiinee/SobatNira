@@ -10,7 +10,7 @@ export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export type DocumentType = 'TRUCK_ARRIVAL_NOTE' | 'PRODUCTION_NOTE' | 'UNKNOWN';
 export type Evidence = { asset_id: string; coordinate_space: string; bbox: number[] };
-export type Issue = { code: string; severity: 'INFO' | 'WARNING' | 'ERROR' | 'BLOCKER'; message: string; field_path?: string };
+export type Issue = { code: string; severity: 'INFO' | 'WARNING' | 'ERROR' | 'BLOCKER'; message: string; field_path?: string; candidates?: unknown };
 export type Field = {
   raw_value: string | null;
   normalized_value: string | number | boolean | null;

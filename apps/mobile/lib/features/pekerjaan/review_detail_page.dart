@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import 'review_api.dart';
+import 'manual_note_form.dart';
 
 class ReviewDetailPage extends StatefulWidget {
   const ReviewDetailPage({required this.api, required this.taskId, super.key});
@@ -216,6 +217,12 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
                 title: Text('${issue['message']}'),
                 dense: true,
               ),
+            if (actions.contains('MANUAL_ENTRY'))
+              ManualNoteForm(
+                document: task['document_type'] as String,
+                saving: _saving,
+                onSave: (values) => _change(task, 'manual-draft', values),
+              ),
             for (final (path, field) in _fields(task['extraction']))
               ListTile(
                 contentPadding: EdgeInsets.zero,
@@ -261,6 +268,17 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
                   _asset = revision['media_asset_id'] as String;
                   _evidence = [];
                 }),
+              ),
+            if ((task['audit'] as List?)?.isNotEmpty ?? false)
+              ExpansionTile(
+                title: const Text('Jejak audit'),
+                children: [
+                  for (final event in (task['audit'] as List).cast<Json>())
+                    ListTile(
+                      title: Text('${event['action']}'),
+                      subtitle: Text('${event['created_at']}'),
+                    ),
+                ],
               ),
             if (_saving) const LinearProgressIndicator(),
             if (actions.contains('VALIDATE'))
