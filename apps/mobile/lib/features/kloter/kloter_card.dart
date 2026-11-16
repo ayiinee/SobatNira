@@ -36,14 +36,16 @@ class KloterCard extends StatelessWidget {
             children: [
               Positioned(
                 right: 0,
-                bottom: 0,
-                child: Opacity(
-                  opacity: pending ? 1 : .37,
-                  child: Image.asset(
-                    'assets/sobatnira/art/cane.png',
-                    width: 137,
-                    height: 83,
-                    excludeFromSemantics: true,
+                bottom: -34,
+                child: IgnorePointer(
+                  child: Opacity(
+                    opacity: pending ? 1 : .37,
+                    child: Image.asset(
+                      'assets/sobatnira/art/cane.png',
+                      width: 137,
+                      height: 83,
+                      excludeFromSemantics: true,
+                    ),
                   ),
                 ),
               ),

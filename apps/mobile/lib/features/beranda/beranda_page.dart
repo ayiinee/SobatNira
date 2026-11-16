@@ -266,12 +266,15 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                         ),
                       ],
                     ),
-                    Text(
-                      _showProfit ? 'Rp -' : 'Rp ••••••',
-                      style: niraText(
-                        33,
-                        color: niraYellow,
-                        weight: FontWeight.w700,
+                    Transform.translate(
+                      offset: const Offset(0, -4),
+                      child: Text(
+                        _showProfit ? 'Rp -' : 'Rp ••••••',
+                        style: niraText(
+                          33,
+                          color: niraYellow,
+                          weight: FontWeight.w700,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 9),
@@ -302,7 +305,7 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: _SummaryTile('Tebu diterima', '8.200Kg', cane: true),
+              child: _SummaryTile('Tebu diterima', '8.200Kg', boxes: true),
             ),
             SizedBox(width: 9),
             Expanded(child: _SummaryTile('Jumlah kloter', '3')),
@@ -314,11 +317,11 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
 }
 
 class _SummaryTile extends StatelessWidget {
-  const _SummaryTile(this.label, this.value, {this.cane = false});
+  const _SummaryTile(this.label, this.value, {this.boxes = false});
 
   final String label;
   final String value;
-  final bool cane;
+  final bool boxes;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -336,21 +339,17 @@ class _SummaryTile extends StatelessWidget {
       children: [
         Positioned(
           bottom: -12,
-          right: -8,
+          right: -19,
           child: IgnorePointer(
-            child: cane
-                ? Image.asset(
-                    'assets/sobatnira/art/cane.png',
-                    width: 110,
-                    height: 100,
-                    fit: BoxFit.cover,
-                    color: const Color(0x20FFFFFF),
-                    excludeFromSemantics: true,
+            child: boxes
+                ? const SizedBox.square(
+                    dimension: 80,
+                    child: CustomPaint(painter: _BoxOverlayPainter()),
                   )
                 : const Icon(
                     Icons.layers_outlined,
                     color: Color(0x20FFFFFF),
-                    size: 100,
+                    size: 80,
                   ),
           ),
         ),
@@ -388,6 +387,46 @@ class _SummaryTile extends StatelessWidget {
   );
 }
 
+class _BoxOverlayPainter extends CustomPainter {
+  const _BoxOverlayPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.scale(size.width / 388, size.height / 388);
+    final paint = Paint()..color = const Color(0x20FFFFFF);
+    // Trace the reference's cube faces without its editor grid or handles.
+    for (final face in const [
+      [Offset(204, 0), Offset(320, 8), Offset(384, 111), Offset(268, 104)],
+      [
+        Offset(193, 18),
+        Offset(254, 113),
+        Offset(216, 180),
+        Offset(165, 152),
+        Offset(140, 115),
+      ],
+      [
+        Offset(268, 123),
+        Offset(375, 128),
+        Offset(322, 225),
+        Offset(235, 223),
+        Offset(234, 191),
+      ],
+      [Offset(7, 204), Offset(112, 148), Offset(216, 204), Offset(112, 260)],
+      [Offset(7, 224), Offset(102, 277), Offset(102, 386), Offset(7, 335)],
+      [Offset(122, 277), Offset(216, 224), Offset(216, 335), Offset(123, 386)],
+      [Offset(311, 283), Offset(349, 322), Offset(311, 362), Offset(273, 322)],
+      [Offset(248, 344), Offset(266, 362), Offset(248, 381), Offset(230, 362)],
+    ]) {
+      canvas.drawPath(Path()..addPolygon(face, true), paint);
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _BoxOverlayPainter oldDelegate) => false;
+}
+
 // Decorative sugarcane motif; independent of data and layout measurements.
 class _CanePatternPainter extends CustomPainter {
   const _CanePatternPainter();
@@ -395,10 +434,10 @@ class _CanePatternPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final outline = Paint()
-      ..color = const Color(0x12D6E9DB)
+      ..color = const Color(0x08D6E9DB)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.6;
-    final leaf = Paint()..color = const Color(0x12D6E9DB);
+    final leaf = Paint()..color = const Color(0x08D6E9DB);
     for (var row = 0; row * 29 < size.height + 29; row++) {
       for (var col = 0; col * 28 < size.width + 28; col++) {
         canvas.save();
@@ -448,24 +487,37 @@ class _BerandaGeometryPainter extends CustomPainter {
     final pen = Paint()
       ..color = const Color(0x30B97105)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
+      ..strokeWidth = 2.25
+      ..strokeCap = StrokeCap.round;
     canvas.save();
     canvas.clipRect(Offset.zero & size);
-    // Two quiet clusters of open, parallel contours frame the content.
+    // Flowing contours frame the cards without adding animation work.
     for (var i = 0; i < 5; i++) {
       final step = i * 19.0;
       canvas.drawPath(
         Path()
           ..moveTo(size.width + 30, 12 + step)
-          ..lineTo(size.width * .68 - step, 112 + step)
-          ..lineTo(size.width + 30, 240 + step),
+          ..cubicTo(
+            size.width * .55 - step,
+            55 + step,
+            size.width * .62 - step,
+            165 + step,
+            size.width + 30,
+            240 + step,
+          ),
         pen,
       );
       canvas.drawPath(
         Path()
           ..moveTo(-25, size.height - 245 + step)
-          ..lineTo(size.width * .3 + step, size.height - 125 + step)
-          ..lineTo(-25, size.height + 22 + step),
+          ..cubicTo(
+            size.width * .52 + step,
+            size.height - 210 + step,
+            size.width * .42 + step,
+            size.height - 65 + step,
+            -25,
+            size.height + 22 + step,
+          ),
         pen,
       );
     }
@@ -495,39 +547,104 @@ class _QuickActions extends StatelessWidget {
         Flexible(
           child: SizedBox(
             width: 63,
-            child: Semantics(
-              button: true,
-              child: InkWell(
-                onTap: () => showUnavailable(context),
-                borderRadius: BorderRadius.circular(7),
-                child: Column(
-                  children: [
-                    Container(
-                      height: 62,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(7),
-                        border: Border.all(color: niraGreen, width: 1.3),
-                      ),
-                      child: QuickActionIcon(icon),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      label,
-                      textAlign: TextAlign.center,
-                      style: niraText(
-                        11.5,
-                        color: Colors.black,
-                        weight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            child: _QuickActionTile(label: label, icon: icon),
           ),
         ),
     ],
   );
+}
+
+class _QuickActionTile extends StatefulWidget {
+  const _QuickActionTile({required this.label, required this.icon});
+
+  final String label;
+  final QuickActionKind icon;
+
+  @override
+  State<_QuickActionTile> createState() => _QuickActionTileState();
+}
+
+class _QuickActionTileState extends State<_QuickActionTile> {
+  bool _hovered = false;
+  bool _focused = false;
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = _hovered || _focused;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final duration = reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 220);
+    final animate = active && !reduceMotion;
+    final tilt = switch (widget.icon) {
+      QuickActionKind.profit || QuickActionKind.recap => -.014,
+      QuickActionKind.expenses || QuickActionKind.help => .014,
+    };
+
+    return Semantics(
+      button: true,
+      child: InkWell(
+        onTap: () => showUnavailable(context),
+        onHover: (value) => setState(() => _hovered = value),
+        onFocusChange: (value) => setState(() => _focused = value),
+        onHighlightChanged: (value) => setState(() => _pressed = value),
+        borderRadius: BorderRadius.circular(7),
+        child: Column(
+          children: [
+            AnimatedSlide(
+              offset: animate && !_pressed
+                  ? const Offset(0, -.06)
+                  : Offset.zero,
+              duration: duration,
+              curve: Curves.easeOutCubic,
+              child: AnimatedContainer(
+                duration: duration,
+                curve: Curves.easeOutCubic,
+                height: 62,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: active ? const Color(0xFFF4F8F1) : Colors.white,
+                  borderRadius: BorderRadius.circular(7),
+                  border: Border.all(color: niraGreen, width: 1.3),
+                  boxShadow: [
+                    BoxShadow(
+                      color: active
+                          ? const Color(0x28174B35)
+                          : Colors.transparent,
+                      blurRadius: active ? 10 : 0,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: AnimatedScale(
+                  scale: reduceMotion
+                      ? 1
+                      : (_pressed ? .95 : (active ? 1.1 : 1)),
+                  duration: duration,
+                  curve: Curves.easeOutCubic,
+                  child: AnimatedRotation(
+                    turns: animate && !_pressed ? tilt : 0,
+                    duration: duration,
+                    curve: Curves.easeOutCubic,
+                    child: QuickActionIcon(widget.icon),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              widget.label,
+              textAlign: TextAlign.center,
+              style: niraText(
+                11.5,
+                color: Colors.black,
+                weight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
