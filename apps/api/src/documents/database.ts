@@ -34,7 +34,7 @@ export class Database implements OnModuleDestroy {
   }
 
   async migrate() {
-    const directory = resolve(__dirname, '../../migrations');
+    const directory = resolve(__dirname, '../../migrations/ocr');
     const files = (await readdir(directory)).filter((name) => /^\d+_.*\.sql$/.test(name)).sort();
     await this.transaction(async (db) => {
       await db.query("SELECT pg_advisory_xact_lock(hashtext('sobatnira_schema_migrations'))");

@@ -6,9 +6,8 @@ const { createServer } = require('node:http');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const test = require('node:test');
-const { NestFactory } = require('@nestjs/core');
 const { Pool } = require('pg');
-const { AppModule } = require('../dist/app.module.js');
+const { createApplication } = require('../dist/application.js');
 const { Database } = require('../dist/documents/database.js');
 const { DocumentProcessor } = require('../dist/documents/processing.js');
 const { mergeProduction } = require('../dist/documents/revisions.js');
@@ -17,6 +16,24 @@ const fixture = (name) => readFile(join(__dirname, '../../../docs/ai/examples', 
 const phone = (suffix) => '+' + [1, 202, 555, String(suffix).padStart(4, '0')].join('');
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a4FcAAAAASUVORK5CYII=', 'base64');
 const tokenHeaders = { 'X-Internal-Service-Token': 'synthetic-adapter-test' };
+
+test('combined application routes OCR requests through their service and review authentication', async (t) => {
+  const adapterToken = process.env.WHATSAPP_ADAPTER_INTERNAL_TOKEN;
+  process.env.WHATSAPP_ADAPTER_INTERNAL_TOKEN = tokenHeaders['X-Internal-Service-Token'];
+  t.after(() => {
+    if (adapterToken === undefined) delete process.env.WHATSAPP_ADAPTER_INTERNAL_TOKEN;
+    else process.env.WHATSAPP_ADAPTER_INTERNAL_TOKEN = adapterToken;
+  });
+  const app = await createApplication({ envFile: false, env: { LOG_LEVEL: 'silent' } });
+  t.after(() => app.close());
+  await app.listen(0, '127.0.0.1');
+  const base = await app.getUrl();
+  const inbound = base + '/internal/v1/whatsapp/inbound';
+  assert.equal((await fetch(inbound, { method: 'POST' })).status, 401);
+  assert.equal((await fetch(inbound, { method: 'POST', headers: tokenHeaders })).status, 400);
+  assert.equal((await fetch(base + '/api/v1/mobile/review-tasks')).status, 401);
+  assert.equal((await fetch(base + '/auth/me')).status, 401);
+});
 
 function event(messageId, kind = 'IMAGE', from = phone(101), quoted = null, caption = null) {
   return { provider: 'BAILEYS', provider_message_id: messageId, chat_id: 'SYNTHETIC-CHAT', sender_phone_e164: from,
@@ -92,7 +109,7 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     const folder = process.env.DOCUMENT_MEDIA_DIR;
     t.after(() => rm(folder, { recursive: true, force: true }));
 
-    const app = await NestFactory.create(AppModule, { logger: false });
+    const app = await createApplication({ envFile: false, env: { LOG_LEVEL: 'silent' } });
     t.after(() => app.close());
     const db = app.get(Database);
     await db.migrate();

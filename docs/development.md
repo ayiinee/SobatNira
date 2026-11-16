@@ -36,6 +36,18 @@ Untuk membuka layar draf sintetis secara mandiri, tambahkan `-t lib/main_demo.da
 
 ## Jalankan integrasi di tiga terminal
 
+Untuk menghubungkan kredensial pada `.env` di akar repo ke Supabase, PostgreSQL, R2 dan Redis/Upstash, ikuti [konfigurasi backend dan pemeriksaan koneksi](backend-configuration.md). Jalankan `npm run check:connections` dari `apps/api` setelah FastAPI aktif. Layanan cloud tetap opsional untuk smoke test fixture di bawah.
+
+Untuk endpoint bisnis yang memakai login, jalankan migrasi dan hubungkan membership sesuai [panduan autentikasi dan akses backend](backend-authentication.md). Endpoint baru memerlukan kebijakan akses eksplisit; `/health` dan demo sintetis development tetap dapat dipakai tanpa login.
+
+Modul [data dasar pemasok dan kloter](backend-production-basics.md) dapat dikembangkan sebelum onboarding selesai. Jalankan `npm run test:production-db` dari `apps/api` untuk memeriksa alur HTTP dengan PostgreSQL dan fixture sintetis yang selalu di-rollback.
+
+Alur [dokumen penerimaan sampai pengesahan](backend-intake-documents.md) memakai draf sintetis sambil menunggu OCR. Setelah migrasi, jalankan `npm run test:intake-db` untuk memeriksa revisi, konfirmasi, pengesahan, audit, stok masuk dan pengesahan bersamaan tanpa onboarding.
+
+Modul [foto bukti R2](backend-evidence.md) menghubungkan foto ke revisi dokumen dan menyajikannya melalui API berizin. `npm run test:evidence-db` memakai S3 tiruan; `npm run test:evidence-r2` menguji upload/baca dengan R2 nyata serta membersihkan fixture. Bucket bukti wajib privat.
+
+Modul [penggilingan dari nota hasil gabungan](backend-milling-documents.md) memakai draf sintetis untuk total nira dan rincian batch. Pengesahan mengurangi seluruh stok tebu kloter dari penerimaan sah dan mencatat nira dalam satu transaksi. Jalankan `npm run test:milling-db` untuk memeriksa alur, pembatasan akses, rollback dan konkurensi dengan PostgreSQL.
+
 **1. FastAPI** dari akar repo.
 
 ```sh

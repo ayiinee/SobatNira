@@ -8,8 +8,16 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "npm run build && node dist/main.js",
-    "db:migrate": "npm run build && node dist/documents/migrate.js",
-    "test": "npm run build && node --test test/*.test.cjs"
+    "test": "npm run build && node --test test/*.test.cjs",
+    "check:connections": "npm run build && node dist/connections/check-connections.js",
+    "db:migrate": "npm run build && node dist/database/migrate.js",
+    "test:access-db": "npm run build && node --test test/integration/access-database.test.cjs",
+    "test:production-db": "npm run build && node --test test/integration/production-database.test.cjs",
+    "test:intake-db": "npm run build && node --test test/integration/intake-database.test.cjs",
+    "test:milling-db": "npm run build && node --test test/integration/milling-database.test.cjs",
+    "test:evidence-db": "npm run build && node --test test/integration/evidence-database.test.cjs",
+    "test:evidence-r2": "npm run build && node --test test/integration/evidence-r2.test.cjs",
+    "db:migrate:ocr": "npm run build && node dist/documents/migrate.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1169.0",
@@ -18,9 +26,11 @@
     "@nestjs/platform-express": "11.2.10",
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1",
+    "ioredis": "6.0.0",
     "pg": "8.23.1",
     "reflect-metadata": "0.2.2",
-    "rxjs": "7.8.2"
+    "rxjs": "7.8.2",
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
