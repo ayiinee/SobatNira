@@ -1,111 +1,89 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 
-const apiBaseUrl = String.fromEnvironment(
-  'API_BASE_URL',
-  defaultValue: 'http://127.0.0.1:3000',
-);
-const useLocalFixture = bool.fromEnvironment('USE_LOCAL_FIXTURE');
+import 'features/beranda/beranda_page.dart';
+import 'features/kloter/demo_production.dart';
+import 'features/kloter/kloter_detail_page.dart';
+import 'features/kloter/kloter_list_page.dart';
+import 'sobatnira_ui.dart';
 
 void main() => runApp(const SobatNiraApp());
 
 class SobatNiraApp extends StatefulWidget {
-  const SobatNiraApp({super.key, this.client});
-
-  final http.Client? client;
+  const SobatNiraApp({super.key});
 
   @override
   State<SobatNiraApp> createState() => _SobatNiraAppState();
 }
 
 class _SobatNiraAppState extends State<SobatNiraApp> {
-  late Future<Map<String, dynamic>> _draft = _loadDraft();
-
-  Future<Map<String, dynamic>> _loadDraft() async {
-    if (useLocalFixture) {
-      return const {
-        'synthetic': true,
-        'lotCode': 'DEMO-261114-01',
-        'stage': 'Penerimaan Tebu',
-        'supplier': 'Pemasok Demo',
-        'netWeightKg': 1250,
-      };
-    }
-
-    final uri = Uri.parse('$apiBaseUrl/demo/draft');
-    final response = await (widget.client?.get(uri) ?? http.get(uri)).timeout(
-      const Duration(seconds: 5),
-    );
-    if (response.statusCode != 200) {
-      throw StateError('API returned ${response.statusCode}');
-    }
-    final draft = jsonDecode(response.body) as Map<String, dynamic>;
-    if (draft['synthetic'] != true) {
-      throw const FormatException('Fixture sintetis diperlukan');
-    }
-    return draft;
-  }
+  final _navigator = GlobalKey<NavigatorState>();
+  final _demo = DemoProduction();
+  NiraTab _tab = NiraTab.beranda;
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'SobatNira',
-      home: Scaffold(
-        appBar: AppBar(title: const Text('SobatNira')),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: FutureBuilder<Map<String, dynamic>>(
-              future: _draft,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done) {
-                  return const CircularProgressIndicator(
-                    semanticsLabel: 'Memuat draf sintetis',
-                  );
-                }
-                if (snapshot.hasError) {
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'Draf belum tersedia. Periksa NestJS dan FastAPI.',
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          final draft = _loadDraft();
-                          setState(() {
-                            _draft = draft;
-                          });
-                        },
-                        child: const Text('Coba lagi'),
-                      ),
-                    ],
-                  );
-                }
-                final draft = snapshot.requireData;
-                return Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Draf sintetis'),
-                        Text('${draft['stage']} · ${draft['lotCode']}'),
-                        Text(
-                          '${draft['supplier']} · ${draft['netWeightKg']} kg',
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
+  void dispose() {
+    _demo.dispose();
+    super.dispose();
+  }
+
+  void _navigate(NiraTab tab) {
+    final navigator = _navigator.currentState!;
+    if (tab == NiraTab.laporan || tab == NiraTab.pengaturan) {
+      showUnavailable(navigator.overlay!.context);
+      return;
+    }
+    FocusManager.instance.primaryFocus?.unfocus();
+    navigator.popUntil((route) => route.isFirst);
+    setState(() => _tab = tab);
+  }
+
+  void _openKloter(DemoKloter kloter) {
+    _navigator.currentState!.push(
+      MaterialPageRoute<void>(
+        builder: (_) => KloterDetailPage(
+          kloter: kloter,
+          demo: _demo,
+          onNavigate: _navigate,
         ),
       ),
     );
   }
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    title: 'SobatNira',
+    debugShowCheckedModeBanner: false,
+    navigatorKey: _navigator,
+    theme: ThemeData(
+      fontFamily: 'Inter',
+      useMaterial3: true,
+      scaffoldBackgroundColor: niraPaper,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: niraGreen,
+      ).copyWith(primary: niraGreen, surface: niraPaper),
+    ),
+    builder: (context, child) => ColoredBox(
+      color: const Color(0xFFF2F2EE),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 430),
+          child: child,
+        ),
+      ),
+    ),
+    home: NiraScaffold(
+      tab: _tab,
+      onNavigate: _navigate,
+      body: ListenableBuilder(
+        listenable: _demo,
+        builder: (context, _) => IndexedStack(
+          index: _tab.index,
+          children: [
+            BerandaPage(kloter: _demo.kloter, onOpenKloter: _openKloter),
+            KloterListPage(kloter: _demo.kloter, onOpenKloter: _openKloter),
+          ],
+        ),
+      ),
+    ),
+  );
 }

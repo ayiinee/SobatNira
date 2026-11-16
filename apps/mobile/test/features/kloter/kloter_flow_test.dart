@@ -1,0 +1,146 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:sobatnira/features/kloter/kloter_card.dart';
+import 'package:sobatnira/main.dart';
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() async {
+    final inter = FontLoader('Inter');
+    for (final weight in ['Regular', 'Medium', 'SemiBold', 'Bold']) {
+      inter.addFont(
+        rootBundle.load('assets/sobatnira/fonts/Inter-$weight.ttf'),
+      );
+    }
+    await inter.load();
+  });
+
+  Future<void> openDemo(
+    WidgetTester tester, {
+    Size size = const Size(393, 853),
+  }) async {
+    await tester.binding.setSurfaceSize(size);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const SobatNiraApp());
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> tap(WidgetTester tester, Finder finder) async {
+    await tester.ensureVisible(finder);
+    await tester.tap(finder);
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('pencarian, tab dan rentang bisa digabung dan dipulihkan', (
+    tester,
+  ) async {
+    await openDemo(tester);
+    expect(find.text('Tebu diterima'), findsOneWidget);
+    expect(find.byType(KloterCard), findsNWidgets(3));
+
+    await tap(tester, find.bySemanticsLabel('Kloter'));
+    await tester.enterText(find.byType(TextField), ' mjt-260926-2a ');
+    await tester.pumpAndSettle();
+    await tap(tester, find.text('Perlu Ditinjau'));
+    expect(find.byType(KloterCard), findsOneWidget);
+    expect(find.text('MJT-260926-2A'), findsOneWidget);
+
+    await tap(tester, find.byTooltip('Filter tanggal'));
+    await tap(tester, find.text('Rentang tanggal'));
+    await tap(tester, find.text('31'));
+    expect(
+      find.text('Tanggal selesai harus sama atau setelah tanggal mulai.'),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Terapkan'))
+          .onPressed,
+      isNull,
+    );
+
+    await tap(tester, find.byTooltip('Kembali ke filter tanggal'));
+    await tap(tester, find.text('Rentang tanggal'));
+    await tap(tester, find.text('Terapkan'));
+    expect(find.byType(KloterCard), findsOneWidget);
+    await tap(tester, find.text('MJT-260926-2A'));
+    expect(find.text('Detail kloter'), findsOneWidget);
+    await tap(tester, find.byTooltip('Kembali'));
+    expect(find.text(' mjt-260926-2a '), findsOneWidget);
+    expect(find.byTooltip('Filter tanggal: Rentang tanggal'), findsOneWidget);
+
+    await tap(tester, find.byTooltip('Filter tanggal: Rentang tanggal'));
+    await tap(tester, find.text('Hari ini'));
+    expect(find.text('Kloter tidak ditemukan'), findsOneWidget);
+    await tap(tester, find.byTooltip('Filter tanggal: Hari ini'));
+    await tap(tester, find.text('Reset'));
+    expect(find.text('MJT-260926-2A'), findsOneWidget);
+  });
+
+  testWidgets('edit, verifikasi dan validasi batch tersimpan selama sesi', (
+    tester,
+  ) async {
+    await openDemo(tester);
+    await tap(tester, find.text('MJT-260926-2A'));
+    await tap(tester, find.text('Data tebu dan penggilingan'));
+    await tap(tester, find.text('Penggilingan'));
+    await tap(tester, find.text('Operator'));
+    await tester.enterText(find.byType(TextFormField), 'Operator Coba');
+    await tap(tester, find.text('Batal'));
+    expect(find.text('Operator Demo'), findsOneWidget);
+
+    await tap(tester, find.text('Operator'));
+    await tester.enterText(find.byType(TextFormField), 'Operator Baru');
+    await tap(tester, find.text('Simpan'));
+    expect(find.text('Operator Baru'), findsOneWidget);
+    await tap(tester, find.text('Verifikasi penggilingan'));
+    expect(find.text('Penggilingan terverifikasi'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    await tap(tester, find.byTooltip('Kembali'));
+    expect(find.text('1 Batch perlu ditinjau'), findsOneWidget);
+    await tap(tester, find.text('Batch 5'));
+
+    await tap(tester, find.text('Masak'));
+    expect(find.text('Data pemasakan'), findsOneWidget);
+    await tap(tester, find.text('Grade'));
+    await tap(tester, find.bySemanticsLabel(RegExp('Edit berat grade B')));
+    await tester.enterText(find.byType(TextFormField), 'bukan angka');
+    await tap(tester, find.text('Simpan'));
+    expect(find.text('Masukkan angka yang valid.'), findsOneWidget);
+    await tester.enterText(find.byType(TextFormField), '24,5');
+    await tap(tester, find.text('Simpan'));
+    expect(find.text('24,5'), findsOneWidget);
+
+    await tap(tester, find.text('Ringkasan'));
+    await tap(tester, find.text('Validasi'));
+    expect(find.text('Batch tervalidasi'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    await tap(tester, find.byTooltip('Kembali'));
+    expect(find.text('Semua batch telah ditinjau'), findsOneWidget);
+    expect(find.text('Batch 5'), findsOneWidget);
+  });
+
+  testWidgets('konten dapat digulir ketika ukuran teks diperbesar', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(360, 720));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      const MediaQuery(
+        data: MediaQueryData(
+          size: Size(360, 720),
+          textScaler: TextScaler.linear(2),
+        ),
+        child: SobatNiraApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -440));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Kloter'), findsWidgets);
+  });
+}
