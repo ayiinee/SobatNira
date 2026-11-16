@@ -2,6 +2,7 @@ import { Controller, Get, Module, ServiceUnavailableException } from '@nestjs/co
 import { BatchesModule } from './batches/batches.module';
 import { ProductionMastersModule } from './production-masters/production-masters.module';
 import { EconomicsModule } from './economics/economics.module';
+import { ReportingModule } from './reporting/reporting.module';
 
 @Controller()
 class AppController {
@@ -27,5 +28,5 @@ class AppController {
   }
 }
 
-@Module({ controllers: [AppController], imports: [BatchesModule, ProductionMastersModule, EconomicsModule] })
+@Module({ controllers: [AppController], imports: [BatchesModule, ProductionMastersModule, EconomicsModule, ReportingModule] })
 export class AppModule {}

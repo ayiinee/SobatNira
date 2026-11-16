@@ -82,3 +82,17 @@ test('tracks sugar stock and allocates mixed economics with exact rupiah totals'
   assert.equal(result.totals.marginRupiah, 50000);
   assert.equal(result.allocations.reduce((sum, item) => sum + item.costRupiah, 0), 100001);
 });
+
+test('serves scoped dashboard, analytics and CSV export', async () => {
+  let response = await request('/dashboard/production');
+  assert.equal(response.status, 200);
+  const dashboard = await response.json();
+  assert.equal(dashboard.batchCount >= 5, true);
+  assert.equal(dashboard.officialSugarWeightGrams >= 1200000, true);
+  response = await request('/analytics/production');
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).points.length >= 1, true);
+  response = await request('/exports/batches.csv');
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /^batch_id,status,occurred_at,total_nira_ml,sugar_weight_grams,grade_code/);
+});
