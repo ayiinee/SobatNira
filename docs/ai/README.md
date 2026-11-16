@@ -29,7 +29,7 @@ Panggilan pertama PaddleOCR mengunduh model. Gunakan `PADDLE_PDX_CACHE_HOME` unt
    flutter run -d web-server --web-hostname 127.0.0.1 --web-port 8080 --dart-define=API_BASE_URL=http://127.0.0.1:3000 --dart-define=SUPABASE_URL=http://127.0.0.1:8077 --dart-define=SUPABASE_PUBLISHABLE_KEY=local-synthetic-publishable
    ```
 
-4. Pada layar awal pilih **Masuk** dan isi `admin-demo` / `sandi-demo`. Buka **Pekerjaan** dan masuk dengan `admin@example.invalid` / `sobatnira-demo`. Setelah terminal menampilkan ID tugas, muat ulang daftar, buka **Nota Kedatangan Truk** dari Operator Demo, periksa foto, evidence, dan riwayat, lalu pilih **Validasi revisi ini**. Terminal menyatakan lulus setelah membaca status `VALIDATED` langsung di PostgreSQL. Biarkan proses berjalan untuk melihat hasil dan gunakan Ctrl+C untuk menghentikannya.
+4. Pada layar awal pilih **Masuk** dan isi `admin-demo` / `sandi-demo`. Buka **Pekerjaan** dan masuk dengan `admin@example.invalid` / `sobatnira-demo`. Setelah terminal menampilkan ID tugas, muat ulang daftar, buka **Nota Kedatangan Truk** dari Operator Demo, periksa foto, evidence, dan riwayat. Pilih **Validasi revisi ini**, pilih kloter demo, lalu pilih **Sahkan dan catat stok**. Terminal memeriksa status `VALIDATED` dan kredit stok 1250 kg di PostgreSQL. Gunakan database lokal khusus demo karena proses ini membukukan transaksi di sana. Gunakan Ctrl+C untuk menghentikannya.
 
 Uji memeriksa dua tipe nota, kutipan pesan bot pada foto produksi lanjutan, kiriman duplikat, operator nonaktif, revisi lama, akses lintas pabrik dan foto ulang. Tes PostgreSQL komponen juga memeriksa lease kedaluwarsa akibat restart dan kegagalan provider yang menuju antrean **Perlu tinjauan manual**. Untuk menjalankan layanan tanpa memasukkan kiriman uji, hilangkan `--smoke`. Gunakan tugas baru dengan status menunggu validasi pada setiap percobaan.
 
@@ -56,9 +56,12 @@ Jalankan gateway, NestJS dan FastAPI pada host yang sama untuk memakai alamat lo
 
    ```sh
    node --env-file=../../.env.connected dist/documents/setup.js check --infra-only
+   node --env-file=../../.env.connected dist/database/migrate.js
    node --env-file=../../.env.connected dist/documents/migrate.js
    node --env-file=../../.env.connected dist/documents/setup.js provision
    ```
+
+   Pengesahan nota truk juga memerlukan membership produksi untuk akun peninjau, ID pabrik produksi yang sama dengan `SETUP_FACTORY_ID`, serta kloter penerimaan dan pemasok yang sudah terdaftar. [Panduan penerimaan dari nota OCR](../backend-intake-documents.md#penerimaan-dari-nota-ocr)
 
 3. Jalankan NestJS dari `apps/api` dengan `node --env-file=../../.env.connected dist/main.js`. Jalankan FastAPI dari `apps/ai` dengan perintah berikut. Jika port diubah, samakan `OCR_MEDIA_BASE_URL` dan `AI_BASE_URL` dengan alamat masing-masing layanan.
 
