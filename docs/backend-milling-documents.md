@@ -108,7 +108,7 @@ Konfirmasi mengantrekan dokumen untuk admin. Pengesahan membukukan berat tebu pe
 
 ## Meninjau perubahan Git
 
-Branch implementasi: `codex/feat/api-milling-flow`. Gunakan `git log --oneline` untuk melihat commit kontrak/skema, alur API, dan pengujian/dokumentasi secara terpisah. Contoh pemeriksaan satu bagian:
+Branch implementasi: `feat/api-milling-flow`. Gunakan `git log --oneline` untuk melihat commit kontrak/skema, alur API, dan pengujian/dokumentasi secara terpisah. Contoh pemeriksaan satu bagian:
 
 ```sh
 git show c4ee50c
