@@ -4,7 +4,7 @@ Pasang Git dan alat sesuai area yang kamu kerjakan. Untuk menjalankan integrasi,
 
 | Area | Alat | Titik awal |
 | --- | --- | --- |
-| Flutter | Flutter stable 3.44.6 (Dart 3.12.2) dan Chrome | `apps/mobile/lib/main.dart`. Mulai dari Beranda dan Kloter dengan data sintetis. |
+| Flutter | Flutter stable 3.44.6 (Dart 3.12.2) dan Chrome | `apps/mobile/lib/main.dart`. Mulai dari onboarding demo dengan data sintetis. |
 | API bisnis | Node.js 24 dengan npm | `apps/api/src/app.module.ts`. Mulai dari kontrak dan validasi dokumen atau data kloter dan batch. |
 | AI | Python 3.13 dengan uv | `apps/ai/main.py`. Mulai dari pemetaan field dan fixture draf ekstraksi. |
 
@@ -19,7 +19,7 @@ Gunakan [panduan kontribusi](contributing.md) untuk membuat branch dan membuka P
 
 ## Flutter dengan data sintetis lokal
 
-Jalankan dari akar repo untuk membuka Beranda dan Kloter. Pencarian, filter, edit, dan verifikasi memakai data sintetis yang kembali ke kondisi awal ketika aplikasi dimulai ulang.
+Jalankan dari akar repo untuk membuka onboarding. Isi nama pengguna dan kata sandi dengan teks sintetis untuk mengakses Beranda, Kloter, Laporan, dan Pengaturan. Sesi demo dan perubahan data lokal kembali ke kondisi awal ketika aplikasi dimulai ulang.
 
 ```sh
 cd apps/mobile
@@ -35,6 +35,20 @@ Untuk membuka layar draf sintetis secara mandiri, tambahkan `-t lib/main_demo.da
 - **FastAPI.** Di `apps/ai`, jalankan `uv sync --locked --python 3.13`, `uv run --locked python -m unittest`, lalu `uv run --locked uvicorn main:app --host 127.0.0.1 --port 8000 --reload`. Cek `http://127.0.0.1:8000/docs` dan coba `GET /demo/draft` dari dokumentasi API lokal.
 
 ## Jalankan integrasi di tiga terminal
+
+Untuk menghubungkan kredensial pada `.env` di akar repo ke Supabase, PostgreSQL, R2 dan Redis/Upstash, ikuti [konfigurasi backend dan pemeriksaan koneksi](backend-configuration.md). Jalankan `npm run check:connections` dari `apps/api` setelah FastAPI aktif. Layanan cloud tetap opsional untuk smoke test fixture di bawah.
+
+Untuk endpoint bisnis yang memakai login, jalankan migrasi dan hubungkan membership sesuai [panduan autentikasi dan akses backend](backend-authentication.md). Endpoint baru memerlukan kebijakan akses eksplisit; `/health` dan demo sintetis development tetap dapat dipakai tanpa login.
+
+Modul [data dasar pemasok dan kloter](backend-production-basics.md) dapat dikembangkan sebelum onboarding selesai. Jalankan `npm run test:production-db` dari `apps/api` untuk memeriksa alur HTTP dengan PostgreSQL dan fixture sintetis yang selalu di-rollback.
+
+Alur [dokumen penerimaan sampai pengesahan](backend-intake-documents.md) memakai draf sintetis sambil menunggu OCR. Setelah migrasi, jalankan `npm run test:intake-db` untuk memeriksa revisi, konfirmasi, pengesahan, audit, stok masuk dan pengesahan bersamaan tanpa onboarding.
+
+Modul [foto bukti R2](backend-evidence.md) menghubungkan foto ke revisi dokumen dan menyajikannya melalui API berizin. `npm run test:evidence-db` memakai S3 tiruan; `npm run test:evidence-r2` menguji upload/baca dengan R2 nyata serta membersihkan fixture. Bucket bukti wajib privat.
+
+Modul [penggilingan dari nota hasil gabungan](backend-milling-documents.md) memakai draf sintetis untuk total nira dan rincian batch. Pengesahan mengurangi seluruh stok tebu kloter dari penerimaan sah dan mencatat nira dalam satu transaksi. Jalankan `npm run test:milling-db` untuk memeriksa alur, pembatasan akses, rollback dan konkurensi dengan PostgreSQL.
+
+Gunakan [kontrak nira dan penutupan kloter](backend-juice-and-closure.md) untuk adapter Backend B. Jalankan `npm run test:juice-db` setelah migrasi untuk memeriksa reservasi, transfer, dan penutupan dengan fixture Backend B.
 
 **1. FastAPI** dari akar repo.
 
@@ -91,9 +105,11 @@ Untuk cek layanan langsung, buka `http://127.0.0.1:8000/health`, `http://127.0.0
 | --- | --- | --- |
 | `apps/ai` | `uv run --locked python -m unittest` | Health dan payload fixture FastAPI |
 | `apps/api` | `npm test` | Build TypeScript, health HTTP, integrasi dengan upstream tes, respons 503 jika AI gagal |
-| `apps/mobile` | `flutter analyze`, `flutter test` | Analisis statis, alur Beranda dan Kloter, serta coba ulang saat API gagal |
+| `apps/mobile` | `flutter analyze`, `flutter test` | Analisis statis, alur Beranda, Kloter, Laporan, Pengaturan, serta coba ulang saat API gagal |
 
 Setup ini memakai satu fixture yang dilayani FastAPI, diteruskan NestJS, dan ditampilkan Flutter. PostgreSQL/Supabase, Redis, WhatsApp, R2 dan provider OCR belum dibutuhkan untuk smoke test ini.
+
+Untuk intake WhatsApp, OCR, dan antrean Pekerjaan, ikuti [panduan setup dan smoke test AI](ai/README.md). Alur tersebut memakai PostgreSQL, PaddleOCR dan Flutter dengan fixture foto untuk dua jenis nota.
 
 ## Jika setup tersendat
 

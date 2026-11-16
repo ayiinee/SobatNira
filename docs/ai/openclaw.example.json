@@ -1,0 +1,28 @@
+{
+  "gateway": { "mode": "local", "bind": "loopback", "auth": { "mode": "token" } },
+  "channels": {
+    "whatsapp": {
+      "enabled": true,
+      "accounts": {
+        "sobatnira": {
+          "enabled": true,
+          "dmPolicy": "allowlist",
+          "allowFrom": ["+12025550101"],
+          "groupPolicy": "disabled",
+          "mediaMaxMb": 10
+        }
+      }
+    }
+  },
+  "plugins": {
+    "allow": ["whatsapp", "sobatnira-intake"],
+    "entries": {
+      "whatsapp": { "enabled": true },
+      "sobatnira-intake": {
+        "enabled": true,
+        "hooks": { "allowConversationAccess": true },
+        "config": { "accountId": "sobatnira", "mediaDir": "/absolute/openclaw-state/media" }
+      }
+    }
+  }
+}

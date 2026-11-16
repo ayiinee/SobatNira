@@ -4,5 +4,7 @@ SobatNira dirancang untuk membantu pabrik gula merah tebu mencatat dan menelusur
 
 ## Mulai kerja
 
+- [Pahami alur produksi dan pembagian tanggung jawab layanan](docs/project-overview.md)
 - [Jalankan proyek dan tes](docs/development.md)
 - [Struktur folder dan cara berkontribusi](docs/contributing.md)
+- [Kontrak dan setup intake dokumen AI](docs/ai/README.md)

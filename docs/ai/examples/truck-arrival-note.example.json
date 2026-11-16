@@ -1,0 +1,77 @@
+{
+  "document_type": "TRUCK_ARRIVAL_NOTE",
+  "schema_version": "1.0.0",
+  "template_version": "1.0.0",
+  "header": {
+    "arrival_date": {
+      "raw_value": "DD-MM-YYYY",
+      "normalized_value": null,
+      "status": "AMBIGUOUS",
+      "source": "PADDLE_OCR",
+      "unit": null,
+      "confidence": null,
+      "evidence": []
+    },
+    "supplier_name": {
+      "raw_value": "NAMA PEMASOK",
+      "normalized_value": "NAMA PEMASOK",
+      "status": "READ",
+      "source": "PADDLE_OCR",
+      "unit": null,
+      "confidence": null,
+      "evidence": []
+    },
+    "vehicle_number": {
+      "raw_value": "PLAT KENDARAAN",
+      "normalized_value": null,
+      "status": "AMBIGUOUS",
+      "source": "PADDLE_OCR",
+      "unit": null,
+      "confidence": null,
+      "evidence": []
+    },
+    "brix": {
+      "raw_value": "NILAI BRIX",
+      "normalized_value": null,
+      "status": "READ",
+      "source": "PADDLE_OCR",
+      "unit": null,
+      "confidence": null,
+      "evidence": []
+    },
+    "net_weight_kg": {
+      "raw_value": "BERAT",
+      "normalized_value": null,
+      "status": "READ",
+      "source": "PADDLE_OCR",
+      "unit": "kg",
+      "confidence": null,
+      "evidence": []
+    },
+    "cane_type": {
+      "raw_value": "KODE JENIS",
+      "normalized_value": null,
+      "status": "READ",
+      "source": "PADDLE_OCR",
+      "unit": null,
+      "confidence": null,
+      "evidence": []
+    },
+    "receiving_operator": {
+      "raw_value": null,
+      "normalized_value": null,
+      "status": "BLANK",
+      "source": "PADDLE_OCR",
+      "unit": null,
+      "confidence": null,
+      "evidence": []
+    }
+  },
+  "cane_tag_reference": {
+    "raw_value": null,
+    "status": "NOT_CAPTURED",
+    "source_note": "Format/sumber persis label masih perlu dikonfirmasi.",
+    "normalized_code": null
+  },
+  "issues": []
+}

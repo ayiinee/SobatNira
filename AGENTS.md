@@ -9,11 +9,13 @@
 ## Acuan keputusan
 
 - Jika tersedia di workspace, mulai dari [indeks dokumen internal](docs/internal/index.md) dan baca dokumen yang terkait dengan tugas. Gunakan register keputusan untuk mengecek status aturan produksi. Jika acuan yang dibutuhkan belum tersedia atau keputusannya masih terbuka, klarifikasi dengan tim sebelum menetapkannya di kode.
+- Untuk pekerjaan intake WhatsApp, OCR, dan validasi nota, gunakan [PRD AI Engineering internal](docs/internal/ai/PRD_SOBATNIRA_AI_ENGINEERING.md) jika tersedia, serta [kontrak dan petunjuk integrasi](docs/ai/README.md).
+- Baca [acuan proyek](docs/project-overview.md) untuk memahami istilah produksi, tanggung jawab layanan, dan status implementasi di repo.
 - Perlakukan fixture sebagai data sintetis. Simpan kredensial, nota asli, data mitra, dan dokumen internal di luar Git.
 
 ## Pengembangan dan verifikasi
 
 - Ikuti [panduan setup lokal](docs/development.md) untuk instalasi, menjalankan layanan, dan menyiapkan fixture.
-- Ikuti [panduan kontribusi](docs/contributing.md) untuk struktur folder, nama branch dan commit, serta proses PR. Jika lokasi penyimpanan di Windows bisa dipilih, gunakan D: saat tersedia.
+- Ikuti [panduan kontribusi](docs/contributing.md) untuk struktur folder, nama branch dan commit, serta proses PR. Mulai nama branch kerja langsung dengan jenis pekerjaan, seperti `feat/` atau `fix/`. Jika lokasi penyimpanan di Windows bisa dipilih, gunakan D: saat tersedia.
 - Periksa komponen yang diubah dari direktorinya. Gunakan `flutter analyze` dan `flutter test` untuk Flutter, `npm test` untuk NestJS, atau `uv run --locked python -m unittest` untuk FastAPI.
 - Jika perubahan menyentuh kontrak antar layanan, verifikasi alur yang terdampak dengan data sintetis. Untuk alur yang dimulai di aplikasi, cek dari Flutter hingga API terkait.

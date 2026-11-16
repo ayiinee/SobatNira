@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -57,7 +55,7 @@ class NiraIcon extends StatelessWidget {
   );
 }
 
-enum NiraTab { beranda, kloter, laporan, pengaturan }
+enum NiraTab { beranda, kloter, pekerjaan, laporan, pengaturan }
 
 class NiraScaffold extends StatelessWidget {
   const NiraScaffold({
@@ -79,6 +77,8 @@ class NiraScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     final padding = MediaQuery.viewPaddingOf(context);
     final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
+    const navigationHeight = 52.0;
+    final navigationBottom = padding.bottom + 8;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark.copyWith(
         statusBarColor: Colors.transparent,
@@ -87,35 +87,27 @@ class NiraScaffold extends StatelessWidget {
       ),
       child: Scaffold(
         backgroundColor: niraPaper,
-        body: SafeArea(
-          top: false,
-          bottom: false,
-          child: Column(
-            children: [
-              Container(height: math.max(padding.top, 38), color: Colors.white),
-              Expanded(child: body),
-              if (!keyboard && bottomAction != null)
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    niraInset,
-                    6,
-                    niraInset,
-                    actionGap,
-                  ),
-                  child: bottomAction,
-                ),
-              if (!keyboard)
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    niraInset,
-                    0,
-                    niraInset,
-                    math.max(padding.bottom, 30),
-                  ),
-                  child: _BottomNavigation(tab: tab, onNavigate: onNavigate),
-                ),
-            ],
-          ),
+        extendBody: true,
+        body: Stack(
+          children: [
+            Positioned.fill(
+              child: SafeArea(top: true, bottom: false, child: body),
+            ),
+            if (!keyboard && bottomAction != null)
+              Positioned(
+                left: niraInset,
+                right: niraInset,
+                bottom: navigationBottom + navigationHeight + actionGap,
+                child: bottomAction!,
+              ),
+            if (!keyboard)
+              Positioned(
+                left: niraInset,
+                right: niraInset,
+                bottom: navigationBottom,
+                child: _BottomNavigation(tab: tab, onNavigate: onNavigate),
+              ),
+          ],
         ),
       ),
     );
@@ -131,6 +123,7 @@ class _BottomNavigation extends StatelessWidget {
   static const _items = [
     (NiraTab.beranda, 'Beranda', 'home', 23.0),
     (NiraTab.kloter, 'Kloter', 'truck', 26.0),
+    (NiraTab.pekerjaan, 'Pekerjaan', 'clip', 20.0),
     (NiraTab.laporan, 'Laporan', 'report', 20.0),
     (NiraTab.pengaturan, 'Pengaturan', 'settings', 26.0),
   ];
@@ -146,7 +139,7 @@ class _BottomNavigation extends StatelessWidget {
         padding: const EdgeInsets.only(right: 12),
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 276),
+            constraints: const BoxConstraints(maxWidth: 330),
             child: Row(
               children: [
                 for (final (item, label, icon, size) in _items)

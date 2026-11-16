@@ -1,0 +1,1070 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sobatnira.local/schemas/truck-arrival-note.schema.json",
+  "title": "SobatNira Truck Arrival Note Extraction",
+  "type": "object",
+  "required": [
+    "document_type",
+    "schema_version",
+    "header",
+    "cane_tag_reference",
+    "issues"
+  ],
+  "properties": {
+    "document_type": {
+      "const": "TRUCK_ARRIVAL_NOTE"
+    },
+    "schema_version": {
+      "type": "string"
+    },
+    "template_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "header": {
+      "type": "object",
+      "required": [
+        "arrival_date",
+        "supplier_name",
+        "vehicle_number",
+        "brix",
+        "net_weight_kg",
+        "cane_type",
+        "receiving_operator"
+      ],
+      "properties": {
+        "arrival_date": {
+          "type": "object",
+          "required": [
+            "raw_value",
+            "normalized_value",
+            "status",
+            "source",
+            "unit",
+            "confidence",
+            "evidence"
+          ],
+          "properties": {
+            "raw_value": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "normalized_value": {
+              "type": [
+                "string",
+                "number",
+                "integer",
+                "boolean",
+                "null"
+              ]
+            },
+            "status": {
+              "enum": [
+                "READ",
+                "BLANK",
+                "NOT_YET_FILLED",
+                "ILLEGIBLE",
+                "AMBIGUOUS",
+                "NOT_PRESENT",
+                "NOT_APPLICABLE",
+                "UNMAPPED"
+              ]
+            },
+            "source": {
+              "enum": [
+                "PADDLE_OCR",
+                "OTHER_OCR",
+                "GEMINI_REREAD",
+                "OPERATOR_CORRECTION",
+                "ADMIN_CORRECTION",
+                "SYSTEM_DERIVED"
+              ]
+            },
+            "unit": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "confidence": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "asset_id",
+                  "coordinate_space",
+                  "bbox"
+                ],
+                "properties": {
+                  "asset_id": {
+                    "type": "string"
+                  },
+                  "page_index": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  },
+                  "coordinate_space": {
+                    "enum": [
+                      "ORIGINAL_IMAGE_NORMALIZED",
+                      "PREPROCESSED_IMAGE_NORMALIZED"
+                    ]
+                  },
+                  "bbox": {
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "minItems": 4,
+                    "maxItems": 4
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "alternatives": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "value",
+                  "source"
+                ],
+                "properties": {
+                  "value": {
+                    "type": [
+                      "string",
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "supplier_name": {
+          "type": "object",
+          "required": [
+            "raw_value",
+            "normalized_value",
+            "status",
+            "source",
+            "unit",
+            "confidence",
+            "evidence"
+          ],
+          "properties": {
+            "raw_value": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "normalized_value": {
+              "type": [
+                "string",
+                "number",
+                "integer",
+                "boolean",
+                "null"
+              ]
+            },
+            "status": {
+              "enum": [
+                "READ",
+                "BLANK",
+                "NOT_YET_FILLED",
+                "ILLEGIBLE",
+                "AMBIGUOUS",
+                "NOT_PRESENT",
+                "NOT_APPLICABLE",
+                "UNMAPPED"
+              ]
+            },
+            "source": {
+              "enum": [
+                "PADDLE_OCR",
+                "OTHER_OCR",
+                "GEMINI_REREAD",
+                "OPERATOR_CORRECTION",
+                "ADMIN_CORRECTION",
+                "SYSTEM_DERIVED"
+              ]
+            },
+            "unit": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "confidence": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "asset_id",
+                  "coordinate_space",
+                  "bbox"
+                ],
+                "properties": {
+                  "asset_id": {
+                    "type": "string"
+                  },
+                  "page_index": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  },
+                  "coordinate_space": {
+                    "enum": [
+                      "ORIGINAL_IMAGE_NORMALIZED",
+                      "PREPROCESSED_IMAGE_NORMALIZED"
+                    ]
+                  },
+                  "bbox": {
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "minItems": 4,
+                    "maxItems": 4
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "alternatives": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "value",
+                  "source"
+                ],
+                "properties": {
+                  "value": {
+                    "type": [
+                      "string",
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "vehicle_number": {
+          "type": "object",
+          "required": [
+            "raw_value",
+            "normalized_value",
+            "status",
+            "source",
+            "unit",
+            "confidence",
+            "evidence"
+          ],
+          "properties": {
+            "raw_value": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "normalized_value": {
+              "type": [
+                "string",
+                "number",
+                "integer",
+                "boolean",
+                "null"
+              ]
+            },
+            "status": {
+              "enum": [
+                "READ",
+                "BLANK",
+                "NOT_YET_FILLED",
+                "ILLEGIBLE",
+                "AMBIGUOUS",
+                "NOT_PRESENT",
+                "NOT_APPLICABLE",
+                "UNMAPPED"
+              ]
+            },
+            "source": {
+              "enum": [
+                "PADDLE_OCR",
+                "OTHER_OCR",
+                "GEMINI_REREAD",
+                "OPERATOR_CORRECTION",
+                "ADMIN_CORRECTION",
+                "SYSTEM_DERIVED"
+              ]
+            },
+            "unit": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "confidence": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "asset_id",
+                  "coordinate_space",
+                  "bbox"
+                ],
+                "properties": {
+                  "asset_id": {
+                    "type": "string"
+                  },
+                  "page_index": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  },
+                  "coordinate_space": {
+                    "enum": [
+                      "ORIGINAL_IMAGE_NORMALIZED",
+                      "PREPROCESSED_IMAGE_NORMALIZED"
+                    ]
+                  },
+                  "bbox": {
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "minItems": 4,
+                    "maxItems": 4
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "alternatives": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "value",
+                  "source"
+                ],
+                "properties": {
+                  "value": {
+                    "type": [
+                      "string",
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "brix": {
+          "type": "object",
+          "required": [
+            "raw_value",
+            "normalized_value",
+            "status",
+            "source",
+            "unit",
+            "confidence",
+            "evidence"
+          ],
+          "properties": {
+            "raw_value": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "normalized_value": {
+              "type": [
+                "string",
+                "number",
+                "integer",
+                "boolean",
+                "null"
+              ]
+            },
+            "status": {
+              "enum": [
+                "READ",
+                "BLANK",
+                "NOT_YET_FILLED",
+                "ILLEGIBLE",
+                "AMBIGUOUS",
+                "NOT_PRESENT",
+                "NOT_APPLICABLE",
+                "UNMAPPED"
+              ]
+            },
+            "source": {
+              "enum": [
+                "PADDLE_OCR",
+                "OTHER_OCR",
+                "GEMINI_REREAD",
+                "OPERATOR_CORRECTION",
+                "ADMIN_CORRECTION",
+                "SYSTEM_DERIVED"
+              ]
+            },
+            "unit": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "confidence": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "asset_id",
+                  "coordinate_space",
+                  "bbox"
+                ],
+                "properties": {
+                  "asset_id": {
+                    "type": "string"
+                  },
+                  "page_index": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  },
+                  "coordinate_space": {
+                    "enum": [
+                      "ORIGINAL_IMAGE_NORMALIZED",
+                      "PREPROCESSED_IMAGE_NORMALIZED"
+                    ]
+                  },
+                  "bbox": {
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "minItems": 4,
+                    "maxItems": 4
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "alternatives": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "value",
+                  "source"
+                ],
+                "properties": {
+                  "value": {
+                    "type": [
+                      "string",
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "net_weight_kg": {
+          "type": "object",
+          "required": [
+            "raw_value",
+            "normalized_value",
+            "status",
+            "source",
+            "unit",
+            "confidence",
+            "evidence"
+          ],
+          "properties": {
+            "raw_value": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "normalized_value": {
+              "type": [
+                "string",
+                "number",
+                "integer",
+                "boolean",
+                "null"
+              ]
+            },
+            "status": {
+              "enum": [
+                "READ",
+                "BLANK",
+                "NOT_YET_FILLED",
+                "ILLEGIBLE",
+                "AMBIGUOUS",
+                "NOT_PRESENT",
+                "NOT_APPLICABLE",
+                "UNMAPPED"
+              ]
+            },
+            "source": {
+              "enum": [
+                "PADDLE_OCR",
+                "OTHER_OCR",
+                "GEMINI_REREAD",
+                "OPERATOR_CORRECTION",
+                "ADMIN_CORRECTION",
+                "SYSTEM_DERIVED"
+              ]
+            },
+            "unit": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "confidence": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "asset_id",
+                  "coordinate_space",
+                  "bbox"
+                ],
+                "properties": {
+                  "asset_id": {
+                    "type": "string"
+                  },
+                  "page_index": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  },
+                  "coordinate_space": {
+                    "enum": [
+                      "ORIGINAL_IMAGE_NORMALIZED",
+                      "PREPROCESSED_IMAGE_NORMALIZED"
+                    ]
+                  },
+                  "bbox": {
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "minItems": 4,
+                    "maxItems": 4
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "alternatives": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "value",
+                  "source"
+                ],
+                "properties": {
+                  "value": {
+                    "type": [
+                      "string",
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "cane_type": {
+          "type": "object",
+          "required": [
+            "raw_value",
+            "normalized_value",
+            "status",
+            "source",
+            "unit",
+            "confidence",
+            "evidence"
+          ],
+          "properties": {
+            "raw_value": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "normalized_value": {
+              "type": [
+                "string",
+                "number",
+                "integer",
+                "boolean",
+                "null"
+              ]
+            },
+            "status": {
+              "enum": [
+                "READ",
+                "BLANK",
+                "NOT_YET_FILLED",
+                "ILLEGIBLE",
+                "AMBIGUOUS",
+                "NOT_PRESENT",
+                "NOT_APPLICABLE",
+                "UNMAPPED"
+              ]
+            },
+            "source": {
+              "enum": [
+                "PADDLE_OCR",
+                "OTHER_OCR",
+                "GEMINI_REREAD",
+                "OPERATOR_CORRECTION",
+                "ADMIN_CORRECTION",
+                "SYSTEM_DERIVED"
+              ]
+            },
+            "unit": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "confidence": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "asset_id",
+                  "coordinate_space",
+                  "bbox"
+                ],
+                "properties": {
+                  "asset_id": {
+                    "type": "string"
+                  },
+                  "page_index": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  },
+                  "coordinate_space": {
+                    "enum": [
+                      "ORIGINAL_IMAGE_NORMALIZED",
+                      "PREPROCESSED_IMAGE_NORMALIZED"
+                    ]
+                  },
+                  "bbox": {
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "minItems": 4,
+                    "maxItems": 4
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "alternatives": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "value",
+                  "source"
+                ],
+                "properties": {
+                  "value": {
+                    "type": [
+                      "string",
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "receiving_operator": {
+          "type": "object",
+          "required": [
+            "raw_value",
+            "normalized_value",
+            "status",
+            "source",
+            "unit",
+            "confidence",
+            "evidence"
+          ],
+          "properties": {
+            "raw_value": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "normalized_value": {
+              "type": [
+                "string",
+                "number",
+                "integer",
+                "boolean",
+                "null"
+              ]
+            },
+            "status": {
+              "enum": [
+                "READ",
+                "BLANK",
+                "NOT_YET_FILLED",
+                "ILLEGIBLE",
+                "AMBIGUOUS",
+                "NOT_PRESENT",
+                "NOT_APPLICABLE",
+                "UNMAPPED"
+              ]
+            },
+            "source": {
+              "enum": [
+                "PADDLE_OCR",
+                "OTHER_OCR",
+                "GEMINI_REREAD",
+                "OPERATOR_CORRECTION",
+                "ADMIN_CORRECTION",
+                "SYSTEM_DERIVED"
+              ]
+            },
+            "unit": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "confidence": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "asset_id",
+                  "coordinate_space",
+                  "bbox"
+                ],
+                "properties": {
+                  "asset_id": {
+                    "type": "string"
+                  },
+                  "page_index": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  },
+                  "coordinate_space": {
+                    "enum": [
+                      "ORIGINAL_IMAGE_NORMALIZED",
+                      "PREPROCESSED_IMAGE_NORMALIZED"
+                    ]
+                  },
+                  "bbox": {
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "minItems": 4,
+                    "maxItems": 4
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "alternatives": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "value",
+                  "source"
+                ],
+                "properties": {
+                  "value": {
+                    "type": [
+                      "string",
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": true
+    },
+    "cane_tag_reference": {
+      "type": "object",
+      "required": [
+        "raw_value",
+        "status",
+        "source_note"
+      ],
+      "properties": {
+        "raw_value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "enum": [
+            "CAPTURED",
+            "NOT_CAPTURED",
+            "PENDING_OPERATOR_INPUT",
+            "UNKNOWN"
+          ]
+        },
+        "source_note": {
+          "type": "string"
+        },
+        "normalized_code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "severity",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "INFO",
+              "WARNING",
+              "ERROR",
+              "BLOCKER"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "field_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
