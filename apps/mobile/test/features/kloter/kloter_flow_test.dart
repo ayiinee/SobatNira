@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sobatnira/features/kloter/kloter_card.dart';
+import 'package:sobatnira/features/kloter/demo_production.dart';
+import 'package:sobatnira/features/kloter/kloter_list_page.dart';
 import 'package:sobatnira/main.dart';
 
 void main() {
@@ -32,6 +34,61 @@ void main() {
     await tester.tap(finder);
     await tester.pumpAndSettle();
   }
+
+  testWidgets(
+    'accordion mengurutkan tanggal dan menyimpan pilihan buka tutup',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 853));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      DemoKloter? opened;
+      final older = DemoKloter('LAMA', 18, KloterStatus.review, 'Pemasok A');
+      final newest = DemoKloter('BARU', 20, KloterStatus.review, 'Pemasok B');
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: KloterListPage(
+              kloter: [
+                older,
+                newest,
+                DemoKloter('BARU-TUNTAS', 20, KloterStatus.done, 'Pemasok C'),
+                DemoKloter('TENGAH', 19, KloterStatus.done, 'Pemasok D'),
+              ],
+              onOpenKloter: (item) => opened = item,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final headers = find.byWidgetPredicate(
+        (widget) => widget is Semantics && widget.properties.expanded != null,
+      );
+      expect(headers, findsNWidgets(3));
+      expect(
+        tester.getTopLeft(headers.at(0)).dy,
+        lessThan(tester.getTopLeft(headers.at(1)).dy),
+      );
+      expect(find.text('BARU'), findsOneWidget);
+      expect(find.text('BARU-TUNTAS'), findsOneWidget);
+      expect(find.text('LAMA'), findsNothing);
+      expect(find.text('TENGAH'), findsNothing);
+
+      await tap(tester, find.text('18 Oktober 2026'));
+      expect(find.text('LAMA'), findsOneWidget);
+      // Multiple dates can stay open independently.
+      expect(find.text('BARU'), findsOneWidget);
+      await tap(tester, find.text('LAMA'));
+      expect(opened, same(older));
+      await tap(tester, headers.first);
+      expect(find.text('BARU'), findsNothing);
+      await tap(tester, find.text('Perlu Ditinjau'));
+      expect(find.text('BARU'), findsNothing);
+      expect(find.text('LAMA'), findsOneWidget);
+      expect(find.text('19 Oktober 2026'), findsNothing);
+      await tap(tester, find.text('Semua'));
+      expect(find.text('BARU'), findsNothing);
+      expect(find.text('LAMA'), findsOneWidget);
+    },
+  );
 
   testWidgets('pencarian, tab dan rentang bisa digabung dan dipulihkan', (
     tester,
