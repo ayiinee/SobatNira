@@ -49,3 +49,41 @@ test('reservations compete for available ml, retain idempotency and finalize exa
     assert.equal((await f.request(f.siblingRoot + '/lots/' + f.ids.lot + '/juice/availability')).status, 404);
   } finally { await f.close(); }
 });
+
+test('transfer and reservation serialize, conserve ml and preserve origin through onward transfer', async () => {
+  const f = await intakeFixture(true);
+  try {
+    await mill(f, f.ids.lot);
+    const transfer = (lotId, input) => f.request(root(f, lotId) + '/transfers', 'POST', input);
+    const held = requestFor('230000');
+    assert.equal((await reserve(f, held)).status, 201);
+    const move = { requestId: randomUUID(), toLotId: f.ids.secondLot, quantityMl: '20000', synthetic: true };
+    const competitor = await Promise.all([transfer(f.ids.lot, move), reserve(f, requestFor('20000'))]);
+    assert.deepEqual(competitor.map((result) => result.status).sort((a, b) => a - b), [201, 409]);
+    if (competitor[1].status === 201) {
+      await f.request(root(f) + '/reservations/' + competitor[1].body.requestId + '/release', 'POST');
+    }
+    const moved = await transfer(f.ids.lot, move);
+    assert.equal(moved.status, 201, JSON.stringify(moved.body));
+    assert.equal(moved.body.originLotId, f.ids.lot);
+    assert.deepEqual((await transfer(f.ids.lot, move)).body, moved.body);
+    assert.equal((await transfer(f.ids.lot, { ...move, quantityMl: '1' })).status, 409);
+    assert.equal((await transfer(f.ids.lot, { ...move, requestId: randomUUID(), toLotId: f.ids.siblingLot })).status, 404);
+    assert.equal((await transfer(f.ids.lot, { ...move, requestId: randomUUID(), toLotId: f.ids.otherLot })).status, 404);
+    assert.equal((await transfer(f.ids.lot, { ...move, requestId: randomUUID(), toLotId: f.ids.lot })).status, 400);
+    assert.equal((await reserve(f, requestFor('1'), f.ids.secondLot)).status, 409);
+    const onward = await transfer(f.ids.secondLot, {
+      ...move, requestId: randomUUID(), toLotId: f.ids.thirdLot, originLotId: f.ids.lot, quantityMl: '5000',
+    });
+    assert.equal(onward.status, 201, JSON.stringify(onward.body));
+    const availability = (lotId) => f.request(root(f, lotId) + '/availability?synthetic=true');
+    assert.equal((await availability(f.ids.lot)).body.onHandMl, '230000');
+    assert.deepEqual((await availability(f.ids.secondLot)).body.origins, [{
+      originLotId: f.ids.lot, onHandMl: '15000', reservedMl: '0', availableMl: '15000',
+    }]);
+    const use = await reserve(f, { ...requestFor('5000'), originLotId: f.ids.lot }, f.ids.thirdLot);
+    assert.equal(use.status, 201, JSON.stringify(use.body));
+    assert.equal(use.body.originLotId, f.ids.lot);
+    assert.equal((await availability(f.ids.thirdLot)).body.availableMl, '0');
+  } finally { await f.close(); }
+});

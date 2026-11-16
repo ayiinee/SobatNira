@@ -2,7 +2,7 @@ import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/com
 import { CurrentFactory, FactoryRoles } from '../auth/auth.decorators';
 import { FactoryAccess } from '../auth/auth.types';
 import { uuid } from '../production/production.dto';
-import { parseAvailability, parseReservation } from './juice.dto';
+import { parseAvailability, parseReservation, parseTransfer } from './juice.dto';
 import { JuiceRepository } from './juice.repository';
 
 @Controller('tenants/:tenantId/factories/:factoryId/lots/:lotId/juice')
@@ -18,6 +18,11 @@ export class JuiceController {
   @Post('reservations')
   reserve(@CurrentFactory() access: FactoryAccess, @Param('lotId') lotId: string, @Body() body: unknown) {
     return this.juice.reserve(access, uuid(lotId, 'lotId'), parseReservation(body));
+  }
+
+  @Post('transfers')
+  transfer(@CurrentFactory() access: FactoryAccess, @Param('lotId') lotId: string, @Body() body: unknown) {
+    return this.juice.transfer(access, parseTransfer(body, uuid(lotId, 'lotId')));
   }
 
   @Post('reservations/:requestId/consume')
