@@ -45,6 +45,16 @@ class WhatsAppController {
     return this.intake.status(sender, requireUuid(id), requireUuid(revision));
   }
 
+  @Get('quoted-context')
+  @Header('Cache-Control', 'private, no-store')
+  quotedContext(@Headers('x-operator-phone') phone: string, @Headers('x-chat-id') chat: string,
+    @Headers('x-quoted-message-id') quote: string) {
+    if (!/^\+[1-9][0-9]{7,14}$/.test(phone) || !chat || chat.length > 255 || !quote || quote.length > 255) {
+      throw new BadRequestException('Rujukan percakapan tidak valid');
+    }
+    return this.intake.quotedContext(phone, chat, quote);
+  }
+
   @Post('text-events')
   @HttpCode(200)
   reply(@Headers('idempotency-key') key: string, @Body() body: { event?: unknown; action?: Parameters<Intake['reply']>[1] }) {
@@ -76,6 +86,17 @@ class OcrMediaController {
 @Controller('api/v1/mobile')
 class MobileReviewController {
   constructor(private readonly review: Review, private readonly media: MediaStorage) {}
+
+  @Get('review-notifications')
+  @Header('Cache-Control', 'private, no-store')
+  async notifications(@Headers('authorization') token: string) {
+    return this.review.unreadNotifications(await this.review.user(token));
+  }
+
+  @Patch('review-notifications/:id/read')
+  async markRead(@Headers('authorization') token: string, @Param('id') id: string) {
+    return this.review.markNotificationRead(await this.review.user(token), requireUuid(id));
+  }
 
   @Get('review-tasks')
   async list(@Headers('authorization') token: string, @Query('status') status = 'PENDING_VALIDATION',

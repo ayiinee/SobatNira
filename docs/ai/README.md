@@ -15,6 +15,28 @@ Gunakan akun WhatsApp khusus yang terhubung melalui OpenClaw/Baileys. Muat plugi
 
 Bot memberi tanda terima dan menyediakan `STATUS <dokumen> <revisi>` untuk membuka draf. Jika gateway mendukung penyiapan notice sesi dan sesi masih aktif, plugin juga mencoba mengirim ringkasan setelah ekstraksi. Ringkasan menyertakan perintah `KOREKSI` dan `KONFIRMASI` dengan ID revisi. Untuk foto nota produksi lanjutan, balas kiriman foto yang dikenal atau gunakan caption `REVISI <dokumen>`. Gunakan `BARU` untuk menyatakan nota baru ketika terdapat kandidat lain. Draf yang rujukannya meragukan tersimpan sebagai bukti dan menunggu pilihan eksplisit.
 
+Untuk mengaktifkan bantuan bahasa natural pada balasan ke foto yang dikenali, isi `OPENROUTER_API_KEY`, `OPENROUTER_AGENT_MODEL`, dan `OPENROUTER_ALLOWED_PROVIDERS` (slug provider yang disetujui, dipisahkan koma) pada gateway. `OPENROUTER_AGENT_FALLBACK_MODEL` opsional untuk gangguan model atau jaringan. Pilih ID model tertentu yang mendukung function calling dan endpoint zero data retention. Plugin mengirim maksimal 300 karakter pertanyaan setelah menyamarkan pola ID, email, dan nomor, tanpa foto, draf, atau riwayat. Hasil model memilih jenis panduan baca-saja. Konfirmasi dan koreksi tetap memakai perintah revisi eksplisit. Jika OpenRouter gagal atau konfigurasi belum lengkap, plugin tetap memakai template. [Kontrak tool calling OpenRouter](https://openrouter.ai/docs/features/tool-calling)
+
+## Notifikasi Pekerjaan
+
+Jalankan `npm run db:migrate:ocr` untuk memasang migrasi `002_review_notifications.sql`. Setelah konfirmasi operator, admin aktif di pabrik terkait menerima badge laporan baru di Pekerjaan. Flutter memeriksa badge saat membuka tab dan setiap 30 detik selama tab aktif. Membuka detail menandai notifikasi itu sudah dibaca untuk admin tersebut. Owner tetap memiliki akses review. Notifikasi berlaku untuk laporan yang dikonfirmasi setelah migrasi ini dan tersedia ketika aplikasi terbuka.
+
+## Benchmark OCR lokal
+
+Dari `apps/ai`, jalankan `uv run --locked --extra paddle python benchmark_ocr.py <manifest.json>`. Simpan manifest dan foto anonim berlabel pada direktori privat yang sama. Setiap foto membutuhkan tipe dokumen yang diharapkan dan dapat memiliki anotasi berdasarkan path field, termasuk raw value, normalized value, status, atau unit.
+
+```json
+[
+  {
+    "image": "nota-sintetis.png",
+    "document_type": "TRUCK_ARRIVAL_NOTE",
+    "fields": { "header.net_weight_kg": { "normalized_value": 1250, "unit": "kg" } }
+  }
+]
+```
+
+Hasil mencakup jumlah gambar, matriks klasifikasi, hitungan benar/salah/tidak ditemukan per field, dan median waktu pemrosesan. Benchmark memanggil PaddleOCR lokal tanpa mengirim foto ke Gemini.
+
 ## Menjalankan tes
 
 - `apps/api` dengan PostgreSQL pengujian dan `TEST_DATABASE_URL` menjalankan `npm test`, termasuk migrasi dan alur lintas endpoint dengan respons OCR serta autentikasi sintetis. Tes memakai schema yang dibuat khusus dan menghapus schema itu setelah selesai.

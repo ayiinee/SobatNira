@@ -69,6 +69,23 @@ export class Review {
     });
   }
 
+  async unreadNotifications(user: string) {
+    const { rows: [result] } = await this.db.query<{ unread_count: number }>(`SELECT count(*)::int AS unread_count
+      FROM admin_review_notifications n JOIN admin_review_tasks t ON t.id=n.task_id AND t.status='PENDING_VALIDATION'
+      JOIN source_documents d ON d.id=t.document_id
+      JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=n.user_id AND a.active AND a.role='ADMIN'
+      WHERE n.user_id=$1 AND n.read_at IS NULL`, [user]);
+    return result;
+  }
+
+  async markNotificationRead(user: string, id: string) {
+    await this.db.query(`UPDATE admin_review_notifications n SET read_at=now()
+      FROM admin_review_tasks t JOIN source_documents d ON d.id=t.document_id JOIN review_memberships a ON a.factory_id=d.factory_id
+      WHERE n.task_id=t.id AND n.task_id=$2 AND n.user_id=$1 AND a.user_id=n.user_id AND a.active AND a.role='ADMIN'
+        AND n.read_at IS NULL`, [user, id]);
+    return { acknowledged: true };
+  }
+
   async asset(user: string, task: string, asset: string) {
     const { rows: [record] } = await this.db.query(`SELECT m.object_key,m.mime_type FROM admin_review_tasks t
       JOIN source_documents d ON d.id=t.document_id JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1 AND a.active
