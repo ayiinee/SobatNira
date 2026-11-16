@@ -15,6 +15,7 @@
     "test:production-db": "npm run build && node --test test/integration/production-database.test.cjs",
     "test:intake-db": "npm run build && node --test test/integration/intake-database.test.cjs",
     "test:milling-db": "npm run build && node --test test/integration/milling-database.test.cjs",
+    "test:juice-db": "npm run build && node --test test/integration/juice-database.test.cjs",
     "test:evidence-db": "npm run build && node --test test/integration/evidence-database.test.cjs",
     "test:evidence-r2": "npm run build && node --test test/integration/evidence-r2.test.cjs"
   },

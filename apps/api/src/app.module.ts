@@ -6,6 +6,7 @@ import { BackendConfigModule } from './config/config.module';
 import { ProductionModule } from './production/production.module';
 import { DocumentsModule } from './documents/documents.module';
 import { MillingModule } from './milling/milling.module';
+import { JuiceModule } from './juice/juice.module';
 
 @Controller()
 class AppController {
@@ -43,7 +44,7 @@ export class AppModule {
   static register(options: ConfigOptions = {}): DynamicModule {
     return {
       module: AppModule,
-      imports: [BackendConfigModule.register(options), AuthModule, ProductionModule, DocumentsModule, MillingModule],
+      imports: [BackendConfigModule.register(options), AuthModule, ProductionModule, DocumentsModule, MillingModule, JuiceModule],
       controllers: [AppController],
     };
   }
