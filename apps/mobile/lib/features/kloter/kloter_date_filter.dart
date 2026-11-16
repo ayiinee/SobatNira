@@ -56,19 +56,21 @@ Future<KloterFilterResult?> showKloterDateFilter(
   context: context,
   barrierDismissible: true,
   barrierLabel: 'Tutup filter tanggal',
-  barrierColor: const Color(0x28000000),
-  transitionDuration: const Duration(milliseconds: 140),
+  barrierColor: const Color(0x66000000),
+  transitionDuration: MediaQuery.disableAnimationsOf(context)
+      ? Duration.zero
+      : const Duration(milliseconds: 180),
   pageBuilder: (context, animation, secondaryAnimation) => SafeArea(
-    child: Align(
-      alignment: Alignment.topRight,
+    child: Center(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 102, 29, 20),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: niraPanelWidth),
+          constraints: const BoxConstraints(maxWidth: 390),
           child: Material(
+            key: const ValueKey('kloter-date-dialog'),
             color: Colors.white,
             elevation: 7,
-            borderRadius: BorderRadius.circular(13),
+            borderRadius: BorderRadius.circular(20),
             clipBehavior: Clip.antiAlias,
             child: SingleChildScrollView(child: _FilterPanel(current)),
           ),
@@ -76,6 +78,19 @@ Future<KloterFilterResult?> showKloterDateFilter(
       ),
     ),
   ),
+  transitionBuilder: (context, animation, secondaryAnimation, child) =>
+      FadeTransition(
+        opacity: animation.drive(CurveTween(curve: Curves.easeOutCubic)),
+        child: ScaleTransition(
+          scale: animation.drive(
+            Tween(
+              begin: .98,
+              end: 1.0,
+            ).chain(CurveTween(curve: Curves.easeOutCubic)),
+          ),
+          child: child,
+        ),
+      ),
 );
 
 class _FilterPanel extends StatefulWidget {
@@ -111,18 +126,24 @@ class _FilterPanelState extends State<_FilterPanel> {
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 12),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 9),
+            padding: EdgeInsets.zero,
             child: Row(
               children: [
+                IconButton(
+                  tooltip: 'Tutup filter tanggal',
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close, color: niraLeaf, size: 22),
+                ),
                 Expanded(
                   child: Text(
                     'Filter tanggal',
-                    style: niraText(19, weight: FontWeight.w700),
+                    textAlign: TextAlign.center,
+                    style: niraText(17, weight: FontWeight.w700),
                   ),
                 ),
                 TextButton(
@@ -130,7 +151,7 @@ class _FilterPanelState extends State<_FilterPanel> {
                   style: TextButton.styleFrom(
                     foregroundColor: niraLeaf,
                     textStyle: niraText(12.5, weight: FontWeight.w700),
-                    minimumSize: const Size(44, 32),
+                    minimumSize: const Size(48, 44),
                     padding: EdgeInsets.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
@@ -139,18 +160,11 @@ class _FilterPanelState extends State<_FilterPanel> {
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(9, 0, 9, 7),
-            child: Text(
-              'Tampilkan kloter berdasarkan periode.',
-              style: niraText(12, color: niraLeaf),
-            ),
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8),
-            child: Divider(height: 10, thickness: 1, color: niraLine),
-          ),
-          for (final period in KloterPeriod.values) _periodRow(period),
+          const SizedBox(height: 8),
+          for (final period in KloterPeriod.values) ...[
+            _periodRow(period),
+            if (period != KloterPeriod.values.last) const SizedBox(height: 3),
+          ],
         ],
       ),
     );
@@ -167,38 +181,53 @@ class _FilterPanelState extends State<_FilterPanel> {
         : _describeRange(filter!.range);
     return Material(
       color: selected ? const Color(0xFFE8F1E5) : Colors.white,
-      shape: RoundedRectangleBorder(
-        side: selected ? const BorderSide(color: niraGreen) : BorderSide.none,
-        borderRadius: BorderRadius.circular(7),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
       child: Semantics(
         selected: selected,
         child: InkWell(
-          borderRadius: BorderRadius.circular(7),
+          borderRadius: BorderRadius.circular(9),
+          hoverColor: const Color(0x14174B35),
           onTap: custom
               ? () => setState(() => _showRange = true)
               : () => _apply(filter),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 41),
+            constraints: const BoxConstraints(minHeight: 66),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               child: Row(
                 children: [
+                  Icon(
+                    switch (period) {
+                      KloterPeriod.today => Icons.today_outlined,
+                      KloterPeriod.week => Icons.date_range_outlined,
+                      KloterPeriod.month => Icons.calendar_month_outlined,
+                      KloterPeriod.year => Icons.event_note_outlined,
+                      KloterPeriod.custom => Icons.tune,
+                    },
+                    size: 23,
+                    color: selected ? niraGreen : niraLeaf,
+                  ),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           period.label,
-                          style: niraText(14.5, weight: FontWeight.w600),
+                          style: niraText(
+                            14.5,
+                            weight: selected
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                          ),
                         ),
                         const SizedBox(height: 3),
-                        Text(caption, style: niraText(11, color: niraLeaf)),
+                        Text(caption, style: niraText(12, color: niraLeaf)),
                       ],
                     ),
                   ),
                   if (selected)
-                    const Icon(Icons.check, size: 17, color: niraGreen)
+                    const Icon(Icons.check, size: 22, color: niraGreen)
                   else if (custom)
                     const Icon(Icons.chevron_right, size: 18, color: niraGreen),
                 ],

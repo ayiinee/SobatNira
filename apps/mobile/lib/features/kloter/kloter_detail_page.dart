@@ -148,7 +148,7 @@ class _BatchTile extends StatelessWidget {
           children: [
             Positioned(
               right: 0,
-              bottom: 0,
+              bottom: -22,
               child: IgnorePointer(
                 child: Opacity(
                   opacity: pending ? 1 : .37,
