@@ -148,7 +148,7 @@ Contoh respons:
 }
 ```
 
-Tanpa `synthetic=true`, data demo tidak masuk saldo. Modul baru membukukan penerimaan; saldo awal dan pengeluaran untuk penggilingan belum diimplementasikan.
+Tanpa `synthetic=true`, data demo tidak masuk saldo. Modul penerimaan membukukan stok masuk; [pengesahan penggilingan dari nota hasil gabungan](backend-milling-documents.md) membukukan pengeluaran tebu untuk satu kloter. Saldo menjumlahkan kedua jenis pergerakan. Saldo awal di luar penerimaan belum diimplementasikan.
 
 ## Konsistensi dan error
 

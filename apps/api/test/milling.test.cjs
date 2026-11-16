@@ -33,7 +33,7 @@ test('milling can preserve incomplete extraction while confirmation requires com
   assert.equal(completeMillingFields({ ...fields, juiceProducedLiters: '0', reportedBatches: [] }).juiceProducedLiters, '0');
 });
 
-test('synthetic milling declares illustrative input and output without deriving a yield formula', () => {
+test('synthetic combined note declares illustrative total nira and explicit batch rows without a yield formula', () => {
   const fields = syntheticMilling({ id: lotId, receivedAt: new Date('2026-11-16T01:00:00Z') });
   assert.equal(fields.occurredAt, '2026-11-16T02:00:00.000Z');
   assert.equal(fields.juiceProducedLiters, '250');

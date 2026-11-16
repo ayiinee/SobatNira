@@ -46,6 +46,8 @@ Alur [dokumen penerimaan sampai pengesahan](backend-intake-documents.md) memakai
 
 Modul [foto bukti R2](backend-evidence.md) menghubungkan foto ke revisi dokumen dan menyajikannya melalui API berizin. `npm run test:evidence-db` memakai S3 tiruan; `npm run test:evidence-r2` menguji upload/baca dengan R2 nyata serta membersihkan fixture. Bucket bukti wajib privat.
 
+Modul [penggilingan dari nota hasil gabungan](backend-milling-documents.md) memakai draf sintetis untuk total nira dan rincian batch. Pengesahan mengurangi seluruh stok tebu kloter dari penerimaan sah dan mencatat nira dalam satu transaksi. Jalankan `npm run test:milling-db` untuk memeriksa alur, pembatasan akses, rollback dan konkurensi dengan PostgreSQL.
+
 **1. FastAPI** dari akar repo.
 
 ```sh

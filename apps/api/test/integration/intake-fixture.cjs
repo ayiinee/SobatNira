@@ -26,7 +26,8 @@ async function intakeFixture(committed = false, extraEnv = {}) {
         // Only this fixture's freshly inserted, randomly identified tenants are removed.
         await client.query('BEGIN');
         await client.query('SET CONSTRAINTS ALL DEFERRED');
-        for (const table of ['sugarcane_stock_movements', 'intake_records', 'intake_document_events', 'intake_document_revisions',
+        for (const table of ['sugarcane_stock_movements', 'juice_stock_movements', 'milling_records', 'milling_document_events',
+          'milling_document_revisions', 'milling_documents', 'intake_records', 'intake_document_events', 'intake_document_revisions',
           'intake_evidence', 'intake_documents', 'production_audit_events', 'lots', 'suppliers', 'factory_memberships', 'tenant_memberships', 'factories']) {
           await client.query(`DELETE FROM sobatnira.${table} WHERE tenant_id IN ($1, $2)`, [ids.tenant, ids.otherTenant]);
         }
@@ -40,8 +41,10 @@ async function intakeFixture(committed = false, extraEnv = {}) {
     await client.connect();
     const hooks = await client.query("SELECT count(*)::int AS count FROM pg_trigger WHERE tgrelid = 'auth.users'::regclass AND NOT tgisinternal");
     assert.equal(hooks.rows[0].count, 0, 'Inspect auth.users hooks before synthetic integration fixtures');
-    const installed = await client.query("SELECT to_regclass('sobatnira.intake_evidence') IS NOT NULL AS installed");
-    assert.ok(installed.rows[0].installed, 'Run npm run db:migrate before test:intake-db');
+    const installed = await client.query(`SELECT to_regclass('sobatnira.intake_evidence') IS NOT NULL
+      AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'sobatnira'
+        AND table_name = 'milling_records' AND column_name = 'reported_batch_count') AS installed`);
+    assert.ok(installed.rows[0].installed, 'Run npm run db:migrate before database integration tests');
     await client.query('BEGIN');
     for (const user of [ids.admin, ids.owner]) {
       await client.query("INSERT INTO auth.users(id, aud, role, email) VALUES ($1, 'authenticated', 'authenticated', $2)",

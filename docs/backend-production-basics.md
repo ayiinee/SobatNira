@@ -13,7 +13,7 @@ Modul ini menyediakan metadata pemasok dan identitas dasar kloter sebelum alur d
 
 Kloter menggunakan UUID internal. `displayCode` bersifat opsional dan diisi manual; sistem belum menghasilkan format/suffix resmi atau memakai kode untuk pencocokan otomatis. Dua kiriman dengan kode tampilan yang sama tetap memiliki UUID berbeda. Nama pemasok juga tidak dijadikan identitas unik.
 
-Endpoint metadata dasar tidak mencatat berat, Brix atau pengesahan. Gunakan [modul dokumen penerimaan](backend-intake-documents.md) untuk mengesahkan draf penerimaan dan membukukan stok tebu masuk. Pemakaian material, batch, penutupan kloter dan kalkulasi ekonomi tetap ditambahkan melalui modul produksinya setelah kontrak dan keputusan terkait tersedia.
+Endpoint metadata dasar tidak mencatat berat, Brix atau pengesahan. Gunakan [modul dokumen penerimaan](backend-intake-documents.md) untuk mengesahkan draf penerimaan dan membukukan stok tebu masuk, lalu [modul nota hasil penggilingan](backend-milling-documents.md) untuk pemakaian seluruh tebu kloter dan pencatatan total nira serta rincian batch yang dilaporkan. Ledger pemasakan, batch resmi, penutupan kloter dan kalkulasi ekonomi mengikuti modul berikutnya.
 
 ## Endpoint
 
