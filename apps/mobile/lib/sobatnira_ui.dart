@@ -100,7 +100,9 @@ class NiraScaffold extends StatelessWidget {
               Column(
                 children: [
                   SizedBox(height: padding.top + 12),
-                  Expanded(child: ClipRect(child: body)),
+                  Expanded(
+                    child: ClipRect(child: RepaintBoundary(child: body)),
+                  ),
                   if (!keyboard && bottomAction != null)
                     Padding(
                       padding: EdgeInsets.fromLTRB(
@@ -132,7 +134,9 @@ class NiraScaffold extends StatelessWidget {
                   right: niraInset,
                   bottom: navigationBottom,
                   height: navigationHeight,
-                  child: _BottomNavigation(tab: tab, onNavigate: onNavigate),
+                  child: RepaintBoundary(
+                    child: _BottomNavigation(tab: tab, onNavigate: onNavigate),
+                  ),
                 ),
             ],
           ),
@@ -172,7 +176,7 @@ class _BottomNavigation extends StatelessWidget {
             ),
             duration: MediaQuery.disableAnimationsOf(context)
                 ? Duration.zero
-                : const Duration(milliseconds: 420),
+                : const Duration(milliseconds: 260),
             curve: Curves.easeInOutCubic,
             builder: (context, position, _) => LayoutBuilder(
               builder: (context, constraints) {
@@ -315,15 +319,42 @@ class NiraTabs extends StatelessWidget {
     ),
     child: Padding(
       padding: EdgeInsets.symmetric(horizontal: inset),
-      child: Row(
+      child: Stack(
         children: [
-          for (var index = 0; index < labels.length; index++)
-            Expanded(child: _tab(context, index)),
+          Row(
+            children: [
+              for (var index = 0; index < labels.length; index++)
+                Expanded(child: _tab(context, index)),
+            ],
+          ),
+          Positioned.fill(
+            child: IgnorePointer(
+              child: AnimatedAlign(
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : const Duration(milliseconds: 320),
+                curve: Curves.easeInOutCubic,
+                alignment: Alignment(
+                  labels.length == 1
+                      ? 0
+                      : (2 * (selected + .5) / labels.length - 1) /
+                            (1 - (wideIndicator ? 1 : .57) / labels.length),
+                  1,
+                ),
+                child: FractionallySizedBox(
+                  widthFactor: (wideIndicator ? 1 : .57) / labels.length,
+                  child: const SizedBox(
+                    height: 2.5,
+                    child: ColoredBox(color: niraGreen),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     ),
   );
-
   Widget _tab(BuildContext context, int index) {
     final active = index == selected;
     final showBadge = index == badgeIndex && badgeCount > 0;
@@ -348,9 +379,11 @@ class NiraTabs extends StatelessWidget {
                   spacing: 3,
                   runSpacing: 2,
                   children: [
-                    Text(
-                      labels[index],
-                      textAlign: TextAlign.center,
+                    AnimatedDefaultTextStyle(
+                      duration: MediaQuery.disableAnimationsOf(context)
+                          ? Duration.zero
+                          : const Duration(milliseconds: 320),
+                      curve: Curves.easeInOutCubic,
                       style: niraText(
                         fontSize,
                         weight: active ? FontWeight.w700 : FontWeight.w500,
@@ -358,6 +391,7 @@ class NiraTabs extends StatelessWidget {
                             ? niraGreen
                             : niraMuted,
                       ),
+                      child: Text(labels[index], textAlign: TextAlign.center),
                     ),
                     if (showBadge)
                       Container(
@@ -373,18 +407,6 @@ class NiraTabs extends StatelessWidget {
                   ],
                 ),
               ),
-              if (active)
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: FractionallySizedBox(
-                      widthFactor: wideIndicator ? 1 : .57,
-                      child: Container(height: 2.5, color: niraGreen),
-                    ),
-                  ),
-                ),
             ],
           ),
         ),
