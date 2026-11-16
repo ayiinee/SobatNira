@@ -2,6 +2,7 @@
 
 import '../../sobatnira_ui.dart';
 import 'batch_api.dart';
+import 'production_dashboard_page.dart';
 
 class BatchListPage extends StatefulWidget {
   BatchListPage({super.key, BatchApi? api}) : api = api ?? BatchApi();
@@ -17,7 +18,7 @@ class _BatchListPageState extends State<BatchListPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Batch produksi'), backgroundColor: niraGreen, foregroundColor: Colors.white),
+    appBar: AppBar(title: const Text('Batch produksi'), backgroundColor: niraGreen, foregroundColor: Colors.white, actions: [IconButton(onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ProductionDashboardPage())), icon: const Icon(Icons.insights), tooltip: 'Dashboard')]),
     body: FutureBuilder<List<BatchSummary>>(
       future: _future,
       builder: (context, snapshot) {
