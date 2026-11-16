@@ -2,6 +2,8 @@ const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const test = require('node:test');
 const { intakeFixture } = require('./intake-fixture.cjs');
+const { TruckIntake } = require('../../dist/documents/truck-intake');
+const { MillingRepository } = require('../../dist/milling/milling.repository');
 
 async function receive(f, lotId, weight = '1250') {
   const draft = await f.create(lotId);
@@ -24,6 +26,42 @@ async function confirm(f, path, revision = 1) {
   assert.equal(response.status, 200, JSON.stringify(response.body));
 }
 const approve = (f, path, revision = 1, token) => f.request(path + '/approve', 'POST', { expectedRevision: revision }, token);
+
+test('real milling can debit an OCR receipt and credit nira while preserving revision provenance', async () => {
+  const f = await intakeFixture();
+  const { app, ids, root, request } = f;
+  try {
+    const repo = app.get(MillingRepository);
+    const access = { userId: ids.admin, tenantId: ids.tenant, factoryId: ids.factory, role: 'admin' };
+    const ocrDocumentId = randomUUID();
+    const ocrRevisionId = randomUUID();
+    const quantity = '251.000000000000000001';
+    await repo.mutate(access, async (tx) => {
+      const receipt = await app.get(TruckIntake).post(tx, {
+        userId: ids.admin, factoryId: ids.factory, lotId: ids.lot, supplierId: ids.supplier,
+        documentId: randomUUID(), revisionId: randomUUID(),
+        note: { document_type: 'TRUCK_ARRIVAL_NOTE', header: {
+          cane_type: { status: 'READ', normalized_value: 'BL' },
+          net_weight_kg: { status: 'READ', unit: 'kg', normalized_value: '1250.01' },
+        } },
+      });
+      await repo.lot(tx, access, ids.lot);
+      const intake = await repo.intakeAndBalance(tx, access, ids.lot, false);
+      assert.equal(intake.id, receipt.id);
+      assert.equal(intake.stockMatches, true);
+      await repo.postMilling(tx, access, {
+        lotId: ids.lot, occurredAt: '2026-11-16T02:00:00Z', juiceProducedLiters: quantity, reportedBatches: [],
+      }, intake, { synthetic: false, ocrDocumentId, ocrRevisionId });
+    });
+    assert.equal((await request(root + '/stock/sugarcane?lotId=' + ids.lot)).body.quantityKg, '0.00');
+    assert.equal((await request(root + '/stock/juice?lotId=' + ids.lot)).body.quantityLiters, quantity);
+    assert.equal((await request(root + '/stock/juice?synthetic=true')).body.quantityLiters, '0');
+    const { milling } = (await request(root + '/lots/' + ids.lot + '/milling-summary')).body;
+    assert.equal(milling.ocrDocumentId, ocrDocumentId);
+    assert.equal(milling.ocrRevisionId, ocrRevisionId);
+    assert.equal(milling.caneConsumedKg, '1250.01');
+  } finally { await f.close(); }
+});
 
 test('combined result note approves whole-lot milling, nira and reported batches atomically with scoped revisions', async () => {
   const f = await intakeFixture();
