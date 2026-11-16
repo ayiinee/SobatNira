@@ -41,3 +41,29 @@ test('rejects cross-factory access and idempotency replay', async () => {
   response = await request('/batches', { method: 'POST', ...body, headers: { ...body.headers, 'idempotency-key': 'create-once', 'x-dev-role': 'admin' } });
   assert.equal(response.status, 409);
 });
+
+test('exposes production masters, nira contract and closure check', async () => {
+  let response = await request('/production-masters/grades');
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).map((item) => item.code), ['A', 'B']);
+  response = await request('/production-masters/pans', { method: 'POST', headers: { 'content-type': 'application/json', 'x-dev-role': 'owner' }, body: JSON.stringify({ code: 'PAN-OWNER', name: 'Tidak boleh' }) });
+  assert.equal(response.status, 403);
+  response = await request('/batches/nira/kloter-999/availability');
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).synthetic, true);
+  response = await request('/batches/closure-check/kloter-101');
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).ready, false);
+});
+
+test('nira reservation rejects reuse beyond synthetic source balance', async () => {
+  const create = await request('/batches', { method: 'POST', headers: { 'content-type': 'application/json', 'x-dev-role': 'admin' }, body: JSON.stringify({ factoryId: 'factory-demo', kloterId: 'kloter-reserve', panId: 'pan-01', occurredAt: new Date().toISOString() }) });
+  assert.equal(create.status, 201);
+  const batch = await create.json();
+  let response = await request(`/batches/${batch.id}/contributions`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-dev-role': 'admin' }, body: JSON.stringify({ kloterId: 'kloter-reserve', volumeMl: 100000 }) });
+  assert.equal(response.status, 201);
+  const secondCreate = await request('/batches', { method: 'POST', headers: { 'content-type': 'application/json', 'x-dev-role': 'admin' }, body: JSON.stringify({ factoryId: 'factory-demo', kloterId: 'kloter-reserve-2', panId: 'pan-01', occurredAt: new Date().toISOString() }) });
+  const secondBatch = await secondCreate.json();
+  response = await request(`/batches/${secondBatch.id}/contributions`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-dev-role': 'admin' }, body: JSON.stringify({ kloterId: 'kloter-reserve', volumeMl: 20000 }) });
+  assert.equal(response.status, 409);
+});

@@ -48,6 +48,8 @@ DATA_MODE=fixture
 
 Endpoint produksi B1 memakai header identitas development saat `NODE_ENV=development`: `x-dev-user-id`, `x-dev-tenant-id`, `x-dev-factory-id`, dan `x-dev-role` (`admin` atau `owner`). Mode `fixture` memakai data sintetis; mode `supabase` memakai migrasi `apps/api/migrations/001_b1_production.sql`.
 
+Endpoint tambahan B1: `GET/POST /production-masters/{pans,grades,additives,configs}`, `GET /batches/nira/:kloterId/availability`, dan `GET /batches/closure-check/:kloterId`. Perubahan master dan produksi membutuhkan role `admin`; pembacaan dapat memakai `owner`.
+
 ## Jalankan integrasi di tiga terminal
 
 **1. FastAPI** dari akar repo.

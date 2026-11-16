@@ -7,6 +7,8 @@ export class BatchesController {
   constructor(private readonly service: BatchesService) {}
   private scope(headers: Record<string, string | undefined>) { return { tenantId: headers['x-dev-tenant-id'] ?? '', factoryId: headers['x-dev-factory-id'] ?? '', role: headers['x-dev-role'] ?? '' }; }
   @Get() list(@Headers() headers: Record<string, string | undefined>, @Query() query: { status?: string; from?: string; to?: string }) { return this.service.list(this.scope(headers), query); }
+  @Get('nira/:kloterId/availability') niraAvailability(@Headers() headers: Record<string, string | undefined>, @Param('kloterId') kloterId: string) { return this.service.niraAvailability(this.scope(headers), kloterId); }
+  @Get('closure-check/:kloterId') closureCheck(@Headers() headers: Record<string, string | undefined>, @Param('kloterId') kloterId: string) { return this.service.closureCheck(this.scope(headers), kloterId); }
   @Get(':id') get(@Headers() headers: Record<string, string | undefined>, @Param('id') id: string) { return this.service.get(this.scope(headers), id); }
   @Post() create(@Headers() headers: Record<string, string | undefined>, @Headers('idempotency-key') key: string | undefined, @Body() body: BatchInput) { return this.service.create(this.scope(headers), body, key); }
   @Post(':id/contributions') contribution(@Headers() headers: Record<string, string | undefined>, @Headers('idempotency-key') key: string | undefined, @Param('id') id: string, @Body() body: { kloterId: string; volumeMl: number; occurredAt?: string }) { return this.service.contribution(this.scope(headers), id, body, key); }
