@@ -33,7 +33,7 @@ const factoryEntries = [
   SettingEntry(
     'Fasilitas Produksi',
     'Wajan, kapasitas, dan status aktif',
-    'factory',
+    'facilities',
   ),
   SettingEntry(
     'Pegawai & WhatsApp',

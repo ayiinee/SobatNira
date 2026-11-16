@@ -175,7 +175,13 @@ class _FilterPanelState extends State<_FilterPanel> {
           for (final period in KloterPeriod.values) ...[
             _periodRow(period),
             if (period != KloterPeriod.values.last)
-              const SizedBox(height: NiraSpace.xs),
+              const Divider(
+                height: NiraSpace.sm,
+                thickness: 1,
+                indent: NiraSpace.md,
+                endIndent: NiraSpace.md,
+                color: niraLine,
+              ),
           ],
         ],
       ),
