@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -79,6 +77,8 @@ class NiraScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     final padding = MediaQuery.viewPaddingOf(context);
     final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
+    const navigationHeight = 52.0;
+    final navigationBottom = padding.bottom + 8;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark.copyWith(
         statusBarColor: Colors.transparent,

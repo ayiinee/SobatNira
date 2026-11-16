@@ -2,6 +2,11 @@
 
 Gunakan panduan ini saat menambah fitur, memperbaiki bug, atau mengubah dokumentasi. Langkah instalasi dan perintah tes ada di [panduan setup lokal](development.md).
 
+## Acuan keputusan dan kontrak
+
+- Gunakan [acuan proyek](project-overview.md) untuk memahami domain dan status implementasi. Jika acuan internal tersedia di `docs/internal/`, buka indeks dan periksa status aturan di register keputusan sebelum mengubah perilaku produk. Jika aturan masih terbuka, bertentangan, atau sumbernya belum tersedia, konfirmasi dengan pemilik keputusan dan catat hasilnya di register internal.
+- Sepakati perubahan field, status, satuan, atau bentuk error dengan pemilik layanan pengirim dan penerima. Catat perubahan kontrak serta urutan penggabungan jika pekerjaan terbagi di beberapa PR. Gunakan fixture sintetis untuk memeriksa contoh sukses dan gagal pada alur yang terdampak.
+
 ## Struktur folder dan penamaan
 
 | Lokasi | Aturan |
@@ -50,7 +55,7 @@ docs(repo): document contribution workflow
 ## Verifikasi dan pengelolaan perubahan
 
 - Jalankan pemeriksaan komponen terkait dari [panduan setup](development.md#tes-sebelum-mengambil-tugas). Untuk perubahan antar layanan, cek alur dari aplikasi hingga API yang terdampak. Jika mengubah perilaku khusus Android, uji pada emulator atau HP dan sebutkan perangkat yang dipakai.
-- Saat kontrak berubah, catat field, status, atau bentuk error yang berubah. Perbarui fixture dan pemanggil terkait. Koordinasikan urutan merge jika perubahan backend dan klien masuk lewat PR berbeda.
+- Saat kontrak berubah, perbarui fixture dan pemanggil terkait.
 - Perbarui lockfile komponen saat dependensi berubah. Gunakan fixture sintetis dan contoh konfigurasi tanpa rahasia. Periksa perubahan yang akan masuk Git agar kredensial, data mitra, cache, dan hasil build tetap tersimpan lokal.
 - Jika lokasi bisa dipilih di Windows dan drive D: tersedia, gunakan D: untuk workspace, cache, file sementara, emulator, dan hasil build.
 
