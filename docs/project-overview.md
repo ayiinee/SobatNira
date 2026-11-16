@@ -12,7 +12,7 @@ SobatNira membantu pabrik gula merah tebu menelusuri hasil produksi kembali ke b
 
 **Kloter** mengelompokkan tebu masuk untuk pelacakan bahan baku. **Batch** mengidentifikasi proses pemasakan dan hasil yang terkait. Rujuk register keputusan internal untuk menentukan cara mencocokkan dokumen atau menghubungkan data produksi.
 
-## Fokus pengembangan berikutnya
+## Cakupan AI Engineering
 
 Baseline AI Engineering memprioritaskan alur foto nota melalui WhatsApp, ekstraksi draf, konfirmasi operator atas revisi tertentu, lalu peninjauan dan validasi oleh admin atau owner di Flutter. Cakupan awal OCR mencakup **Nota Kedatangan Truk** dan **Nota Produksi**. Nota Produksi dapat diperbarui lewat pengiriman foto berikutnya. Lima tahap fisik di atas tetap menjadi konteks proses.
 
@@ -22,11 +22,11 @@ Kontrak dan kriteria penerimaan terperinci tersedia di paket PRD internal tim.
 
 | Layanan | Tanggung jawab | Yang tersedia di repo |
 | --- | --- | --- |
-| Flutter | Antarmuka admin dan owner untuk melihat serta meninjau data. | Onboarding, Beranda, Kloter, Laporan, dan Pengaturan memakai simulasi lokal. Demo integrasi tersedia melalui `lib/main_demo.dart`. |
-| NestJS | Otorisasi, validasi domain, dan kalkulasi resmi. | Endpoint health dan penerusan `GET /demo/draft` ke FastAPI. |
-| FastAPI | Pemrosesan AI internal dan keluaran draf ekstraksi. | Endpoint health dan satu draf sintetis melalui `GET /demo/draft`. |
+| Flutter | Antarmuka admin dan owner untuk melihat serta meninjau data. | Onboarding, Beranda, Kloter, Laporan, dan Pengaturan memakai simulasi lokal. Pekerjaan memakai API review saat autentikasi dikonfigurasi. |
+| NestJS | Otorisasi, validasi domain, dan kalkulasi resmi. | Intake satu foto, penyimpanan privat, pekerjaan OCR, revisi, serta konfirmasi dan review berbasis PostgreSQL. |
+| FastAPI | Pemrosesan AI internal dan keluaran draf ekstraksi. | Ekstraksi draf dua tipe nota dengan PaddleOCR, parser dan evidence. Gemini dapat dikonfigurasi untuk crop ambigu. |
 
-Intake WhatsApp, OCR nota, riwayat revisi, dan antrean peninjauan berbasis API masih dalam rancangan. Dalam [demo integrasi lokal](development.md#jalankan-integrasi-di-tiga-terminal), Flutter mengambil draf melalui NestJS dan menampilkan hasil fixture dari FastAPI.
+[Panduan intake AI](ai/README.md) menjelaskan setup bridge OpenClaw/Baileys, database, dan layar Pekerjaan. [Demo integrasi lokal](development.md#jalankan-integrasi-di-tiga-terminal) tetap tersedia dengan `lib/main_demo.dart` dan menampilkan fixture dari FastAPI melalui NestJS.
 
 ## Menggunakan acuan tim
 

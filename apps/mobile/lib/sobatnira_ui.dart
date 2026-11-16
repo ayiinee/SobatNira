@@ -55,7 +55,7 @@ class NiraIcon extends StatelessWidget {
   );
 }
 
-enum NiraTab { beranda, kloter, laporan, pengaturan }
+enum NiraTab { beranda, kloter, pekerjaan, laporan, pengaturan }
 
 class NiraScaffold extends StatelessWidget {
   const NiraScaffold({
@@ -123,6 +123,7 @@ class _BottomNavigation extends StatelessWidget {
   static const _items = [
     (NiraTab.beranda, 'Beranda', 'home', 23.0),
     (NiraTab.kloter, 'Kloter', 'truck', 26.0),
+    (NiraTab.pekerjaan, 'Pekerjaan', 'clip', 20.0),
     (NiraTab.laporan, 'Laporan', 'report', 20.0),
     (NiraTab.pengaturan, 'Pengaturan', 'settings', 26.0),
   ];
@@ -138,7 +139,7 @@ class _BottomNavigation extends StatelessWidget {
         padding: const EdgeInsets.only(right: 12),
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 276),
+            constraints: const BoxConstraints(maxWidth: 330),
             child: Row(
               children: [
                 for (final (item, label, icon, size) in _items)

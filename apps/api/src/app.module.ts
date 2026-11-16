@@ -1,4 +1,5 @@
 import { Controller, Get, Module, ServiceUnavailableException } from '@nestjs/common';
+import { DocumentsModule } from './documents/documents.module';
 
 @Controller()
 class AppController {
@@ -24,5 +25,5 @@ class AppController {
   }
 }
 
-@Module({ controllers: [AppController] })
+@Module({ imports: [DocumentsModule], controllers: [AppController] })
 export class AppModule {}

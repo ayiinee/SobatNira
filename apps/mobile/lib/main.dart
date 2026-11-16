@@ -8,6 +8,8 @@ import 'features/kloter/kloter_list_page.dart';
 import 'features/laporan/demo_analytics.dart';
 import 'features/laporan/laporan_page.dart';
 import 'features/laporan/report_detail_page.dart';
+import 'features/pekerjaan/pekerjaan_page.dart';
+import 'features/pekerjaan/review_api.dart';
 import 'features/pengaturan/pengaturan_page.dart';
 import 'features/pengaturan/settings_demo.dart';
 import 'sobatnira_ui.dart';
@@ -15,7 +17,9 @@ import 'sobatnira_ui.dart';
 void main() => runApp(const SobatNiraApp());
 
 class SobatNiraApp extends StatefulWidget {
-  const SobatNiraApp({super.key});
+  const SobatNiraApp({this.reviewApi, super.key});
+
+  final ReviewApi? reviewApi;
 
   @override
   State<SobatNiraApp> createState() => _SobatNiraAppState();
@@ -120,6 +124,7 @@ class _SobatNiraAppState extends State<SobatNiraApp> {
           builder: (context, _) =>
               KloterListPage(kloter: _demo.kloter, onOpenKloter: _openKloter),
         ),
+        PekerjaanPage(api: widget.reviewApi),
         LaporanPage(analytics: _analytics, onOpenDetail: _openReportDetail),
         PengaturanPage(settings: _settings, onNavigate: _navigate),
       ],

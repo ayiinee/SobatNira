@@ -1,0 +1,131 @@
+{
+  "document_type": "PRODUCTION_NOTE",
+  "schema_version": "1.0.0",
+  "template_version": "1.0.0",
+  "header": {
+    "production_date": {
+      "raw_value": "DD-MM-YYYY",
+      "normalized_value": null,
+      "status": "READ",
+      "source": "PADDLE_OCR",
+      "unit": null,
+      "confidence": null,
+      "evidence": []
+    },
+    "shift": {
+      "raw_value": "SHIFT",
+      "normalized_value": null,
+      "status": "READ",
+      "source": "PADDLE_OCR",
+      "unit": null,
+      "confidence": null,
+      "evidence": []
+    },
+    "chef": {
+      "raw_value": "NAMA CHEF",
+      "normalized_value": null,
+      "status": "READ",
+      "source": "PADDLE_OCR",
+      "unit": null,
+      "confidence": null,
+      "evidence": []
+    }
+  },
+  "cane_blocks": [
+    {
+      "block_reference": "BLOCK-001",
+      "cane_label": {
+        "raw_value": "LABEL TEBU",
+        "normalized_value": null,
+        "status": "READ",
+        "source": "PADDLE_OCR",
+        "unit": null,
+        "confidence": null,
+        "evidence": []
+      },
+      "kloter_match": {
+        "status": "CANDIDATE",
+        "candidate_kloter_id": null,
+        "match_method": "NONE",
+        "match_evidence": []
+      },
+      "batches": [
+        {
+          "row_reference": "ROW-001",
+          "draft_batch_id": null,
+          "pan_number": {
+            "raw_value": "1",
+            "normalized_value": 1,
+            "status": "READ",
+            "source": "PADDLE_OCR",
+            "unit": null,
+            "confidence": null,
+            "evidence": []
+          },
+          "brix": {
+            "raw_value": null,
+            "normalized_value": null,
+            "status": "NOT_PRESENT",
+            "source": "PADDLE_OCR",
+            "unit": null,
+            "confidence": null,
+            "evidence": []
+          },
+          "brix_measurement_stage": "UNKNOWN",
+          "cooking": {
+            "isi_kg": {
+              "raw_value": "115",
+              "normalized_value": 115,
+              "status": "READ",
+              "source": "PADDLE_OCR",
+              "unit": "kg",
+              "confidence": null,
+              "evidence": []
+            },
+            "gamping": {
+              "raw_value": "1 1/2",
+              "normalized_value": "1 1/2",
+              "status": "READ",
+              "source": "PADDLE_OCR",
+              "unit": "CUSTOM_MEASURE",
+              "confidence": null,
+              "evidence": []
+            },
+            "jam_turun": {
+              "raw_value": "15:35",
+              "normalized_value": "15:35",
+              "status": "READ",
+              "source": "PADDLE_OCR",
+              "unit": null,
+              "confidence": null,
+              "evidence": []
+            }
+          },
+          "output": {
+            "grade": {
+              "raw_value": null,
+              "normalized_value": null,
+              "status": "NOT_YET_FILLED",
+              "source": "PADDLE_OCR",
+              "unit": null,
+              "confidence": null,
+              "evidence": []
+            },
+            "hasil_kg": {
+              "raw_value": null,
+              "normalized_value": null,
+              "status": "NOT_YET_FILLED",
+              "source": "PADDLE_OCR",
+              "unit": "kg",
+              "confidence": null,
+              "evidence": []
+            }
+          },
+          "unmapped_cells": []
+        }
+      ]
+    }
+  ],
+  "unmapped_columns": [],
+  "issues": []
+}

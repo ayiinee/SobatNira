@@ -1,6 +1,8 @@
 from fastapi import FastAPI
+from ocr_service import router as ocr_router
 
 app = FastAPI(title="SobatNira AI")
+app.include_router(ocr_router)
 
 
 @app.get("/health")
