@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../sobatnira_ui.dart';
+
 import 'review_api.dart';
 import 'review_detail_page.dart';
 
@@ -149,7 +151,12 @@ class _PekerjaanPageState extends State<PekerjaanPage>
 
   @override
   Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.all(20),
+    padding: EdgeInsets.fromLTRB(
+      niraInset,
+      NiraSpace.lg,
+      niraInset,
+      NiraSpace.lg,
+    ),
     children: [
       Row(
         children: [

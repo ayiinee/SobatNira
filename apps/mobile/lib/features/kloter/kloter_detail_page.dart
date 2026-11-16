@@ -33,9 +33,9 @@ class KloterDetailPage extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(
                   niraInset,
-                  21,
+                  NiraSpace.xl,
                   niraInset,
-                  17,
+                  NiraSpace.lg,
                 ),
                 child: Column(
                   children: [
@@ -44,7 +44,7 @@ class KloterDetailPage extends StatelessWidget {
                       ('Brix tebu', '90Kg'),
                       ('Nira tercatat', '360L'),
                     ]),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: NiraSpace.lg),
                     DocumentLink('Data tebu dan penggilingan', () {
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
@@ -75,30 +75,30 @@ class KloterDetailPage extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(
                   niraInset,
-                  14,
+                  NiraSpace.lg,
                   niraInset,
-                  10,
+                  NiraSpace.md,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const DetailSectionTitle('Batch kloter'),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: NiraSpace.xs),
                     Text(
                       kloter.batchesToReview == 0
                           ? 'Semua batch telah ditinjau'
                           : '${kloter.batchesToReview} Batch perlu ditinjau',
                       style: niraText(
-                        11.5,
+                        NiraType.caption,
                         color: kloter.batchesToReview == 0
                             ? niraLeaf
                             : niraOchre,
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: NiraSpace.md),
                     for (final batch in kloter.batches)
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 13),
+                        padding: const EdgeInsets.only(bottom: NiraSpace.md),
                         child: _BatchTile(
                           batch,
                           () => Navigator.of(context).push(
@@ -132,14 +132,12 @@ class _BatchTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pending = !batch.review.verified;
-    final foreground = pending && MediaQuery.highContrastOf(context)
-        ? niraGreen
-        : Colors.white;
+    const foreground = Colors.white;
     return Material(
       color: pending ? niraGold : niraGreen,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(7),
+        borderRadius: BorderRadius.circular(niraRadius),
         side: BorderSide(color: pending ? niraOchre : niraGreen, width: 1),
       ),
       child: InkWell(
@@ -148,14 +146,14 @@ class _BatchTile extends StatelessWidget {
           children: [
             Positioned(
               right: 0,
-              bottom: -22,
+              bottom: -20,
               child: IgnorePointer(
                 child: Opacity(
-                  opacity: pending ? 1 : .37,
+                  opacity: pending ? .65 : .30,
                   child: Image.asset(
                     'assets/sobatnira/art/cane.png',
-                    width: 137,
-                    height: 83,
+                    width: 104,
+                    height: 63,
                     excludeFromSemantics: true,
                   ),
                 ),
@@ -165,43 +163,71 @@ class _BatchTile extends StatelessWidget {
               constraints: const BoxConstraints(minHeight: 63),
               child: Padding(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 7,
+                  horizontal: NiraSpace.md,
+                  vertical: NiraSpace.sm,
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      flex: 24,
-                      child: Text(
-                        'Batch ${batch.number}',
-                        style: niraText(
-                          14.2,
-                          color: pending ? foreground : niraYellow,
-                          weight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 5),
-                    Expanded(
-                      flex: 66,
-                      child: Column(
+                child:
+                    MediaQuery.textScalerOf(context).scale(NiraType.body) > 17
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Batch ${batch.number}',
+                                  style: niraText(
+                                    NiraType.section,
+                                    color: pending ? foreground : niraYellow,
+                                    weight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              Icon(
+                                Icons.chevron_right,
+                                color: foreground,
+                                size: 20,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: NiraSpace.sm),
                           _info('Nira batch', '180L', foreground),
-                          const SizedBox(height: 3),
+                          const SizedBox(height: NiraSpace.xs),
                           _info('Hasil fisik', '90Kg', foreground),
-                          const SizedBox(height: 3),
-                          _info(
-                            'Bagian dari kloter',
-                            batch.review.fields[3].display,
-                            foreground,
+                        ],
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            flex: 24,
+                            child: Text(
+                              'Batch ${batch.number}',
+                              style: niraText(
+                                NiraType.section,
+                                color: pending ? foreground : niraYellow,
+                                weight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: NiraSpace.xs),
+                          Expanded(
+                            flex: 66,
+                            child: Column(
+                              children: [
+                                _info('Nira batch', '180L', foreground),
+                                const SizedBox(height: NiraSpace.xs),
+                                _info('Hasil fisik', '90Kg', foreground),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.chevron_right,
+                            size: 20,
+                            color: foreground,
                           ),
                         ],
                       ),
-                    ),
-                    Icon(Icons.chevron_right, size: 20, color: foreground),
-                  ],
-                ),
               ),
             ),
           ],
@@ -215,13 +241,16 @@ class _BatchTile extends StatelessWidget {
     children: [
       Expanded(
         flex: 3,
-        child: Text(label, style: niraText(11.5, color: foreground)),
+        child: Text(label, style: niraText(NiraType.body, color: foreground)),
       ),
       Expanded(
         flex: 3,
         child: Padding(
-          padding: const EdgeInsets.only(left: 4),
-          child: Text(':   $value', style: niraText(11.5, color: foreground)),
+          padding: const EdgeInsets.only(left: NiraSpace.xs),
+          child: Text(
+            ':   $value',
+            style: niraText(NiraType.body, color: foreground),
+          ),
         ),
       ),
     ],

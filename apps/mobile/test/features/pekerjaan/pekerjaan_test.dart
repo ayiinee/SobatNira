@@ -5,9 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
-import 'package:sobatnira/main.dart';
-
-import '../../support/demo_login.dart';
+import 'package:sobatnira/features/pekerjaan/pekerjaan_page.dart';
+import 'package:sobatnira/sobatnira_ui.dart';
 
 void main() {
   testWidgets('Pekerjaan loads the API and validates the displayed revision', (
@@ -104,16 +103,12 @@ void main() {
     );
     addTearDown(api.close);
 
-    await tester.pumpWidget(SobatNiraApp(reviewApi: api));
-    await tester.pumpAndSettle();
-    await openDemoLogin(tester);
-    await submitDemoLogin(tester);
-    final semantics = tester.ensureSemantics();
-    try {
-      await tester.tap(find.bySemanticsLabel('Pekerjaan'));
-    } finally {
-      semantics.dispose();
-    }
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: niraTheme(),
+        home: Scaffold(body: PekerjaanPage(api: api, active: true)),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.text('Menunggu validasi'), findsOneWidget);
     expect(find.text('1 laporan baru'), findsOneWidget);

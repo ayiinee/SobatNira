@@ -22,15 +22,15 @@ class PengaturanPage extends StatelessWidget {
       key: const PageStorageKey('pengaturan-scroll'),
       padding: EdgeInsets.fromLTRB(
         niraInset,
-        13,
+        NiraSpace.lg,
         niraInset,
-        MediaQuery.viewPaddingOf(context).bottom + 88,
+        NiraSpace.lg,
       ),
       children: [
         _profile(),
-        const SizedBox(height: 18),
+        const SizedBox(height: NiraSpace.xl),
         _section('PABRIK & TIM', factoryEntries, context),
-        const SizedBox(height: 15),
+        const SizedBox(height: NiraSpace.xl),
         _section('PRODUKSI & PERHITUNGAN', productionEntries, context),
       ],
     ),
@@ -41,13 +41,16 @@ class PengaturanPage extends StatelessWidget {
       ClipOval(
         child: Image.asset(
           'assets/sobatnira/art/profil-demo.png',
-          width: 58,
-          height: 58,
+          width: 64,
+          height: 64,
           excludeFromSemantics: true,
         ),
       ),
-      const SizedBox(height: 5),
-      Text('Pak Putu Alvin', style: niraText(15, weight: FontWeight.w700)),
+      const SizedBox(height: NiraSpace.xs),
+      Text(
+        'Pak Putu Alvin',
+        style: niraText(NiraType.section, weight: FontWeight.w700),
+      ),
     ],
   );
 
@@ -60,9 +63,13 @@ class PengaturanPage extends StatelessWidget {
     children: [
       Text(
         title,
-        style: niraText(10.5, color: niraLeaf, weight: FontWeight.w700),
+        style: niraText(
+          NiraType.caption,
+          color: niraLeaf,
+          weight: FontWeight.w700,
+        ),
       ),
-      const SizedBox(height: 5),
+      const SizedBox(height: NiraSpace.xs),
       for (final entry in entries) _row(entry, context),
     ],
   );
@@ -75,21 +82,24 @@ class PengaturanPage extends StatelessWidget {
     child: InkWell(
       onTap: () => _open(context, entry),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 7),
+        padding: const EdgeInsets.symmetric(vertical: NiraSpace.md),
         child: Row(
           children: [
             _SettingIcon(entry.icon),
-            const SizedBox(width: 8),
+            const SizedBox(width: NiraSpace.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     entry.title,
-                    style: niraText(12.5, weight: FontWeight.w700),
+                    style: niraText(NiraType.body, weight: FontWeight.w600),
                   ),
-                  const SizedBox(height: 2),
-                  Text(entry.subtitle, style: niraText(10.5, color: niraLeaf)),
+                  const SizedBox(height: NiraSpace.xs),
+                  Text(
+                    entry.subtitle,
+                    style: niraText(NiraType.caption, color: niraLeaf),
+                  ),
                 ],
               ),
             ),
@@ -125,6 +135,15 @@ class _SettingIcon extends StatelessWidget {
       'calculator' => Icons.calculate_outlined,
       _ => Icons.factory_outlined,
     };
-    return Icon(icon, size: 30, color: niraGreen);
+    return Container(
+      width: 40,
+      height: 40,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF0E8),
+        borderRadius: BorderRadius.circular(niraRadius),
+      ),
+      child: Icon(icon, size: 24, color: niraGreen),
+    );
   }
 }

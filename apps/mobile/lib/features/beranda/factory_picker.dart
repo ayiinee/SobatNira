@@ -72,7 +72,7 @@ class _FactoryPickerState extends State<FactoryPicker> {
                     shadowColor: const Color(0x33174B35),
                     clipBehavior: Clip.antiAlias,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(9),
+                      borderRadius: BorderRadius.circular(niraRadius),
                       side: const BorderSide(color: niraGreen, width: 1.2),
                     ),
                     child: FocusTraversalGroup(
@@ -145,14 +145,17 @@ class _FactoryPickerState extends State<FactoryPicker> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 44),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.symmetric(
+                horizontal: NiraSpace.md,
+                vertical: NiraSpace.md,
+              ),
               child: Row(
                 children: [
                   Expanded(
                     child: Text(
                       factory,
                       style: niraText(
-                        12.5,
+                        NiraType.caption,
                         color: selected ? Colors.white : niraGreen,
                         weight: selected ? FontWeight.w600 : FontWeight.w400,
                       ),

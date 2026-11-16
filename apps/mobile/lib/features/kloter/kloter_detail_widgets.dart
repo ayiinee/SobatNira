@@ -4,25 +4,36 @@ import '../../sobatnira_ui.dart';
 import 'demo_production.dart';
 
 class DetailTitle extends StatelessWidget {
-  const DetailTitle(this.title, {super.key});
+  const DetailTitle(this.title, {this.inset = niraInset, super.key});
 
   final String title;
+  final double inset;
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(left: 18, right: niraInset),
-    child: Row(
+    padding: EdgeInsets.symmetric(horizontal: inset),
+    child: Stack(
+      alignment: Alignment.centerLeft,
       children: [
-        IconButton(
-          tooltip: 'Kembali',
-          onPressed: () => Navigator.maybePop(context),
-          icon: const Icon(Icons.chevron_left, color: niraGreen, size: 23),
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 36, minHeight: 39),
-          visualDensity: VisualDensity.standard,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(32, NiraSpace.md, 0, NiraSpace.md),
+          child: Text(
+            title,
+            style: niraText(NiraType.title, weight: FontWeight.w700),
+          ),
         ),
-        Expanded(
-          child: Text(title, style: niraText(17.65, weight: FontWeight.w700)),
+        Positioned(
+          left: -18,
+          top: 0,
+          bottom: 0,
+          width: 48,
+          child: IconButton(
+            tooltip: 'Kembali',
+            onPressed: () => Navigator.maybePop(context),
+            icon: const Icon(Icons.chevron_left, color: niraGreen, size: 23),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          ),
         ),
       ],
     ),
@@ -39,11 +50,14 @@ class KloterHeading extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(kloter.code, style: niraText(20.5, weight: FontWeight.w700)),
-        const SizedBox(height: 2),
-        Text(kloter.supplier, style: niraText(14.5)),
-        const SizedBox(height: 3),
-        Text(formatDate(kloter.date), style: niraText(14.5)),
+        Text(
+          kloter.code,
+          style: niraText(NiraType.title, weight: FontWeight.w700),
+        ),
+        const SizedBox(height: NiraSpace.xs),
+        Text(kloter.supplier, style: niraText(NiraType.body)),
+        const SizedBox(height: NiraSpace.xs),
+        Text(formatDate(kloter.date), style: niraText(NiraType.body)),
       ],
     ),
   );
@@ -57,6 +71,34 @@ class DetailMetrics extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final minWidth = MediaQuery.textScalerOf(context).scale(20) * 4.5 + 16;
+        final columns = (constraints.maxWidth / minWidth).floor().clamp(
+          1,
+          metrics.length,
+        );
+        if (columns < metrics.length) {
+          final width =
+              (constraints.maxWidth - NiraSpace.md * (columns - 1)) / columns;
+          return Wrap(
+            spacing: NiraSpace.md,
+            runSpacing: NiraSpace.md,
+            children: [
+              for (final metric in metrics)
+                SizedBox(
+                  width: width,
+                  child: NiraOutline(_metric(metric, center: false)),
+                ),
+            ],
+          );
+        }
+        return _row(context);
+      },
+    );
+  }
+
+  Widget _row(BuildContext context) {
     if (separate) {
       return Row(
         spacing: 12,
@@ -74,7 +116,7 @@ class DetailMetrics extends StatelessWidget {
             for (var index = 0; index < metrics.length; index++) ...[
               if (index > 0)
                 const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 11),
+                  padding: EdgeInsets.symmetric(vertical: NiraSpace.md),
                   child: VerticalDivider(
                     width: 1,
                     thickness: 1,
@@ -93,7 +135,10 @@ class DetailMetrics extends StatelessWidget {
       ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 60),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+          padding: const EdgeInsets.symmetric(
+            horizontal: NiraSpace.sm,
+            vertical: NiraSpace.sm,
+          ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: center
@@ -103,13 +148,13 @@ class DetailMetrics extends StatelessWidget {
               Text(
                 metric.$1,
                 textAlign: center ? TextAlign.center : TextAlign.start,
-                style: niraText(11.4, weight: FontWeight.w500),
+                style: niraText(NiraType.caption, weight: FontWeight.w500),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: NiraSpace.xs),
               Text(
                 metric.$2,
                 textAlign: center ? TextAlign.center : TextAlign.start,
-                style: niraText(21, weight: FontWeight.w700),
+                style: niraText(NiraType.title, weight: FontWeight.w700),
               ),
             ],
           ),
@@ -124,7 +169,7 @@ class DetailSectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      Text(title, style: niraText(15.1, weight: FontWeight.w700));
+      Text(title, style: niraText(NiraType.section, weight: FontWeight.w600));
 }
 
 class DocumentLink extends StatelessWidget {
@@ -144,7 +189,10 @@ class DocumentLink extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 51),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+            padding: const EdgeInsets.symmetric(
+              horizontal: NiraSpace.sm,
+              vertical: NiraSpace.sm,
+            ),
             child: Row(
               children: [
                 const Icon(
@@ -152,11 +200,11 @@ class DocumentLink extends StatelessWidget {
                   color: niraGreen,
                   size: 32,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: NiraSpace.sm),
                 Expanded(
                   child: Text(
                     label,
-                    style: niraText(11.4, weight: FontWeight.w500),
+                    style: niraText(NiraType.body, weight: FontWeight.w500),
                   ),
                 ),
                 const Icon(Icons.chevron_right, color: niraGreen, size: 17),
@@ -183,11 +231,11 @@ class DocumentPreview extends StatelessWidget {
   }) => showDialog<void>(
     context: context,
     builder: (context) => Dialog(
-      insetPadding: const EdgeInsets.all(16),
+      insetPadding: const EdgeInsets.all(NiraSpace.lg),
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(NiraSpace.md),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -196,7 +244,7 @@ class DocumentPreview extends StatelessWidget {
                 Expanded(
                   child: Text(
                     'Nota sintetis',
-                    style: niraText(17, weight: FontWeight.w700),
+                    style: niraText(NiraType.section, weight: FontWeight.w700),
                   ),
                 ),
                 IconButton(
@@ -218,10 +266,10 @@ class DocumentPreview extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       const DetailSectionTitle('Pratinjau foto'),
-      const SizedBox(height: 5),
+      const SizedBox(height: NiraSpace.xs),
       Material(
         clipBehavior: Clip.antiAlias,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(niraRadius),
         child: InkWell(
           onTap: () => open(context, batch: batch),
           child: AspectRatio(
@@ -247,7 +295,7 @@ class EditableFields extends StatelessWidget {
   @override
   Widget build(BuildContext context) => NiraOutline(
     Padding(
-      padding: const EdgeInsets.all(2),
+      padding: const EdgeInsets.all(NiraSpace.xs),
       child: Column(
         children: [
           for (var index = 0; index < fields.length; index++) ...[
@@ -272,9 +320,12 @@ class EditableFields extends StatelessWidget {
     child: InkWell(
       onTap: () => onEdit(field),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 30),
+        constraints: const BoxConstraints(minHeight: 48),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          padding: const EdgeInsets.symmetric(
+            horizontal: NiraSpace.md,
+            vertical: NiraSpace.xs,
+          ),
           child: Row(
             children: [
               Expanded(
@@ -282,22 +333,22 @@ class EditableFields extends StatelessWidget {
                 child: Text(
                   field.label,
                   style: niraText(
-                    11.6,
+                    NiraType.body,
                     weight: FontWeight.w500,
                     color: const Color(0xFF68736E),
                   ),
                 ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: NiraSpace.sm),
               Expanded(
                 flex: 10,
                 child: Text(
                   field.display,
-                  style: niraText(11.6, weight: FontWeight.w700),
+                  style: niraText(NiraType.body, weight: FontWeight.w600),
                 ),
               ),
-              const SizedBox(width: 4),
-              const Icon(Icons.edit_rounded, color: niraMuted, size: 13),
+              const SizedBox(width: NiraSpace.xs),
+              const Icon(Icons.edit_rounded, color: niraMuted, size: 20),
             ],
           ),
         ),
@@ -354,7 +405,7 @@ class _EditValueDialogState extends State<_EditValueDialog> {
     backgroundColor: niraPaper,
     title: Text(
       'Edit ${widget.label}',
-      style: niraText(18, weight: FontWeight.w700),
+      style: niraText(NiraType.section, weight: FontWeight.w700),
     ),
     content: Form(
       key: _form,

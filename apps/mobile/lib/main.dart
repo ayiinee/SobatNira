@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'features/auth/login_pages.dart';
 import 'features/beranda/beranda_page.dart';
 import 'features/kloter/demo_production.dart';
 import 'features/kloter/kloter_detail_page.dart';
@@ -8,8 +7,6 @@ import 'features/kloter/kloter_list_page.dart';
 import 'features/laporan/demo_analytics.dart';
 import 'features/laporan/laporan_page.dart';
 import 'features/laporan/report_detail_page.dart';
-import 'features/pekerjaan/pekerjaan_page.dart';
-import 'features/pekerjaan/review_api.dart';
 import 'features/pengaturan/pengaturan_page.dart';
 import 'features/pengaturan/settings_demo.dart';
 import 'sobatnira_ui.dart';
@@ -17,9 +14,7 @@ import 'sobatnira_ui.dart';
 void main() => runApp(const SobatNiraApp());
 
 class SobatNiraApp extends StatefulWidget {
-  const SobatNiraApp({this.reviewApi, super.key});
-
-  final ReviewApi? reviewApi;
+  const SobatNiraApp({super.key});
 
   @override
   State<SobatNiraApp> createState() => _SobatNiraAppState();
@@ -30,7 +25,6 @@ class _SobatNiraAppState extends State<SobatNiraApp> {
   final _demo = DemoProduction();
   final _analytics = DemoAnalytics();
   final _settings = SettingsDemo();
-  bool _signedIn = false;
   final _tab = ValueNotifier(NiraTab.beranda);
   final _pages = <NiraTab, Widget>{};
 
@@ -46,13 +40,6 @@ class _SobatNiraAppState extends State<SobatNiraApp> {
         listenable: _demo,
         builder: (context, _) =>
             KloterListPage(kloter: _demo.kloter, onOpenKloter: _openKloter),
-      ),
-      NiraTab.pekerjaan => ValueListenableBuilder<NiraTab>(
-        valueListenable: _tab,
-        builder: (context, activeTab, _) => PekerjaanPage(
-          api: widget.reviewApi,
-          active: activeTab == NiraTab.pekerjaan,
-        ),
       ),
       NiraTab.laporan => LaporanPage(
         analytics: _analytics,
@@ -71,21 +58,6 @@ class _SobatNiraAppState extends State<SobatNiraApp> {
     _analytics.dispose();
     _settings.dispose();
     super.dispose();
-  }
-
-  void _openLogin() {
-    _navigator.currentState!.push(
-      MaterialPageRoute<void>(
-        builder: (_) => LoginFormPage(onSubmit: _enterDemo),
-      ),
-    );
-  }
-
-  void _enterDemo() {
-    if (_signedIn) return;
-    FocusManager.instance.primaryFocus?.unfocus();
-    _navigator.currentState!.popUntil((route) => route.isFirst);
-    setState(() => _signedIn = true);
   }
 
   void _navigate(NiraTab tab) {
@@ -121,14 +93,7 @@ class _SobatNiraAppState extends State<SobatNiraApp> {
     title: 'SobatNira',
     debugShowCheckedModeBanner: false,
     navigatorKey: _navigator,
-    theme: ThemeData(
-      fontFamily: 'Inter',
-      useMaterial3: true,
-      scaffoldBackgroundColor: niraPaper,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: niraGreen,
-      ).copyWith(primary: niraGreen, surface: niraPaper),
-    ),
+    theme: niraTheme(),
     builder: (context, child) => ColoredBox(
       color: const Color(0xFFF2F2EE),
       child: Center(
@@ -138,7 +103,7 @@ class _SobatNiraAppState extends State<SobatNiraApp> {
         ),
       ),
     ),
-    home: _signedIn ? _buildHome() : LoginWelcomePage(onContinue: _openLogin),
+    home: _buildHome(),
   );
 
   Widget _buildHome() => ValueListenableBuilder<NiraTab>(

@@ -31,7 +31,7 @@ void main() {
     final rect = tester.getRect(
       find.byKey(const ValueKey('kloter-date-dialog')),
     );
-    expect(rect.width, 390);
+    expect(rect.width, 382);
     expect(rect.center.dx, closeTo(215, 1));
     expect(rect.center.dy, closeTo(400, 1));
     expect(find.byIcon(Icons.check), findsOneWidget);

@@ -7,8 +7,6 @@ import 'package:sobatnira/features/pekerjaan/pekerjaan_page.dart';
 import 'package:sobatnira/features/pengaturan/pengaturan_page.dart';
 import 'package:sobatnira/main.dart';
 
-import 'support/demo_login.dart';
-
 void main() {
   testWidgets('tab dimuat saat dibuka dan mempertahankan isian saat kembali', (
     tester,
@@ -17,8 +15,7 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(const SobatNiraApp());
     await tester.pumpAndSettle();
-    await openDemoLogin(tester);
-    await submitDemoLogin(tester);
+
     expect(find.byType(BerandaPage), findsOneWidget);
     expect(find.byType(KloterListPage, skipOffstage: false), findsNothing);
     expect(find.byType(LaporanPage, skipOffstage: false), findsNothing);
@@ -42,26 +39,7 @@ void main() {
       tester.widget<TextField>(find.byType(TextField)).controller!.text,
       'MJT-260926-2A',
     );
-    await tester.tap(find.bySemanticsLabel('Pekerjaan'));
-    await tester.pumpAndSettle();
-    expect(
-      tester.widget<PekerjaanPage>(find.byType(PekerjaanPage)).active,
-      isTrue,
-    );
-    await tester.tap(find.bySemanticsLabel('Kloter'));
-    await tester.pumpAndSettle();
-    expect(
-      tester
-          .widget<PekerjaanPage>(
-            find.byType(PekerjaanPage, skipOffstage: false),
-          )
-          .active,
-      isFalse,
-    );
-    expect(
-      tester.widget<TextField>(find.byType(TextField)).controller!.text,
-      'MJT-260926-2A',
-    );
+    expect(find.bySemanticsLabel('Pekerjaan'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

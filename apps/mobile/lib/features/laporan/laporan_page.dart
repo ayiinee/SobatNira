@@ -45,7 +45,12 @@ class _LaporanPageState extends State<LaporanPage> {
       key: const PageStorageKey('laporan-scroll'),
       slivers: [
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(28, 13, 21, 3),
+          padding: const EdgeInsets.fromLTRB(
+            niraInset,
+            NiraSpace.lg,
+            niraInset,
+            NiraSpace.sm,
+          ),
           sliver: SliverToBoxAdapter(child: _searchRow()),
         ),
         SliverToBoxAdapter(
@@ -59,12 +64,7 @@ class _LaporanPageState extends State<LaporanPage> {
           ),
         ),
         SliverPadding(
-          padding: EdgeInsets.fromLTRB(
-            niraInset,
-            13,
-            niraInset,
-            MediaQuery.viewPaddingOf(context).bottom + 88,
-          ),
+          padding: EdgeInsets.fromLTRB(niraInset, 13, niraInset, NiraSpace.lg),
           sliver: SliverList.list(
             children: [
               if (widget.analytics.tab == ReportTab.production)
@@ -85,16 +85,16 @@ class _LaporanPageState extends State<LaporanPage> {
         child: TextField(
           controller: _search,
           onChanged: widget.analytics.setQuery,
-          style: niraText(12.5),
+          style: niraText(NiraType.body),
           decoration: InputDecoration(
             hintText: 'Telusuri Kloter berdasarkan ID',
-            hintStyle: niraText(12),
+            hintStyle: niraText(NiraType.body, color: niraLeaf),
             prefixIcon: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 11),
+              padding: EdgeInsets.symmetric(horizontal: NiraSpace.md),
               child: NiraIcon('search', 21, color: niraGreen),
             ),
             prefixIconConstraints: const BoxConstraints(minWidth: 42),
-            contentPadding: const EdgeInsets.symmetric(vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(vertical: NiraSpace.lg),
             filled: true,
             fillColor: Colors.white,
             isDense: true,
@@ -108,12 +108,12 @@ class _LaporanPageState extends State<LaporanPage> {
         button: true,
         child: Material(
           color: niraGreen,
-          borderRadius: BorderRadius.circular(7),
+          borderRadius: BorderRadius.circular(niraRadius),
           child: InkWell(
             onTap: _dateFilter,
-            borderRadius: BorderRadius.circular(7),
+            borderRadius: BorderRadius.circular(niraRadius),
             child: const SizedBox.square(
-              dimension: 45,
+              dimension: 48,
               child: Center(
                 child: NiraIcon('calendar', 26, color: Colors.white),
               ),
@@ -125,7 +125,7 @@ class _LaporanPageState extends State<LaporanPage> {
   );
 
   OutlineInputBorder _border({double width = 1.3}) => OutlineInputBorder(
-    borderRadius: BorderRadius.circular(7),
+    borderRadius: BorderRadius.circular(niraRadius),
     borderSide: BorderSide(color: niraGreen, width: width),
   );
 
@@ -139,9 +139,9 @@ class _LaporanPageState extends State<LaporanPage> {
           Expanded(child: _metric('Tebu diterima', '5.567Kg')),
         ],
       ),
-      const SizedBox(height: 10),
+      const SizedBox(height: NiraSpace.md),
       _chartCard(),
-      const SizedBox(height: 13),
+      const SizedBox(height: NiraSpace.md),
       if (widget.analytics.variant == ProductionVariant.grade)
         _gradeTable()
       else
@@ -153,7 +153,7 @@ class _LaporanPageState extends State<LaporanPage> {
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       _metric('Margin Produksi', 'Rp1.580.000', wide: true),
-      const SizedBox(height: 9),
+      const SizedBox(height: NiraSpace.sm),
       Row(
         spacing: 8,
         children: [
@@ -161,31 +161,36 @@ class _LaporanPageState extends State<LaporanPage> {
           Expanded(child: _metric('Total biaya', '5.567Kg')),
         ],
       ),
-      const SizedBox(height: 10),
+      const SizedBox(height: NiraSpace.md),
       _chartCard(margin: true),
-      const SizedBox(height: 13),
+      const SizedBox(height: NiraSpace.md),
       _marginTable(),
     ],
   );
 
   Widget _metric(String label, String value, {bool wide = false}) => Container(
     constraints: const BoxConstraints(minHeight: 62),
-    padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+    padding: const EdgeInsets.fromLTRB(
+      NiraSpace.md,
+      NiraSpace.sm,
+      NiraSpace.md,
+      NiraSpace.sm,
+    ),
     decoration: BoxDecoration(
       color: niraGreen,
-      borderRadius: BorderRadius.circular(7),
+      borderRadius: BorderRadius.circular(niraRadius),
       boxShadow: const [niraShadow],
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text(label, style: niraText(wide ? 11 : 10.5, color: Colors.white)),
-        const SizedBox(height: 2),
+        Text(label, style: niraText(NiraType.caption, color: Colors.white)),
+        const SizedBox(height: NiraSpace.xs),
         Text(
           value,
           style: niraText(
-            wide ? 23 : 19,
+            NiraType.metric,
             color: niraYellow,
             weight: FontWeight.w700,
           ),
@@ -196,28 +201,31 @@ class _LaporanPageState extends State<LaporanPage> {
 
   Widget _chartCard({bool margin = false}) => NiraOutline(
     Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 7),
+      padding: const EdgeInsets.fromLTRB(
+        NiraSpace.sm,
+        NiraSpace.sm,
+        NiraSpace.sm,
+        NiraSpace.sm,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  margin
-                      ? 'Margin per kloter (1000)'
-                      : 'Gula final per hari (Kg)',
-                  style: niraText(11.5, weight: FontWeight.w700),
-                ),
-              ),
-              if (!margin) ...[
+          Text(
+            margin ? 'Margin per kloter (1000)' : 'Gula final per hari (Kg)',
+            style: niraText(NiraType.body, weight: FontWeight.w600),
+          ),
+          if (!margin) ...[
+            const SizedBox(height: NiraSpace.sm),
+            Wrap(
+              spacing: NiraSpace.sm,
+              runSpacing: NiraSpace.sm,
+              children: [
                 _modeChip('Rendemen', ProductionVariant.rendemen),
-                const SizedBox(width: 3),
                 _modeChip('Grade', ProductionVariant.grade),
               ],
-            ],
-          ),
-          const SizedBox(height: 6),
+            ),
+          ],
+          const SizedBox(height: NiraSpace.sm),
           SizedBox(
             height: 134,
             child: CustomPaint(
@@ -240,9 +248,13 @@ class _LaporanPageState extends State<LaporanPage> {
     selected: widget.analytics.variant == value,
     child: InkWell(
       onTap: () => widget.analytics.setVariant(value),
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(niraRadius),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        constraints: const BoxConstraints(minHeight: 48),
+        padding: const EdgeInsets.symmetric(
+          horizontal: NiraSpace.sm,
+          vertical: NiraSpace.xs,
+        ),
         decoration: BoxDecoration(
           color: widget.analytics.variant == value
               ? const Color(0xFFE8F0E7)
@@ -250,9 +262,12 @@ class _LaporanPageState extends State<LaporanPage> {
           border: Border.all(
             color: widget.analytics.variant == value ? niraLeaf : niraMuted,
           ),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(niraRadius),
         ),
-        child: Text(label, style: niraText(8.5, weight: FontWeight.w600)),
+        child: Text(
+          label,
+          style: niraText(NiraType.caption, weight: FontWeight.w600),
+        ),
       ),
     ),
   );
@@ -290,13 +305,18 @@ class _LaporanPageState extends State<LaporanPage> {
   }) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      Text(title, style: niraText(14.5, weight: FontWeight.w700)),
-      const SizedBox(height: 5),
+      Text(title, style: niraText(NiraType.section, weight: FontWeight.w600)),
+      const SizedBox(height: NiraSpace.xs),
       NiraOutline(
         Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(9, 6, 7, 5),
+              padding: const EdgeInsets.fromLTRB(
+                NiraSpace.sm,
+                NiraSpace.sm,
+                NiraSpace.sm,
+                NiraSpace.xs,
+              ),
               child: Row(
                 children: [
                   for (final column in columns)
@@ -304,7 +324,7 @@ class _LaporanPageState extends State<LaporanPage> {
                       child: Text(
                         column,
                         style: niraText(
-                          10,
+                          NiraType.caption,
                           color: niraLeaf,
                           weight: FontWeight.w600,
                         ),
@@ -315,11 +335,11 @@ class _LaporanPageState extends State<LaporanPage> {
             ),
             if (rows.isEmpty)
               Padding(
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(NiraSpace.lg),
                 child: Text(
                   'Data tidak ditemukan',
                   textAlign: TextAlign.center,
-                  style: niraText(11.5, color: niraLeaf),
+                  style: niraText(NiraType.caption, color: niraLeaf),
                 ),
               )
             else
@@ -327,16 +347,32 @@ class _LaporanPageState extends State<LaporanPage> {
                 InkWell(
                   onTap: onTap,
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(9, 6, 7, 6),
+                    padding: const EdgeInsets.fromLTRB(
+                      NiraSpace.sm,
+                      NiraSpace.sm,
+                      NiraSpace.sm,
+                      NiraSpace.sm,
+                    ),
                     child: Row(
                       children: [
                         Expanded(
-                          child: Text(row.supplier, style: niraText(10.5)),
+                          child: Text(
+                            row.supplier,
+                            style: niraText(NiraType.body),
+                          ),
                         ),
-                        Expanded(child: Text(row.value, style: niraText(10.5))),
+                        Expanded(
+                          child: Text(
+                            row.value,
+                            style: niraText(NiraType.body),
+                          ),
+                        ),
                         if (columns.length > 2)
                           Expanded(
-                            child: Text(row.secondary, style: niraText(10.5)),
+                            child: Text(
+                              row.secondary,
+                              style: niraText(NiraType.body),
+                            ),
                           ),
                         const Icon(
                           Icons.chevron_right,
