@@ -71,6 +71,16 @@ test('nira reservation rejects reuse beyond synthetic source balance', async () 
   assert.equal(response.status, 409);
 });
 
+test('accepts Backend A lotId alias for batch nira contribution', async () => {
+  const response = await request('/batches/batch-mixed/contributions', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-dev-role': 'admin' },
+    body: JSON.stringify({ lotId: 'lot-a-alias', volumeMl: 1000 }),
+  });
+  assert.equal(response.status, 201);
+  assert.equal((await response.json()).contributions.at(-1).kloterId, 'lot-a-alias');
+});
+
 test('tracks sugar stock and allocates mixed economics with exact rupiah totals', async () => {
   let response = await request('/stock/sugar?grade=A');
   assert.equal(response.status, 200);

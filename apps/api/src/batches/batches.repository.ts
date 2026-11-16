@@ -39,7 +39,7 @@ export class FixtureBatchesRepository implements BatchesRepository {
   async get(scope: { tenantId: string; factoryId: string }, id: string) { const b = this.batches.find((item) => item.id === id && item.tenantId === scope.tenantId && item.factoryId === scope.factoryId); return b && clone(b); }
   async findAny(id: string) { const b = this.batches.find((item) => item.id === id); return b && clone(b); }
   async create(scope: { tenantId: string; factoryId: string }, input: BatchInput) {
-    const item: Batch = { id: randomUUID(), tenantId: scope.tenantId, factoryId: scope.factoryId, kloterId: input.kloterId, panId: input.panId, status: 'DRAFT', occurredAt: input.occurredAt, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), productionConfig: { id: 'config-default', maxNiraMl: 115000 }, priceVersion: { id: 'price-demo', effectiveAt: new Date().toISOString() }, contributions: [], reworks: [] };
+    const item: Batch = { id: randomUUID(), tenantId: scope.tenantId, factoryId: scope.factoryId, kloterId: input.kloterId!, panId: input.panId, status: 'DRAFT', occurredAt: input.occurredAt, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), productionConfig: { id: 'config-default', maxNiraMl: 115000 }, priceVersion: { id: 'price-demo', effectiveAt: new Date().toISOString() }, contributions: [], reworks: [] };
     this.batches.push(item); return clone(item);
   }
   private save(batch: Batch) { const index = this.batches.findIndex((b) => b.id === batch.id); batch.updatedAt = new Date().toISOString(); this.batches[index] = batch; return clone(batch); }

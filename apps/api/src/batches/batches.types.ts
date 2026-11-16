@@ -27,7 +27,9 @@ export type Rework = { id: string; sourceBatchId: string; receivingBatchId: stri
 
 export type BatchInput = {
   factoryId: string;
-  kloterId: string;
+  /** Canonical B1 source identifier. `lotId` is accepted as Backend A alias. */
+  kloterId?: string;
+  lotId?: string;
   panId: string;
   occurredAt: string;
   contributions?: Array<{ kloterId: string; volumeMl: number; occurredAt?: string }>;
