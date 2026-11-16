@@ -92,8 +92,8 @@ class NiraScaffold extends StatelessWidget {
           bottom: false,
           child: Column(
             children: [
-              Container(height: math.max(padding.top, 38), color: Colors.white),
-              Expanded(child: body),
+              SizedBox(height: padding.top),
+              Expanded(child: ClipRect(child: body)),
               if (!keyboard && bottomAction != null)
                 Padding(
                   padding: EdgeInsets.fromLTRB(
@@ -108,7 +108,7 @@ class NiraScaffold extends StatelessWidget {
                 Padding(
                   padding: EdgeInsets.fromLTRB(
                     niraInset,
-                    0,
+                    14,
                     niraInset,
                     math.max(padding.bottom, 30),
                   ),
@@ -140,21 +140,71 @@ class _BottomNavigation extends StatelessWidget {
     color: niraGreen,
     borderRadius: BorderRadius.circular(28),
     clipBehavior: Clip.antiAlias,
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 52),
-      child: Padding(
-        padding: const EdgeInsets.only(right: 12),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 276),
-            child: Row(
-              children: [
-                for (final (item, label, icon, size) in _items)
-                  Expanded(
-                    flex: item == tab ? 27 : 14,
-                    child: _destination(item, label, icon, size),
+    child: Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 276),
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(
+              begin: tab.index.toDouble(),
+              end: tab.index.toDouble(),
+            ),
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 420),
+            curve: Curves.easeInOutCubic,
+            builder: (context, position, _) => LayoutBuilder(
+              builder: (context, constraints) {
+                final weights = [
+                  for (var i = 0; i < _items.length; i++)
+                    (1 - (position - i).abs()).clamp(0.0, 1.0),
+                ];
+                final widths = [
+                  for (final w in weights)
+                    constraints.maxWidth * (14 + 13 * w) / 69,
+                ];
+                final starts = <double>[0];
+                for (final width in widths) {
+                  starts.add(starts.last + width);
+                }
+                final lower = position.floor();
+                final upper = position.ceil();
+                final fraction = position - lower;
+                final left =
+                    starts[lower] + (starts[upper] - starts[lower]) * fraction;
+                final width =
+                    widths[lower] + (widths[upper] - widths[lower]) * fraction;
+                return SizedBox(
+                  height: 52,
+                  child: Stack(
+                    alignment: Alignment.centerLeft,
+                    children: [
+                      Positioned(
+                        left: left + 2,
+                        width: width - 4,
+                        top: 10,
+                        bottom: 10,
+                        child: const DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.all(Radius.circular(20)),
+                          ),
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          for (var i = 0; i < _items.length; i++)
+                            SizedBox(
+                              width: widths[i],
+                              child: _destination(i, weights[i]),
+                            ),
+                        ],
+                      ),
+                    ],
                   ),
-              ],
+                );
+              },
             ),
           ),
         ),
@@ -162,53 +212,56 @@ class _BottomNavigation extends StatelessWidget {
     ),
   );
 
-  Widget _destination(NiraTab item, String label, String icon, double size) =>
-      Semantics(
-        label: label,
-        button: true,
-        selected: item == tab,
+  Widget _destination(int index, double emphasis) {
+    final (item, label, icon, size) = _items[index];
+    return Semantics(
+      label: label,
+      button: true,
+      selected: item == tab,
+      onTap: () => onNavigate(item),
+      excludeSemantics: true,
+      child: InkWell(
         onTap: () => onNavigate(item),
-        excludeSemantics: true,
-        child: InkWell(
-          onTap: () => onNavigate(item),
-          borderRadius: BorderRadius.circular(26),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 44, minHeight: 48),
-            child: Center(
-              widthFactor: 1,
-              heightFactor: 1,
-              child: item == tab
-                  ? DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            NiraIcon(icon, size, color: niraGreen),
-                            const SizedBox(width: 4),
-                            Flexible(
-                              child: Text(
-                                label,
-                                overflow: TextOverflow.ellipsis,
-                                style: niraText(10.5, weight: FontWeight.w700),
-                              ),
-                            ),
-                          ],
+        borderRadius: BorderRadius.circular(26),
+        child: SizedBox(
+          height: 52,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 5),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                NiraIcon(
+                  icon,
+                  size,
+                  color: Color.lerp(Colors.white, niraGreen, emphasis),
+                ),
+                Flexible(
+                  child: ClipRect(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: emphasis,
+                      child: Opacity(
+                        opacity: emphasis,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.clip,
+                            style: niraText(10.5, weight: FontWeight.w700),
+                          ),
                         ),
                       ),
-                    )
-                  : NiraIcon(icon, size, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
-      );
+      ),
+    );
+  }
 }
 
 class NiraTabs extends StatelessWidget {
