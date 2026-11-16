@@ -2,21 +2,29 @@
   "name": "@sobatnira/api",
   "version": "0.1.0",
   "private": true,
-  "engines": { "node": ">=24 <25" },
+  "engines": {
+    "node": ">=24 <25"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "npm run build && node --env-file-if-exists=.env dist/main.js",
+    "db:migrate": "npm run build && node dist/documents/migrate.js",
     "test": "npm run build && node --test test/*.test.cjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1169.0",
     "@nestjs/common": "11.2.10",
     "@nestjs/core": "11.2.10",
     "@nestjs/platform-express": "11.2.10",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "pg": "8.23.1",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@types/pg": "8.23.1",
     "typescript": "~5.9.3"
   }
 }

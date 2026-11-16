@@ -1,15 +1,25 @@
 import 'package:flutter/material.dart';
 
+import 'features/auth/login_pages.dart';
 import 'features/beranda/beranda_page.dart';
 import 'features/kloter/demo_production.dart';
 import 'features/kloter/kloter_detail_page.dart';
 import 'features/kloter/kloter_list_page.dart';
+import 'features/laporan/demo_analytics.dart';
+import 'features/laporan/laporan_page.dart';
+import 'features/laporan/report_detail_page.dart';
+import 'features/pekerjaan/pekerjaan_page.dart';
+import 'features/pekerjaan/review_api.dart';
+import 'features/pengaturan/pengaturan_page.dart';
+import 'features/pengaturan/settings_demo.dart';
 import 'sobatnira_ui.dart';
 
 void main() => runApp(const SobatNiraApp());
 
 class SobatNiraApp extends StatefulWidget {
-  const SobatNiraApp({super.key});
+  const SobatNiraApp({this.reviewApi, super.key});
+
+  final ReviewApi? reviewApi;
 
   @override
   State<SobatNiraApp> createState() => _SobatNiraAppState();
@@ -18,23 +28,47 @@ class SobatNiraApp extends StatefulWidget {
 class _SobatNiraAppState extends State<SobatNiraApp> {
   final _navigator = GlobalKey<NavigatorState>();
   final _demo = DemoProduction();
+  final _analytics = DemoAnalytics();
+  final _settings = SettingsDemo();
+  bool _signedIn = false;
   NiraTab _tab = NiraTab.beranda;
 
   @override
   void dispose() {
     _demo.dispose();
+    _analytics.dispose();
+    _settings.dispose();
     super.dispose();
+  }
+
+  void _openLogin() {
+    _navigator.currentState!.push(
+      MaterialPageRoute<void>(
+        builder: (_) => LoginFormPage(onSubmit: _enterDemo),
+      ),
+    );
+  }
+
+  void _enterDemo() {
+    if (_signedIn) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    _navigator.currentState!.popUntil((route) => route.isFirst);
+    setState(() => _signedIn = true);
   }
 
   void _navigate(NiraTab tab) {
     final navigator = _navigator.currentState!;
-    if (tab == NiraTab.laporan || tab == NiraTab.pengaturan) {
-      showUnavailable(navigator.overlay!.context);
-      return;
-    }
     FocusManager.instance.primaryFocus?.unfocus();
     navigator.popUntil((route) => route.isFirst);
     setState(() => _tab = tab);
+  }
+
+  void _openReportDetail(ReportDetailKind kind) {
+    _navigator.currentState!.push(
+      MaterialPageRoute<void>(
+        builder: (_) => ReportDetailPage(kind: kind, onNavigate: _navigate),
+      ),
+    );
   }
 
   void _openKloter(DemoKloter kloter) {
@@ -71,19 +105,29 @@ class _SobatNiraAppState extends State<SobatNiraApp> {
         ),
       ),
     ),
-    home: NiraScaffold(
-      tab: _tab,
-      onNavigate: _navigate,
-      body: ListenableBuilder(
-        listenable: _demo,
-        builder: (context, _) => IndexedStack(
-          index: _tab.index,
-          children: [
-            BerandaPage(kloter: _demo.kloter, onOpenKloter: _openKloter),
-            KloterListPage(kloter: _demo.kloter, onOpenKloter: _openKloter),
-          ],
+    home: _signedIn ? _buildHome() : LoginWelcomePage(onContinue: _openLogin),
+  );
+
+  Widget _buildHome() => NiraScaffold(
+    tab: _tab,
+    onNavigate: _navigate,
+    body: IndexedStack(
+      index: _tab.index,
+      children: [
+        ListenableBuilder(
+          listenable: _demo,
+          builder: (context, _) =>
+              BerandaPage(kloter: _demo.kloter, onOpenKloter: _openKloter),
         ),
-      ),
+        ListenableBuilder(
+          listenable: _demo,
+          builder: (context, _) =>
+              KloterListPage(kloter: _demo.kloter, onOpenKloter: _openKloter),
+        ),
+        PekerjaanPage(api: widget.reviewApi),
+        LaporanPage(analytics: _analytics, onOpenDetail: _openReportDetail),
+        PengaturanPage(settings: _settings, onNavigate: _navigate),
+      ],
     ),
   );
 }

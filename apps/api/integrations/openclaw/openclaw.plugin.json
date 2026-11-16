@@ -1,0 +1,14 @@
+{
+  "id": "sobatnira-intake",
+  "name": "SobatNira Intake",
+  "description": "Forwards an authorized WhatsApp conversation to the SobatNira document workflow.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["accountId", "mediaDir"],
+    "properties": {
+      "accountId": { "type": "string", "minLength": 1 },
+      "mediaDir": { "type": "string", "minLength": 1 }
+    }
+  }
+}

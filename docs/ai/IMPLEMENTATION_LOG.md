@@ -1,0 +1,26 @@
+# Log implementasi AI SobatNira
+
+17 November 2026. Implementasi memakai baseline `309142e` yang sudah mencakup onboarding Flutter. Referensi produk lengkap tersimpan di indeks internal workspace.
+
+| Tahap | Selesai dan file terkait | Pengujian |
+| --- | --- | --- |
+| 0 — Audit | Inventaris tiga aplikasi, dependency, gap, dan konflik acuan di [audit awal](IMPLEMENTATION_AUDIT.md). | Pemeriksaan source, lockfile, CI dan environment lokal. |
+| 1 — Kontrak dan database | Skema dan contoh bersama di `docs/ai/`. `apps/api/migrations/001_document_intake.sql` menambah operator, keanggotaan review, inbound, media, dokumen, revisi, job, attempt, klarifikasi, konfirmasi, task, approval dan audit. Nilai mentah, nilai normalisasi dan evidence disimpan sebagai field terpisah dalam JSONB. | Contoh divalidasi terhadap schema. Migrasi diterapkan dan dapat dijalankan ulang di PostgreSQL 18 lokal. CI API dikonfigurasi dengan PostgreSQL 17. |
+| 2 — Intake WhatsApp | `apps/api/src/documents/` menerima multipart satu foto, memverifikasi token dan operator serta menduplikasi hasil retry melalui idempotency key. `apps/api/integrations/openclaw/` meneruskan event WhatsApp dan membaca foto staging privat. Media dapat disimpan di filesystem lokal atau R2. | Tes adapter dan PostgreSQL mencakup operator nonaktif, mime tidak valid, kiriman paralel, dan konflik idempotency. |
+| 3 — OCR | `apps/ai/ocr_service.py` dan `ocr_parser.py` menjalankan validasi gambar, PaddleOCR, klasifikasi, parser field/baris, evidence dan Gemini selektif. NestJS menyimpan attempt asli dan memeriksa envelope sebelum menyimpan draf. | Enam tes FastAPI lulus. Inference PaddleOCR CPU membaca nota kedatangan sintetis dengan berat 1250 kg dan tabel nota produksi sintetis dengan dua blok. |
+| 4 — Revisi dan konfirmasi | Worker membuat draf per revisi. Revisi produksi memakai referensi eksplisit atau kutipan kiriman sebelumnya. Backend mengikat konfirmasi dan koreksi pada revisi dan operator. Draf dengan kecocokan ambigu menunggu klarifikasi. | Tes PostgreSQL mencakup riwayat revisi, pergantian pengirim pada foto lanjutan, konfirmasi stale, retry konfirmasi, dan OCR gagal. Smoke HTTP dengan PaddleOCR sungguhan memproses revisi foto di dokumen yang sama. |
+| 5 — Review mobile | `apps/mobile/lib/features/pekerjaan/` memakai sesi Supabase dan API untuk antrean, foto, evidence, riwayat, koreksi, pengembalian dan validasi. NestJS memeriksa scope pabrik, role, dan versi. | `flutter analyze` bersih dan sepuluh tes Flutter lulus. Tes API mencakup foto dan tugas lintas pabrik, versi stale, koreksi, pengembalian, antrean pengecualian, validasi dan idempotency. |
+| 6 — Alur sintetis | Lima langkah utama berjalan dari intake HTTP, media privat, FastAPI/PaddleOCR, konfirmasi, hingga antrean dan validasi mobile API. Demo lama tetap tersedia. | Empat tes NestJS lulus dengan PostgreSQL lokal. Smoke lintas proses membaca nota kedatangan dan foto produksi sintetis. Smoke Chrome pada build release menampilkan foto, hasil ekstraksi, dan riwayat, lalu menyimpan `VALIDATED` untuk revisi yang dipilih di PostgreSQL. Kedua smoke test memakai stub autentikasi. |
+
+## Arsitektur dan integritas
+
+OpenClaw/Baileys memasok identitas pesan dan file staging ke NestJS. NestJS mengikat operator dan scope pabrik, menyimpan original, lalu memasukkan pekerjaan PostgreSQL dalam transaksi yang sama dengan revisi. Worker memakai lease, retry dan idempotency untuk pekerjaan OCR. FastAPI hanya membaca media melalui endpoint internal bertoken dan mengembalikan kandidat yang tidak mengubah status bisnis. NestJS mencatat konfirmasi, pengembalian, approval, dan audit. Flutter membaca foto melalui endpoint berotorisasi per permintaan.
+
+Untuk revisi, pencocokan otomatis memakai label blok dan pasangan kode wajan serta jam turun yang terbaca dan unik pada blok terkait. Jika bukti tidak cukup, draf diberi blocker dan riwayat tetap dapat diperiksa. Nilai yang masih valid dapat diteruskan bersama evidence dari revisi sumber. Aturan label tebu, satuan gamping operasional, tahap Brix, dan makna kolom yang tidak dikenali masih mengikuti penanganan terbuka di PRD.
+
+## Pekerjaan terbuka
+
+- Pairing dan reconnect WhatsApp/OpenClaw, pengiriman notice lewat gateway, R2, Supabase proyek, dan Gemini belum diuji dengan akun nyata. Jalur teks operator saat ini memakai perintah deterministik. Konfigurasi Agent LLM/OpenRouter dan pengiriman notifikasi admin membutuhkan integrasi lanjutan.
+- Ringkasan otomatis bergantung pada sesi gateway. Jika notice tidak tersedia atau gateway restart, operator dapat mengambil draf kembali lewat `STATUS`. Pengembalian mencatat alasan dan membuka revisi koreksi baru. Operator dapat mengambilnya lewat `STATUS` untuk submission yang sama.
+- Parser mendukung layout baseline yang diuji. Sampel anonim berlabel dibutuhkan untuk mengukur akurasi tulisan tangan, layout tidak lazim, pemisahan kolom kosong dan tidak terbaca, dan kecocokan baris yang buktinya belum lengkap. Tinjauan manual menampilkan foto dan alasan ketika OCR gagal. Pengisian hasil manual tanpa draf belum tersedia.
+- Urutan berikutnya adalah uji gateway dan akun pengembangan, benchmark sampel anonim, dan review bersama tim atas pemetaan template, kebijakan notifikasi dan retensi media sebelum pilot.

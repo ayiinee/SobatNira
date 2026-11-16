@@ -3,6 +3,7 @@ import { BatchesModule } from './batches/batches.module';
 import { ProductionMastersModule } from './production-masters/production-masters.module';
 import { EconomicsModule } from './economics/economics.module';
 import { ReportingModule } from './reporting/reporting.module';
+import { DocumentsModule } from './documents/documents.module';
 
 @Controller()
 class AppController {
@@ -28,5 +29,5 @@ class AppController {
   }
 }
 
-@Module({ controllers: [AppController], imports: [BatchesModule, ProductionMastersModule, EconomicsModule, ReportingModule] })
+@Module({ controllers: [AppController], imports: [BatchesModule, ProductionMastersModule, EconomicsModule, ReportingModule, DocumentsModule] })
 export class AppModule {}
