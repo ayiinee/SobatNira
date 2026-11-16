@@ -1,13 +1,19 @@
-import 'reflect-metadata';
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
+import { createApplication } from './application';
+import { BACKEND_CONFIG, BackendConfig, ConfigurationError } from './config/backend.config';
+import { validateRuntime } from './documents/config';
+import { assertR2Privacy } from './documents/media';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  app.enableCors({
-    origin: ['http://127.0.0.1:8080', 'http://localhost:8080'],
-  });
-  await app.listen(Number(process.env.API_PORT ?? 3000), '127.0.0.1');
+  validateRuntime();
+  if (process.env.SOBATNIRA_MODE === 'connected' && process.env.R2_PUBLIC_BASE_URL) await assertR2Privacy();
+  const app = await createApplication();
+  const config = app.get<BackendConfig>(BACKEND_CONFIG);
+  await app.listen(config.port, config.host);
 }
 
-void bootstrap();
+void bootstrap().catch((error: unknown) => {
+  console.error(error instanceof ConfigurationError ||
+    (error instanceof Error && /^(NestJS|PostgreSQL|FastAPI|Supabase|R2|Mode local):/.test(error.message))
+    ? error.message : 'API gagal dimulai; periksa host, port dan konfigurasi.');
+  process.exitCode = 1;
+});

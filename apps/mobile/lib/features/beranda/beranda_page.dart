@@ -83,6 +83,7 @@ class _BerandaPageState extends State<BerandaPage> {
                     ],
                   ),
                 ),
+                const SizedBox(height: 82),
               ],
             ),
           ),
