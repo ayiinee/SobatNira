@@ -59,7 +59,12 @@ class _LaporanPageState extends State<LaporanPage> {
           ),
         ),
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(niraInset, 13, niraInset, 88),
+          padding: EdgeInsets.fromLTRB(
+            niraInset,
+            13,
+            niraInset,
+            MediaQuery.viewPaddingOf(context).bottom + 88,
+          ),
           sliver: SliverList.list(
             children: [
               if (widget.analytics.tab == ReportTab.production)
