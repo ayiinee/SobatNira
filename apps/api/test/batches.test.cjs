@@ -46,6 +46,9 @@ test('exposes production masters, nira contract and closure check', async () => 
   let response = await request('/production-masters/grades');
   assert.equal(response.status, 200);
   assert.deepEqual((await response.json()).map((item) => item.code), ['A', 'B']);
+  response = await request('/production-masters/prices');
+  assert.equal(response.status, 200);
+  assert.equal((await response.json())[0].prices.A, 10000);
   response = await request('/production-masters/pans', { method: 'POST', headers: { 'content-type': 'application/json', 'x-dev-role': 'owner' }, body: JSON.stringify({ code: 'PAN-OWNER', name: 'Tidak boleh' }) });
   assert.equal(response.status, 403);
   response = await request('/batches/nira/kloter-999/availability');
