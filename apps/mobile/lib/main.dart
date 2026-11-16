@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'features/auth/login_pages.dart';
 import 'features/beranda/beranda_page.dart';
 import 'features/kloter/demo_production.dart';
 import 'features/kloter/kloter_detail_page.dart';
@@ -25,6 +26,7 @@ class _SobatNiraAppState extends State<SobatNiraApp> {
   final _demo = DemoProduction();
   final _analytics = DemoAnalytics();
   final _settings = SettingsDemo();
+  bool _signedIn = false;
   NiraTab _tab = NiraTab.beranda;
 
   @override
@@ -33,6 +35,21 @@ class _SobatNiraAppState extends State<SobatNiraApp> {
     _analytics.dispose();
     _settings.dispose();
     super.dispose();
+  }
+
+  void _openLogin() {
+    _navigator.currentState!.push(
+      MaterialPageRoute<void>(
+        builder: (_) => LoginFormPage(onSubmit: _enterDemo),
+      ),
+    );
+  }
+
+  void _enterDemo() {
+    if (_signedIn) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    _navigator.currentState!.popUntil((route) => route.isFirst);
+    setState(() => _signedIn = true);
   }
 
   void _navigate(NiraTab tab) {
@@ -84,26 +101,28 @@ class _SobatNiraAppState extends State<SobatNiraApp> {
         ),
       ),
     ),
-    home: NiraScaffold(
-      tab: _tab,
-      onNavigate: _navigate,
-      body: IndexedStack(
-        index: _tab.index,
-        children: [
-          ListenableBuilder(
-            listenable: _demo,
-            builder: (context, _) =>
-                BerandaPage(kloter: _demo.kloter, onOpenKloter: _openKloter),
-          ),
-          ListenableBuilder(
-            listenable: _demo,
-            builder: (context, _) =>
-                KloterListPage(kloter: _demo.kloter, onOpenKloter: _openKloter),
-          ),
-          LaporanPage(analytics: _analytics, onOpenDetail: _openReportDetail),
-          PengaturanPage(settings: _settings, onNavigate: _navigate),
-        ],
-      ),
+    home: _signedIn ? _buildHome() : LoginWelcomePage(onContinue: _openLogin),
+  );
+
+  Widget _buildHome() => NiraScaffold(
+    tab: _tab,
+    onNavigate: _navigate,
+    body: IndexedStack(
+      index: _tab.index,
+      children: [
+        ListenableBuilder(
+          listenable: _demo,
+          builder: (context, _) =>
+              BerandaPage(kloter: _demo.kloter, onOpenKloter: _openKloter),
+        ),
+        ListenableBuilder(
+          listenable: _demo,
+          builder: (context, _) =>
+              KloterListPage(kloter: _demo.kloter, onOpenKloter: _openKloter),
+        ),
+        LaporanPage(analytics: _analytics, onOpenDetail: _openReportDetail),
+        PengaturanPage(settings: _settings, onNavigate: _navigate),
+      ],
     ),
   );
 }

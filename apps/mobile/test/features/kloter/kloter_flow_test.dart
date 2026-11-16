@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sobatnira/features/kloter/kloter_card.dart';
 import 'package:sobatnira/main.dart';
 
+import '../../support/demo_login.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -25,6 +27,8 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(const SobatNiraApp());
     await tester.pumpAndSettle();
+    await openDemoLogin(tester);
+    await submitDemoLogin(tester);
   }
 
   Future<void> tap(WidgetTester tester, Finder finder) async {
@@ -137,6 +141,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await openDemoLogin(tester);
+    await submitDemoLogin(tester);
     expect(tester.takeException(), isNull);
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -440));
     await tester.pumpAndSettle();
