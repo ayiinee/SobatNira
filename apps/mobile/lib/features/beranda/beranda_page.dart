@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../sobatnira_ui.dart';
 import '../kloter/demo_production.dart';
 import '../kloter/kloter_card.dart';
+import 'quick_action_icon.dart';
+import 'factory_picker.dart';
 
 class BerandaPage extends StatefulWidget {
   const BerandaPage({
@@ -28,16 +30,22 @@ class _BerandaPageState extends State<BerandaPage> {
     return CustomScrollView(
       key: const PageStorageKey('beranda-scroll'),
       slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(niraInset, 0, niraInset, 15),
-          sliver: SliverList.list(
-            children: const [
-              _Profile(),
-              SizedBox(height: 15),
-              _ProductionSummary(),
-              SizedBox(height: 17),
-              _QuickActions(),
-            ],
+        SliverToBoxAdapter(
+          child: CustomPaint(
+            painter: const _BerandaGeometryPainter(),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(niraInset, 0, niraInset, 15),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: const [
+                  _Profile(),
+                  SizedBox(height: 15),
+                  _ProductionSummary(),
+                  SizedBox(height: 17),
+                  _QuickActions(),
+                ],
+              ),
+            ),
           ),
         ),
         SliverPadding(
@@ -98,9 +106,15 @@ class _BerandaPageState extends State<BerandaPage> {
   }
 }
 
-class _Profile extends StatelessWidget {
+class _Profile extends StatefulWidget {
   const _Profile();
 
+  @override
+  State<_Profile> createState() => _ProfileState();
+}
+
+class _ProfileState extends State<_Profile> {
+  String _factory = 'Pabrik Demo';
   @override
   Widget build(BuildContext context) => Container(
     constraints: const BoxConstraints(minHeight: 57),
@@ -108,6 +122,14 @@ class _Profile extends StatelessWidget {
     decoration: BoxDecoration(
       color: niraGreen,
       borderRadius: BorderRadius.circular(33),
+      border: Border.all(color: niraGreen, width: 1.2),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x18174B35),
+          blurRadius: 8,
+          offset: Offset(0, 3),
+        ),
+      ],
     ),
     child: Row(
       children: [
@@ -125,7 +147,7 @@ class _Profile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text('Pabrik Demo', style: niraText(10.5, color: Colors.white)),
+              Text(_factory, style: niraText(10.5, color: Colors.white)),
               const SizedBox(height: 1),
               Text(
                 'Admin Demo',
@@ -138,21 +160,9 @@ class _Profile extends StatelessWidget {
             ],
           ),
         ),
-        Material(
-          color: Colors.white,
-          shape: const CircleBorder(),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: () => showUnavailable(context),
-            child: const Tooltip(
-              message: 'Notifikasi',
-              child: SizedBox(
-                width: 43,
-                height: 43,
-                child: Center(child: NiraIcon('bell', 20, color: niraGreen)),
-              ),
-            ),
-          ),
+        FactoryPicker(
+          value: _factory,
+          onChanged: (value) => setState(() => _factory = value),
         ),
       ],
     ),
@@ -430,14 +440,50 @@ class _CanePatternPainter extends CustomPainter {
   bool shouldRepaint(covariant _CanePatternPainter oldDelegate) => false;
 }
 
+class _BerandaGeometryPainter extends CustomPainter {
+  const _BerandaGeometryPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final pen = Paint()
+      ..color = const Color(0x30B97105)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
+    // Two quiet clusters of open, parallel contours frame the content.
+    for (var i = 0; i < 5; i++) {
+      final step = i * 19.0;
+      canvas.drawPath(
+        Path()
+          ..moveTo(size.width + 30, 12 + step)
+          ..lineTo(size.width * .68 - step, 112 + step)
+          ..lineTo(size.width + 30, 240 + step),
+        pen,
+      );
+      canvas.drawPath(
+        Path()
+          ..moveTo(-25, size.height - 245 + step)
+          ..lineTo(size.width * .3 + step, size.height - 125 + step)
+          ..lineTo(-25, size.height + 22 + step),
+        pen,
+      );
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _BerandaGeometryPainter oldDelegate) => false;
+}
+
 class _QuickActions extends StatelessWidget {
   const _QuickActions();
 
   static const _actions = [
-    ('Laba', 'calculator', 25.0),
-    ('Biaya Ops', 'tag', 29.0),
-    ('Rekap', 'clip', 26.0),
-    ('Bantuan', 'headset', 32.0),
+    ('Laba', QuickActionKind.profit),
+    ('Biaya Ops', QuickActionKind.expenses),
+    ('Rekap', QuickActionKind.recap),
+    ('Bantuan', QuickActionKind.help),
   ];
 
   @override
@@ -445,7 +491,7 @@ class _QuickActions extends StatelessWidget {
     mainAxisAlignment: MainAxisAlignment.spaceBetween,
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      for (final (label, icon, size) in _actions)
+      for (final (label, icon) in _actions)
         Flexible(
           child: SizedBox(
             width: 63,
@@ -464,7 +510,7 @@ class _QuickActions extends StatelessWidget {
                         borderRadius: BorderRadius.circular(7),
                         border: Border.all(color: niraGreen, width: 1.3),
                       ),
-                      child: NiraIcon(icon, size),
+                      child: QuickActionIcon(icon),
                     ),
                     const SizedBox(height: 3),
                     Text(
