@@ -1,16 +1,18 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { fields, requireUuid, UUID } from './contracts';
+import { parsePage } from '../production/production.dto';
 import { Database } from './database';
 import { audit, editRevision, Revision } from './intake';
 import { correctField } from './revisions';
 import { manualNote } from './manual-note';
 import { enqueueNotice } from './notices';
 import { supabaseKey } from './config';
+import { PostedIntake, postedIntakeColumns, TruckIntake } from './truck-intake';
 
 @Injectable()
 export class Review {
-  constructor(private readonly db: Database) {}
+  constructor(private readonly db: Database, private readonly truckIntake: TruckIntake) {}
 
   async user(authorization?: string) {
     if (!authorization || !/^Bearer \S{1,8192}$/.test(authorization)) throw new UnauthorizedException();
@@ -50,7 +52,7 @@ export class Review {
   async detail(user: string, id: string) {
     return this.db.transaction(async (db) => {
       await db.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
-      const { rows: [task] } = await db.query(`SELECT t.*,d.document_type,r.version,r.extraction,r.issues,r.operator_status,
+      const { rows: [task] } = await db.query(`SELECT t.*,d.factory_id,d.document_type,r.version,r.extraction,r.issues,r.operator_status,
         r.processing_status,s.media_asset_id,d.current_revision_id,m.received_at,o.display_name AS sender_name,a.role
         FROM admin_review_tasks t JOIN source_documents d ON d.id=t.document_id
         JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1 AND a.active
@@ -66,9 +68,29 @@ export class Review {
       const { rows: auditTrail } = await db.query(`SELECT e.action,e.revision_id,e.created_at FROM audit_events e
         JOIN document_revisions r ON r.id=e.revision_id WHERE e.document_id=$1 AND r.version<=$2
         ORDER BY e.created_at,e.id`, [task.document_id, task.version]);
+      let intake: PostedIntake | null = null;
+      if (task.document_type === 'TRUCK_ARRIVAL_NOTE' && task.status === 'VALIDATED') {
+        const result = await db.query<PostedIntake>(`SELECT ${postedIntakeColumns} FROM sobatnira.intake_records
+          WHERE factory_id=$1 AND ocr_document_id=$2 AND ocr_revision_id=$3`,
+        [task.factory_id, task.document_id, task.revision_id]);
+        intake = result.rows[0] ?? null;
+      }
       return { ...task, revisions: history, operator_confirmation: history.find((row) => row.confirmed_at) ?? null,
-        audit: auditTrail, actions: task.current_revision_id !== task.revision_id ? [] : task.status === 'PENDING_VALIDATION'
+        intake, audit: auditTrail, actions: task.current_revision_id !== task.revision_id ? [] : task.status === 'PENDING_VALIDATION'
           ? ['CORRECT', 'VALIDATE', 'RETURN'] : task.status === 'MANUAL_REVIEW_REQUIRED' ? ['MANUAL_ENTRY', 'RETURN'] : [] };
+    });
+  }
+
+  intakeLots(user: string, id: string, query: unknown) {
+    const page = parsePage(query);
+    return this.db.transaction(async (db) => {
+      const { rows: [task] } = await db.query<{ factory_id: string }>(`SELECT d.factory_id
+        FROM admin_review_tasks t JOIN source_documents d ON d.id=t.document_id
+        JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1 AND a.active
+        WHERE t.id=$2 AND d.document_type='TRUCK_ARRIVAL_NOTE' AND t.status='PENDING_VALIDATION'
+          AND d.current_revision_id=t.revision_id FOR SHARE OF a`, [user, id]);
+      if (!task) throw new NotFoundException('Pekerjaan penerimaan tidak ditemukan.');
+      return this.truckIntake.choices(db, user, task.factory_id, page);
     });
   }
 
@@ -106,9 +128,10 @@ export class Review {
       throw new BadRequestException('Versi revisi dan Idempotency-Key wajib');
     }
     const revisionId = requireUuid(body.revision_id);
+    const lotSelection = body.lot_id === undefined && body.supplier_id === undefined ? [] : [body.lot_id, body.supplier_id];
     const fingerprint = createHash('sha256').update(JSON.stringify([document, action, revisionId, body.expected_version,
       body.field_path, body.value, body.decision, body.reason_code, body.comment, body.request_operator_follow_up, body.note,
-      ...(action === 'MANUAL_ENTRY' ? [body.document_type, body.values, body.rows_per_block] : [])])).digest('hex');
+      ...(action === 'MANUAL_ENTRY' ? [body.document_type, body.values, body.rows_per_block] : []), ...lotSelection])).digest('hex');
     return this.db.transaction(async (db) => {
       const { rows: [doc] } = await db.query(`SELECT d.* FROM source_documents d
         JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1 AND a.active
@@ -173,9 +196,14 @@ export class Review {
         }
         await db.query(`INSERT INTO document_approvals (document_id,revision_id,user_id,note) VALUES ($1,$2,$3,$4)`,
           [document, revisionId, user, body.note ?? null]);
+        const intake = doc.document_type === 'TRUCK_ARRIVAL_NOTE'
+          ? await this.truckIntake.post(db, {
+            documentId: document, revisionId, userId: user, factoryId: doc.factory_id,
+            lotId: requireUuid(body.lot_id), supplierId: requireUuid(body.supplier_id), note: base.extraction,
+          }) : null;
         await db.query(`UPDATE admin_review_tasks SET status='VALIDATED' WHERE id=$1`, [task.id]);
-        await audit(db, base, 'ADMIN_VALIDATED', user);
-        outcome = { revision_id: revisionId, version: base.version, status: 'VALIDATED' };
+        await audit(db, base, 'ADMIN_VALIDATED', user, intake ? { intake_record_id: intake.id, lot_id: intake.lot_id } : undefined);
+        outcome = { revision_id: revisionId, version: base.version, status: 'VALIDATED', ...(intake ? { intake } : {}) };
       } else {
         if (typeof body.reason_code !== 'string' || !/^[A-Z_]{1,64}$/.test(body.reason_code) ||
             typeof body.comment !== 'string' || body.comment.length < 1 || body.comment.length > 1000 ||

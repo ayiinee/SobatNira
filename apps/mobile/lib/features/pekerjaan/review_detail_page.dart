@@ -9,6 +9,7 @@ import '../../sobatnira_ui.dart';
 
 import 'review_api.dart';
 import 'manual_note_form.dart';
+import 'intake_lot_dialog.dart';
 
 class ReviewDetailPage extends StatefulWidget {
   const ReviewDetailPage({required this.api, required this.taskId, super.key});
@@ -153,6 +154,21 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
     });
   }
 
+  Future<void> _validate(Json task) async {
+    final values = <String, dynamic>{'decision': 'VALIDATED'};
+    if (task['document_type'] == 'TRUCK_ARRIVAL_NOTE') {
+      final selected = await showDialog<Json>(
+        context: context,
+        builder: (context) =>
+            IntakeLotDialog(api: widget.api, taskId: widget.taskId),
+      );
+      if (!mounted || selected == null) return;
+      values['lot_id'] = selected['id'];
+      values['supplier_id'] = selected['supplierId'];
+    }
+    await _change(task, 'validate', values);
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -188,6 +204,7 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
         final asset = _asset ?? currentAsset;
         final actions = task['actions'] as List;
         final confirmation = task['operator_confirmation'] as Json?;
+        final intake = task['intake'] as Json?;
         return ListView(
           padding: const EdgeInsets.symmetric(
             horizontal: niraInset,
@@ -200,6 +217,8 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
             ),
             Text('${task['sender_name']} · Revisi ${task['version']}'),
             Text('Status: ${task['status']}'),
+            if (intake != null)
+              Text('Stok tebu tercatat: ${intake['net_weight_kg']} kg'),
             if (confirmation != null)
               Text(
                 'Dikonfirmasi ${confirmation['confirmed_by']} pada revisi ${confirmation['version']}',
@@ -288,10 +307,7 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
             if (_saving) const LinearProgressIndicator(),
             if (actions.contains('VALIDATE'))
               FilledButton(
-                onPressed: _saving
-                    ? null
-                    : () =>
-                          _change(task, 'validate', {'decision': 'VALIDATED'}),
+                onPressed: _saving ? null : () => _validate(task),
                 child: const Text('Validasi revisi ini'),
               ),
             if (actions.contains('RETURN'))
