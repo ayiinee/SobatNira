@@ -22,6 +22,7 @@ class KloterListPage extends StatefulWidget {
 class _KloterListPageState extends State<KloterListPage> {
   final _search = TextEditingController();
   final _scroll = ScrollController();
+  final _expandedDates = <DateTime, bool>{};
   KloterDateFilter? _dateFilter;
   int _activeTab = 0;
 
@@ -64,11 +65,11 @@ class _KloterListPageState extends State<KloterListPage> {
         .where((item) => item.status == KloterStatus.review)
         .length;
     final groups = <DateTime, List<DemoKloter>>{};
-    if (status == null) {
-      for (final item in visible) {
-        groups.putIfAbsent(item.date, () => []).add(item);
-      }
+    for (final item in visible) {
+      final date = DateUtils.dateOnly(item.date);
+      groups.putIfAbsent(date, () => []).add(item);
     }
+    final dates = groups.keys.toList()..sort((a, b) => b.compareTo(a));
 
     return Column(
       children: [
@@ -109,26 +110,89 @@ class _KloterListPageState extends State<KloterListPage> {
             children: [
               if (visible.isEmpty)
                 _empty()
-              else if (status == null)
-                for (final entry in groups.entries) ...[
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    color: niraMuted,
-                    padding: const EdgeInsets.fromLTRB(17, 5, 8, 5),
-                    child: Text(
-                      formatDate(entry.key),
-                      style: niraText(14.5, color: const Color(0xFF243B31)),
-                    ),
-                  ),
-                  for (final item in entry.value) _card(item),
-                  const SizedBox(height: 9),
-                ]
               else
-                for (final item in visible) _card(item),
+                for (final date in dates)
+                  _dateAccordion(
+                    date,
+                    groups[date]!,
+                    latest: date == dates.first,
+                  ),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _dateAccordion(
+    DateTime date,
+    List<DemoKloter> items, {
+    required bool latest,
+  }) {
+    final expanded = _expandedDates[date] ?? latest;
+    return Padding(
+      key: ValueKey(date),
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Material(
+            color: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(7),
+              side: const BorderSide(color: niraLine),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Semantics(
+              expanded: expanded,
+              child: InkWell(
+                onTap: () {
+                  FocusScope.of(context).unfocus();
+                  setState(() => _expandedDates[date] = !expanded);
+                },
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            formatDate(date),
+                            style: niraText(14.5, weight: FontWeight.w600),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${items.length} kloter',
+                          style: niraText(11.5, color: niraLeaf),
+                        ),
+                        const SizedBox(width: 8),
+                        AnimatedRotation(
+                          turns: expanded ? .5 : 0,
+                          duration: const Duration(milliseconds: 200),
+                          child: const Icon(
+                            Icons.keyboard_arrow_down,
+                            color: niraLeaf,
+                            size: 22,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (expanded) ...[
+            const SizedBox(height: 9),
+            for (final item in items) _card(item),
+          ],
+        ],
+      ),
     );
   }
 
