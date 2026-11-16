@@ -147,9 +147,10 @@ async function smoke() {
   };
   const inactive = await receive(photo('truck.png', '', { SenderE164: phone(102) }));
   assert.match(inactive, /belum aktif/);
-  const input = photo('truck.png');
+  const input = photo('truck.png', 'BARU');
   const first = parse(await receive(input));
   assert.deepEqual(parse(await receive(input)), first);
+  assert.deepEqual(parse(await receive(photo('truck.png'))), first);
   const client = createBridge({ apiUrl: url(ports.api), token: process.env.WHATSAPP_ADAPTER_INTERNAL_TOKEN, mediaDir: staging });
   const ready = (target) => waitFor(async () => {
     const status = await client.status(phone(101), target.document, target.revision);
@@ -169,19 +170,19 @@ async function smoke() {
   assert.notEqual(updated.revision,initial.revision);
   assert.equal((await ready(updated)).extraction.cane_blocks[0].batches[0].output.hasil_kg.normalized_value,26);
   assert.doesNotMatch(await receive(body(randomUUID(),`KONFIRMASI ${initial.document} ${initial.revision}`)),/masuk antrean/);
-  const ambiguous = parse(await receive(photo('ambiguous.png')));
+  const ambiguous = parse(await receive(photo('ambiguous.png', 'BARU')));
   const question = (await ready(ambiguous)).pending_question;
   assert.equal(question.field_path,'header.net_weight_kg');
   const answer = `JAWAB ${ambiguous.document} ${ambiguous.revision} ${question.id} 1250`;
   assert.match(await receive(body(randomUUID(), answer)), /OPERATOR|1250 kg/);
   assert.match(await receive(body(randomUUID(), answer)), /revisi berubah/);
-  const invalid = parse(await receive(photo('unreadable.png')));
+  const invalid = parse(await receive(photo('unreadable.png', 'BARU')));
   const failed = await ready(invalid);
   assert.equal(failed.processing_status,'MANUAL_REVIEW_REQUIRED');
   const retake = parse(await receive(photo('truck.png', `FOTO ULANG ${invalid.document} ${invalid.revision}`)));
   assert.equal(retake.document,invalid.document);
   assert.equal((await ready(retake)).extraction.document_type,'TRUCK_ARRIVAL_NOTE');
-  const manual = parse(await receive(photo('manual.png')));
+  const manual = parse(await receive(photo('manual.png', 'BARU')));
   assert.equal((await ready(manual)).processing_status,'MANUAL_REVIEW_REQUIRED');
   const task = await db.query('SELECT id FROM admin_review_tasks WHERE revision_id=$1', [first.revision]);
   assert.equal(task.rowCount,1);

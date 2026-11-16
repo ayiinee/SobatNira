@@ -155,7 +155,8 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
         form.set('event', JSON.stringify({ ...metadata, message_type: 'IMAGE', media_mime_type: media.contentType }));
         form.set('media', new Blob([bytes], { type: media.contentType }), 'nota');
         const accepted = await call('inbound', { method: 'POST', body: form }, messageId);
-        return { text: `Foto diterima. Cek dengan STATUS ${accepted.document_id} ${accepted.revision_id}` };
+        const acknowledgement = accepted.duplicate ? 'Foto ini sudah tercatat.' : 'Foto diterima.';
+        return { text: `${acknowledgement} Cek dengan STATUS ${accepted.document_id} ${accepted.revision_id}` };
       }
       const parsed = command.exec(content);
       if (!parsed) return { text: await help(phone, chatId, metadata.quoted_message_id, content) };

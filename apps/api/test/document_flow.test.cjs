@@ -15,6 +15,7 @@ const { mergeProduction } = require('../dist/documents/revisions.js');
 const fixture = (name) => readFile(join(__dirname, '../../../docs/ai/examples', `${name}.example.json`), 'utf8').then(JSON.parse);
 const phone = (suffix) => '+' + [1, 202, 555, String(suffix).padStart(4, '0')].join('');
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a4FcAAAAASUVORK5CYII=', 'base64');
+const imageFor = (id) => Buffer.concat([png, Buffer.from(id)]);
 const tokenHeaders = { 'X-Internal-Service-Token': 'synthetic-adapter-test' };
 
 test('combined application routes OCR requests through their service and review authentication', async (t) => {
@@ -236,7 +237,7 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
           headers: { 'X-Internal-Service-Token': process.env.AI_SERVICE_INTERNAL_TOKEN },
         });
         assert.equal(photo.status, 200);
-        assert.deepEqual(Buffer.from(await photo.arrayBuffer()), png);
+        assert.deepEqual(Buffer.from(await photo.arrayBuffer()).subarray(0, png.length), png);
         const note = notes.shift();
         if (!note) { response.writeHead(503).end(); return; }
         const { request_id, document_id, submission_id, revision_id, schema_version } = input;
@@ -252,7 +253,7 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     process.env.AI_SERVICE_BASE_URL = `http://127.0.0.1:${upstream.address().port}`;
     process.env.SUPABASE_URL = process.env.AI_SERVICE_BASE_URL;
     const processor = app.get(DocumentProcessor);
-    const photo = (metadata, bytes) => fetch(`${base}/internal/v1/whatsapp/inbound`, {
+    const photo = (metadata, bytes = imageFor(metadata.provider_message_id)) => fetch(`${base}/internal/v1/whatsapp/inbound`, {
       method: 'POST', body: form(metadata, bytes), headers: { ...tokenHeaders, 'Idempotency-Key': `baileys:${metadata.provider_message_id}` },
     });
     const action = (metadata, target, verb = 'CONFIRM', extra = {}) => fetch(`${base}/internal/v1/whatsapp/text-events`, {
@@ -285,6 +286,9 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     assert.equal(a.revision_id, b.revision_id);
     assert.equal(Number(a.duplicate) + Number(b.duplicate), 1);
     assert.equal((await photo({ ...first, caption: 'conflicting' })).status, 409);
+    const resent = await photo(event('truck-resent'), imageFor('truck-01')).then((response) => response.json());
+    assert.equal(resent.duplicate, true);
+    assert.equal(resent.revision_id, a.revision_id);
     assert.equal((await db.query('SELECT count(*)::int AS count FROM document_jobs')).rows[0].count, 1);
 
     const truck = await fixture('truck-arrival-note');
@@ -329,6 +333,10 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     assert.equal((await quoted(phone(101), 'OTHER-CHAT')).status, 404);
     assert.equal((await quoted(phone(102), 'SYNTHETIC-CHAT')).status, 404);
     assert.equal((await quoted(phone(101), 'SYNTHETIC-CHAT').then((response) => response.json())).revision_id, corrected.revision_id);
+    const alias = await fetch(`${base}/internal/v1/whatsapp/quoted-context`, {
+      headers: { ...tokenHeaders, 'X-Operator-Phone': phone(101), 'X-Chat-Id': 'SYNTHETIC-CHAT', 'X-Quoted-Message-Id': 'truck-resent' },
+    }).then((response) => response.json());
+    assert.equal(alias.revision_id, corrected.revision_id);
     const unread = (user) => mobile('review-notifications', user).then((response) => response.json());
     assert.deepEqual(await unread('reviewer'), { unread_count: 0 });
     const operatorMessage = event('truck-confirm', 'TEXT');
@@ -354,7 +362,7 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     assert.equal(detail.extraction.header.net_weight_kg.raw_value, 'BERAT');
     assert.equal(detail.extraction.header.net_weight_kg.normalized_value, 1251);
     assert.equal((await mobile(`review-tasks/${taskId}/assets/${detail.media_asset_id}`, 'other-user')).status, 404);
-    assert.deepEqual(Buffer.from(await mobile(`review-tasks/${taskId}/assets/${detail.media_asset_id}`).then((response) => response.arrayBuffer())), png);
+    assert.deepEqual(Buffer.from(await mobile(`review-tasks/${taskId}/assets/${detail.media_asset_id}`).then((response) => response.arrayBuffer())), imageFor('truck-01'));
     const edited = await change(detail, 'draft', { revision_id: detail.revision_id, expected_version: 2,
       field_path: 'header.net_weight_kg', value: 1252 }, randomUUID(), 'PATCH');
     assert.equal(edited.status, 200, await edited.clone().text());

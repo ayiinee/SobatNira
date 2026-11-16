@@ -17,7 +17,7 @@ const json = (value: unknown) => JSON.stringify(value);
 
 // Only inbound photos and provider-acknowledged bot notices can identify a quoted submission.
 const quotedSubmission = `SELECT s.* FROM document_submissions s
-  JOIN whatsapp_inbound_messages m ON m.id=s.inbound_message_id
+  JOIN whatsapp_inbound_messages m ON m.id=s.inbound_message_id OR s.id=(m.outcome->>'submission_id')::uuid
   WHERE m.provider_message_id=$1 AND m.event->>'chat_id'=$2
   UNION
   SELECT s.* FROM whatsapp_notices n JOIN document_revisions r ON r.id=n.revision_id
@@ -102,6 +102,18 @@ export class Intake {
       }
       if (event.quoted_message_id && !quoted && !requested && !explicitNew) throw new ConflictException('DOCUMENT_REFERENCE_REQUIRED');
       const target = requested ?? quoted?.document_id;
+      if (!explicitNew && !retakeRevision) {
+        const { rows: [prior] } = await db.query(`SELECT m.outcome FROM media_assets a
+          JOIN document_submissions s ON s.media_asset_id=a.id JOIN whatsapp_inbound_messages m ON m.id=s.inbound_message_id
+          WHERE a.factory_id=$1 AND a.sha256=$2 AND m.operator_id=$3 AND m.event->>'chat_id'=$4
+            AND ($5::uuid IS NULL OR s.document_id=$5)
+          ORDER BY m.received_at DESC,m.id LIMIT 1`, [operator.factory_id, sha, operator.id, event.chat_id, target ?? null]);
+        if (prior?.outcome) {
+          const outcome = { ...prior.outcome, duplicate: true };
+          await db.query('UPDATE whatsapp_inbound_messages SET outcome=$2 WHERE id=$1', [inbound.id, json(outcome)]);
+          return outcome;
+        }
+      }
       let docId: string;
       let previous: Revision | undefined;
       let submissionExplicitNew = explicitNew;

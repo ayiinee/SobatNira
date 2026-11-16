@@ -31,6 +31,8 @@ async function readiness(db: Database, infrastructureOnly: boolean) {
     check('Migration [jalankan db:migrate]', async () => {
       await db.query('SELECT 1 FROM whatsapp_notices LIMIT 0');
       await db.query('SELECT status FROM clarification_requests LIMIT 0');
+      const { rowCount } = await db.query("SELECT 1 FROM sobatnira_migrations WHERE name='005_duplicate_photo_lookup.sql'");
+      if (!rowCount) throw new Error('Migration missing');
     }),
     check('PaddleOCR [AI_BASE_URL, AI_SERVICE_INTERNAL_TOKEN, extra paddle]', () => ok(
       new URL('/internal/v1/ocr/ready', process.env.AI_SERVICE_BASE_URL || process.env.AI_BASE_URL),
