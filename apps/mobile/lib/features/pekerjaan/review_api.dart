@@ -85,6 +85,22 @@ class ReviewApi {
   Future<Json> detail(String id) =>
       _json(_client.get(_url('review-tasks/$id'), headers: _headers));
 
+  Future<int> unreadNotifications() async {
+    final response = await _json(
+      _client.get(_url('review-notifications'), headers: _headers),
+    );
+    return response['unread_count'] as int;
+  }
+
+  Future<void> markNotificationRead(String taskId) async {
+    await _json(
+      _client.patch(
+        _url('review-notifications/$taskId/read'),
+        headers: _headers,
+      ),
+    );
+  }
+
   Future<Uint8List> photo(String id, String asset) async {
     final response = await _client
         .get(_url('review-tasks/$id/assets/$asset'), headers: _headers)

@@ -1,6 +1,7 @@
 from io import BytesIO
 import json
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
 from uuid import uuid4
@@ -8,6 +9,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 from PIL import Image
 
+from benchmark_ocr import evaluate, load_cases
 from main import app
 from ocr_parser import Token, extract
 from ocr_service import SCHEMAS
@@ -99,3 +101,22 @@ class OcrTest(TestCase):
     def test_service_auth_rejects_access(self):
         with patch.dict("os.environ", {"AI_SERVICE_INTERNAL_TOKEN": "test-token"}):
             self.assertEqual(self.post().status_code, 401)
+
+    def test_benchmark_scores_normalized_values_and_missing_fields(self):
+        with TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "synthetic.png").write_bytes(self.image)
+            manifest = root / "ground-truth.json"
+            manifest.write_text(json.dumps([{"image": "synthetic.png", "document_type": "TRUCK_ARRIVAL_NOTE", "fields": {
+                "header.net_weight_kg": {"normalized_value": 1250, "unit": "kg"},
+                "header.supplier_name": {"normalized_value": "Pemasok Berbeda"},
+                "header.unknown": {"status": "READ"},
+            }}]), encoding="utf-8")
+            tokens = [token(line, .1, .1 + index * .1) for index, line in enumerate([
+                "TANGGAL: 16-11-2026", "PENGIRIM: PEMASOK DEMO", "NO. KENDARAAN: TEST-001", "BERAT BERSIH: 1250",
+            ])]
+            report = evaluate(list(load_cases(manifest)), lambda *_: tokens)
+        self.assertEqual(report["classification"], {"TRUCK_ARRIVAL_NOTE": {"TRUCK_ARRIVAL_NOTE": 1}})
+        self.assertEqual(report["fields"]["TRUCK_ARRIVAL_NOTE.header.net_weight_kg"]["correct"], 1)
+        self.assertEqual(report["fields"]["TRUCK_ARRIVAL_NOTE.header.supplier_name"]["incorrect"], 1)
+        self.assertEqual(report["fields"]["TRUCK_ARRIVAL_NOTE.header.unknown"]["missing"], 1)

@@ -124,7 +124,7 @@ class _SobatNiraAppState extends State<SobatNiraApp> {
           builder: (context, _) =>
               KloterListPage(kloter: _demo.kloter, onOpenKloter: _openKloter),
         ),
-        PekerjaanPage(api: widget.reviewApi),
+        PekerjaanPage(api: widget.reviewApi, active: _tab == NiraTab.pekerjaan),
         LaporanPage(analytics: _analytics, onOpenDetail: _openReportDetail),
         PengaturanPage(settings: _settings, onNavigate: _navigate),
       ],

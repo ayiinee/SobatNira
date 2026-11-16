@@ -134,6 +134,16 @@ export class Intake {
     return { ...result, candidate_documents: rows.map(({ id }) => id) };
   }
 
+  async quotedContext(phone: string, chat: string, quotedMessageId: string) {
+    const { rows: [reference] } = await this.db.query<{ document_id: string; revision_id: string }>(`SELECT s.document_id,r.id AS revision_id
+      FROM whatsapp_inbound_messages m JOIN operator_contacts o ON o.id=m.operator_id AND o.active
+      JOIN document_submissions s ON s.inbound_message_id=m.id JOIN source_documents d ON d.id=s.document_id AND d.factory_id=o.factory_id
+      JOIN document_revisions r ON r.id=d.current_revision_id AND r.submission_id=s.id
+      WHERE m.provider_message_id=$1 AND o.phone_e164=$2 AND m.event->>'chat_id'=$3`, [quotedMessageId, phone, chat]);
+    if (!reference) throw new NotFoundException('Rujukan foto tidak tersedia pada percakapan ini');
+    return reference;
+  }
+
   async reply(event: Inbound, action: Action) {
     if (!action || !['CONFIRM', 'CORRECT'].includes(action.action) || !UUID.test(action.document_id) || !UUID.test(action.revision_id) ||
         (action.action === 'CORRECT' && typeof action.field_path !== 'string')) throw new BadRequestException('Aksi operator tidak valid');
@@ -168,6 +178,8 @@ export class Intake {
         await db.query(`UPDATE document_revisions SET operator_status='CONFIRMED' WHERE id=$1`, [base.id]);
         const { rows: [task] } = await db.query(`INSERT INTO admin_review_tasks (document_id, revision_id) VALUES ($1,$2) RETURNING id`,
           [doc.id, base.id]);
+        await db.query(`INSERT INTO admin_review_notifications (task_id,user_id)
+          SELECT $1,user_id FROM review_memberships WHERE factory_id=$2 AND active AND role='ADMIN'`, [task.id, operator.factory_id]);
         await audit(db, base, 'OPERATOR_CONFIRMED', operator.id);
         outcome = { document_id: doc.id, revision_id: base.id, task_id: task.id, operator_status: 'CONFIRMED' };
       }

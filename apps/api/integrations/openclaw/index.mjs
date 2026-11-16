@@ -1,11 +1,13 @@
 import { open, realpath } from 'node:fs/promises';
 import { isAbsolute, relative } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { createOperatorAgent } from './operator-agent.mjs';
 
 const uuid = '[a-f0-9-]{36}';
 const command = new RegExp(`^(STATUS|KONFIRMASI|KOREKSI)\\s+(${uuid})\\s+(${uuid})(?:\\s+(.+))?$`, 'i');
 const maxBytes = 10 * 1024 * 1024;
 const terminal = new Set(['EXTRACTED', 'NEEDS_CLARIFICATION', 'MANUAL_REVIEW_REQUIRED', 'FAILED_FINAL']);
+const operatorHelp = 'Kirim satu foto nota atau gunakan perintah STATUS, KOREKSI, atau KONFIRMASI dari ringkasan draf.';
 
 function asPhone(input) {
   const value = typeof input === 'string' ? input.replace(/@s\.whatsapp\.net$/, '') : '';
@@ -62,7 +64,7 @@ function summary(revision, document, id, page = 1) {
   return sections.join('\n');
 }
 
-export function createBridge({ apiUrl, token, mediaDir, request = fetch }) {
+export function createBridge({ apiUrl, token, mediaDir, request = fetch, classifyIntent }) {
   const call = async (endpoint, options = {}, messageId) => {
     const headers = { ...options.headers, 'X-Internal-Service-Token': token };
     if (messageId) headers['Idempotency-Key'] = `baileys:${messageId}`;
@@ -82,6 +84,37 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch }) {
   };
 
   const status = (phone, document, revision) => call(`documents/${document}/revisions/${revision}`, { headers: { 'X-Operator-Phone': phone } });
+
+  async function help(phone, chat, quote, content) {
+    if (!quote || !classifyIntent) return operatorHelp;
+    const target = await call('quoted-context', { headers: { 'X-Operator-Phone': phone, 'X-Chat-Id': chat, 'X-Quoted-Message-Id': quote } })
+      .catch(() => null);
+    if (!target) return operatorHelp;
+    const { document_id: document, revision_id: id } = target;
+    const revision = await status(phone, document, id);
+    if (!terminal.has(revision.processing_status)) return summary(revision, document, id);
+    const intent = await classifyIntent(content);
+    const commandTarget = `${document} ${revision.id ?? id}`;
+    switch (intent) {
+      case 'SHOW_DRAFT':
+        return summary(revision, document, id);
+      case 'EXPLAIN_ISSUE': {
+        const lines = draftLines(revision.extraction).filter((line) => /\[(ILLEGIBLE|AMBIGUOUS)\]$/.test(line));
+        if (lines.length) return [`Bidang yang perlu diperiksa:`, ...lines.slice(0, 3), `Lihat draf lengkap dengan STATUS ${commandTarget}`].join('\n');
+        return summary(revision, document, id);
+      }
+      case 'GUIDE_CORRECTION':
+        if (revision.operator_status === 'PENDING') return `Periksa draf dengan STATUS ${commandTarget}, lalu gunakan KOREKSI ${commandTarget} <field_path>=<nilai JSON>.`;
+        return summary(revision, document, id);
+      case 'GUIDE_CONFIRMATION':
+        if (revision.operator_status === 'PENDING') return `Periksa semua halaman dengan STATUS ${commandTarget}. Perintah konfirmasi tersedia pada halaman terakhir.`;
+        return summary(revision, document, id);
+      case 'RETAKE_PHOTO':
+        return 'Potret nota dari atas dengan cahaya merata. Pastikan semua kolom terlihat dan kirim satu foto dengan rujukan yang sesuai.';
+      default:
+        return operatorHelp;
+    }
+  }
 
   async function handle(event, context) {
     const phone = asPhone(event.metadata?.senderE164) ?? asPhone(event.senderId) ?? asPhone(context.senderId);
@@ -114,7 +147,7 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch }) {
           pending: accepted.duplicate ? null : { phone, document: accepted.document_id, revision: accepted.revision_id } };
       }
       const parsed = command.exec(content);
-      if (!parsed) return { text: 'Kirim satu foto nota atau gunakan perintah STATUS, KOREKSI, atau KONFIRMASI dari ringkasan draf.' };
+      if (!parsed) return { text: await help(phone, chatId, metadata.quoted_message_id, content) };
       const [, verb, document, revision, tail] = parsed;
       if (verb.toUpperCase() === 'STATUS') return { text: summary(await status(phone, document, revision), document, revision, Number(tail ?? 1)) };
       const action = { action: 'CONFIRM', document_id: document.toLowerCase(), revision_id: revision.toLowerCase() };
@@ -145,7 +178,14 @@ export default {
     const apiUrl = process.env.SOBATNIRA_API_URL;
     const token = process.env.WHATSAPP_ADAPTER_INTERNAL_TOKEN;
     if (!apiUrl || !token || !accountId || !mediaDir) throw new Error('SobatNira bridge configuration is incomplete');
-    const bridge = createBridge({ apiUrl, token, mediaDir });
+    let classifyIntent;
+    try {
+      classifyIntent = createOperatorAgent({ key: process.env.OPENROUTER_API_KEY, model: process.env.OPENROUTER_AGENT_MODEL,
+        fallbackModel: process.env.OPENROUTER_AGENT_FALLBACK_MODEL, providers: process.env.OPENROUTER_ALLOWED_PROVIDERS });
+    } catch {
+      api.logger.warn('Konfigurasi OpenRouter tidak lengkap. Panduan operator memakai template.');
+    }
+    const bridge = createBridge({ apiUrl, token, mediaDir, classifyIntent });
     const system = api.runtime.system;
     const waiting = new Map();
     api.on('inbound_claim', async (event, context) => {

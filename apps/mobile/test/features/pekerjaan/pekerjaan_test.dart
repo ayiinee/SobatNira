@@ -14,6 +14,7 @@ void main() {
     tester,
   ) async {
     var validated = false;
+    var notificationRead = false;
     var listed = 0;
     final task = {
       'id': 'task-demo',
@@ -30,6 +31,17 @@ void main() {
       client: MockClient((request) async {
         expect(request.headers['Authorization'], 'Bearer synthetic-token');
         final endpoint = request.url.path.replaceFirst('/api/v1/mobile/', '');
+        if (endpoint == 'review-notifications') {
+          return http.Response(
+            jsonEncode({'unread_count': notificationRead ? 0 : 1}),
+            200,
+          );
+        }
+        if (endpoint == 'review-notifications/task-demo/read') {
+          expect(request.method, 'PATCH');
+          notificationRead = true;
+          return http.Response('{"acknowledged":true}', 200);
+        }
         if (endpoint == 'review-tasks') {
           listed++;
           return http.Response(
@@ -46,6 +58,7 @@ void main() {
           return http.Response(
             jsonEncode({
               ...task,
+              'role': 'ADMIN',
               'status': validated ? 'VALIDATED' : 'PENDING_VALIDATION',
               'actions': validated ? [] : ['CORRECT', 'VALIDATE', 'RETURN'],
               'issues': [],
@@ -103,6 +116,7 @@ void main() {
     }
     await tester.pumpAndSettle();
     expect(find.text('Menunggu validasi'), findsOneWidget);
+    expect(find.text('1 laporan baru'), findsOneWidget);
     await tester.tap(find.text('Nota Kedatangan Truk'));
     await tester.pumpAndSettle();
     expect(
@@ -110,6 +124,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('1250 kg'), findsOneWidget);
+    expect(notificationRead, isTrue);
     final validate = find.widgetWithText(FilledButton, 'Validasi revisi ini');
     await tester.ensureVisible(validate);
     await tester.tap(validate);
@@ -118,6 +133,8 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('Belum ada laporan pada status ini.'), findsOneWidget);
+    expect(find.text('1 laporan baru'), findsNothing);
     expect(listed, 2);
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -16,12 +17,30 @@ class ReviewDetailPage extends StatefulWidget {
 }
 
 class _ReviewDetailPageState extends State<ReviewDetailPage> {
-  late Future<Json> _task = widget.api.detail(widget.taskId);
+  late Future<Json> _task = _load();
   String? _asset;
   List<Json> _evidence = [];
   bool _saving = false;
   String? _retrySignature;
   String? _retryKey;
+  bool _notificationRead = false;
+
+  Future<Json> _load() async {
+    final task = await widget.api.detail(widget.taskId);
+    if (mounted && !_notificationRead && task['role'] == 'ADMIN') {
+      unawaited(_markNotificationRead());
+    }
+    return task;
+  }
+
+  Future<void> _markNotificationRead() async {
+    try {
+      await widget.api.markNotificationRead(widget.taskId);
+      _notificationRead = true;
+    } catch (_) {
+      // Loading the note succeeds even if the notification is still unread.
+    }
+  }
 
   Future<void> _change(Json task, String action, Json values) async {
     final signature = jsonEncode([task['revision_id'], action, values]);
@@ -35,7 +54,7 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
       if (!mounted) return;
       _retrySignature = null;
       setState(() {
-        _task = widget.api.detail(widget.taskId);
+        _task = _load();
       });
       ScaffoldMessenger.of(
         context,
@@ -141,7 +160,7 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
           onPressed: _saving
               ? null
               : () => setState(() {
-                  _task = widget.api.detail(widget.taskId);
+                  _task = _load();
                 }),
           icon: const Icon(Icons.refresh),
         ),
