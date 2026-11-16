@@ -9,6 +9,7 @@
 ## Acuan keputusan
 
 - Jika tersedia di workspace, mulai dari [indeks dokumen internal](docs/internal/index.md) dan baca dokumen yang terkait dengan tugas. Gunakan register keputusan untuk mengecek status aturan produksi. Jika acuan yang dibutuhkan belum tersedia atau keputusannya masih terbuka, klarifikasi dengan tim sebelum menetapkannya di kode.
+- Baca [acuan proyek](docs/project-overview.md) untuk memahami istilah produksi, tanggung jawab layanan, dan status implementasi di repo.
 - Perlakukan fixture sebagai data sintetis. Simpan kredensial, nota asli, data mitra, dan dokumen internal di luar Git.
 
 ## Pengembangan dan verifikasi
