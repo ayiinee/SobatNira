@@ -106,7 +106,12 @@ class _KloterListPageState extends State<KloterListPage> {
             key: const PageStorageKey('kloter-scroll'),
             controller: _scroll,
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.fromLTRB(niraInset, 10, niraInset, 88),
+            padding: EdgeInsets.fromLTRB(
+              niraInset,
+              10,
+              niraInset,
+              MediaQuery.viewPaddingOf(context).bottom + 88,
+            ),
             children: [
               if (visible.isEmpty)
                 _empty()

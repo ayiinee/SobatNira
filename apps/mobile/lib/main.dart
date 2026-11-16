@@ -85,6 +85,7 @@ class _SobatNiraAppState extends State<SobatNiraApp> {
       ),
     ),
     home: NiraScaffold(
+      floatingNavigation: true,
       tab: _tab,
       onNavigate: _navigate,
       body: IndexedStack(
