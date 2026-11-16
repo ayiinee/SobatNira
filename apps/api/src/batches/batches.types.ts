@@ -21,9 +21,9 @@ export type Batch = {
 
 export type Contribution = { id: string; kloterId: string; volumeMl: number; occurredAt: string };
 export type CookingRecord = { id: string; startedAt: string; endedAt?: string; additiveIds: string[] };
-export type Weighing = { id: string; caneWeightGrams?: number; sugarWeightGrams: number; occurredAt: string };
-export type Grading = { id: string; gradeCode: string; sugarWeightGrams: number; occurredAt: string };
-export type Rework = { id: string; sourceBatchId: string; receivingBatchId: string; weightGrams: number; status: 'RECORDED'; occurredAt: string };
+export type Weighing = { id: string; caneWeightKg?: number; sugarWeightKg?: number; occurredAt: string; caneWeightGrams?: number; sugarWeightGrams?: number };
+export type Grading = { id: string; gradeCode: string; sugarWeightKg?: number; occurredAt: string; sugarWeightGrams?: number };
+export type Rework = { id: string; sourceBatchId: string; receivingBatchId: string; weightKg?: number; status: 'RECORDED'; occurredAt: string; weightGrams?: number };
 
 export type BatchInput = {
   factoryId: string;
