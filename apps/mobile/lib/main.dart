@@ -26,7 +26,6 @@ class _SobatNiraAppState extends State<SobatNiraApp> {
   final _analytics = DemoAnalytics();
   final _settings = SettingsDemo();
   NiraTab _tab = NiraTab.beranda;
-
   @override
   void dispose() {
     _demo.dispose();
@@ -39,6 +38,7 @@ class _SobatNiraAppState extends State<SobatNiraApp> {
     final navigator = _navigator.currentState!;
     FocusManager.instance.primaryFocus?.unfocus();
     navigator.popUntil((route) => route.isFirst);
+    if (_tab == tab) return;
     setState(() => _tab = tab);
   }
 

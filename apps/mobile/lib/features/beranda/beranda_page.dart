@@ -159,157 +159,275 @@ class _Profile extends StatelessWidget {
   );
 }
 
-class _ProductionSummary extends StatelessWidget {
+class _ProductionSummary extends StatefulWidget {
   const _ProductionSummary();
 
-  static const _smallStats = [
-    ('Gula final', '820Kg', Icons.water_drop_outlined),
-    ('Kloter', '3', Icons.layers_outlined),
-    ('Antrean batch', '4', Icons.format_list_bulleted),
-  ];
+  @override
+  State<_ProductionSummary> createState() => _ProductionSummaryState();
+}
+
+class _ProductionSummaryState extends State<_ProductionSummary> {
+  bool _showProfit = true;
 
   @override
-  Widget build(BuildContext context) => DecoratedBox(
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.fromLTRB(9, 9, 9, 15),
     decoration: BoxDecoration(
       color: Colors.white,
       border: Border.all(color: niraGreen, width: 1.35),
-      borderRadius: BorderRadius.circular(7),
+      borderRadius: BorderRadius.circular(9),
       boxShadow: const [niraShadow],
     ),
-    child: Padding(
-      padding: const EdgeInsets.fromLTRB(9, 8, 9, 17),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(7),
-            child: DecoratedBox(
-              decoration: const BoxDecoration(
-                color: niraGreen,
-                image: DecorationImage(
-                  image: AssetImage('assets/sobatnira/art/hero-texture.jpg'),
-                  fit: BoxFit.cover,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: niraGreen,
+            borderRadius: BorderRadius.circular(9),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF0B231A), Color(0xFF287653), niraGreen],
+              stops: [0, .6, 1],
+            ),
+          ),
+          child: Stack(
+            children: [
+              const Positioned.fill(
+                child: IgnorePointer(
+                  child: RepaintBoundary(
+                    child: CustomPaint(painter: _CanePatternPainter()),
+                  ),
                 ),
               ),
-              child: Stack(
-                children: [
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: Image.asset(
-                      'assets/sobatnira/art/hero-cane.png',
-                      width: 153,
-                      height: 103,
-                      excludeFromSemantics: true,
-                    ),
+              Positioned(
+                right: -9,
+                bottom: 0,
+                top: 0,
+                width: 153,
+                child: IgnorePointer(
+                  child: Image.asset(
+                    'assets/sobatnira/art/hero-cane.png',
+                    fit: BoxFit.contain,
+                    alignment: Alignment.bottomRight,
+                    opacity: const AlwaysStoppedAnimation(.9),
+                    excludeFromSemantics: true,
                   ),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 102),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(13, 8, 13, 10),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Tebu diterima',
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(17, 9, 12, 17),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Keuntungan',
                             style: niraText(
-                              17.65,
+                              17,
                               color: Colors.white,
-                              weight: FontWeight.w600,
-                            ),
-                          ),
-                          Text(
-                            '8.200Kg',
-                            style: niraText(
-                              35.31,
-                              color: niraYellow,
                               weight: FontWeight.w700,
                             ),
                           ),
-                          const SizedBox(height: 3),
-                          Text(
+                        ),
+                        IconButton(
+                          constraints: const BoxConstraints(
+                            minWidth: 44,
+                            minHeight: 44,
+                          ),
+                          padding: EdgeInsets.zero,
+                          onPressed: () =>
+                              setState(() => _showProfit = !_showProfit),
+                          tooltip: _showProfit
+                              ? 'Sembunyikan keuntungan'
+                              : 'Tampilkan keuntungan',
+                          isSelected: !_showProfit,
+                          icon: Icon(
+                            _showProfit
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                            size: 21,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      _showProfit ? 'Rp -' : 'Rp ••••••',
+                      style: niraText(
+                        33,
+                        color: niraYellow,
+                        weight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 9),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.calendar_today_outlined,
+                          size: 12,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
                             '20 Oktober 2026',
                             style: niraText(11.8, color: Colors.white),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ),
-          const SizedBox(height: 9),
-          Row(
-            spacing: 8,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (final (label, value, icon) in _smallStats)
-                Expanded(child: _SummaryTile(label, value, icon)),
             ],
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 10),
+        const Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _SummaryTile('Tebu diterima', '8.200Kg', cane: true),
+            ),
+            SizedBox(width: 9),
+            Expanded(child: _SummaryTile('Jumlah kloter', '3')),
+          ],
+        ),
+      ],
     ),
   );
 }
 
 class _SummaryTile extends StatelessWidget {
-  const _SummaryTile(this.label, this.value, this.icon);
+  const _SummaryTile(this.label, this.value, {this.cane = false});
 
   final String label;
   final String value;
-  final IconData icon;
+  final bool cane;
 
   @override
   Widget build(BuildContext context) => Container(
-    constraints: const BoxConstraints(minHeight: 55),
     clipBehavior: Clip.antiAlias,
     decoration: BoxDecoration(
       borderRadius: BorderRadius.circular(7),
       gradient: const LinearGradient(
-        begin: Alignment.bottomLeft,
-        end: Alignment.topRight,
-        colors: [Color(0xFF102E20), Color(0xFF205D42)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFF0B231A), Color(0xFF205D42), niraGreen],
+        stops: [0, .6, 1],
       ),
     ),
     child: Stack(
-      alignment: Alignment.center,
       children: [
         Positioned(
-          bottom: -5,
-          right: 0,
-          child: Icon(icon, color: const Color(0x0DFFFFFF), size: 50),
+          bottom: -12,
+          right: -8,
+          child: IgnorePointer(
+            child: cane
+                ? Image.asset(
+                    'assets/sobatnira/art/cane.png',
+                    width: 110,
+                    height: 100,
+                    fit: BoxFit.cover,
+                    color: const Color(0x20FFFFFF),
+                    excludeFromSemantics: true,
+                  )
+                : const Icon(
+                    Icons.layers_outlined,
+                    color: Color(0x20FFFFFF),
+                    size: 100,
+                  ),
+          ),
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
-          child: Column(
-            children: [
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: niraText(
-                  9.6,
-                  color: Colors.white,
-                  weight: FontWeight.w500,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 15),
+          child: SizedBox(
+            width: double.infinity,
+            child: Column(
+              children: [
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: niraText(
+                    12,
+                    color: Colors.white,
+                    weight: FontWeight.w600,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: niraText(
-                  16.5,
-                  color: niraYellow,
-                  weight: FontWeight.w700,
+                const SizedBox(height: 5),
+                Text(
+                  value,
+                  textAlign: TextAlign.center,
+                  style: niraText(
+                    23,
+                    color: niraYellow,
+                    weight: FontWeight.w700,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ],
     ),
   );
+}
+
+// Decorative sugarcane motif; independent of data and layout measurements.
+class _CanePatternPainter extends CustomPainter {
+  const _CanePatternPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final outline = Paint()
+      ..color = const Color(0x12D6E9DB)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6;
+    final leaf = Paint()..color = const Color(0x12D6E9DB);
+    for (var row = 0; row * 29 < size.height + 29; row++) {
+      for (var col = 0; col * 28 < size.width + 28; col++) {
+        canvas.save();
+        canvas.translate(col * 28 + (row.isOdd ? 14 : 0), row * 29.0);
+        canvas.rotate(.35);
+        for (var stalk = 0; stalk < 2; stalk++) {
+          for (var joint = 0; joint < 3; joint++) {
+            canvas.drawRRect(
+              RRect.fromRectAndRadius(
+                Rect.fromLTWH(stalk * 7.0, joint * 7.0, 5, 6),
+                const Radius.circular(1.3),
+              ),
+              outline,
+            );
+          }
+        }
+        canvas.drawPath(
+          Path()
+            ..moveTo(6, 7)
+            ..quadraticBezierTo(-6, 7, -5, -1)
+            ..quadraticBezierTo(3, -1, 6, 7)
+            ..close(),
+          leaf,
+        );
+        canvas.drawPath(
+          Path()
+            ..moveTo(7, 7)
+            ..quadraticBezierTo(7, -5, 17, -4)
+            ..quadraticBezierTo(17, 4, 7, 7)
+            ..close(),
+          leaf,
+        );
+        canvas.restore();
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _CanePatternPainter oldDelegate) => false;
 }
 
 class _QuickActions extends StatelessWidget {
