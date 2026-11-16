@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { BadRequestException } = require('@nestjs/common');
+const { BadRequestException, NotFoundException } = require('@nestjs/common');
+const { MillingService } = require('../dist/milling/milling.service');
 const { parseMillingUpdate, completeMillingFields } = require('../dist/milling/milling.dto');
 const { syntheticMilling } = require('../dist/milling/synthetic-milling.fixture');
 const { sumDecimals } = require('../dist/production/decimal');
@@ -52,4 +53,10 @@ test('three reusable woks permit more than three reported batches and track mixe
     assert.throws(() => update({ reportedBatches: [{ ...mixed, ...changes }] }), BadRequestException);
   }
   assert.throws(() => update({ reportedBatches: [mixed, mixed] }), BadRequestException);
+});
+
+test('synthetic combined-note creation and simulated operator confirmation are disabled in production', () => {
+  const service = new MillingService({}, { environment: 'production' });
+  assert.throws(() => service.createSynthetic({}, { lotId, requestId: lotId }), NotFoundException);
+  assert.throws(() => service.confirmSynthetic({}, lotId, 1), NotFoundException);
 });
