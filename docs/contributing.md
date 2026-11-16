@@ -18,17 +18,52 @@ Gunakan panduan ini saat menambah fitur, memperbaiki bug, atau mengubah dokument
 | `apps/ai/` | Pertahankan `main.py` sebagai titik masuk FastAPI. Saat tanggung jawab bertambah, kelompokkan menurut fungsi, misalnya `ocr/` atau `parsing/`. Gunakan `snake_case` untuk modul Python dan `test_*.py` untuk tes. |
 | `docs/` | Simpan panduan teknis yang bisa dibagikan. Simpan spesifikasi dan keputusan internal di `docs/internal/`, yang sudah dikecualikan dari Git. |
 
-Buat folder saat ada kode yang memerlukannya. Taruh komponen dan helper di dekat fitur pemiliknya. Pindahkan ke lokasi bersama ketika ada penggunaan bersama dengan tanggung jawab yang jelas. Ikuti istilah produk yang sudah dipakai pada fitur terkait.
+Buat folder saat ada kode yang memerlukannya. Ikuti istilah produk yang sudah dipakai pada fitur terkait.
+
+Contoh struktur dari repo saat ini.
+
+```text
+SobatNira/
+├── apps/
+│   ├── mobile/
+│   │   ├── assets/sobatnira/
+│   │   ├── lib/
+│   │   │   ├── features/kloter/
+│   │   │   ├── main.dart
+│   │   │   └── sobatnira_ui.dart
+│   │   ├── test/
+│   │   │   ├── features/kloter/
+│   │   │   └── support/
+│   │   └── pubspec.yaml
+│   ├── api/
+│   │   ├── src/
+│   │   └── test/
+│   └── ai/
+│       ├── main.py
+│       └── test_main.py
+├── docs/
+└── .github/workflows/ci.yml
+```
+
+### Kode bersama
+
+- Simpan widget, helper, dan state Flutter di folder fitur yang memakainya. Pindahkan kode ke lokasi bersama saat beberapa fitur menggunakannya untuk tujuan yang sama. Contoh yang sudah ada adalah komponen UI di [`sobatnira_ui.dart`](../apps/mobile/lib/sobatnira_ui.dart) dan helper login demo di [`test/support/`](../apps/mobile/test/support/).
+
+### Aset dan fixture
+
+- Simpan aset Flutter di `apps/mobile/assets/sobatnira/`. Gunakan `art/` untuk gambar dan ilustrasi, `icons/` untuk ikon, serta `fonts/` untuk font dan lisensinya.
+- Periksa [`apps/mobile/pubspec.yaml`](../apps/mobile/pubspec.yaml) saat menambah aset. File langsung di `art/` atau `icons/` sudah tercakup oleh entri direktorinya. Daftarkan direktori baru atau subfolder aset di `flutter.assets`, dan daftarkan keluarga serta bobot font di `flutter.fonts`.
+- Simpan data demo sintetis di dekat fitur pemiliknya, seperti [`demo_production.dart`](../apps/mobile/lib/features/kloter/demo_production.dart) pada fitur Kloter. Untuk data yang khusus dipakai tes, letakkan bersama tes yang memakainya. Simpan fixture yang dipakai beberapa tes di lokasi pendukung dalam area tes aplikasi tersebut.
 
 ## Nama branch dan commit
 
-Mulai dari `main` terbaru. Gunakan pola `<jenis>/<area>-<ringkasan>` dengan huruf kecil dan tanda hubung. Pakai area seperti `mobile`, `api`, `ai`, atau `repo`. Jika ada issue, nomornya boleh ditambahkan. Untuk branch yang dibuat Codex, awali dengan `codex/`.
+Mulai dari `main` terbaru. Gunakan pola `<jenis>/<area>-<ringkasan>` dengan huruf kecil dan tanda hubung. Awali nama branch langsung dengan jenis pekerjaan, seperti `feat/`, `fix/`, `docs/`, atau `test/`. Pakai area seperti `mobile`, `api`, `ai`, atau `repo`. Jika ada issue, nomornya boleh ditambahkan.
 
 ```text
 feat/mobile-kloter-detail
 fix/api-42-validasi-dokumen
 docs/repo-panduan-kontribusi
-codex/test/ai-fixture-ekstraksi
+test/ai-fixture-ekstraksi
 ```
 
 Buat satu perubahan yang utuh per commit. Pakai format Conventional Commits `<jenis>(<area>): <ringkasan>` dengan kata kerja yang menjelaskan perubahan. Jenis umum: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, dan `ci`. Jika perubahan memutus kompatibilitas kontrak, tandai dengan `!` dan jelaskan dampaknya di PR.
@@ -54,6 +89,7 @@ docs(repo): document contribution workflow
 
 ## Verifikasi dan pengelolaan perubahan
 
+- [Workflow CI](../.github/workflows/ci.yml) berjalan saat ada pull request ke `main` dan saat ada push ke `main`. CI menjalankan analisis dan tes Flutter, build dan tes NestJS, serta unit test FastAPI. Periksa hasilnya pada PR sebelum merge.
 - Jalankan pemeriksaan komponen terkait dari [panduan setup](development.md#tes-sebelum-mengambil-tugas). Untuk perubahan antar layanan, cek alur dari aplikasi hingga API yang terdampak. Jika mengubah perilaku khusus Android, uji pada emulator atau HP dan sebutkan perangkat yang dipakai.
 - Saat kontrak berubah, perbarui fixture dan pemanggil terkait.
 - Perbarui lockfile komponen saat dependensi berubah. Gunakan fixture sintetis dan contoh konfigurasi tanpa rahasia. Periksa perubahan yang akan masuk Git agar kredensial, data mitra, cache, dan hasil build tetap tersimpan lokal.
@@ -61,5 +97,4 @@ docs(repo): document contribution workflow
 
 ## Saran saat pekerjaan tim bertambah
 
-- Tambahkan CI yang menjalankan pemeriksaan dari panduan setup ketika PR mulai rutin masuk. Pakai pemeriksaan yang sudah stabil sebagai syarat merge setelah tim menyepakatinya.
 - Saat database mulai dipakai, simpan perubahan skema sebagai migrasi berversi. Uji pada database lokal atau lingkungan development dengan data sintetis, lalu dokumentasikan urutan penerapannya sebelum menggabungkan perubahan.

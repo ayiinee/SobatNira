@@ -15,6 +15,6 @@
 ## Pengembangan dan verifikasi
 
 - Ikuti [panduan setup lokal](docs/development.md) untuk instalasi, menjalankan layanan, dan menyiapkan fixture.
-- Ikuti [panduan kontribusi](docs/contributing.md) untuk struktur folder, nama branch dan commit, serta proses PR. Jika lokasi penyimpanan di Windows bisa dipilih, gunakan D: saat tersedia.
+- Ikuti [panduan kontribusi](docs/contributing.md) untuk struktur folder, nama branch dan commit, serta proses PR. Mulai nama branch kerja langsung dengan jenis pekerjaan, seperti `feat/` atau `fix/`. Jika lokasi penyimpanan di Windows bisa dipilih, gunakan D: saat tersedia.
 - Periksa komponen yang diubah dari direktorinya. Gunakan `flutter analyze` dan `flutter test` untuk Flutter, `npm test` untuk NestJS, atau `uv run --locked python -m unittest` untuk FastAPI.
 - Jika perubahan menyentuh kontrak antar layanan, verifikasi alur yang terdampak dengan data sintetis. Untuk alur yang dimulai di aplikasi, cek dari Flutter hingga API terkait.
