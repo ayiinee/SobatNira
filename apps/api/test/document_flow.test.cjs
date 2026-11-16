@@ -145,7 +145,7 @@ test('OpenRouter gives read-only guidance on verified quotes and uses bounded fa
 });
 
 test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
-  { skip: !process.env.TEST_DATABASE_URL, timeout: 30_000 }, async (t) => {
+  { skip: !process.env.TEST_DATABASE_URL, timeout: 60_000 }, async (t) => {
     const schema = `sobatnira_test_${randomUUID().replaceAll('-', '')}`;
     const admin = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
     await admin.query(`CREATE SCHEMA ${schema}`);
@@ -166,7 +166,35 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     const db = app.get(Database);
     await db.migrate();
     await db.migrate();
-    const [factory, otherFactory, reviewer, otherUser, owner, colleague] = Array.from({ length: 6 }, () => randomUUID());
+    const [factory, otherFactory, reviewer, otherUser, owner, colleague, tenant, supplier, lot, otherLot] =
+      Array.from({ length: 10 }, () => randomUUID());
+    const hooks = await admin.query("SELECT 1 FROM pg_trigger WHERE tgrelid='auth.users'::regclass AND NOT tgisinternal");
+    assert.equal(hooks.rowCount, 0, 'Use a development test database without auth.users hooks');
+    t.after(async () => {
+      const clean = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
+      try {
+        for (const table of ['sugarcane_stock_movements', 'intake_records', 'lots', 'suppliers', 'factory_memberships',
+          'tenant_memberships', 'factories']) {
+          await clean.query(`DELETE FROM sobatnira.${table} WHERE tenant_id=$1`, [tenant]);
+        }
+        await clean.query('DELETE FROM sobatnira.tenants WHERE id=$1', [tenant]);
+        await clean.query('DELETE FROM auth.users WHERE id=$1', [reviewer]);
+      } finally { await clean.end(); }
+    });
+    await db.transaction(async (tx) => {
+      await tx.query("INSERT INTO auth.users(id,aud,role,email) VALUES ($1,'authenticated','authenticated',$2)",
+        [reviewer, `synthetic-${reviewer}@example.invalid`]);
+      await tx.query("INSERT INTO sobatnira.tenants(id,name) VALUES ($1,'Synthetic OCR tenant')", [tenant]);
+      await tx.query("INSERT INTO sobatnira.factories(id,tenant_id,name) VALUES ($1,$3,'Synthetic factory'),($2,$3,'Other factory')",
+        [factory, otherFactory, tenant]);
+      await tx.query('INSERT INTO sobatnira.tenant_memberships(tenant_id,user_id) VALUES ($1,$2)', [tenant, reviewer]);
+      await tx.query("INSERT INTO sobatnira.factory_memberships(tenant_id,factory_id,user_id,role) VALUES ($1,$2,$3,'admin')",
+        [tenant, factory, reviewer]);
+      await tx.query("INSERT INTO sobatnira.suppliers(id,tenant_id,name) VALUES ($1,$2,'Synthetic supplier')", [supplier, tenant]);
+      await tx.query(`INSERT INTO sobatnira.lots(id,tenant_id,factory_id,supplier_id,received_at,display_code)
+        VALUES ($1,$3,$4,$6,'2026-11-16T01:00:00Z','SYNTHETIC-TRUCK-1'),($2,$3,$5,$6,'2026-11-16T01:00:00Z','OTHER')`,
+      [lot, otherLot, tenant, factory, otherFactory, supplier]);
+    });
     await db.query(`INSERT INTO operator_contacts (factory_id,display_name,phone_e164,active) VALUES
       ($1,'Operator Demo 1',$2,true),($1,'Operator Demo 2',$3,true),($1,'Tidak aktif',$4,false)`,
     [factory, phone(101), phone(102), phone(103)]);
@@ -240,6 +268,7 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     truck.header.arrival_date = { ...truck.header.arrival_date, normalized_value: '2026-11-16', status: 'READ' };
     truck.header.vehicle_number = { ...truck.header.vehicle_number, normalized_value: 'SYNTHETIC-TRUCK', status: 'READ' };
     truck.header.net_weight_kg = { ...truck.header.net_weight_kg, normalized_value: 1250 };
+    truck.header.cane_type = { ...truck.header.cane_type, normalized_value: 'BL' };
     notes.push(truck);
     assert.equal(await processor.processOne(), true);
     assert.equal((await mobile('review-tasks').then((response) => response.json())).items.length, 0);
@@ -287,10 +316,33 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     detail = await mobile(`review-tasks/${taskId}`).then((response) => response.json());
     assert.equal(detail.revisions.length, 3);
     assert.equal(detail.operator_confirmation.version, 2);
-    const decision = { revision_id: detail.revision_id, expected_version: detail.version, decision: 'VALIDATED' };
+    const choicePath = `review-tasks/${taskId}/intake-lots`;
+    assert.equal((await mobile(choicePath, 'owner')).status, 403);
+    assert.equal((await mobile(choicePath, 'other-user')).status, 404);
+    const { items } = await mobile(choicePath).then((response) => response.json());
+    assert.deepEqual(items.map(({ id, supplierId }) => ({ id, supplierId })), [{ id: lot, supplierId: supplier }]);
+    const stock = async () => (await db.query(`SELECT quantity_delta_kg::text, is_synthetic FROM sobatnira.sugarcane_stock_movements
+      WHERE tenant_id=$1 AND lot_id=$2`, [tenant, lot])).rows;
+    assert.deepEqual(await stock(), []);
+    const baseDecision = { revision_id: detail.revision_id, expected_version: detail.version, decision: 'VALIDATED' };
+    assert.equal((await change(detail, 'validate', baseDecision, randomUUID())).status, 400);
+    const decision = { ...baseDecision, lot_id: lot, supplier_id: supplier };
+    assert.equal((await change(detail, 'validate', { ...decision, lot_id: otherLot }, randomUUID())).status, 409);
+    assert.equal((await change(detail, 'validate', { ...decision, supplier_id: randomUUID() }, randomUUID())).status, 409);
+    assert.equal((await db.query('SELECT count(*)::int AS count FROM document_approvals')).rows[0].count, 0);
+    assert.deepEqual(await stock(), []);
     const key = randomUUID();
-    assert.equal((await change(detail, 'validate', decision, key)).status, 200);
-    assert.equal((await change(detail, 'validate', decision, key)).status, 200);
+    const attempts = await Promise.all([change(detail, 'validate', decision, key), change(detail, 'validate', decision, key)]);
+    for (const attempt of attempts) assert.equal(attempt.status, 200, await attempt.clone().text());
+    const booked = await attempts[0].json();
+    assert.deepEqual(await attempts[1].json(), booked);
+    assert.equal(booked.intake.revision_id, detail.revision_id);
+    assert.equal(booked.intake.net_weight_kg, '1252');
+    assert.equal(booked.intake.lot_id, lot);
+    assert.equal((await change(detail, 'validate', { ...decision, lot_id: otherLot }, key)).status, 409);
+    assert.equal((await change(detail, 'validate', decision, randomUUID())).status, 409);
+    assert.deepEqual(await stock(), [{ quantity_delta_kg: '1252', is_synthetic: false }]);
+    assert.deepEqual((await mobile(`review-tasks/${taskId}`).then((response) => response.json())).intake, booked.intake);
     assert.equal((await db.query('SELECT count(*)::int AS count FROM document_approvals')).rows[0].count, 1);
 
     const production = await fixture('production-note-progressive-update');

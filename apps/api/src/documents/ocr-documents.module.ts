@@ -9,6 +9,7 @@ import { Intake } from './intake';
 import { imageMime, MediaStorage } from './media';
 import { DocumentProcessor } from './processing';
 import { Review } from './review';
+import { TruckIntake } from './truck-intake';
 
 @Injectable()
 class AdapterGuard implements CanActivate {
@@ -109,6 +110,12 @@ class MobileReviewController {
     return this.review.detail(await this.review.user(token), requireUuid(id));
   }
 
+  @Get('review-tasks/:id/intake-lots')
+  @Header('Cache-Control', 'private, no-store')
+  async intakeLots(@Headers('authorization') token: string, @Param('id') id: string, @Query() query: unknown) {
+    return this.review.intakeLots(await this.review.user(token), requireUuid(id), query);
+  }
+
   @Get('review-tasks/:id/assets/:asset')
   @Header('Cache-Control', 'private, no-store')
   @Header('X-Content-Type-Options', 'nosniff')
@@ -139,5 +146,5 @@ class MobileReviewController {
 }
 
 @Module({ controllers: [WhatsAppController, OcrMediaController, MobileReviewController],
-  providers: [AdapterGuard, Database, DocumentProcessor, Intake, MediaStorage, Review] })
+  providers: [AdapterGuard, Database, DocumentProcessor, Intake, MediaStorage, Review, TruckIntake] })
 export class OcrDocumentsModule {}
