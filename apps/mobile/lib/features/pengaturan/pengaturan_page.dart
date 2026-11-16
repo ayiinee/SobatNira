@@ -125,25 +125,21 @@ class _SettingIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final icon = switch (name) {
-      'people' => Icons.groups_outlined,
-      'schedule' => Icons.access_time_rounded,
-      'security' => Icons.group_outlined,
-      'rule' => Icons.settings_suggest_outlined,
-      'grade' => Icons.workspace_premium_outlined,
-      'science' => Icons.science_outlined,
-      'form' => Icons.description_outlined,
-      'calculator' => Icons.calculate_outlined,
-      _ => Icons.factory_outlined,
+      'facilities' => Icons.precision_manufacturing,
+      'people' => Icons.groups,
+      'schedule' => Icons.watch_later,
+      'security' => Icons.admin_panel_settings,
+      'rule' => Icons.fact_check,
+      'grade' => Icons.workspace_premium,
+      'science' => Icons.science,
+      'form' => Icons.assignment,
+      'calculator' => Icons.calculate,
+      _ => Icons.factory,
     };
-    return Container(
+    return SizedBox(
       width: 40,
       height: 40,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: const Color(0xFFEAF0E8),
-        borderRadius: BorderRadius.circular(niraRadius),
-      ),
-      child: Icon(icon, size: 24, color: niraGreen),
+      child: Center(child: Icon(icon, size: 28, color: niraGreen)),
     );
   }
 }

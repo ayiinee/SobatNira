@@ -159,7 +159,7 @@ class NiraScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     final padding = MediaQuery.viewPaddingOf(context);
     final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
-    const navigationHeight = 52.0;
+    const navigationHeight = 58.0;
     final navigationBottom = math.max(padding.bottom, 16.0);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark.copyWith(
@@ -247,83 +247,101 @@ class _BottomNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
     color: niraGreen,
-    borderRadius: BorderRadius.circular(28),
+    borderRadius: BorderRadius.circular(29),
     clipBehavior: Clip.antiAlias,
-    child: Padding(
-      padding: const EdgeInsets.only(right: NiraSpace.md),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 330),
-          child: TweenAnimationBuilder<double>(
-            tween: Tween(
-              begin: tab.index.toDouble(),
-              end: tab.index.toDouble(),
-            ),
-            duration: MediaQuery.disableAnimationsOf(context)
-                ? Duration.zero
-                : const Duration(milliseconds: 260),
-            curve: Curves.easeInOutCubic,
-            builder: (context, position, _) => LayoutBuilder(
-              builder: (context, constraints) {
+    child: SizedBox(
+      height: 58,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final inset = (constraints.maxWidth * .09).clamp(20.0, 36.0);
+          final available = constraints.maxWidth - inset * 2;
+          final style = niraText(12, weight: FontWeight.w600, height: 1.15);
+          final activeWidths = [
+            for (final (_, label, _, iconSize) in _items)
+              (() {
+                final painter = TextPainter(
+                  text: TextSpan(text: label, style: style),
+                  textDirection: Directionality.of(context),
+                  textScaler: MediaQuery.textScalerOf(context),
+                )..layout();
+                final width = painter.width + iconSize + 28;
+                painter.dispose();
+                return width;
+              })(),
+          ];
+          return Padding(
+            padding: EdgeInsets.symmetric(horizontal: inset),
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(
+                begin: tab.index.toDouble(),
+                end: tab.index.toDouble(),
+              ),
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 260),
+              curve: Curves.easeInOutCubic,
+              builder: (context, position, _) {
+                final lower = position.floor();
+                final upper = position.ceil();
+                final fraction = position - lower;
+                final activeWidth =
+                    (activeWidths[lower] +
+                            (activeWidths[upper] - activeWidths[lower]) *
+                                fraction)
+                        .clamp(48.0, available - 34 * (_items.length - 1));
+                final idleWidth =
+                    (available - activeWidth) / (_items.length - 1);
                 final weights = [
                   for (var i = 0; i < _items.length; i++)
                     (1 - (position - i).abs()).clamp(0.0, 1.0),
                 ];
                 final widths = [
-                  for (final w in weights)
-                    constraints.maxWidth *
-                        (14 + 13 * w) /
-                        (14 * _items.length + 13),
+                  for (final weight in weights)
+                    idleWidth + (activeWidth - idleWidth) * weight,
                 ];
                 final starts = <double>[0];
                 for (final width in widths) {
                   starts.add(starts.last + width);
                 }
-                final lower = position.floor();
-                final upper = position.ceil();
-                final fraction = position - lower;
                 final left =
                     starts[lower] + (starts[upper] - starts[lower]) * fraction;
                 final width =
                     widths[lower] + (widths[upper] - widths[lower]) * fraction;
-                return SizedBox(
-                  height: 52,
-                  child: Stack(
-                    alignment: Alignment.centerLeft,
-                    children: [
-                      Positioned(
-                        left: left + 2,
-                        width: width - 4,
-                        top: 10,
-                        bottom: 10,
-                        child: const DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.all(Radius.circular(20)),
-                          ),
+                return Stack(
+                  alignment: Alignment.centerLeft,
+                  children: [
+                    Positioned(
+                      left: left + 2,
+                      width: width - 4,
+                      top: 13,
+                      bottom: 13,
+                      child: const DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.all(Radius.circular(18)),
                         ),
                       ),
-                      Row(
-                        children: [
-                          for (var i = 0; i < _items.length; i++)
-                            SizedBox(
-                              width: widths[i],
-                              child: _destination(i, weights[i]),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
+                    ),
+                    Row(
+                      children: [
+                        for (var i = 0; i < _items.length; i++)
+                          SizedBox(
+                            width: widths[i],
+                            child: _destination(i, weights[i], style),
+                          ),
+                      ],
+                    ),
+                  ],
                 );
               },
             ),
-          ),
-        ),
+          );
+        },
       ),
     ),
   );
 
-  Widget _destination(int index, double emphasis) {
+  Widget _destination(int index, double emphasis, TextStyle style) {
     final (item, label, icon, size) = _items[index];
     return Semantics(
       label: label,
@@ -333,11 +351,11 @@ class _BottomNavigation extends StatelessWidget {
       excludeSemantics: true,
       child: InkWell(
         onTap: () => onNavigate(item),
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(29),
         child: SizedBox(
-          height: 52,
+          height: 58,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: NiraSpace.xs),
+            padding: EdgeInsets.symmetric(horizontal: 4 + 6 * emphasis),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -354,15 +372,12 @@ class _BottomNavigation extends StatelessWidget {
                       child: Opacity(
                         opacity: emphasis,
                         child: Padding(
-                          padding: const EdgeInsets.only(left: NiraSpace.xs),
+                          padding: const EdgeInsets.only(left: 4),
                           child: Text(
                             label,
                             maxLines: 1,
                             overflow: TextOverflow.clip,
-                            style: niraText(
-                              NiraType.caption,
-                              weight: FontWeight.w700,
-                            ),
+                            style: style,
                           ),
                         ),
                       ),
@@ -402,6 +417,25 @@ class NiraTabs extends StatelessWidget {
   final double fontSize;
   final double inset;
 
+  List<int> get _flexes => [
+    for (var i = 0; i < labels.length; i++) i == badgeIndex ? 2 : 1,
+  ];
+
+  double get _indicatorWidth {
+    final flexes = _flexes;
+    final total = flexes.fold(0, (sum, flex) => sum + flex);
+    return (wideIndicator ? 1 : .57) * flexes[selected] / total;
+  }
+
+  double get _indicatorAlignment {
+    if (labels.length == 1) return 0;
+    final flexes = _flexes;
+    final total = flexes.fold(0, (sum, flex) => sum + flex);
+    final preceding = flexes.take(selected).fold(0, (sum, flex) => sum + flex);
+    final center = (preceding + flexes[selected] / 2) / total;
+    return (2 * center - 1) / (1 - _indicatorWidth);
+  }
+
   @override
   Widget build(BuildContext context) => DecoratedBox(
     decoration: const BoxDecoration(
@@ -414,7 +448,7 @@ class NiraTabs extends StatelessWidget {
           Row(
             children: [
               for (var index = 0; index < labels.length; index++)
-                Expanded(child: _tab(context, index)),
+                Expanded(flex: _flexes[index], child: _tab(context, index)),
             ],
           ),
           Positioned.fill(
@@ -424,15 +458,9 @@ class NiraTabs extends StatelessWidget {
                     ? Duration.zero
                     : const Duration(milliseconds: 320),
                 curve: Curves.easeInOutCubic,
-                alignment: Alignment(
-                  labels.length == 1
-                      ? 0
-                      : (2 * (selected + .5) / labels.length - 1) /
-                            (1 - (wideIndicator ? 1 : .57) / labels.length),
-                  1,
-                ),
+                alignment: Alignment(_indicatorAlignment, 1),
                 child: FractionallySizedBox(
-                  widthFactor: (wideIndicator ? 1 : .57) / labels.length,
+                  widthFactor: _indicatorWidth,
                   child: const SizedBox(
                     height: 2.5,
                     child: ColoredBox(color: niraGreen),
@@ -466,27 +494,33 @@ class NiraTabs extends StatelessWidget {
                   horizontal: NiraSpace.xs,
                   vertical: NiraSpace.sm,
                 ),
-                child: Wrap(
-                  alignment: WrapAlignment.center,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 3,
-                  runSpacing: 2,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    AnimatedDefaultTextStyle(
-                      duration: MediaQuery.disableAnimationsOf(context)
-                          ? Duration.zero
-                          : const Duration(milliseconds: 320),
-                      curve: Curves.easeInOutCubic,
-                      style: niraText(
-                        fontSize,
-                        weight: active ? FontWeight.w700 : FontWeight.w500,
-                        color: active || MediaQuery.highContrastOf(context)
-                            ? niraGreen
-                            : niraMuted,
+                    Flexible(
+                      child: AnimatedDefaultTextStyle(
+                        duration: MediaQuery.disableAnimationsOf(context)
+                            ? Duration.zero
+                            : const Duration(milliseconds: 320),
+                        curve: Curves.easeInOutCubic,
+                        style: niraText(
+                          fontSize,
+                          weight: active ? FontWeight.w700 : FontWeight.w500,
+                          color: active || MediaQuery.highContrastOf(context)
+                              ? niraGreen
+                              : niraMuted,
+                        ),
+                        child: Text(
+                          labels[index],
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      child: Text(labels[index], textAlign: TextAlign.center),
                     ),
-                    if (showBadge)
+                    if (showBadge) ...[
+                      const SizedBox(width: NiraSpace.xs),
                       Container(
                         alignment: Alignment.center,
                         width: 20,
@@ -500,6 +534,7 @@ class NiraTabs extends StatelessWidget {
                           style: niraText(NiraType.caption),
                         ),
                       ),
+                    ],
                   ],
                 ),
               ),
