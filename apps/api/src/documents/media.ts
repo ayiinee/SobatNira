@@ -4,6 +4,7 @@ import { mkdir, readFile, link, unlink, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { MAX_IMAGE_BYTES } from './contracts';
+import { s3Send } from '../connections/s3-client';
 
 export function imageMime(buffer: Buffer, declared: string) {
   const jpeg = buffer.length >= 4 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
@@ -41,7 +42,7 @@ export class MediaStorage {
     const storage = this.storage(key);
     if (storage.s3) {
       try {
-        await storage.s3.send(new PutObjectCommand({ Bucket: storage.bucket, Key: storage.key, ContentType: mime, Body: bytes, IfNoneMatch: '*' }),
+        await s3Send(storage.s3, new PutObjectCommand({ Bucket: storage.bucket, Key: storage.key, ContentType: mime, Body: bytes, IfNoneMatch: '*' }),
           { abortSignal: AbortSignal.timeout(12_000) });
       } catch (error) {
         if ((error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode !== 412) throw error;
@@ -63,7 +64,7 @@ export class MediaStorage {
   async read(key: string) {
     const storage = this.storage(key);
     if (!storage.s3) return readFile(storage.key);
-    const { Body, ContentLength } = await storage.s3.send(new GetObjectCommand({ Bucket: storage.bucket, Key: storage.key }),
+    const { Body, ContentLength } = await s3Send<{ Body?: { transformToByteArray(): Promise<Uint8Array> }; ContentLength?: number }>(storage.s3, new GetObjectCommand({ Bucket: storage.bucket, Key: storage.key }),
       { abortSignal: AbortSignal.timeout(12_000) });
     if (!Body || ContentLength === undefined || ContentLength > MAX_IMAGE_BYTES) {
       throw new ServiceUnavailableException('Ukuran media tersimpan tidak valid');

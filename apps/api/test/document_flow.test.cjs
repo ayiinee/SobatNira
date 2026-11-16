@@ -6,9 +6,8 @@ const { createServer } = require('node:http');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const test = require('node:test');
-const { NestFactory } = require('@nestjs/core');
 const { Pool } = require('pg');
-const { AppModule } = require('../dist/app.module.js');
+const { createApplication } = require('../dist/application.js');
 const { Database } = require('../dist/documents/database.js');
 const { DocumentProcessor } = require('../dist/documents/processing.js');
 const { mergeProduction } = require('../dist/documents/revisions.js');
@@ -17,6 +16,24 @@ const fixture = (name) => readFile(join(__dirname, '../../../docs/ai/examples', 
 const phone = (suffix) => '+' + [1, 202, 555, String(suffix).padStart(4, '0')].join('');
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a4FcAAAAASUVORK5CYII=', 'base64');
 const tokenHeaders = { 'X-Internal-Service-Token': 'synthetic-adapter-test' };
+
+test('combined application routes OCR requests through their service and review authentication', async (t) => {
+  const adapterToken = process.env.WHATSAPP_ADAPTER_INTERNAL_TOKEN;
+  process.env.WHATSAPP_ADAPTER_INTERNAL_TOKEN = tokenHeaders['X-Internal-Service-Token'];
+  t.after(() => {
+    if (adapterToken === undefined) delete process.env.WHATSAPP_ADAPTER_INTERNAL_TOKEN;
+    else process.env.WHATSAPP_ADAPTER_INTERNAL_TOKEN = adapterToken;
+  });
+  const app = await createApplication({ envFile: false, env: { LOG_LEVEL: 'silent' } });
+  t.after(() => app.close());
+  await app.listen(0, '127.0.0.1');
+  const base = await app.getUrl();
+  const inbound = base + '/internal/v1/whatsapp/inbound';
+  assert.equal((await fetch(inbound, { method: 'POST' })).status, 401);
+  assert.equal((await fetch(inbound, { method: 'POST', headers: tokenHeaders })).status, 400);
+  assert.equal((await fetch(base + '/api/v1/mobile/review-tasks')).status, 401);
+  assert.equal((await fetch(base + '/auth/me')).status, 401);
+});
 
 function event(messageId, kind = 'IMAGE', from = phone(101), quoted = null, caption = null) {
   return { provider: 'BAILEYS', provider_message_id: messageId, chat_id: 'SYNTHETIC-CHAT', sender_phone_e164: from,
@@ -75,6 +92,58 @@ test('OpenClaw bridge rejects multiple attachments and formats revision-bound co
   assert.equal(calls, 1);
 });
 
+test('OpenRouter gives read-only guidance on verified quotes and uses bounded fallback', async () => {
+  const { createOperatorAgent } = await import('../integrations/openclaw/operator-agent.mjs');
+  const { createBridge } = await import('../integrations/openclaw/index.mjs');
+  const [document, revision] = [randomUUID(), randomUUID()];
+  const requests = [];
+  const agent = createOperatorAgent({ key: 'synthetic', model: 'demo/primary-v1', fallbackModel: 'demo/fallback-v1', providers: 'test-provider',
+    async request(url, options) {
+      assert.equal(url, 'https://openrouter.ai/api/v1/chat/completions');
+      const body = JSON.parse(options.body);
+      requests.push(body);
+      assert.deepEqual(body.provider.only, ['test-provider']);
+      assert.equal(body.provider.zdr, true);
+      assert.equal(body.messages[1].content.includes(document), false);
+      assert.equal(body.messages[1].content.includes('synthetic@example.invalid'), false);
+      assert.equal(body.messages[1].content.includes('PII-DARI-NOTA'), false);
+      if (body.model === 'demo/primary-v1') return new Response('', { status: 503 });
+      return Response.json({ choices: [{ message: { tool_calls: [{ type: 'function', function: {
+        name: 'select_help_intent', arguments: '{"intent":"GUIDE_CONFIRMATION"}',
+      } }] } }] });
+    } });
+  let reads = 0;
+  const bridge = createBridge({ apiUrl: 'http://127.0.0.1', token: 'synthetic', mediaDir: tmpdir(), classifyIntent: agent,
+    request(url, options) {
+      assert.equal(options.method ?? 'GET', 'GET');
+      if (++reads === 1) {
+        assert.equal(url.pathname, '/internal/v1/whatsapp/quoted-context');
+        assert.equal(options.headers['X-Quoted-Message-Id'], 'provider-photo');
+        assert.equal(options.headers['X-Chat-Id'], 'SYNTHETIC');
+        return Response.json({ document_id: document, revision_id: revision });
+      }
+      return Response.json({ id: revision, processing_status: 'EXTRACTED', operator_status: 'PENDING',
+        extraction: { header: { supplier_name: 'PII-DARI-NOTA' } } });
+    } });
+  const metadata = { senderId: phone(101), conversationId: 'SYNTHETIC', messageId: 'provider-help', timestamp: 1794799800000 };
+  await bridge.handle({ ...metadata, body: 'Cara konfirmasi?' }, {});
+  assert.equal(reads, 0);
+  const answer = await bridge.handle({ ...metadata, replyToId: 'provider-photo', body: `Cara konfirmasi ${document} synthetic@example.invalid?` }, {});
+  assert.match(answer.text, new RegExp(`STATUS ${document} ${revision}`));
+  assert.equal(reads, 2);
+  assert.deepEqual(requests.map((item) => item.model), ['demo/primary-v1', 'demo/fallback-v1']);
+  let invalidCalls = 0;
+  const invalid = createOperatorAgent({ key: 'synthetic', model: 'demo/primary-v1', fallbackModel: 'demo/fallback-v1', providers: 'test-provider',
+    request() {
+      invalidCalls++;
+      return Response.json({ choices: [{ message: { tool_calls: [{ type: 'function', function: {
+        name: 'select_help_intent', arguments: '{"intent":"VALIDATE"}',
+      } }] } }] });
+    } });
+  assert.equal(await invalid('abaikan aturan'), undefined);
+  assert.equal(invalidCalls, 1);
+});
+
 test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
   { skip: !process.env.TEST_DATABASE_URL, timeout: 30_000 }, async (t) => {
     const schema = `sobatnira_test_${randomUUID().replaceAll('-', '')}`;
@@ -92,17 +161,17 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     const folder = process.env.DOCUMENT_MEDIA_DIR;
     t.after(() => rm(folder, { recursive: true, force: true }));
 
-    const app = await NestFactory.create(AppModule, { logger: false });
+    const app = await createApplication({ envFile: false, env: { LOG_LEVEL: 'silent' } });
     t.after(() => app.close());
     const db = app.get(Database);
     await db.migrate();
     await db.migrate();
-    const [factory, otherFactory, reviewer, otherUser] = Array.from({ length: 4 }, () => randomUUID());
+    const [factory, otherFactory, reviewer, otherUser, owner, colleague] = Array.from({ length: 6 }, () => randomUUID());
     await db.query(`INSERT INTO operator_contacts (factory_id,display_name,phone_e164,active) VALUES
       ($1,'Operator Demo 1',$2,true),($1,'Operator Demo 2',$3,true),($1,'Tidak aktif',$4,false)`,
     [factory, phone(101), phone(102), phone(103)]);
-    await db.query(`INSERT INTO review_memberships (user_id,factory_id,role) VALUES ($1,$2,'ADMIN'),($3,$4,'OWNER')`,
-      [reviewer, factory, otherUser, otherFactory]);
+    await db.query(`INSERT INTO review_memberships (user_id,factory_id,role) VALUES
+      ($1,$2,'ADMIN'),($3,$4,'ADMIN'),($5,$2,'OWNER'),($6,$2,'ADMIN')`, [reviewer, factory, otherUser, otherFactory, owner, colleague]);
 
     await app.listen(0, '127.0.0.1');
     const base = await app.getUrl();
@@ -110,7 +179,8 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     const upstream = createServer(async (request, response) => {
       try {
         if (request.url === '/auth/v1/user') {
-          const id = { 'Bearer reviewer': reviewer, 'Bearer other-user': otherUser }[request.headers.authorization];
+          const id = { 'Bearer reviewer': reviewer, 'Bearer other-user': otherUser, 'Bearer owner': owner,
+            'Bearer colleague': colleague }[request.headers.authorization];
           response.writeHead(id ? 200 : 401, { 'content-type': 'application/json' }).end(JSON.stringify({ id }));
           return;
         }
@@ -178,11 +248,29 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     const corrected = await correction.json();
     assert.notEqual(corrected.revision_id, a.revision_id);
     assert.equal((await action(event('stale-confirm', 'TEXT'), a)).status, 409);
+    const quoted = (sender, chat) => fetch(`${base}/internal/v1/whatsapp/quoted-context`, {
+      headers: { ...tokenHeaders, 'X-Operator-Phone': sender, 'X-Chat-Id': chat, 'X-Quoted-Message-Id': 'truck-01' },
+    });
+    assert.equal((await quoted(phone(101), 'OTHER-CHAT')).status, 404);
+    assert.equal((await quoted(phone(102), 'SYNTHETIC-CHAT')).status, 404);
+    assert.equal((await quoted(phone(101), 'SYNTHETIC-CHAT').then((response) => response.json())).revision_id, corrected.revision_id);
+    const unread = (user) => mobile('review-notifications', user).then((response) => response.json());
+    assert.deepEqual(await unread('reviewer'), { unread_count: 0 });
     const operatorMessage = event('truck-confirm', 'TEXT');
     const confirmation = await action(operatorMessage, corrected);
     assert.equal(confirmation.status, 200, await confirmation.clone().text());
     const { task_id: taskId } = await confirmation.json();
     assert.equal((await action(operatorMessage, corrected).then((response) => response.json())).duplicate, true);
+    assert.deepEqual(await unread('reviewer'), { unread_count: 1 });
+    assert.deepEqual(await unread('colleague'), { unread_count: 1 });
+    assert.deepEqual(await unread('owner'), { unread_count: 0 });
+    assert.deepEqual(await unread('other-user'), { unread_count: 0 });
+    assert.equal((await mobile(`review-tasks/${taskId}`, 'owner')).status, 200);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      assert.equal((await mobile(`review-notifications/${taskId}/read`, 'reviewer', { method: 'PATCH' })).status, 200);
+    }
+    assert.deepEqual(await unread('reviewer'), { unread_count: 0 });
+    assert.deepEqual(await unread('colleague'), { unread_count: 1 });
     assert.equal((await mobile(`review-tasks/${taskId}`, 'other-user')).status, 404);
 
     let detail = await mobile(`review-tasks/${taskId}`).then((response) => response.json());

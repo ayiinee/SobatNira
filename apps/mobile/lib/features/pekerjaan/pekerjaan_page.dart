@@ -1,17 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'review_api.dart';
 import 'review_detail_page.dart';
 
 class PekerjaanPage extends StatefulWidget {
-  const PekerjaanPage({this.api, super.key});
+  const PekerjaanPage({this.api, required this.active, super.key});
   final ReviewApi? api;
+  final bool active;
 
   @override
   State<PekerjaanPage> createState() => _PekerjaanPageState();
 }
 
-class _PekerjaanPageState extends State<PekerjaanPage> {
+class _PekerjaanPageState extends State<PekerjaanPage>
+    with WidgetsBindingObserver {
   final _email = TextEditingController();
   final _password = TextEditingController();
   ReviewApi? _session;
@@ -20,17 +24,62 @@ class _PekerjaanPageState extends State<PekerjaanPage> {
   int _page = 1;
   bool _signingIn = false;
   String? _error;
+  Timer? _notifications;
+  int _unread = 0;
 
   ReviewApi? get _api => widget.api ?? _session;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
+    _scheduleNotifications();
+  }
+
+  @override
+  void didUpdateWidget(PekerjaanPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.active != widget.active) _scheduleNotifications();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _scheduleNotifications();
+  }
+
+  void _scheduleNotifications() {
+    _notifications?.cancel();
+    final state = WidgetsBinding.instance.lifecycleState;
+    if (!widget.active ||
+        _api == null ||
+        (state != null && state != AppLifecycleState.resumed)) {
+      return;
+    }
+    unawaited(_loadNotifications());
+    _notifications = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _loadNotifications(),
+    );
+  }
+
+  Future<void> _loadNotifications() async {
+    final api = _api;
+    if (api == null) return;
+    try {
+      final count = await api.unreadNotifications();
+      if (mounted && identical(_api, api) && _unread != count) {
+        setState(() => _unread = count);
+      }
+    } catch (_) {
+      // The review queue is independent of the notification request.
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _notifications?.cancel();
     _email.dispose();
     _password.dispose();
     _session?.close();
@@ -64,6 +113,7 @@ class _PekerjaanPageState extends State<PekerjaanPage> {
         _session = session;
         _load();
       });
+      _scheduleNotifications();
     } catch (_) {
       if (mounted) {
         setState(() => _error = 'Gagal masuk. Periksa akun dan koneksi.');
@@ -74,11 +124,13 @@ class _PekerjaanPageState extends State<PekerjaanPage> {
   }
 
   void _signOut() {
+    _notifications?.cancel();
     _session?.close();
     setState(() {
       _session = null;
       _tasks = null;
       _page = 1;
+      _unread = 0;
     });
   }
 
@@ -89,7 +141,10 @@ class _PekerjaanPageState extends State<PekerjaanPage> {
             ReviewDetailPage(api: _api!, taskId: task['id'] as String),
       ),
     );
-    if (mounted) setState(_load);
+    if (mounted) {
+      setState(_load);
+      unawaited(_loadNotifications());
+    }
   }
 
   @override
@@ -112,6 +167,18 @@ class _PekerjaanPageState extends State<PekerjaanPage> {
       if (_api == null)
         ..._login()
       else ...[
+        if (_unread > 0)
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.notifications_outlined),
+              title: Text('$_unread laporan baru'),
+              onTap: () => setState(() {
+                _status = 'PENDING_VALIDATION';
+                _page = 1;
+                _load();
+              }),
+            ),
+          ),
         DropdownButton<String>(
           value: _status,
           isExpanded: true,

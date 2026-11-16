@@ -20,7 +20,14 @@ Untuk revisi, pencocokan otomatis memakai label blok dan pasangan kode wajan ser
 
 ## Pekerjaan terbuka
 
-- Pairing dan reconnect WhatsApp/OpenClaw, pengiriman notice lewat gateway, R2, Supabase proyek, dan Gemini belum diuji dengan akun nyata. Jalur teks operator saat ini memakai perintah deterministik. Konfigurasi Agent LLM/OpenRouter dan pengiriman notifikasi admin membutuhkan integrasi lanjutan.
+- Pairing dan reconnect WhatsApp/OpenClaw, pengiriman notice lewat gateway, OpenRouter, R2, Supabase proyek, dan Gemini masih memerlukan uji akun live. Model OpenRouter baru perlu dikunci sesudah benchmark sesuai kebijakan provider tim.
 - Ringkasan otomatis bergantung pada sesi gateway. Jika notice tidak tersedia atau gateway restart, operator dapat mengambil draf kembali lewat `STATUS`. Pengembalian mencatat alasan dan membuka revisi koreksi baru. Operator dapat mengambilnya lewat `STATUS` untuk submission yang sama.
 - Parser mendukung layout baseline yang diuji. Sampel anonim berlabel dibutuhkan untuk mengukur akurasi tulisan tangan, layout tidak lazim, pemisahan kolom kosong dan tidak terbaca, dan kecocokan baris yang buktinya belum lengkap. Tinjauan manual menampilkan foto dan alasan ketika OCR gagal. Pengisian hasil manual tanpa draf belum tersedia.
-- Urutan berikutnya adalah uji gateway dan akun pengembangan, benchmark sampel anonim, dan review bersama tim atas pemetaan template, kebijakan notifikasi dan retensi media sebelum pilot.
+- Urutan berikutnya adalah uji gateway dan akun pengembangan, benchmark sampel anonim, dan review bersama tim atas pemetaan template, kebutuhan push saat aplikasi tertutup, serta retensi media sebelum pilot.
+
+## Lanjutan pada baseline `ce73b4f`
+
+- **Bantuan operator.** Plugin OpenClaw memverifikasi rujukan foto terhadap percakapan dan operator aktif melalui NestJS. OpenRouter hanya memilih kategori panduan. Default memakai template dan fallback model terbatas pada kegagalan sementara. Perintah status, penulisan koreksi dan konfirmasi tetap ditangani melalui jalur deterministik.
+- **Notifikasi admin.** Migration `002_review_notifications.sql` menyimpan notifikasi per task dan per admin aktif di pabrik yang sama. Pembuatan notifikasi berada dalam transaksi konfirmasi operator. Flutter membaca badge secara berkala selama Pekerjaan aktif dan menandai notifikasi saat detail berhasil dimuat. Endpoint review tetap dapat digunakan apabila permintaan notifikasi gagal.
+- **Benchmark.** `apps/ai/benchmark_ocr.py` mengukur klasifikasi, kecocokan anotasi field, dan median waktu proses dengan PaddleOCR lokal. Hasil agregat dapat dibagikan tanpa menyertakan nilai nota. Dataset anonim berlabel tetap diperlukan untuk melaporkan akurasi pada nota lapangan.
+- **Verifikasi.** Lima tes NestJS dengan PostgreSQL, tujuh tes FastAPI, sepuluh tes Flutter, dan `flutter analyze` lulus. Chrome dengan autentikasi stub menampilkan satu badge untuk admin, menyimpan `read_at` setelah detail dibuka, dan tetap menampilkan task setelah badge hilang. Benchmark PaddleOCR CPU atas satu nota sintetis mengklasifikasikan tipe dengan benar dan mencocokkan ketiga anotasi field.
