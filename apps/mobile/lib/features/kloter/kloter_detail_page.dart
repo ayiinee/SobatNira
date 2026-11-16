@@ -136,7 +136,7 @@ class _BatchTile extends StatelessWidget {
         ? niraGreen
         : Colors.white;
     return Material(
-      color: pending ? niraGold : niraLeaf,
+      color: pending ? niraGold : niraGreen,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(7),
@@ -144,45 +144,67 @@ class _BatchTile extends StatelessWidget {
       ),
       child: InkWell(
         onTap: onTap,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 63),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  flex: 24,
-                  child: Text(
-                    'Batch ${batch.number}',
-                    style: niraText(
-                      14.2,
-                      color: foreground,
-                      weight: FontWeight.w700,
-                    ),
+        child: Stack(
+          children: [
+            Positioned(
+              right: 0,
+              bottom: -22,
+              child: IgnorePointer(
+                child: Opacity(
+                  opacity: pending ? 1 : .37,
+                  child: Image.asset(
+                    'assets/sobatnira/art/cane.png',
+                    width: 137,
+                    height: 83,
+                    excludeFromSemantics: true,
                   ),
                 ),
-                const SizedBox(width: 5),
-                Expanded(
-                  flex: 66,
-                  child: Column(
-                    children: [
-                      _info('Nira batch', '180L', foreground),
-                      const SizedBox(height: 3),
-                      _info('Hasil fisik', '90Kg', foreground),
-                      const SizedBox(height: 3),
-                      _info(
-                        'Bagian dari kloter',
-                        batch.review.fields[3].display,
-                        foreground,
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(Icons.chevron_right, size: 20, color: foreground),
-              ],
+              ),
             ),
-          ),
+            ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 63),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 7,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      flex: 24,
+                      child: Text(
+                        'Batch ${batch.number}',
+                        style: niraText(
+                          14.2,
+                          color: pending ? foreground : niraYellow,
+                          weight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      flex: 66,
+                      child: Column(
+                        children: [
+                          _info('Nira batch', '180L', foreground),
+                          const SizedBox(height: 3),
+                          _info('Hasil fisik', '90Kg', foreground),
+                          const SizedBox(height: 3),
+                          _info(
+                            'Bagian dari kloter',
+                            batch.review.fields[3].display,
+                            foreground,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.chevron_right, size: 20, color: foreground),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

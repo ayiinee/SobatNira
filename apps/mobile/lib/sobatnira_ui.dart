@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -64,6 +66,7 @@ class NiraScaffold extends StatelessWidget {
     required this.body,
     this.bottomAction,
     this.actionGap = 14,
+    this.floatingNavigation = false,
     super.key,
   });
 
@@ -72,13 +75,14 @@ class NiraScaffold extends StatelessWidget {
   final Widget body;
   final Widget? bottomAction;
   final double actionGap;
+  final bool floatingNavigation;
 
   @override
   Widget build(BuildContext context) {
     final padding = MediaQuery.viewPaddingOf(context);
     final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
     const navigationHeight = 52.0;
-    final navigationBottom = padding.bottom + 8;
+    final navigationBottom = math.max(padding.bottom, 16.0);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark.copyWith(
         statusBarColor: Colors.transparent,
@@ -87,27 +91,55 @@ class NiraScaffold extends StatelessWidget {
       ),
       child: Scaffold(
         backgroundColor: niraPaper,
-        extendBody: true,
-        body: Stack(
-          children: [
-            Positioned.fill(
-              child: SafeArea(top: true, bottom: false, child: body),
-            ),
-            if (!keyboard && bottomAction != null)
-              Positioned(
-                left: niraInset,
-                right: niraInset,
-                bottom: navigationBottom + navigationHeight + actionGap,
-                child: bottomAction!,
+        body: SafeArea(
+          top: false,
+          bottom: false,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Column(
+                children: [
+                  SizedBox(height: padding.top + 12),
+                  Expanded(
+                    child: ClipRect(child: RepaintBoundary(child: body)),
+                  ),
+                  if (!keyboard && bottomAction != null)
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        niraInset,
+                        6,
+                        niraInset,
+                        actionGap,
+                      ),
+                      child: bottomAction,
+                    ),
+                  if (!keyboard && !floatingNavigation)
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        niraInset,
+                        14,
+                        niraInset,
+                        math.max(padding.bottom, 30),
+                      ),
+                      child: _BottomNavigation(
+                        tab: tab,
+                        onNavigate: onNavigate,
+                      ),
+                    ),
+                ],
               ),
-            if (!keyboard)
-              Positioned(
-                left: niraInset,
-                right: niraInset,
-                bottom: navigationBottom,
-                child: _BottomNavigation(tab: tab, onNavigate: onNavigate),
-              ),
-          ],
+              if (!keyboard && floatingNavigation)
+                Positioned(
+                  left: niraInset,
+                  right: niraInset,
+                  bottom: navigationBottom,
+                  height: navigationHeight,
+                  child: RepaintBoundary(
+                    child: _BottomNavigation(tab: tab, onNavigate: onNavigate),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -133,21 +165,73 @@ class _BottomNavigation extends StatelessWidget {
     color: niraGreen,
     borderRadius: BorderRadius.circular(28),
     clipBehavior: Clip.antiAlias,
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 52),
-      child: Padding(
-        padding: const EdgeInsets.only(right: 12),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 330),
-            child: Row(
-              children: [
-                for (final (item, label, icon, size) in _items)
-                  Expanded(
-                    flex: item == tab ? 27 : 14,
-                    child: _destination(item, label, icon, size),
+    child: Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 330),
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(
+              begin: tab.index.toDouble(),
+              end: tab.index.toDouble(),
+            ),
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 260),
+            curve: Curves.easeInOutCubic,
+            builder: (context, position, _) => LayoutBuilder(
+              builder: (context, constraints) {
+                final weights = [
+                  for (var i = 0; i < _items.length; i++)
+                    (1 - (position - i).abs()).clamp(0.0, 1.0),
+                ];
+                final widths = [
+                  for (final w in weights)
+                    constraints.maxWidth *
+                        (14 + 13 * w) /
+                        (14 * _items.length + 13),
+                ];
+                final starts = <double>[0];
+                for (final width in widths) {
+                  starts.add(starts.last + width);
+                }
+                final lower = position.floor();
+                final upper = position.ceil();
+                final fraction = position - lower;
+                final left =
+                    starts[lower] + (starts[upper] - starts[lower]) * fraction;
+                final width =
+                    widths[lower] + (widths[upper] - widths[lower]) * fraction;
+                return SizedBox(
+                  height: 52,
+                  child: Stack(
+                    alignment: Alignment.centerLeft,
+                    children: [
+                      Positioned(
+                        left: left + 2,
+                        width: width - 4,
+                        top: 10,
+                        bottom: 10,
+                        child: const DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.all(Radius.circular(20)),
+                          ),
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          for (var i = 0; i < _items.length; i++)
+                            SizedBox(
+                              width: widths[i],
+                              child: _destination(i, weights[i]),
+                            ),
+                        ],
+                      ),
+                    ],
                   ),
-              ],
+                );
+              },
             ),
           ),
         ),
@@ -155,53 +239,56 @@ class _BottomNavigation extends StatelessWidget {
     ),
   );
 
-  Widget _destination(NiraTab item, String label, String icon, double size) =>
-      Semantics(
-        label: label,
-        button: true,
-        selected: item == tab,
+  Widget _destination(int index, double emphasis) {
+    final (item, label, icon, size) = _items[index];
+    return Semantics(
+      label: label,
+      button: true,
+      selected: item == tab,
+      onTap: () => onNavigate(item),
+      excludeSemantics: true,
+      child: InkWell(
         onTap: () => onNavigate(item),
-        excludeSemantics: true,
-        child: InkWell(
-          onTap: () => onNavigate(item),
-          borderRadius: BorderRadius.circular(26),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 44, minHeight: 48),
-            child: Center(
-              widthFactor: 1,
-              heightFactor: 1,
-              child: item == tab
-                  ? DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            NiraIcon(icon, size, color: niraGreen),
-                            const SizedBox(width: 4),
-                            Flexible(
-                              child: Text(
-                                label,
-                                overflow: TextOverflow.ellipsis,
-                                style: niraText(10.5, weight: FontWeight.w700),
-                              ),
-                            ),
-                          ],
+        borderRadius: BorderRadius.circular(26),
+        child: SizedBox(
+          height: 52,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 5),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                NiraIcon(
+                  icon,
+                  size,
+                  color: Color.lerp(Colors.white, niraGreen, emphasis),
+                ),
+                Flexible(
+                  child: ClipRect(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: emphasis,
+                      child: Opacity(
+                        opacity: emphasis,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.clip,
+                            style: niraText(10.5, weight: FontWeight.w700),
+                          ),
                         ),
                       ),
-                    )
-                  : NiraIcon(icon, size, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
-      );
+      ),
+    );
+  }
 }
 
 class NiraTabs extends StatelessWidget {
@@ -235,15 +322,42 @@ class NiraTabs extends StatelessWidget {
     ),
     child: Padding(
       padding: EdgeInsets.symmetric(horizontal: inset),
-      child: Row(
+      child: Stack(
         children: [
-          for (var index = 0; index < labels.length; index++)
-            Expanded(child: _tab(context, index)),
+          Row(
+            children: [
+              for (var index = 0; index < labels.length; index++)
+                Expanded(child: _tab(context, index)),
+            ],
+          ),
+          Positioned.fill(
+            child: IgnorePointer(
+              child: AnimatedAlign(
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : const Duration(milliseconds: 320),
+                curve: Curves.easeInOutCubic,
+                alignment: Alignment(
+                  labels.length == 1
+                      ? 0
+                      : (2 * (selected + .5) / labels.length - 1) /
+                            (1 - (wideIndicator ? 1 : .57) / labels.length),
+                  1,
+                ),
+                child: FractionallySizedBox(
+                  widthFactor: (wideIndicator ? 1 : .57) / labels.length,
+                  child: const SizedBox(
+                    height: 2.5,
+                    child: ColoredBox(color: niraGreen),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     ),
   );
-
   Widget _tab(BuildContext context, int index) {
     final active = index == selected;
     final showBadge = index == badgeIndex && badgeCount > 0;
@@ -268,9 +382,11 @@ class NiraTabs extends StatelessWidget {
                   spacing: 3,
                   runSpacing: 2,
                   children: [
-                    Text(
-                      labels[index],
-                      textAlign: TextAlign.center,
+                    AnimatedDefaultTextStyle(
+                      duration: MediaQuery.disableAnimationsOf(context)
+                          ? Duration.zero
+                          : const Duration(milliseconds: 320),
+                      curve: Curves.easeInOutCubic,
                       style: niraText(
                         fontSize,
                         weight: active ? FontWeight.w700 : FontWeight.w500,
@@ -278,6 +394,7 @@ class NiraTabs extends StatelessWidget {
                             ? niraGreen
                             : niraMuted,
                       ),
+                      child: Text(labels[index], textAlign: TextAlign.center),
                     ),
                     if (showBadge)
                       Container(
@@ -293,18 +410,6 @@ class NiraTabs extends StatelessWidget {
                   ],
                 ),
               ),
-              if (active)
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: FractionallySizedBox(
-                      widthFactor: wideIndicator ? 1 : .57,
-                      child: Container(height: 2.5, color: niraGreen),
-                    ),
-                  ),
-                ),
             ],
           ),
         ),
