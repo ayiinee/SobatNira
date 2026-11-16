@@ -29,7 +29,7 @@ class _BerandaPageState extends State<BerandaPage> {
       key: const PageStorageKey('beranda-scroll'),
       slivers: [
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(niraInset, 6, niraInset, 15),
+          padding: const EdgeInsets.fromLTRB(niraInset, 0, niraInset, 15),
           sliver: SliverList.list(
             children: const [
               _Profile(),
