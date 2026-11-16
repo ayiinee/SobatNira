@@ -4,7 +4,7 @@ Pasang Git dan alat sesuai area yang kamu kerjakan. Untuk menjalankan integrasi,
 
 | Area | Alat | Titik awal |
 | --- | --- | --- |
-| Flutter | Flutter stable 3.44.6 (Dart 3.12.2) dan Chrome | `apps/mobile/lib/main.dart`. Mulai dari Beranda, Kloter, Laporan, dan Pengaturan dengan data sintetis. |
+| Flutter | Flutter stable 3.44.6 (Dart 3.12.2) dan Chrome | `apps/mobile/lib/main.dart`. Mulai dari onboarding demo dengan data sintetis. |
 | API bisnis | Node.js 24 dengan npm | `apps/api/src/app.module.ts`. Mulai dari kontrak dan validasi dokumen atau data kloter dan batch. |
 | AI | Python 3.13 dengan uv | `apps/ai/main.py`. Mulai dari pemetaan field dan fixture draf ekstraksi. |
 
@@ -19,7 +19,7 @@ Gunakan [panduan kontribusi](contributing.md) untuk membuat branch dan membuka P
 
 ## Flutter dengan data sintetis lokal
 
-Jalankan dari akar repo untuk membuka Beranda, Kloter, Laporan, dan Pengaturan. Pencarian, filter, edit, verifikasi, serta konfigurasi lokal memakai data sintetis yang kembali ke kondisi awal ketika aplikasi dimulai ulang.
+Jalankan dari akar repo untuk membuka onboarding. Isi nama pengguna dan kata sandi dengan teks sintetis untuk mengakses Beranda, Kloter, Laporan, dan Pengaturan. Sesi demo dan perubahan data lokal kembali ke kondisi awal ketika aplikasi dimulai ulang.
 
 ```sh
 cd apps/mobile
