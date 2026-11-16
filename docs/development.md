@@ -4,7 +4,7 @@ Pasang Git dan alat sesuai area yang kamu kerjakan. Untuk menjalankan integrasi,
 
 | Area | Alat | Titik awal |
 | --- | --- | --- |
-| Flutter | Flutter stable 3.44.6 (Dart 3.12.2) dan Chrome | `apps/mobile/lib/main.dart`. Mulai dari tampilan draf atau daftar pekerjaan dengan data sintetis. |
+| Flutter | Flutter stable 3.44.6 (Dart 3.12.2) dan Chrome | `apps/mobile/lib/main.dart`. Mulai dari Beranda dan Kloter dengan data sintetis. |
 | API bisnis | Node.js 24 dengan npm | `apps/api/src/app.module.ts`. Mulai dari kontrak dan validasi dokumen atau data kloter dan batch. |
 | AI | Python 3.13 dengan uv | `apps/ai/main.py`. Mulai dari pemetaan field dan fixture draf ekstraksi. |
 
@@ -19,15 +19,15 @@ Gunakan [panduan kontribusi](contributing.md) untuk membuat branch dan membuka P
 
 ## Flutter dengan data sintetis lokal
 
-Jalankan dari akar repo untuk mulai mengembangkan UI. Draf sintetis dimuat dari Flutter sehingga pekerjaan layar bisa berjalan selama kontrak API sedang dikerjakan.
+Jalankan dari akar repo untuk membuka Beranda dan Kloter. Pencarian, filter, edit, dan verifikasi memakai data sintetis yang kembali ke kondisi awal ketika aplikasi dimulai ulang.
 
 ```sh
 cd apps/mobile
 flutter pub get --enforce-lockfile
-flutter run -d chrome --web-hostname 127.0.0.1 --web-port 8080 --dart-define=USE_LOCAL_FIXTURE=true
+flutter run -d chrome --web-hostname 127.0.0.1 --web-port 8080
 ```
 
-`USE_LOCAL_FIXTURE` default-nya `false`. Gunakan konfigurasi default untuk menguji integrasi.
+Untuk membuka layar draf sintetis secara mandiri, tambahkan `-t lib/main_demo.dart --dart-define=USE_LOCAL_FIXTURE=true`.
 
 ## Kerjakan satu layanan
 
@@ -57,7 +57,7 @@ npm run dev
 ```sh
 cd apps/mobile
 flutter pub get --enforce-lockfile
-flutter run -d chrome --web-hostname 127.0.0.1 --web-port 8080
+flutter run -d chrome -t lib/main_demo.dart --web-hostname 127.0.0.1 --web-port 8080
 ```
 
 Chrome menampilkan **Draf sintetis**, `DEMO-261114-01`, dan berat 1250 kg. Jika API belum berjalan, nyalakan kembali kedua layanan dan tekan **Coba lagi**.
@@ -67,20 +67,20 @@ Chrome menampilkan **Draf sintetis**, `DEMO-261114-01`, dan berat 1250 kg. Jika 
 Tinjau lisensi yang dilaporkan oleh `flutter doctor --android-licenses`. Buka emulator atau hubungkan HP dengan USB debugging. Jalankan `flutter devices`, lalu gunakan ID yang tampil. Untuk mengerjakan UI dengan draf lokal, jalankan dari `apps/mobile`.
 
 ```sh
-flutter run -d <device-id> --dart-define=USE_LOCAL_FIXTURE=true
+flutter run -d <device-id>
 ```
 
 Untuk menguji integrasi dari emulator atau HP, jalankan kedua backend. Dengan satu perangkat Android terhubung, teruskan port API memakai ADB dan jalankan Flutter dengan URL bawaan.
 
 ```sh
 adb reverse tcp:3000 tcp:3000
-flutter run -d <device-id>
+flutter run -d <device-id> -t lib/main_demo.dart
 ```
 
 Jika beberapa perangkat terhubung, gunakan `adb -s <device-id> reverse tcp:3000 tcp:3000`. Emulator juga dapat mengakses loopback laptop menggunakan `10.0.2.2`.
 
 ```sh
-flutter run -d <emulator-id> --dart-define=API_BASE_URL=http://10.0.2.2:3000
+flutter run -d <emulator-id> -t lib/main_demo.dart --dart-define=API_BASE_URL=http://10.0.2.2:3000
 ```
 
 Untuk cek layanan langsung, buka `http://127.0.0.1:8000/health`, `http://127.0.0.1:3000/health`, dan `http://127.0.0.1:3000/demo/draft`. API dapat mengubah port dengan `API_PORT` dan tujuan AI dengan `AI_BASE_URL`. Jika port API diganti, sesuaikan `--dart-define=API_BASE_URL=...` untuk Flutter. Web memakai port 8080 agar origin sesuai konfigurasi lokal API.
@@ -91,7 +91,7 @@ Untuk cek layanan langsung, buka `http://127.0.0.1:8000/health`, `http://127.0.0
 | --- | --- | --- |
 | `apps/ai` | `uv run --locked python -m unittest` | Health dan payload fixture FastAPI |
 | `apps/api` | `npm test` | Build TypeScript, health HTTP, integrasi dengan upstream tes, respons 503 jika AI gagal |
-| `apps/mobile` | `flutter analyze`, `flutter test` | Analisis statis, tampilkan fixture dan coba ulang saat API gagal |
+| `apps/mobile` | `flutter analyze`, `flutter test` | Analisis statis, alur Beranda dan Kloter, serta coba ulang saat API gagal |
 
 Setup ini memakai satu fixture yang dilayani FastAPI, diteruskan NestJS, dan ditampilkan Flutter. PostgreSQL/Supabase, Redis, WhatsApp, R2 dan provider OCR belum dibutuhkan untuk smoke test ini.
 

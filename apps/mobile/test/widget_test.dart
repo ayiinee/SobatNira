@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:sobatnira/main.dart';
+import 'package:sobatnira/main_demo.dart';
 
 void main() {
   testWidgets('loads the synthetic draft and retries an unavailable API', (
@@ -25,7 +25,7 @@ void main() {
       );
     });
 
-    await tester.pumpWidget(SobatNiraApp(client: client));
+    await tester.pumpWidget(SobatNiraIntegrationDemo(client: client));
     await tester.pumpAndSettle();
     expect(find.text('Coba lagi'), findsOneWidget);
     await tester.tap(find.text('Coba lagi'));

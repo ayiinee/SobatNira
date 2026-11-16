@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  mobile:
+    name: Flutter analyze and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.6'
+          channel: stable
+          cache: true
+      - name: Install Flutter dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Analyze Flutter code
+        run: flutter analyze --no-pub
+      - name: Test Flutter code
+        run: flutter test --no-pub
+
+  api:
+    name: NestJS build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/api/package-lock.json
+      - name: Install API dependencies
+        run: npm ci
+      - name: Build and test API
+        run: npm test
+
+  ai:
+    name: FastAPI unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/ai
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: apps/ai/uv.lock
+      - name: Install AI dependencies
+        run: uv sync --locked --python 3.13
+      - name: Test AI service
+        run: uv run --locked python -m unittest
