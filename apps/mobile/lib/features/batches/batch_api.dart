@@ -26,7 +26,10 @@ class BatchApi {
     if (_useFixture || _apiBaseUrl.isEmpty) return BatchDetail.fixture.firstWhere((item) => item.id == id);
     final response = await _client.get(Uri.parse('$_apiBaseUrl/batches/$id'), headers: _scope);
     if (response.statusCode >= 400) throw Exception('Detail batch gagal (${response.statusCode})');
-    return BatchDetail.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    final detail = BatchDetail.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    final trace = await _client.get(Uri.parse('$_apiBaseUrl/batches/$id/traceability'), headers: _scope);
+    if (trace.statusCode >= 400) throw Exception('Traceability batch gagal (${trace.statusCode})');
+    return detail.withTrace(jsonDecode(trace.body) as Map<String, dynamic>);
   }
 }
 
@@ -55,7 +58,9 @@ class BatchDetail {
   final Map<String, dynamic>? weighing;
   final Map<String, dynamic>? grading;
   final List<Map<String, dynamic>> reworks;
-  factory BatchDetail.fromJson(Map<String, dynamic> json) => BatchDetail(id: json['id'] as String, status: json['status'] as String, contributions: ((json['contributions'] as List?) ?? const []).map((item) => ContributionView.fromJson(item as Map<String, dynamic>)).toList(), cooking: json['cooking'] as Map<String, dynamic>?, weighing: json['weighing'] as Map<String, dynamic>?, grading: json['grading'] as Map<String, dynamic>?, reworks: ((json['reworks'] as List?) ?? const []).cast<Map<String, dynamic>>());
+  final Map<String, dynamic>? traceability;
+  factory BatchDetail.fromJson(Map<String, dynamic> json) => BatchDetail(id: json['id'] as String, status: json['status'] as String, contributions: ((json['contributions'] as List?) ?? const []).map((item) => ContributionView.fromJson(item as Map<String, dynamic>)).toList(), cooking: json['cooking'] as Map<String, dynamic>?, weighing: json['weighing'] as Map<String, dynamic>?, grading: json['grading'] as Map<String, dynamic>?, reworks: ((json['reworks'] as List?) ?? const []).cast<Map<String, dynamic>>(), traceability: json['traceability'] as Map<String, dynamic>?);
+  BatchDetail withTrace(Map<String, dynamic> value) => BatchDetail(id: id, status: status, contributions: contributions, cooking: cooking, weighing: weighing, grading: grading, reworks: reworks, traceability: value);
   static final fixture = BatchSummary.fixture.map((summary) => BatchDetail(id: summary.id, status: summary.status, contributions: summary.id == 'batch-mixed' ? const [ContributionView('kloter-102', 20000), ContributionView('kloter-103', 80000)] : [ContributionView('kloter-101', summary.totalNiraMl)], cooking: summary.status == 'COOKED' ? const {'startedAt': '2026-01-01T00:00:00Z'} : null, weighing: summary.status == 'WEIGHED' || summary.status == 'GRADED' ? const {'sugarWeightGrams': 1250000} : null, grading: summary.status == 'GRADED' ? const {'gradeCode': 'A'} : null, reworks: summary.id == 'batch-rework' ? const [{'weightGrams': 10000, 'receivingBatchId': 'batch-graded', 'status': 'RECORDED'}] : const [])).toList();
 }
 

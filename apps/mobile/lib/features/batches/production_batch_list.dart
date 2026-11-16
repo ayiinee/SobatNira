@@ -91,9 +91,10 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
           const SizedBox(height: 16),
           _Section(title: 'Sumber nira', child: Column(children: batch.contributions.map((item) => ListTile(contentPadding: EdgeInsets.zero, title: Text(item.kloterId), subtitle: Text('${item.volumeMl} ml â€¢ ${(item.volumeMl / total * 100).toStringAsFixed(1)}%'))).toList())),
           _Section(title: 'Pemasakan', child: Text(batch.cooking == null ? 'Belum dicatat' : 'Tercatat')),
-          _Section(title: 'Hasil timbang', child: Text(batch.weighing?['sugarWeightGrams'] == null ? 'Belum ditimbang' : '${batch.weighing!['sugarWeightGrams']} gram')),
+          _Section(title: 'Hasil timbang', child: Text(batch.weighing?['sugarWeightKg'] == null && batch.weighing?['sugarWeightGrams'] == null ? 'Belum ditimbang' : '${batch.weighing!['sugarWeightKg'] ?? ((batch.weighing!['sugarWeightGrams'] as num) / 1000)} kg')),
           _Section(title: 'Grade', child: Text(batch.grading?['gradeCode']?.toString() ?? 'Belum grading')),
-          _Section(title: 'Rework (terpisah)', child: batch.reworks.isEmpty ? const Text('Tidak ada') : Column(crossAxisAlignment: CrossAxisAlignment.start, children: batch.reworks.map((item) => Text('${item['weightGrams']} gram ? ${item['receivingBatchId']}')).toList())),
+          _Section(title: 'Rework (terpisah)', child: batch.reworks.isEmpty ? const Text('Tidak ada') : Column(crossAxisAlignment: CrossAxisAlignment.start, children: batch.reworks.map((item) => Text('${item['weightKg'] ?? ((item['weightGrams'] as num) / 1000)} kg → ${item['receivingBatchId']}')).toList())),
+          _Section(title: 'Traceability', child: Text(batch.traceability == null ? 'Belum tersedia' : 'Sumber dan audit tersedia')),
         ]);
       },
     ),
