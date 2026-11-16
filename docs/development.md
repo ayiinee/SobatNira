@@ -95,6 +95,8 @@ Untuk cek layanan langsung, buka `http://127.0.0.1:8000/health`, `http://127.0.0
 
 Setup ini memakai satu fixture yang dilayani FastAPI, diteruskan NestJS, dan ditampilkan Flutter. PostgreSQL/Supabase, Redis, WhatsApp, R2 dan provider OCR belum dibutuhkan untuk smoke test ini.
 
+Untuk pekerjaan intake WhatsApp, OCR, atau antrean Pekerjaan, rujuk PRD AI Engineering melalui indeks dokumen internal tim. Kriteria ujinya mencakup dua jenis nota, revisi foto, konfirmasi operator, dan peninjauan mobile. Tes fixture pada setup ini membuktikan koneksi ketiga aplikasi.
+
 ## Jika setup tersendat
 
 - Instal dependency dari direktori masing-masing. Jalankan `npm.cmd` sebagai pengganti `npm` bila PowerShell memblokir `npm.ps1`.
