@@ -6,8 +6,20 @@ export type SugarMovement = {
   deltaGrams: number;
   reason: string;
   batchId?: string;
+  correctionOfMovementId?: string;
   occurredAt: string;
   createdAt: string;
+};
+
+export type AuditEvent = {
+  id: string;
+  tenantId: string;
+  factoryId: string;
+  entityType: string;
+  entityId: string;
+  action: string;
+  reason: string;
+  occurredAt: string;
 };
 
 export type Allocation = {

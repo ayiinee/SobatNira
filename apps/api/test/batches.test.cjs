@@ -96,3 +96,13 @@ test('serves scoped dashboard, analytics and CSV export', async () => {
   assert.equal(response.status, 200);
   assert.match(await response.text(), /^batch_id,status,occurred_at,total_nira_ml,sugar_weight_grams,grade_code/);
 });
+
+test('records stock correction as separate audited movement', async () => {
+  const headersWithKey = { 'content-type': 'application/json', 'x-dev-role': 'admin', 'idempotency-key': 'correction-1' };
+  let response = await request('/stock/sugar/movements', { method: 'POST', headers: headersWithKey, body: JSON.stringify({ gradeCode: 'B', deltaGrams: -50000, reason: 'SALE' }) });
+  assert.equal(response.status, 201);
+  const original = await response.json();
+  response = await request('/stock/sugar/corrections', { method: 'POST', headers: { ...headersWithKey, 'idempotency-key': 'correction-2' }, body: JSON.stringify({ gradeCode: 'B', deltaGrams: 50000, reason: 'FIX_SOURCE_DOC', correctionOfMovementId: original.movement.id }) });
+  assert.equal(response.status, 201);
+  assert.equal((await response.json()).movement.reason, 'CORRECTION_FIX_SOURCE_DOC');
+});
