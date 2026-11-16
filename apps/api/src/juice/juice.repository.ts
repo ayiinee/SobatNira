@@ -94,6 +94,13 @@ export class JuiceRepository {
     }
   }
 
+  private async assertOpen(tx: DatabaseSession, access: FactoryAccess, ids: string[], synthetic: boolean) {
+    const closed = await tx.query(`SELECT lot_id FROM sobatnira.lot_closures
+      WHERE tenant_id = $1 AND factory_id = $2 AND lot_id = ANY($3::uuid[]) AND is_synthetic = $4`,
+    [...this.scope(access), ids, synthetic]);
+    if (closed.rows.length) throw new ConflictException('Kloter sudah ditutup.');
+  }
+
   reserve(access: FactoryAccess, lotId: string, input: ReturnType<typeof parseReservation>) {
     return this.mutate(access, async (tx) => {
       await this.lockRequest(tx, access, 'reserve', input.requestId);
@@ -109,6 +116,7 @@ export class JuiceRepository {
         }
         return existing;
       }
+      await this.assertOpen(tx, access, [lotId], input.synthetic);
       await this.assertAvailable(tx, access, lotId, input.synthetic, input.quantityMl, originLotId);
       return (await tx.query<Reservation>(`INSERT INTO sobatnira.juice_reservations
         (tenant_id, factory_id, lot_id, request_id, batch_id, quantity_ml, is_synthetic, created_by, origin_lot_id)
@@ -131,6 +139,7 @@ export class JuiceRepository {
         }
         return existing;
       }
+      await this.assertOpen(tx, access, [input.fromLotId, input.toLotId], input.synthetic);
       await this.assertAvailable(tx, access, input.fromLotId, input.synthetic, input.quantityMl, input.originLotId);
       return (await tx.query<Transfer>(`INSERT INTO sobatnira.juice_transfers
         (tenant_id, factory_id, request_id, from_lot_id, to_lot_id, origin_lot_id, quantity_ml, is_synthetic, created_by)

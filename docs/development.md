@@ -48,6 +48,8 @@ Modul [foto bukti R2](backend-evidence.md) menghubungkan foto ke revisi dokumen 
 
 Modul [penggilingan dari nota hasil gabungan](backend-milling-documents.md) memakai draf sintetis untuk total nira dan rincian batch. Pengesahan mengurangi seluruh stok tebu kloter dari penerimaan sah dan mencatat nira dalam satu transaksi. Jalankan `npm run test:milling-db` untuk memeriksa alur, pembatasan akses, rollback dan konkurensi dengan PostgreSQL.
 
+Gunakan [kontrak nira dan penutupan kloter](backend-juice-and-closure.md) untuk adapter Backend B. Jalankan `npm run test:juice-db` setelah migrasi untuk memeriksa reservasi, transfer, dan penutupan dengan fixture Backend B.
+
 **1. FastAPI** dari akar repo.
 
 ```sh

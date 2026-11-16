@@ -12,6 +12,10 @@ export function parseAvailability(input: unknown) {
   return parseStockQuery(object(input, ['synthetic'])).synthetic;
 }
 
+export function parseClosure(input: unknown) {
+  return synthetic(object(input ?? {}, ['synthetic']).synthetic);
+}
+
 export function parseReservation(input: unknown) {
   const row = object(input, ['requestId', 'batchId', 'quantityMl', 'synthetic', 'originLotId']);
   return {

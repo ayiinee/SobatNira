@@ -1,5 +1,7 @@
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
+const { once } = require('node:events');
+const { createServer } = require('node:http');
 const test = require('node:test');
 const { intakeFixture } = require('./intake-fixture.cjs');
 
@@ -86,4 +88,64 @@ test('transfer and reservation serialize, conserve ml and preserve origin throug
     assert.equal(use.body.originLotId, f.ids.lot);
     assert.equal((await availability(f.ids.thirdLot)).body.availableMl, '0');
   } finally { await f.close(); }
+});
+
+test('lot closure checks drained stock and Backend B, then blocks new stock operations', async () => {
+  const calls = [];
+  let reply = { canClose: false };
+  const batches = createServer((req, res) => {
+    calls.push({ url: req.url, auth: req.headers.authorization });
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify(reply));
+  });
+  batches.listen(0, '127.0.0.1');
+  await once(batches, 'listening');
+  let f;
+  try {
+    f = await intakeFixture(true, { BATCH_API_BASE_URL: 'http://127.0.0.1:' + batches.address().port });
+    const { lot, secondLot, tenant, factory, admin } = f.ids;
+    const closure = f.root + '/lots/' + lot + '/closure';
+    const status = () => f.request(closure + '?synthetic=true');
+    const close = () => f.request(closure, 'POST', { synthetic: true });
+    assert.equal((await status()).body.status, 'open');
+    assert.equal((await close()).status, 409);
+    await mill(f, lot);
+    assert.equal((await close()).status, 409);
+    const held = requestFor('230000');
+    assert.equal((await reserve(f, held)).status, 201);
+    assert.equal((await f.request(root(f) + '/transfers', 'POST',
+      { requestId: randomUUID(), toLotId: secondLot, quantityMl: '20000', synthetic: true })).status, 201);
+    assert.equal((await close()).status, 409);
+    assert.equal(calls.length, 0);
+    const consume = root(f) + '/reservations/' + held.requestId + '/consume';
+    assert.equal((await f.request(consume, 'POST')).status, 200);
+    assert.equal((await close()).status, 409);
+    assert.deepEqual(calls[0], {
+      url: '/batches/closure-check/' + lot + '?tenantId=' + tenant + '&factoryId=' + factory + '&synthetic=true',
+      auth: 'Bearer fixture-admin',
+    });
+    reply = { canClose: 'yes' };
+    assert.equal((await close()).status, 503);
+    assert.equal((await status()).body.status, 'open');
+    reply = { canClose: true };
+    const closed = await close();
+    assert.equal(closed.status, 200, JSON.stringify(closed.body));
+    assert.equal(closed.body.status, 'closed');
+    assert.equal(closed.body.closedBy, admin);
+    assert.deepEqual((await close()).body, closed.body);
+    assert.equal(calls.length, 3);
+    assert.equal((await f.request(closure)).body.status, 'open');
+    assert.equal((await reserve(f, requestFor('1'))).status, 409);
+    assert.equal((await f.request(root(f, secondLot) + '/transfers', 'POST', {
+      requestId: randomUUID(), toLotId: lot, originLotId: lot, quantityMl: '1', synthetic: true,
+    })).status, 409);
+    assert.equal((await f.request(consume, 'POST')).body.state, 'consumed');
+    assert.equal((await f.request(f.siblingRoot + '/lots/' + lot + '/closure')).status, 404);
+  } finally {
+    try { await f?.close(); }
+    finally {
+      batches.closeAllConnections();
+      await new Promise((done) => batches.close(done));
+    }
+  }
 });
