@@ -232,6 +232,7 @@ class _KloterListPageState extends State<KloterListPage> {
           ),
           child: InkWell(
             onTap: _selectDate,
+            overlayColor: niraGreenOverlay,
             borderRadius: BorderRadius.circular(niraRadius),
             child: const SizedBox.square(
               dimension: 48,

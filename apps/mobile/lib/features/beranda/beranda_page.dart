@@ -23,91 +23,179 @@ class BerandaPage extends StatefulWidget {
 
 class _BerandaPageState extends State<BerandaPage> {
   int _selected = 0;
+  final _headerKey = GlobalKey();
+  final _sheet = DraggableScrollableController();
+  double? _headerHeight;
+
+  @override
+  void dispose() {
+    _sheet.dispose();
+    super.dispose();
+  }
+
+  void _measureHeader() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final box = _headerKey.currentContext?.findRenderObject() as RenderBox?;
+      if (box != null &&
+          (_headerHeight == null ||
+              (box.size.height - _headerHeight!).abs() > .5)) {
+        setState(() => _headerHeight = box.size.height);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final status = _selected == 0 ? KloterStatus.review : KloterStatus.done;
-    final recent = widget.kloter.where((item) => item.status == status).take(3);
-    return CustomScrollView(
-      key: const PageStorageKey('beranda-scroll'),
-      slivers: [
-        SliverToBoxAdapter(
-          child: CustomPaint(
-            painter: const _BerandaGeometryPainter(),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                niraInset,
-                0,
-                niraInset,
-                NiraSpace.lg,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const _Profile(),
-                  const SizedBox(height: NiraSpace.lg),
-                  const _ProductionSummary(),
-                  const SizedBox(height: NiraSpace.lg),
-                  const _QuickActions(),
-                ],
-              ),
-            ),
-          ),
-        ),
-        SliverPadding(
-          padding: EdgeInsets.only(bottom: NiraSpace.lg),
-          sliver: SliverFillRemaining(
-            hasScrollBody: false,
-            child: DecoratedBox(
-              decoration: const BoxDecoration(
-                border: Border(
-                  top: BorderSide(color: niraLeaf, width: 1),
-                  left: BorderSide(color: niraLeaf, width: 1),
-                  right: BorderSide(color: niraLeaf, width: 1),
-                ),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(7)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  NiraTabs(
-                    labels: const ['Tinjau', 'Tuntas'],
-                    selected: _selected,
-                    height: 50,
-                    fontSize: NiraType.body,
-                    inset: 27,
-                    wideIndicator: true,
-                    onSelected: (value) => setState(() => _selected = value),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
+    final items = widget.kloter.where((item) => item.status == status).toList();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        _measureHeader();
+        final height = constraints.maxHeight;
+        final headerHeight = (_headerHeight ?? 440).clamp(0.0, height * .72);
+        final collapsed = (1 - headerHeight / height).clamp(.22, .75);
+        final expanded = (collapsed + .22).clamp(collapsed, .94);
+        void settle() {
+          if (!_sheet.isAttached) return;
+          final target = _sheet.size > (collapsed + expanded) / 2
+              ? expanded
+              : collapsed;
+          _sheet.animateTo(
+            target,
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+          );
+        }
+
+        return Stack(
+          children: [
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: headerHeight,
+              child: SingleChildScrollView(
+                key: const PageStorageKey('beranda-fixed-header'),
+                child: CustomPaint(
+                  key: _headerKey,
+                  painter: const _BerandaGeometryPainter(),
+                  child: const Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      niraInset,
+                      0,
                       niraInset,
                       NiraSpace.lg,
-                      niraInset,
-                      NiraSpace.md,
                     ),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        for (final item in recent)
-                          Padding(
-                            padding: const EdgeInsets.only(
-                              bottom: NiraSpace.sm,
-                            ),
-                            child: KloterCard(
-                              kloter: item,
-                              onTap: () => widget.onOpenKloter(item),
-                            ),
-                          ),
+                        _Profile(),
+                        SizedBox(height: NiraSpace.lg),
+                        _ProductionSummary(),
+                        SizedBox(height: NiraSpace.lg),
+                        _QuickActions(),
                       ],
                     ),
                   ),
-                  const SizedBox(height: NiraSpace.lg),
-                ],
+                ),
               ),
             ),
-          ),
-        ),
-      ],
+            DraggableScrollableSheet(
+              controller: _sheet,
+              initialChildSize: collapsed,
+              minChildSize: collapsed,
+              maxChildSize: expanded,
+              snap: true,
+              builder: (context, scrollController) => Material(
+                color: niraPaper,
+                clipBehavior: Clip.antiAlias,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+                  side: BorderSide(color: niraLeaf),
+                ),
+                child: Column(
+                  children: [
+                    Semantics(
+                      label: 'Tarik daftar kloter ke atas',
+                      button: true,
+                      child: GestureDetector(
+                        key: const ValueKey('beranda-kloter-handle'),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          if (!_sheet.isAttached) return;
+                          _sheet.animateTo(
+                            _sheet.size < expanded - .01 ? expanded : collapsed,
+                            duration: const Duration(milliseconds: 220),
+                            curve: Curves.easeOutCubic,
+                          );
+                        },
+                        onVerticalDragUpdate: (event) {
+                          if (_sheet.isAttached)
+                            _sheet.jumpTo(
+                              (_sheet.size - event.delta.dy / height).clamp(
+                                collapsed,
+                                expanded,
+                              ),
+                            );
+                        },
+                        onVerticalDragEnd: (_) => settle(),
+                        child: SizedBox(
+                          height: 24,
+                          width: double.infinity,
+                          child: Center(
+                            child: Container(
+                              width: 36,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: niraMuted,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    NiraTabs(
+                      labels: const ['Tinjau', 'Tuntas'],
+                      selected: _selected,
+                      height: 48,
+                      fontSize: NiraType.body,
+                      inset: 27,
+                      wideIndicator: true,
+                      onSelected: (value) {
+                        if (scrollController.hasClients)
+                          scrollController.jumpTo(0);
+                        setState(() => _selected = value);
+                      },
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        key: const ValueKey('beranda-kloter-list'),
+                        controller: scrollController,
+                        padding: const EdgeInsets.fromLTRB(
+                          niraInset,
+                          NiraSpace.md,
+                          niraInset,
+                          NiraSpace.lg,
+                        ),
+                        itemCount: items.length,
+                        itemBuilder: (context, index) => Padding(
+                          padding: const EdgeInsets.only(bottom: NiraSpace.sm),
+                          child: KloterCard(
+                            kloter: items[index],
+                            onTap: () => widget.onOpenKloter(items[index]),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

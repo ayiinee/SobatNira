@@ -52,6 +52,33 @@ class DemoProduction extends ChangeNotifier {
           'Pemasok Contoh A',
         ),
         DemoKloter('MJT-230926-1A', 17, KloterStatus.done, 'Pemasok Contoh B'),
+        DemoKloter(
+          'MJT-220926-1A',
+          16,
+          KloterStatus.review,
+          'Pemasok Contoh D',
+        ),
+        DemoKloter(
+          'MJT-220926-2A',
+          16,
+          KloterStatus.review,
+          'Pemasok Contoh E',
+        ),
+        DemoKloter(
+          'MJT-210926-1A',
+          15,
+          KloterStatus.review,
+          'Pemasok Contoh F',
+        ),
+        DemoKloter(
+          'MJT-200926-1A',
+          14,
+          KloterStatus.review,
+          'Pemasok Contoh G',
+        ),
+        DemoKloter('MJT-190926-1A', 13, KloterStatus.done, 'Pemasok Contoh D'),
+        DemoKloter('MJT-180926-1A', 12, KloterStatus.done, 'Pemasok Contoh E'),
+        DemoKloter('MJT-170926-1A', 11, KloterStatus.done, 'Pemasok Contoh F'),
       ];
 
   static final today = DateTime(2026, 10, 29);

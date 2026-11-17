@@ -142,6 +142,7 @@ class _BatchTile extends StatelessWidget {
       ),
       child: InkWell(
         onTap: onTap,
+        overlayColor: niraGreenOverlay,
         child: Stack(
           children: [
             Positioned(
