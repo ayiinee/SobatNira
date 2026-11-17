@@ -155,6 +155,8 @@ class NiraScaffold extends StatelessWidget {
     this.bottomAction,
     this.actionGap = 14,
     this.floatingNavigation = false,
+    this.extendBehindNavigation = false,
+    this.topGap = 12,
     super.key,
   });
 
@@ -164,6 +166,8 @@ class NiraScaffold extends StatelessWidget {
   final Widget? bottomAction;
   final double actionGap;
   final bool floatingNavigation;
+  final bool extendBehindNavigation;
+  final double topGap;
 
   @override
   Widget build(BuildContext context) {
@@ -187,11 +191,14 @@ class NiraScaffold extends StatelessWidget {
             children: [
               Column(
                 children: [
-                  SizedBox(height: padding.top + 12),
+                  SizedBox(height: padding.top + topGap),
                   Expanded(
                     child: Padding(
                       padding: EdgeInsets.only(
-                        bottom: floatingNavigation && !keyboard
+                        bottom:
+                            floatingNavigation &&
+                                !keyboard &&
+                                !extendBehindNavigation
                             ? navigationHeight + navigationBottom + NiraSpace.md
                             : 0,
                       ),
