@@ -24,8 +24,8 @@ Kontrak dan kriteria penerimaan terperinci tersedia di paket PRD internal tim.
 
 | Layanan | Tanggung jawab | Yang tersedia di repo |
 | --- | --- | --- |
-| Flutter | Antarmuka admin dan owner untuk melihat serta meninjau data. | Onboarding, Beranda, Kloter, Laporan, dan Pengaturan memakai simulasi lokal. Pekerjaan memakai API review saat autentikasi dikonfigurasi. |
-| NestJS | Otorisasi, validasi domain, dan kalkulasi resmi. | Intake satu foto, penyimpanan privat, pekerjaan OCR, revisi, serta konfirmasi dan review berbasis PostgreSQL. Modul produksi menangani pemasok, kloter, penerimaan, bukti R2, dan pembukuan penggilingan sintetis. |
+| Flutter | Antarmuka admin dan owner untuk melihat serta meninjau data. | Build dengan autentikasi Supabase membuka Kloter dan Pekerjaan melalui API NestJS dengan satu sesi dan pilihan pabrik. Build tanpa konfigurasi Supabase membuka demo lokal. |
+| NestJS | Otorisasi, validasi domain, dan kalkulasi resmi. | Intake foto privat, pekerjaan OCR, revisi, konfirmasi dan review berbasis PostgreSQL. Modul produksi mencatat penerimaan, penggilingan, saldo nira, dan koreksi stok dari nota sah. |
 | FastAPI | Pemrosesan AI internal dan keluaran draf ekstraksi. | Ekstraksi draf dua tipe nota dengan PaddleOCR, parser dan evidence. Gemini dapat dikonfigurasi untuk crop ambigu. |
 
 [Panduan intake AI](ai/README.md) menjelaskan setup bridge OpenClaw/Baileys, database, dan layar Pekerjaan. [Demo integrasi lokal](development.md#jalankan-integrasi-di-tiga-terminal) tetap tersedia dengan `lib/main_demo.dart` dan menampilkan fixture dari FastAPI melalui NestJS.

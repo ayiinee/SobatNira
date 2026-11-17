@@ -79,7 +79,8 @@ async function intakeFixture(committed = false, extraEnv = {}) {
     });
     authServer.listen(0, '127.0.0.1');
     await once(authServer, 'listening');
-    const env = { SUPABASE_URL: `http://127.0.0.1:${authServer.address().port}`, SUPABASE_PUBLISHABLE_KEY: 'synthetic-key', LOG_LEVEL: 'silent', ...extraEnv };
+    const env = { ...process.env, SUPABASE_URL: `http://127.0.0.1:${authServer.address().port}`,
+      SUPABASE_PUBLISHABLE_KEY: 'synthetic-key', LOG_LEVEL: 'silent', ...extraEnv };
     app = await createApplication(committed ? { env } : { envFile: false, env });
     if (!committed) useTransactionFixture(app.get(DatabaseService), client);
     await app.listen(0, '127.0.0.1');
