@@ -20,6 +20,15 @@ const connectedMobile =
 
 typedef Json = Map<String, dynamic>;
 
+enum ProductionCatalog {
+  suppliers('suppliers', 'Pemasok'),
+  caneTypes('cane-types', 'Jenis tebu');
+
+  const ProductionCatalog(this.path, this.label);
+  final String path;
+  final String label;
+}
+
 class FactoryScope {
   FactoryScope.fromJson(Json row)
     : tenantId = row['tenantId'] as String,
@@ -32,13 +41,8 @@ class FactoryScope {
   final String factoryId;
   final String factoryName;
 
-  List<String> get _lots => [
-    'tenants',
-    tenantId,
-    'factories',
-    factoryId,
-    'lots',
-  ];
+  List<String> get _base => ['tenants', tenantId, 'factories', factoryId];
+  List<String> get _lots => [..._base, 'lots'];
 }
 
 String documentType(Object? type) => switch (type) {
@@ -117,9 +121,14 @@ class ReviewApi {
 
   Map<String, String> get _headers => {'Authorization': 'Bearer $_token'};
 
-  Future<Json> _json(Future<http.Response> request) async {
+  Future<Json> _json(
+    Future<http.Response> request, {
+    int expectedStatus = 200,
+  }) async {
     final response = await request.timeout(const Duration(seconds: 10));
-    if (response.statusCode != 200) throw ReviewApiError(response.statusCode);
+    if (response.statusCode != expectedStatus) {
+      throw ReviewApiError(response.statusCode);
+    }
     return jsonDecode(response.body) as Json;
   }
 
@@ -161,6 +170,45 @@ class ReviewApi {
 
   Future<Json> juice(FactoryScope scope, String id) =>
       _productionGet([...scope._lots, id, 'juice', 'availability']);
+
+  Future<Json> catalog(
+    FactoryScope scope,
+    ProductionCatalog kind, {
+    int offset = 0,
+    String search = '',
+    bool? active,
+  }) => _productionGet(
+    [...scope._base, kind.path],
+    query: {
+      'limit': '20',
+      'offset': '$offset',
+      if (search.isNotEmpty) 'q': search,
+      if (active != null) 'isActive': '$active',
+    },
+  );
+
+  Future<Json> _productionWrite(List<String> path, Json values, {String? id}) {
+    final request = http.Request(
+      id == null ? 'POST' : 'PATCH',
+      Uri.parse(baseUrl).replace(pathSegments: ['', ...path, ?id]),
+    );
+    request.headers.addAll({..._headers, 'Content-Type': 'application/json'});
+    request.body = jsonEncode(values);
+    return _json(
+      _client.send(request).then(http.Response.fromStream),
+      expectedStatus: id == null ? 201 : 200,
+    );
+  }
+
+  Future<Json> saveCatalog(
+    FactoryScope scope,
+    ProductionCatalog kind,
+    Json values, {
+    String? id,
+  }) => _productionWrite([...scope._base, kind.path], values, id: id);
+
+  Future<Json> saveLot(FactoryScope scope, Json values, {String? id}) =>
+      _productionWrite(scope._lots, values, id: id);
 
   Future<List<Json>> list(String status, int page, {String? factoryId}) async {
     final response = await _json(

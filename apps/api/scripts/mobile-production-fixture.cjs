@@ -1,0 +1,35 @@
+const { intakeFixture } = require('../test/integration/intake-fixture.cjs');
+
+// This server keeps all synthetic changes inside one rollback-only transaction.
+async function main() {
+  const url = new URL(process.env.TEST_DATABASE_URL ?? '');
+  if (!['postgres:', 'postgresql:'].includes(url.protocol) || !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) {
+    throw new Error('TEST_DATABASE_URL harus menunjuk PostgreSQL pengujian lokal.');
+  }
+  process.env.DATABASE_URL = url.href;
+  process.env.DATABASE_SSL_CA_FILE = '';
+  process.env.NODE_ENV = 'test';
+  process.env.SOBATNIRA_MODE = 'legacy';
+  const fixture = await intakeFixture(false);
+  let stopping = false;
+  const stop = async () => {
+    if (stopping) return;
+    stopping = true;
+    await fixture.close();
+  };
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    process.once(signal, () => {
+      void stop().then(() => process.exit(0)).catch(() => process.exit(1));
+    });
+  }
+  console.log(JSON.stringify({
+    PRODUCTION_TEST_API: fixture.base,
+    PRODUCTION_TEST_TENANT: fixture.ids.tenant,
+    PRODUCTION_TEST_FACTORY: fixture.ids.factory,
+  }));
+}
+
+main().catch(() => {
+  console.error('Fixture mobile gagal. Periksa TEST_DATABASE_URL, migrasi bisnis, dan schema auth pada PostgreSQL pengujian lokal.');
+  process.exitCode = 1;
+});

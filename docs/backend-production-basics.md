@@ -141,6 +141,22 @@ Pengecekan cakupan diulang dalam statement query, termasuk ketika menulis. Compo
 
 ## Migrasi dan pengujian tanpa onboarding
 
+### Pengelolaan melalui Flutter
+
+Pada mode terhubung, masuk ke aplikasi lalu pilih pabrik. Tombol **Pemasok** dan **Jenis tebu** membuka daftar dari API tenant. Cari data atau filter status, lalu gunakan tombol tambah atau buka item untuk mengubah nama dan status aktif. Saat membuat jenis tebu, isi juga kode. Kode jenis tebu tampil pada form edit.
+
+Gunakan **Tambah kloter** untuk memilih pemasok aktif serta waktu penerimaan sesuai zona waktu perangkat. Pemilih pemasok mendukung pencarian dan perpindahan halaman. Kode kloter bersifat opsional. Setelah disimpan, daftar dimuat ulang dari API. Untuk mengedit kloter, buka detail lalu pilih ikon **Edit kloter**. Pemasok dan waktu penerimaan terkunci ketika detail sudah memuat penerimaan sah. Backend memeriksa lagi kondisi tersebut saat menyimpan, termasuk bila pengesahan terjadi ketika form masih terbuka.
+
+Pengujian widget dengan API tiruan dijalankan melalui `flutter test test/features/kloter/production_management_test.dart`. Untuk memeriksa form sampai PostgreSQL, siapkan database lokal khusus pengujian dengan schema auth sintetis serta migrasi bisnis 001–016. Dari `apps/api`, set `TEST_DATABASE_URL` ke database loopback tersebut lalu jalankan `node scripts/mobile-production-fixture.cjs`. Server mencetak URL serta UUID tenant dan pabrik sintetis untuk perintah berikut dari `apps/mobile`.
+
+```sh
+flutter test --dart-define=PRODUCTION_TEST_API=http://127.0.0.1:PORT --dart-define=PRODUCTION_TEST_TENANT=UUID_TENANT --dart-define=PRODUCTION_TEST_FACTORY=UUID_PABRIK test/features/kloter/production_backend_test.dart
+```
+
+Isi ketiga nilai dari keluaran server fixture. Uji membuat dan mengubah pemasok, menonaktifkan jenis tebu, serta membuat dan mengubah kloter melalui form Flutter. Periksa hasil lewat endpoint API dan riwayat PostgreSQL. Hentikan server dengan Ctrl+C untuk rollback data sintetis. Uji ini dilewati pada `flutter test` biasa bila URL fixture belum diisi.
+
+### Pengujian API
+
 Dari `apps/api`:
 
 ```powershell
