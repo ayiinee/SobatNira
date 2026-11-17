@@ -96,7 +96,7 @@ Jika foto akan dilampirkan, upload selama status masih `draft`; pemasangan foto 
 
 Berat wajib berupa string desimal positif dengan titik desimal, tanpa eksponen atau pemisah ribuan. Brix berupa string desimal 0–100 atau `null`. Nilai disimpan sebagai PostgreSQL `numeric` tanpa skala tetap dan dikembalikan sebagai string, sehingga tidak melewati pembulatan floating-point. Batas 64 karakter merupakan batas ukuran input; modul tidak menetapkan kebijakan pembulatan bisnis baru.
 
-Waktu harus berupa ISO 8601 dengan zona waktu eksplisit. Kode jenis tebu dipertahankan seperti yang diinput; fixture memakai BL, bukan katalog lengkap jenis tebu yang ditetapkan otomatis.
+Waktu harus berupa ISO 8601 dengan zona waktu eksplisit. Kode jenis tebu dipertahankan seperti yang diinput. Fixture memakai BL. [Katalog jenis tebu](backend-production-basics.md#mengelola-katalog-jenis-tebu) tersedia sebagai sumber pilihan pabrik.
 
 Draf boleh memakai `null` untuk waktu, jenis tebu atau berat yang belum terbaca. Konfirmasi dan pengesahan menolak draf yang belum lengkap. Brix bersifat opsional. Alasan koreksi wajib diisi, maksimal 500 karakter. Perubahan yang tidak mengubah nilai tidak membuat revisi baru.
 

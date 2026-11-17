@@ -200,8 +200,9 @@ class _ProductionChartState extends State<ProductionChart> {
                         ((position.dx - plot.left) / plot.width * days.length)
                             .floor()
                             .clamp(0, days.length - 1);
-                    if (_selectedDay != days[index].day)
+                    if (_selectedDay != days[index].day) {
                       setState(() => _selectedDay = days[index].day);
+                    }
                   }
 
                   return Semantics(
