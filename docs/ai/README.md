@@ -124,6 +124,8 @@ Gateway hanya menangani DM pada akun yang dikonfigurasi. NestJS mengotorisasi se
 
 ## Pengelolaan operator WhatsApp
 
+Di Flutter mode terhubung, masuk sebagai admin atau owner, pilih pabrik di **Kloter**, lalu buka **Operator WhatsApp**. Daftar mendukung pencarian nama dan nomor serta filter status. Gunakan **Tambah operator WhatsApp** untuk mendaftarkan nomor, ikon edit untuk mengubah nama dan status, atau ikon riwayat untuk melihat perubahan.
+
 Admin dan owner dengan membership aktif dapat mengelola operator pada pabrik yang dipilih. Kirim token akses Supabase sebagai `Authorization: Bearer <access_token>`. Route dasar memakai `/tenants/:tenantId/factories/:factoryId/operators`.
 
 | Metode dan path relatif | Fungsi |

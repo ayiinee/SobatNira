@@ -46,11 +46,15 @@ class JuiceTransferRequest {
 
 enum ProductionCatalog {
   suppliers('suppliers', 'Pemasok'),
-  caneTypes('cane-types', 'Jenis tebu');
+  caneTypes('cane-types', 'Jenis tebu'),
+  operators('operators', 'Operator WhatsApp');
 
   const ProductionCatalog(this.path, this.label);
   final String path;
   final String label;
+
+  String get itemLabel =>
+      this == operators ? 'operator WhatsApp' : label.toLowerCase();
 }
 
 class FactoryScope {
@@ -293,6 +297,15 @@ class ReviewApi {
     Json values, {
     String? id,
   }) => _productionWrite([...scope._base, kind.path], values, id: id);
+
+  Future<Json> operatorHistory(
+    FactoryScope scope,
+    String operatorId, {
+    required int offset,
+  }) => _productionGet(
+    [...scope._base, ProductionCatalog.operators.path, operatorId, 'history'],
+    query: {'limit': '20', 'offset': '$offset'},
+  );
 
   Future<Json> saveLot(FactoryScope scope, Json values, {String? id}) =>
       _productionWrite(scope._lots, values, id: id);
