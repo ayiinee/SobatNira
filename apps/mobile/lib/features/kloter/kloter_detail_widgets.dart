@@ -235,8 +235,6 @@ class DocumentPreview extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const DetailSectionTitle('Pratinjau foto'),
-      const SizedBox(height: NiraSpace.xs),
       Material(
         clipBehavior: Clip.antiAlias,
         borderRadius: BorderRadius.circular(niraRadius),
@@ -255,11 +253,10 @@ class DocumentPreview extends StatelessWidget {
               Positioned(
                 top: NiraSpace.xs,
                 right: NiraSpace.xs,
-                child: IconButton.filled(
+                child: IconButton(
                   tooltip: 'Perbesar foto',
                   onPressed: () => open(context, batch: batch),
                   style: IconButton.styleFrom(
-                    backgroundColor: niraGreen,
                     foregroundColor: Colors.white,
                   ),
                   icon: const Icon(Icons.open_in_full, size: 20),
@@ -311,12 +308,7 @@ class _DocumentViewerState extends State<_DocumentViewer> {
             ),
             child: Row(
               children: [
-                Expanded(
-                  child: Text(
-                    'Pratinjau foto',
-                    style: niraText(NiraType.section, weight: FontWeight.w700),
-                  ),
-                ),
+                const Spacer(),
                 IconButton(
                   tooltip: 'Tutup nota',
                   onPressed: () => Navigator.pop(context),
