@@ -157,18 +157,43 @@ void main() {
       isNull,
     );
     expect(find.text('Memeriksa akun…'), findsOneWidget);
-    const messages = {
-      400: 'Email atau kata sandi tidak cocok.',
-      429: 'Terlalu banyak percobaan. Tunggu sebentar sebelum mencoba lagi.',
-      503: 'Belum bisa masuk. Periksa koneksi dan coba lagi.',
-    };
-    for (final entry in messages.entries) {
+    const fallback =
+        'Belum bisa masuk. Coba lagi atau hubungi pengelola pabrik.';
+    final cases = [
+      (
+        http.Response('{"error_code":"invalid_credentials"}', 400),
+        'Email atau kata sandi tidak cocok.',
+      ),
+      (
+        http.Response('{"error_code":"email_not_confirmed"}', 400),
+        'Email belum dikonfirmasi. Periksa kotak masuk atau hubungi pengelola pabrik.',
+      ),
+      (
+        http.Response('{"error_code":"user_banned"}', 403),
+        'Akun ini tidak bisa digunakan. Hubungi pengelola pabrik.',
+      ),
+      (
+        http.Response('Too many requests', 429),
+        'Terlalu banyak percobaan. Tunggu sebentar sebelum mencoba lagi.',
+      ),
+      (
+        http.Response('{"error_code":"unknown","msg":"Raw error"}', 401),
+        fallback,
+      ),
+      (http.Response('<html>Raw error</html>', 400), fallback),
+      (
+        http.Response('{}', 503),
+        'Belum bisa masuk. Periksa koneksi dan coba lagi.',
+      ),
+    ];
+    for (final (response, message) in cases) {
       if (attempts.last.isCompleted) await tester.tap(find.text('Masuk'));
-      attempts.last.completeError(ReviewApiError(entry.key));
+      attempts.last.completeError(ReviewApiError.fromSignInResponse(response));
       await tester.pumpAndSettle();
-      expect(find.text(entry.value), findsOneWidget);
+      expect(find.text(message), findsOneWidget);
+      expect(find.textContaining('Raw error'), findsNothing);
     }
-    expect(attempts, hasLength(3));
+    expect(attempts, hasLength(cases.length));
   });
 
   testWidgets(

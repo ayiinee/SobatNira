@@ -80,8 +80,29 @@ String documentType(Object? type) => switch (type) {
 };
 
 class ReviewApiError implements Exception {
-  const ReviewApiError(this.status);
+  const ReviewApiError(this.status, {this.authCode});
+
+  factory ReviewApiError.fromSignInResponse(http.Response response) {
+    String? authCode;
+    try {
+      final payload = jsonDecode(response.body);
+      final code = payload is Json ? payload['error_code'] : null;
+      if (code is String &&
+          const {
+            'invalid_credentials',
+            'email_not_confirmed',
+            'user_banned',
+          }.contains(code)) {
+        authCode = code;
+      }
+    } on FormatException {
+      // Gateways may return a non-JSON error body.
+    }
+    return ReviewApiError(response.statusCode, authCode: authCode);
+  }
+
   final int status;
+  final String? authCode;
 
   String get message => switch (status) {
     401 => 'Sesi masuk telah berakhir.',
@@ -167,8 +188,8 @@ class ReviewApi {
   static List<String> get invalidConfiguration => [
     if (!_validOrigin(supabaseProject)) 'SUPABASE_URL',
     if (supabasePublicKey.isEmpty) 'SUPABASE_PUBLISHABLE_KEY',
-    if (!_validOrigin(reviewApiBase) ||
-        (_explicitConnectedMode && !const bool.hasEnvironment('API_BASE_URL')))
+    if (!const bool.hasEnvironment('API_BASE_URL') ||
+        !_validOrigin(reviewApiBase))
       'API_BASE_URL',
   ];
 
@@ -188,7 +209,9 @@ class ReviewApi {
           body: jsonEncode({'email': email, 'password': password}),
         )
         .timeout(const Duration(seconds: 10));
-    if (response.statusCode != 200) throw ReviewApiError(response.statusCode);
+    if (response.statusCode != 200) {
+      throw ReviewApiError.fromSignInResponse(response);
+    }
     final payload = jsonDecode(response.body);
     final token = payload is Json ? payload['access_token'] : null;
     if (token is! String || token.isEmpty) throw const ReviewApiError(503);

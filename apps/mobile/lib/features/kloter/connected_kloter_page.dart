@@ -65,11 +65,17 @@ class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
       if (mounted) {
         setState(() {
           _loginMessage = switch (error) {
-            ReviewApiError(status: 400 || 401 || 422) =>
-              'Email atau kata sandi tidak cocok.',
             ReviewApiError(status: 429) =>
               'Terlalu banyak percobaan. Tunggu sebentar sebelum mencoba lagi.',
-            _ => 'Belum bisa masuk. Periksa koneksi dan coba lagi.',
+            ReviewApiError(authCode: 'invalid_credentials') =>
+              'Email atau kata sandi tidak cocok.',
+            ReviewApiError(authCode: 'email_not_confirmed') =>
+              'Email belum dikonfirmasi. Periksa kotak masuk atau hubungi pengelola pabrik.',
+            ReviewApiError(authCode: 'user_banned') =>
+              'Akun ini tidak bisa digunakan. Hubungi pengelola pabrik.',
+            ReviewApiError(status: >= 500) || TimeoutException() =>
+              'Belum bisa masuk. Periksa koneksi dan coba lagi.',
+            _ => 'Belum bisa masuk. Coba lagi atau hubungi pengelola pabrik.',
           };
         });
       }
@@ -139,7 +145,9 @@ class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
             ProductionCatalogPage(api: api, scope: scope, kind: kind),
       ),
     );
-    if (mounted && identical(_api, api) && kind != ProductionCatalog.operators) {
+    if (mounted &&
+        identical(_api, api) &&
+        kind != ProductionCatalog.operators) {
       setState(_load);
     }
   }
