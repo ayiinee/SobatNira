@@ -7,12 +7,14 @@ class NiraSummaryCard extends StatelessWidget {
     this.label,
     this.value, {
     this.boxes = false,
+    this.cane = false,
     super.key,
   });
 
   final String label;
   final String value;
   final bool boxes;
+  final bool cane;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -28,22 +30,39 @@ class NiraSummaryCard extends StatelessWidget {
     ),
     child: Stack(
       children: [
-        Positioned(
-          bottom: -12,
-          right: -19,
-          child: IgnorePointer(
-            child: boxes
-                ? const SizedBox.square(
-                    dimension: 80,
-                    child: CustomPaint(painter: _BoxOverlayPainter()),
-                  )
-                : const Icon(
-                    Icons.layers_outlined,
-                    color: Color(0x20FFFFFF),
-                    size: 80,
-                  ),
+        if (cane)
+          Positioned(
+            right: -9,
+            top: 0,
+            bottom: 0,
+            width: 153,
+            child: IgnorePointer(
+              child: Image.asset(
+                'assets/sobatnira/art/hero-cane.png',
+                fit: BoxFit.contain,
+                alignment: Alignment.bottomRight,
+                opacity: const AlwaysStoppedAnimation(.9),
+                excludeFromSemantics: true,
+              ),
+            ),
+          )
+        else
+          Positioned(
+            bottom: -12,
+            right: -19,
+            child: IgnorePointer(
+              child: boxes
+                  ? const SizedBox.square(
+                      dimension: 80,
+                      child: CustomPaint(painter: _BoxOverlayPainter()),
+                    )
+                  : const Icon(
+                      Icons.layers_outlined,
+                      color: Color(0x20FFFFFF),
+                      size: 80,
+                    ),
+            ),
           ),
-        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(
             NiraSpace.lg,

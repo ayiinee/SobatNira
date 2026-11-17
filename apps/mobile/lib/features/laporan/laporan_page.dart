@@ -150,7 +150,7 @@ class _LaporanPageState extends State<LaporanPage> {
   Widget _margin() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      const NiraSummaryCard('Margin Produksi', 'Rp1.580.000'),
+      const NiraSummaryCard('Margin Produksi', 'Rp1.580.000', cane: true),
       const SizedBox(height: NiraSpace.sm),
       const NiraSummaryPair(
         first: NiraSummaryCard('Nilai produksi', '360Kg'),

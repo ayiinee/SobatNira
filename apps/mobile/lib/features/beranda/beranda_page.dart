@@ -506,6 +506,8 @@ class _QuickActionTileState extends State<_QuickActionTile> {
         onHover: (value) => setState(() => _hovered = value),
         onFocusChange: (value) => setState(() => _focused = value),
         onHighlightChanged: (value) => setState(() => _pressed = value),
+        hoverColor: Colors.transparent,
+        focusColor: Colors.transparent,
         borderRadius: BorderRadius.circular(niraRadius),
         child: Column(
           children: [
@@ -525,15 +527,6 @@ class _QuickActionTileState extends State<_QuickActionTile> {
                   color: active ? const Color(0xFFF4F8F1) : Colors.white,
                   borderRadius: BorderRadius.circular(niraRadius),
                   border: Border.all(color: niraGreen, width: 1.3),
-                  boxShadow: [
-                    BoxShadow(
-                      color: active
-                          ? const Color(0x28174B35)
-                          : Colors.transparent,
-                      blurRadius: active ? 10 : 0,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
                 ),
                 child: AnimatedScale(
                   scale: reduceMotion
