@@ -52,7 +52,7 @@ void main() {
     },
   );
 
-  testWidgets('pencarian dan tab Laporan/Kloter tidak ikut bergulir', (
+  testWidgets('tab Laporan dan header Kloter tidak ikut bergulir', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(393, 853));
@@ -65,11 +65,15 @@ void main() {
     ]) {
       await tester.tap(find.bySemanticsLabel(label));
       await tester.pumpAndSettle();
-      final search = tester.getTopLeft(find.byType(TextField));
+      final search = label == 'Kloter'
+          ? tester.getTopLeft(find.byType(TextField))
+          : null;
+      if (label == 'Laporan') expect(find.byType(TextField), findsNothing);
       final tab = tester.getTopLeft(find.text(tabLabel));
       await tester.drag(find.byKey(PageStorageKey(key)), const Offset(0, -420));
       await tester.pumpAndSettle();
-      expect(tester.getTopLeft(find.byType(TextField)), search);
+      if (search != null)
+        expect(tester.getTopLeft(find.byType(TextField)), search);
       expect(tester.getTopLeft(find.text(tabLabel)), tab);
       expect(tester.takeException(), isNull);
     }

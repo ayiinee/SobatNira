@@ -50,6 +50,11 @@ void main() {
     expect(find.text('Gula final'), findsWidgets);
     expect(find.text('Tebu diterima'), findsOneWidget);
     expect(find.text('Rendemen'), findsWidgets);
+    expect(find.byType(TextField), findsNothing);
+    expect(
+      tester.getCenter(find.bySemanticsLabel('Filter tanggal laporan')).dx,
+      greaterThan(tester.getCenter(find.byTooltip('Jenis grafik')).dx),
+    );
 
     await tap(tester, find.bySemanticsLabel('Filter tanggal laporan'));
     await tap(tester, find.text('Hari ini'));
