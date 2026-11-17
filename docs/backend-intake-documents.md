@@ -20,7 +20,7 @@ Konfirmasi sementara memakai `confirmationSource=synthetic_admin` dan identitas 
 
 Semua dokumen/penerimaan/pergerakan yang dibuat alur ini berlabel sintetis. Saldo stok normal tidak memasukkan data tersebut; gunakan `synthetic=true` untuk melihat saldo demo. Pengesahan penerimaan tidak menyelesaikan seluruh produksi atau menutup kloter.
 
-Foto bukti dapat diunggah dan dibaca privat melalui [modul bukti R2](backend-evidence.md), lalu terhubung ke revisi dokumen. Sumber ekstraksi tetap disimpan sebagai payload fixture dengan `sourcePayload.evidence.kind=synthetic_fixture`; upload foto tidak menjalankan OCR. Webhook WhatsApp, pemrosesan OCR, penolakan laporan dan koreksi pascapengesahan belum dihubungkan.
+Foto bukti dapat diunggah dan dibaca privat melalui [modul bukti R2](backend-evidence.md), lalu terhubung ke revisi dokumen. Sumber ekstraksi fixture disimpan sebagai `sourcePayload.evidence.kind=synthetic_fixture`. Alur nota riil tersedia melalui [penerimaan dari nota OCR](#penerimaan-dari-nota-ocr).
 
 ## Endpoint
 
@@ -197,3 +197,13 @@ Di Pekerjaan, buka nota truk yang sudah dikonfirmasi operator. Koreksi berat ber
 - Respons pengesahan dan detail tugas memuat `intake` dengan ID penerimaan, kloter, pemasok, berat, waktu dan UUID dokumen/revisi OCR. Stok tebu riil dapat dibaca di `GET /tenants/{tenantId}/factories/{factoryId}/stock/sugarcane?lotId={lotId}`.
 - Pengesahan, satu penerimaan per kloter dan nota, kredit stok, serta audit disimpan dalam satu transaksi. Jika relasi berubah atau stok gagal dibukukan, tugas tetap menunggu validasi. Retry dengan kunci yang sama mengembalikan hasil tersimpan.
 - Nota yang sudah disahkan sebelum fitur ini tetap ada dalam riwayat. Penerimaan historisnya perlu rekonsiliasi tersendiri.
+
+## Koreksi stok nota sah
+
+Pada revisi terkini yang berstatus sah di Pekerjaan, pilih **Koreksi stok nota sah**. Pilih kloter bila nota produksi mencakup beberapa blok, lalu masukkan kuantitas yang benar dan alasannya. Peninjau memerlukan akses review dan produksi pada pabrik tersebut. Jika ada revisi foto yang lebih baru, selesaikan review revisi itu dahulu.
+
+- Nota truk memakai berat bersih dalam kg. Koreksi tersedia selama kloter masih terbuka dan tebu belum digiling.
+- Nota produksi memakai volume hasil giling dalam liter. Koreksi tersedia selama kloter masih terbuka dan nira belum dipakai, tidak memiliki reservasi aktif, serta belum terlibat dalam transfer. Reservasi yang sudah dilepas tidak mengurangi saldo.
+- API menerima `POST /api/v1/mobile/documents/{documentId}/reconcile` dengan `Idempotency-Key` dan body `{revision_id, expected_version, lot_id, quantity, reason}`. `quantity` adalah nilai akhir dalam string desimal, bukan selisih.
+- Respons mengembalikan task dan revisi sah baru serta `reconciliation` dengan kuantitas sebelum, sesudah, selisih, dan alasan. Tindakan yang sama dapat diulang dengan kunci yang sama. Koreksi terhadap revisi usang atau stok yang sudah terpakai menghasilkan 409.
+- Posting awal tetap tersimpan. Ledger memasukkan selisih koreksi, sedangkan detail kloter menunjukkan berat efektif dan referensi revisi yang memperbarui stok. Layar Pekerjaan menampilkan riwayat koreksi pada tiap revisi.
