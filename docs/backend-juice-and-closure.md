@@ -12,7 +12,7 @@ Panggil `GET /tenants/{tenantId}/factories/{factoryId}/lots/{lotId}` dengan acce
 | --- | --- |
 | `synthetic` | Kategori data yang diminta. Bawaan `false`. Gunakan `?synthetic=true` untuk fixture. |
 | `netWeightGrams` | Berat penerimaan yang sudah sah dalam gram, berupa string desimal eksak atau `null` sebelum penerimaan sah. Contoh 1250,01 kg menjadi `"1250010"`. Nilai ini tetap menunjukkan berat penerimaan setelah tebu digiling. |
-| `status`, `closedAt`, `closedBy` | `open` sampai kloter ditutup pada kategori yang diminta. Kloter yang terbuka mengembalikan dua field penutupan sebagai `null`. |
+| `status`, `closureId`, `closedAt`, `closedBy` | Status pada kategori yang diminta. Kloter yang terbuka mengembalikan ketiga field penutupan sebagai `null`. |
 | `intake`, `milling` | `null` atau objek `{id, approvedAt, document}` untuk penerimaan dan penggilingan yang sudah dibukukan. |
 | `document` | `{source, documentId, revisionId, revisionNumber}`. Sumber `ocr` membawa UUID revisi sah pada `revisionId`. Sumber `synthetic` membawa nomor revisi sah pada `revisionNumber`. Field revisi yang tidak dipakai bernilai `null`. |
 
@@ -43,11 +43,19 @@ Contoh alur sintetis dengan satuan ml. Kloter A menghasilkan 250000. Setelah dua
 
 ## Penutupan kloter
 
-- `GET /closure?synthetic=true` memberi `status: "open" | "closed"`, `closedAt`, dan `closedBy`.
+- `GET /closure?synthetic=true` memberi `status: "open" | "closed"`, `closureId`, `closedAt`, dan `closedBy`.
 - `POST /closure` menerima body opsional `{synthetic: true}` dan mengembalikan status penutupan. Prasyarat lokal adalah penggilingan sah, saldo di kloter sudah nol, dan tidak ada reservasi aktif.
 - A memanggil `GET /batches/closure-check/{kloterId}?tenantId=…&factoryId=…&synthetic=…` dengan access token pemanggil. Respons yang dibutuhkan adalah HTTP 200 dengan `{"canClose":true}` atau `{"canClose":false}`. B memvalidasi akses tenant/pabrik dan menilai kesiapan penutupan berdasarkan catatan batch yang sah. Jalur ini harus baca saja dan tidak meminta operasi yang mengunci kloter yang sama.
 - Bila B mengembalikan `false`, A merespons 409. Jika konfigurasi kosong, B gagal, mencapai timeout, atau bentuk respons tidak sesuai, A merespons 503. Kloter tetap terbuka. Format respons dan penerusan Bearer diuji dengan fixture dan perlu dicocokkan dengan implementasi B sebelum integrasi nyata.
 - Saat B menyetujui, A menulis status tutup di bawah kunci kloter. Retry mengembalikan penutup yang sama. Setelah tutup, A menolak reservasi atau transfer baru yang melibatkan saldo kloter tersebut. Status tutup memakai kategori sintetis atau riil yang sama dengan ledger. Penutupan saldo kloter sumber tidak menutup pemakaian nira asalnya yang sudah dipindahkan ke kloter lain.
 - Agar pemeriksaan tetap konsisten, semua pemakaian batch baru harus melewati reservasi A dan B harus memperlakukan reservasi sebagai prasyarat pencatatan pemakaian. Pemeriksaan HTTP B tidak membuat transaksi lintas layanan.
+
+### Buka kembali dan riwayat
+
+- Terapkan migrasi `015_lot_reopening.sql` sebelum menjalankan API baru. Migrasi memberi UUID pada penutupan yang sudah ada dan menambahkan penyimpanan riwayat buka kembali.
+- `POST /closure/reopen` menerima `{closureId, reason, synthetic?}`. Ambil `closureId` dari status penutupan aktif pada kategori yang sama. Admin dan owner di pabrik tersebut dapat membuka kembali dengan alasan 1–500 karakter. Respons `200` berisi `{lotId, synthetic, closureId, reopenedBy, reopenedAt, reason}`. Panggil `GET /closure` untuk memuat status terkini.
+- Kiriman ulang dengan ID penutupan dan alasan yang sama mengembalikan bukti buka kembali sebelumnya, termasuk jika kloter telah ditutup ulang. ID yang tidak sesuai atau alasan berbeda menghasilkan `409`. ID lama tidak dapat digunakan untuk membuka penutupan baru.
+- `GET /closure/history?synthetic=true&limit=20&offset=0` memberi `items`, `total`, `limit`, dan `offset`. Setiap item memuat `id` penutupan, `closedBy`, `closedAt`, `reopenedBy`, `reopenedAt`, dan `reason`. Data buka kembali bernilai `null` selama penutupan masih aktif. Riwayat mengikuti kategori riil atau sintetis yang dipilih.
+- Buka kembali mengubah status kloter dan mencatat audit dalam satu transaksi. Saldo, reservasi, transfer, dan revisi dokumen tetap mengikuti catatan semula. Penutupan ulang memakai `closureId` baru serta menjalankan lagi pengecekan saldo dan Backend B.
 
 Konfigurasikan `BATCH_API_BASE_URL` dengan origin Backend B, tanpa path. Gunakan HTTPS untuk origin nonlokal. `BATCH_CLOSURE_TIMEOUT_MS` bawaan 3000. Jalur API penyimpanan tetap dibatasi role dan cakupan pabrik, termasuk untuk data sintetis.
