@@ -12,6 +12,7 @@ class ReportDateButton extends StatelessWidget {
     button: true,
     child: Tooltip(
       message: 'Filter tanggal laporan',
+      excludeFromSemantics: true,
       child: Material(
         color: niraGreen,
         borderRadius: BorderRadius.circular(niraRadius),
