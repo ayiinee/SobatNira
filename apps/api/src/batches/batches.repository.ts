@@ -7,6 +7,7 @@ export interface BatchesRepository {
   findAny(id: string): Promise<Batch | undefined>;
   create(scope: { tenantId: string; factoryId: string }, input: BatchInput): Promise<Batch>;
   addContribution(batch: Batch, input: Contribution): Promise<Batch>;
+  atomicContribution?(batch: Batch, input: Contribution, requestId: string, userId: string): Promise<Batch>;
   setCooking(batch: Batch, cooking: CookingRecord): Promise<Batch>;
   setWeighing(batch: Batch, weighing: Weighing): Promise<Batch>;
   setGrading(batch: Batch, grading: Grading): Promise<Batch>;
@@ -75,6 +76,7 @@ export class SupabaseBatchesRepository extends FixtureBatchesRepository {
   override async get(scope: { tenantId: string; factoryId: string }, id: string) { const rows = await this.list(scope); return rows.find((row) => row.id === id); }
   override async findAny(id: string) { const response = await this.request(`/batches?id=eq.${encodeURIComponent(id)}&select=*`); const row = ((await response.json()) as Record<string, any>[])[0]; return row && this.mapRow(row); }
   private async mutate(path: string, body: Record<string, unknown>, method = 'POST') { await this.request(path, { method, headers: { Prefer: 'return=minimal' }, body: JSON.stringify(body) }); }
+  async atomicContribution(batch: Batch, input: Contribution, requestId: string, userId: string) { await this.mutate('/rpc/record_batch_nira_contribution', { p_tenant_id: batch.tenantId, p_factory_id: batch.factoryId, p_user_id: userId, p_batch_id: batch.id, p_lot_id: input.kloterId, p_request_id: requestId, p_quantity_ml: input.volumeMl, p_occurred_at: input.occurredAt }); return (await this.get({ tenantId: batch.tenantId, factoryId: batch.factoryId }, batch.id))!; }
   override async create(scope: { tenantId: string; factoryId: string }, input: BatchInput) {
     const productionConfigId = process.env.DEFAULT_PRODUCTION_CONFIG_ID;
     const priceVersionId = process.env.DEFAULT_PRICE_VERSION_ID;
@@ -88,3 +90,4 @@ export class SupabaseBatchesRepository extends FixtureBatchesRepository {
   override async setGrading(batch: Batch, grading: Grading) { const gradeResponse = await this.request(`/grades?code=eq.${encodeURIComponent(grading.gradeCode)}&factory_id=eq.${encodeURIComponent(batch.factoryId)}&select=id`); const grade = ((await gradeResponse.json()) as Array<{ id: string }>)[0]; if (!grade) throw new Error(`Grade ${grading.gradeCode} tidak ditemukan`); await this.mutate('/batch_grades', { tenant_id: batch.tenantId, factory_id: batch.factoryId, batch_id: batch.id, grade_id: grade.id, sugar_weight_kg: grading.sugarWeightKg, occurred_at: grading.occurredAt }); await this.mutate(`/batches?id=eq.${batch.id}`, { status: 'GRADED' }, 'PATCH'); return (await this.get({ tenantId: batch.tenantId, factoryId: batch.factoryId }, batch.id))!; }
   override async addRework(batch: Batch, rework: Rework) { await this.mutate('/reworks', { tenant_id: batch.tenantId, factory_id: batch.factoryId, source_batch_id: rework.sourceBatchId, receiving_batch_id: rework.receivingBatchId, weight_kg: rework.weightKg, status: rework.status, occurred_at: rework.occurredAt }); return (await this.get({ tenantId: batch.tenantId, factoryId: batch.factoryId }, batch.id))!; }
 }
+
