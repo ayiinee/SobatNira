@@ -97,6 +97,8 @@ Jalankan gateway, NestJS dan FastAPI pada host yang sama untuk memakai alamat lo
 
    Sajikan `build/web` dari origin yang terdaftar di `CORS_ORIGINS`. Masuk dengan akun Supabase, pilih pabrik yang terdaftar di akun, lalu buka **Kloter** atau **Pekerjaan**.
 
+   Jika probe privasi R2 gagal karena koneksi ke hostname lama terputus, cocokkan hostname dengan daftar domain publik bucket di dashboard R2 dan ulangi `check-media-privacy` dari host deployment. Bila hostname lama sudah dihapus dan dashboard menunjukkan seluruh akses publik dinonaktifkan, `R2_PUBLIC_BASE_URL` boleh dikosongkan. Verifikasi ini terpisah dari pemeriksaan akses S3.
+
 ### Smoke test setelah pairing
 
 1. Dari `apps/ai`, jalankan `uv run --locked --extra paddle python synthetic_notes.py ../../.tmp/live-fixtures`. Kirim `truck.png` dari nomor operator terdaftar dan periksa tanda terima, ringkasan otomatis, berat 1250 kg, serta perintah `STATUS`. Kirim `KONFIRMASI <dokumen> <revisi>`. Di Pekerjaan buka badge laporan baru, periksa foto dan evidence, lalu sahkan ke kloter uji A. Status harus `VALIDATED` setelah halaman dimuat ulang.
