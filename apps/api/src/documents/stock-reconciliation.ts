@@ -57,7 +57,7 @@ export class StockReconciliation {
     const locked = await db.query(`SELECT id FROM sobatnira.lots WHERE tenant_id=$1 AND factory_id=$2 AND id=$3 FOR UPDATE`, values);
     if (!locked.rows.length) throw new ConflictException('Kloter koreksi tidak tersedia pada pabrik ini.');
     const status = await db.query(`SELECT 1 FROM sobatnira.lot_closures
-      WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3 AND NOT is_synthetic`, values);
+      WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3 AND NOT is_synthetic AND reopened_at IS NULL`, values);
     if (status.rows.length) throw new ConflictException('Kloter sudah ditutup.');
 
     const isCane = revision.extraction?.document_type === 'TRUCK_ARRIVAL_NOTE';

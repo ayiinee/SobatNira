@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { parseStockQuery } from '../documents/intake.dto';
 import { decimal } from '../production/decimal';
-import { object, uuid } from '../production/production.dto';
+import { object, parsePage, text, uuid } from '../production/production.dto';
 
 function synthetic(input: unknown): boolean {
   if (input !== undefined && typeof input !== 'boolean') throw new BadRequestException('synthetic harus boolean.');
@@ -14,6 +14,20 @@ export function parseAvailability(input: unknown) {
 
 export function parseClosure(input: unknown) {
   return synthetic(object(input ?? {}, ['synthetic']).synthetic);
+}
+
+export function parseReopen(input: unknown) {
+  const row = object(input, ['closureId', 'reason', 'synthetic']);
+  return {
+    closureId: uuid(row.closureId, 'closureId'),
+    reason: text(row.reason, 'reason', 500),
+    synthetic: synthetic(row.synthetic),
+  };
+}
+
+export function parseClosureHistory(input: unknown) {
+  const { synthetic: category, ...page } = object(input, ['synthetic', 'limit', 'offset']);
+  return { synthetic: parseAvailability({ synthetic: category }), page: parsePage(page) };
 }
 
 export function parseReservation(input: unknown) {
