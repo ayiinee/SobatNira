@@ -27,7 +27,7 @@ export async function queryPage<T extends { id: string }>(
 export class ProductionHistoryRepository {
   constructor(private readonly database: DatabaseService) {}
 
-  list(access: FactoryAccess, entity: 'supplier' | 'lot', id: string, page: Pagination) {
+  list(access: FactoryAccess, entity: 'supplier' | 'lot' | 'cane_type', id: string, page: Pagination) {
     return queryPage<{ id: string; action: string; actorId: string; before: unknown; after: unknown; occurredAt: Date }>(
       this.database, `${FACTORY_SCOPE_CTE}, filtered AS (
         SELECT e.id, e.action, e.actor_id AS "actorId", e.before_data AS before,
