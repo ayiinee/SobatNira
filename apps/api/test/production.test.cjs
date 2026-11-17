@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { BadRequestException } = require('@nestjs/common');
+const { parseCaneTypeCreate, parseCaneTypeUpdate } = require('../dist/cane-types/cane-types.dto');
 const { parseSupplierInput, parseLotInput, parseSupplierQuery, parseLotQuery, timestamp } = require('../dist/production/production.dto');
 
 const supplierId = '40000000-0000-4000-8000-000000000001';
@@ -13,6 +14,18 @@ test('supplier input accepts basic metadata and rejects scope/role injection or 
     assert.throws(() => parseSupplierInput(input), BadRequestException);
   }
   assert.throws(() => parseSupplierInput({ isActive: 'false' }, true), BadRequestException);
+});
+
+test('cane type catalogue normalizes codes and keeps them stable during edits', () => {
+  assert.deepEqual(parseCaneTypeCreate({ code: ' demo_01 ', name: ' Jenis Uji ' }), { code: 'DEMO_01', name: 'Jenis Uji' });
+  assert.equal(parseCaneTypeUpdate({ isActive: false }).isActive, false);
+  for (const input of [{ code: 'ß', name: 'Uji' }, { code: 'DEMO 01', name: 'Uji' }, { code: 'x'.repeat(41), name: 'Uji' },
+    { code: 'DEMO', name: '\t' }, { code: 'DEMO', name: 'Uji', tenantId: supplierId }]) {
+    assert.throws(() => parseCaneTypeCreate(input), BadRequestException);
+  }
+  for (const input of [{}, { code: 'ABC' }, { isActive: 'false' }, { name: null }]) {
+    assert.throws(() => parseCaneTypeUpdate(input), BadRequestException);
+  }
 });
 
 test('lot input requires a supplier and explicit event time, with an optional manual display code', () => {
