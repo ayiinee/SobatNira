@@ -131,13 +131,14 @@ class _BerandaPageState extends State<BerandaPage> {
                           );
                         },
                         onVerticalDragUpdate: (event) {
-                          if (_sheet.isAttached)
+                          if (_sheet.isAttached) {
                             _sheet.jumpTo(
                               (_sheet.size - event.delta.dy / height).clamp(
                                 collapsed,
                                 expanded,
                               ),
                             );
+                          }
                         },
                         onVerticalDragEnd: (_) => settle(),
                         child: SizedBox(
@@ -164,8 +165,9 @@ class _BerandaPageState extends State<BerandaPage> {
                       inset: 27,
                       wideIndicator: true,
                       onSelected: (value) {
-                        if (scrollController.hasClients)
+                        if (scrollController.hasClients) {
                           scrollController.jumpTo(0);
+                        }
                         setState(() => _selected = value);
                       },
                     ),

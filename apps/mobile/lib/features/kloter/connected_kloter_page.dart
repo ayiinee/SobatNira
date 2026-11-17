@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../../sobatnira_ui.dart';
 import '../pekerjaan/pekerjaan_page.dart';
 import '../pekerjaan/review_api.dart';
+import 'production_catalog_page.dart';
+import 'production_lot_editor.dart';
+import 'lot_closure_page.dart';
 
 class ConnectedKloterPage extends StatefulWidget {
   const ConnectedKloterPage({
@@ -101,6 +104,39 @@ class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
     _load();
   });
 
+  Future<void> _openCatalog(FactoryScope scope, ProductionCatalog kind) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) =>
+            ProductionCatalogPage(api: _api!, scope: scope, kind: kind),
+      ),
+    );
+    if (mounted) setState(_load);
+  }
+
+  Future<void> _createLot(FactoryScope scope) async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ProductionLotEditor(api: _api!, scope: scope),
+      ),
+    );
+    if (mounted && saved == true) {
+      setState(() {
+        _offset = 0;
+        _load();
+      });
+    }
+  }
+
+  Future<void> _openLot(FactoryScope scope, Json lot) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => _ConnectedLotDetail(api: _api!, scope: scope, lot: lot),
+      ),
+    );
+    if (mounted) setState(_load);
+  }
+
   void _openReview(FactoryScope scope) {
     final api = _api!;
     Navigator.of(context).push<void>(
@@ -198,6 +234,21 @@ class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
         icon: const Icon(Icons.fact_check_outlined),
         label: const Text('Pekerjaan'),
       ),
+      Wrap(
+        spacing: 8,
+        children: [
+          for (final kind in ProductionCatalog.values)
+            OutlinedButton(
+              onPressed: () => _openCatalog(scope, kind),
+              child: Text(kind.label),
+            ),
+        ],
+      ),
+      FilledButton.icon(
+        onPressed: () => _createLot(scope),
+        icon: const Icon(Icons.add),
+        label: const Text('Tambah kloter'),
+      ),
       TextField(
         controller: _searchInput,
         maxLength: 100,
@@ -247,15 +298,7 @@ class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
               title: Text(_lotCode(lot)),
               subtitle: Text('${lot['supplierName']} · ${_receivedAt(lot)}'),
               trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                final api = _api!;
-                Navigator.of(context).push<void>(
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        _ConnectedLotDetail(api: api, scope: scope, lot: lot),
-                  ),
-                );
-              },
+              onTap: () => _openLot(scope, lot),
             ),
           ),
         if (_offset > 0 || _offset + limit < total)
@@ -315,22 +358,57 @@ class _ConnectedLotDetail extends StatefulWidget {
 class _ConnectedLotDetailState extends State<_ConnectedLotDetail> {
   late var _data = _load();
 
+  Future<void> _closure() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => LotClosurePage(
+          api: widget.api,
+          scope: widget.scope,
+          lotId: widget.lot['id'] as String,
+        ),
+      ),
+    );
+    if (mounted) {
+      setState(() {
+        _data = _load();
+      });
+    }
+  }
+
+  Future<void> _edit(Json lot) async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) =>
+            ProductionLotEditor(api: widget.api, scope: widget.scope, lot: lot),
+      ),
+    );
+    if (mounted && saved == true) {
+      setState(() {
+        _data = _load();
+      });
+    }
+  }
+
   Future<List<Json>> _load() {
     final id = widget.lot['id'] as String;
-    return Future.wait([
+    final request = Future.wait([
       widget.api.lot(widget.scope, id),
       widget.api.juice(widget.scope, id),
     ]);
+    request.ignore();
+    return request;
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: Text(_lotCode(widget.lot)),
+      title: const Text('Detail kloter'),
       actions: [
         IconButton(
           tooltip: 'Muat ulang detail',
-          onPressed: () => setState(() => _data = _load()),
+          onPressed: () => setState(() {
+            _data = _load();
+          }),
           icon: const Icon(Icons.refresh),
         ),
       ],
@@ -348,12 +426,23 @@ class _ConnectedLotDetailState extends State<_ConnectedLotDetail> {
           if (snapshot.hasError) {
             return _LoadError(
               error: snapshot.error,
-              retry: () => setState(() => _data = _load()),
+              retry: () => setState(() {
+                _data = _load();
+              }),
             );
           }
           final [lot, stock] = snapshot.requireData;
           return ListView(
             children: [
+              ListTile(
+                title: const Text('Kode kloter'),
+                subtitle: Text(_lotCode(lot)),
+                trailing: IconButton(
+                  tooltip: 'Edit kloter',
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: () => _edit(lot),
+                ),
+              ),
               ListTile(
                 title: const Text('Pabrik'),
                 subtitle: Text(widget.scope.factoryName),
@@ -371,6 +460,11 @@ class _ConnectedLotDetailState extends State<_ConnectedLotDetail> {
                 subtitle: Text(
                   lot['status'] == 'closed' ? 'Ditutup' : 'Terbuka',
                 ),
+              ),
+              OutlinedButton.icon(
+                onPressed: _closure,
+                icon: const Icon(Icons.history),
+                label: const Text('Penutupan dan riwayat'),
               ),
               ListTile(
                 title: const Text('Berat bersih penerimaan'),
