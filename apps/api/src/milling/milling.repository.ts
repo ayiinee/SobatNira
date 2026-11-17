@@ -108,7 +108,7 @@ export class MillingRepository {
   async intakeAndBalance(tx: DatabaseSession, access: FactoryAccess, lotId: string, synthetic = true) {
     return (await tx.query<{ id: string; netWeightKg: string; occurredAt: Date; stockMatches: boolean; alreadyMilled: boolean }>(`
       SELECT i.id, i.net_weight_kg::text AS "netWeightKg", i.occurred_at AS "occurredAt",
-        COALESCE((SELECT sum(s.quantity_delta_kg) FROM sobatnira.sugarcane_stock_movements s
+        COALESCE((SELECT sum(s.quantity_delta_kg) FROM sobatnira.cane_stock_entries s
           WHERE s.tenant_id = i.tenant_id AND s.factory_id = i.factory_id AND s.lot_id = i.lot_id AND s.is_synthetic = i.is_synthetic), 0)
           = i.net_weight_kg AS "stockMatches",
         EXISTS(SELECT 1 FROM sobatnira.milling_records m WHERE m.tenant_id = i.tenant_id AND m.factory_id = i.factory_id AND m.lot_id = i.lot_id) AS "alreadyMilled"
@@ -173,7 +173,7 @@ export class MillingRepository {
   async balance(access: FactoryAccess, synthetic: boolean, lotId?: string) {
     const result = await this.database.query<{ quantityLiters: string }>(`WITH ${FACTORY_SCOPE_CTE}
       SELECT COALESCE(sum(m.quantity_delta_liters), 0)::text AS "quantityLiters"
-      FROM sobatnira.juice_stock_movements m JOIN authorized_scope scope
+      FROM sobatnira.juice_produced_entries m JOIN authorized_scope scope
         ON scope."tenantId" = m.tenant_id AND scope."factoryId" = m.factory_id
       WHERE m.is_synthetic = $4 AND ($5::uuid IS NULL OR m.lot_id = $5)`, [...scopeValues(access), synthetic, lotId ?? null]);
     return { material: 'juice', unit: 'L', synthetic, lotId: lotId ?? null, quantityLiters: result.rows[0].quantityLiters };
@@ -183,12 +183,16 @@ export class MillingRepository {
     return (await this.database.query<{ lotId: string; milling: Record<string, unknown> | null }>(`WITH ${FACTORY_SCOPE_CTE}
       SELECT l.id AS "lotId", (SELECT jsonb_build_object('id', m.id, 'documentId', m.document_id,
         'documentRevision', m.document_revision, 'caneConsumedKg', m.cane_consumed_kg::text,
-        'juiceProducedLiters', m.juice_produced_liters::text, 'reportedBatchCount', m.reported_batch_count,
-        'reportedBatches', m.reported_batches, 'occurredAt', m.occurred_at, 'approvedAt', m.approved_at, 'synthetic', m.is_synthetic)
+        'juiceProducedLiters', COALESCE(c.quantity_after, m.juice_produced_liters)::text, 'reportedBatchCount', m.reported_batch_count,
+        'reportedBatches', m.reported_batches, 'occurredAt', m.occurred_at,
+        'approvedAt', COALESCE(c.created_at,m.approved_at), 'synthetic', m.is_synthetic)
         || CASE WHEN m.is_synthetic THEN '{}'::jsonb
-          ELSE jsonb_build_object('ocrDocumentId', m.ocr_document_id, 'ocrRevisionId', m.ocr_revision_id,
+          ELSE jsonb_build_object('ocrDocumentId', m.ocr_document_id, 'ocrRevisionId', COALESCE(c.revision_id,m.ocr_revision_id),
             'ocrCaneLabel', m.ocr_cane_label) END
-        FROM sobatnira.milling_records m WHERE m.tenant_id = l.tenant_id AND m.factory_id = l.factory_id
+        FROM sobatnira.milling_records m LEFT JOIN LATERAL (
+          SELECT revision_id,quantity_after,created_at FROM sobatnira.stock_reconciliations
+          WHERE milling_record_id=m.id ORDER BY revision_version DESC LIMIT 1
+        ) c ON true WHERE m.tenant_id = l.tenant_id AND m.factory_id = l.factory_id
           AND m.lot_id = l.id AND m.is_synthetic = $5) AS milling
       FROM sobatnira.lots l JOIN authorized_scope scope ON scope."tenantId" = l.tenant_id AND scope."factoryId" = l.factory_id
       WHERE l.id = $4::uuid`, [...scopeValues(access), lotId, synthetic])).rows[0];

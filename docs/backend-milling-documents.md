@@ -19,7 +19,7 @@ Jalankan `npm run db:migrate` dan `npm run db:migrate:ocr` pada database yang sa
 - `GET /api/v1/mobile/review-tasks/{taskId}/milling-lots` memberi pilihan kloter berhalaman. Respons detail tugas memuat `milling` berisi hasil yang sudah dibukukan beserta UUID revisi awal.
 - `POST /api/v1/mobile/documents/{documentId}/validate` menerima `milling` sebagai daftar `{cane_label, lot_id, occurred_at, juice_produced_liters}`, dengan liter dalam string desimal dan waktu ISO 8601 berzona. Kirim satu elemen untuk tiap blok baru dan gunakan `milling: []` jika semua blok sudah dibukukan.
 - Pengesahan, debit tebu, kredit nira, dan audit satu nota berada dalam satu transaksi. Semua blok baru harus valid. Retry dengan kunci yang sama mengembalikan hasil pengesahan sebelumnya.
-- Foto susulan mengikuti label tebu yang sama walau urutan blok berubah. Pengesahan susulan dapat melengkapi hasil di workflow OCR dan membukukan blok baru. Untuk mengubah volume kloter yang sudah dibukukan, gunakan alur rekonsiliasi stok setelah tersedia.
+- Foto susulan mengikuti label tebu yang sama walau urutan blok berubah. Pengesahan susulan dapat melengkapi hasil di workflow OCR dan membukukan blok baru. Perubahan volume yang sudah dibukukan memakai [koreksi stok nota sah](backend-intake-documents.md#koreksi-stok-nota-sah).
 - `GET /lots/{lotId}/milling-summary` pada cakupan pabrik memuat `ocrDocumentId`, `ocrRevisionId`, dan `ocrCaneLabel` untuk catatan riil. `reportedBatches` adalah snapshot pengamatan pada saat stok dibukukan. Untuk nota OCR, `contentsKg` adalah berat isi wajan dari revisi dan `finishTime` adalah jam turun jika terbaca. Pemakaian nira batch tetap tercatat melalui API nira Backend B.
 
 ## Setup dan pemeriksaan
@@ -113,7 +113,7 @@ Konfirmasi mengantrekan dokumen untuk admin. Pengesahan membukukan berat tebu pe
 - `expectedRevision` menahan edit/pengesahan dari layar lama. Revisi koreksi admin tetap menyimpan referensi revisi konfirmasi operator. Sumber sintetis asli tidak ditimpa.
 - Pengesahan mengunci dokumen dan kloter, membaca ulang penerimaan serta saldo pada snapshot baru, memastikan saldo tebu sama dengan penerimaan, kemudian menulis record, stok tebu negatif, stok nira, status, dan audit dalam satu transaksi. Kegagalan salah satu membatalkan semuanya.
 - Retry pengesahan revisi yang sama mengembalikan hasil yang sama. Dua dokumen berbeda untuk kloter sama bersaing: hanya satu yang boleh membukukan stok. Constraint database mengikat debit kg dan kredit L ke record sumbernya.
-- Dokumen sah tidak dapat diedit dengan PATCH draf. Koreksi resmi berikut rekonsiliasi tahap turunannya memerlukan alur tersendiri.
+- Dokumen sah memakai alur koreksi stok tersendiri. PATCH draf hanya berlaku sebelum pengesahan.
 - Endpoint sintetis dan simulasi konfirmasi dinonaktifkan pada `APP_ENV=production`. Tidak ada hak baca langsung tabel untuk `anon` atau `authenticated`; NestJS membatasi semua operasi dengan tenant/pabrik dan membership terbaru.
 
 ## Meninjau perubahan Git
