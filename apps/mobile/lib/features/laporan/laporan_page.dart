@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/chart_growth.dart';
 import '../../widgets/summary_card.dart';
 import '../kloter/kloter_date_filter.dart';
 import 'demo_analytics.dart';
@@ -190,12 +191,15 @@ class _LaporanPageState extends State<LaporanPage> {
                 const SizedBox(height: NiraSpace.sm),
                 SizedBox(
                   height: 134,
-                  child: CustomPaint(
-                    painter: _ReportChartPainter(
-                      margin: margin,
-                      bars:
-                          margin ||
-                          widget.analytics.variant == ProductionVariant.grade,
+                  child: ChartGrowth(
+                    builder: (context, progress) => CustomPaint(
+                      painter: _ReportChartPainter(
+                        margin: margin,
+                        bars:
+                            margin ||
+                            widget.analytics.variant == ProductionVariant.grade,
+                        progress: progress,
+                      ),
                     ),
                   ),
                 ),
@@ -206,6 +210,7 @@ class _LaporanPageState extends State<LaporanPage> {
 
   Widget _rendemenTable() => _tableSection(
     title: 'Rendemen',
+    plain: true,
     columns: const ['Pemasok', 'Gula final', 'Rendemen'],
     rows: widget.analytics.visibleRows,
     onTap: () => widget.onOpenDetail(ReportDetailKind.rendemen),
@@ -229,104 +234,195 @@ class _LaporanPageState extends State<LaporanPage> {
     onTap: () => widget.onOpenDetail(ReportDetailKind.margin),
   );
 
+  Widget _plainTable(
+    String title,
+    List<String> columns,
+    List<AnalyticsRow> rows,
+    VoidCallback onTap,
+  ) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Text(title, style: niraText(NiraType.section, weight: FontWeight.w700)),
+      const SizedBox(height: NiraSpace.sm),
+      Row(
+        children: [
+          for (var index = 0; index < columns.length; index++)
+            Expanded(
+              flex: index == 0 ? 4 : 3,
+              child: Text(
+                columns[index],
+                textAlign: index == 0 ? TextAlign.start : TextAlign.center,
+                style: niraText(
+                  NiraType.caption,
+                  color: const Color(0xFF858B87),
+                  weight: FontWeight.w600,
+                ),
+              ),
+            ),
+          const SizedBox(width: 20),
+        ],
+      ),
+      const SizedBox(height: NiraSpace.xs),
+      const Divider(height: 1, thickness: 1, color: niraLine),
+      if (rows.isEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: NiraSpace.lg),
+          child: Text(
+            'Data tidak ditemukan',
+            textAlign: TextAlign.center,
+            style: niraText(NiraType.caption, color: niraLeaf),
+          ),
+        )
+      else
+        for (final row in rows) ...[
+          InkWell(
+            onTap: onTap,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 40),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 4,
+                      child: Text(row.supplier, style: niraText(NiraType.body)),
+                    ),
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        row.value,
+                        textAlign: TextAlign.center,
+                        style: niraText(NiraType.body),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        row.secondary,
+                        textAlign: TextAlign.center,
+                        style: niraText(NiraType.body),
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right, color: niraGreen, size: 20),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const Divider(height: 1, thickness: 1, color: niraLine),
+        ],
+    ],
+  );
+
   Widget _tableSection({
     required String title,
     required List<String> columns,
     required List<AnalyticsRow> rows,
     required VoidCallback onTap,
-  }) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Text(title, style: niraText(NiraType.section, weight: FontWeight.w600)),
-      const SizedBox(height: NiraSpace.xs),
-      NiraOutline(
-        Column(
+    bool plain = false,
+  }) => plain
+      ? _plainTable(title, columns, rows, onTap)
+      : Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                NiraSpace.sm,
-                NiraSpace.sm,
-                NiraSpace.sm,
-                NiraSpace.xs,
-              ),
-              child: Row(
-                children: [
-                  for (final column in columns)
-                    Expanded(
-                      child: Text(
-                        column,
-                        style: niraText(
-                          NiraType.caption,
-                          color: niraLeaf,
-                          weight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+            Text(
+              title,
+              style: niraText(NiraType.section, weight: FontWeight.w600),
             ),
-            if (rows.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(NiraSpace.lg),
-                child: Text(
-                  'Data tidak ditemukan',
-                  textAlign: TextAlign.center,
-                  style: niraText(NiraType.caption, color: niraLeaf),
-                ),
-              )
-            else
-              for (final row in rows.take(7))
-                InkWell(
-                  onTap: onTap,
-                  child: Padding(
+            const SizedBox(height: NiraSpace.xs),
+            NiraOutline(
+              Column(
+                children: [
+                  Padding(
                     padding: const EdgeInsets.fromLTRB(
                       NiraSpace.sm,
                       NiraSpace.sm,
                       NiraSpace.sm,
-                      NiraSpace.sm,
+                      NiraSpace.xs,
                     ),
                     child: Row(
                       children: [
-                        Expanded(
-                          child: Text(
-                            row.supplier,
-                            style: niraText(NiraType.body),
-                          ),
-                        ),
-                        Expanded(
-                          child: Text(
-                            row.value,
-                            style: niraText(NiraType.body),
-                          ),
-                        ),
-                        if (columns.length > 2)
+                        for (final column in columns)
                           Expanded(
                             child: Text(
-                              row.secondary,
-                              style: niraText(NiraType.body),
+                              column,
+                              style: niraText(
+                                NiraType.caption,
+                                color: niraLeaf,
+                                weight: FontWeight.w600,
+                              ),
                             ),
                           ),
-                        const Icon(
-                          Icons.chevron_right,
-                          size: 15,
-                          color: niraGreen,
-                        ),
                       ],
                     ),
                   ),
-                ),
+                  if (rows.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(NiraSpace.lg),
+                      child: Text(
+                        'Data tidak ditemukan',
+                        textAlign: TextAlign.center,
+                        style: niraText(NiraType.caption, color: niraLeaf),
+                      ),
+                    )
+                  else
+                    for (final row in rows.take(7))
+                      InkWell(
+                        onTap: onTap,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                            NiraSpace.sm,
+                            NiraSpace.sm,
+                            NiraSpace.sm,
+                            NiraSpace.sm,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  row.supplier,
+                                  style: niraText(NiraType.body),
+                                ),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  row.value,
+                                  style: niraText(NiraType.body),
+                                ),
+                              ),
+                              if (columns.length > 2)
+                                Expanded(
+                                  child: Text(
+                                    row.secondary,
+                                    style: niraText(NiraType.body),
+                                  ),
+                                ),
+                              const Icon(
+                                Icons.chevron_right,
+                                size: 15,
+                                color: niraGreen,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                ],
+              ),
+            ),
           ],
-        ),
-      ),
-    ],
-  );
+        );
 }
 
 class _ReportChartPainter extends CustomPainter {
-  const _ReportChartPainter({required this.margin, required this.bars});
+  const _ReportChartPainter({
+    required this.margin,
+    required this.bars,
+    required this.progress,
+  });
 
   final bool margin;
   final bool bars;
+  final double progress;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -343,8 +439,8 @@ class _ReportChartPainter extends CustomPainter {
       final gold = Paint()..color = niraGold;
       for (var i = 0; i < 7; i++) {
         final x = plot.left + 15 + i * 31;
-        final h1 = 28.0 + (i % 3) * 15.0;
-        final h2 = 20.0 + ((i + 1) % 3) * 18.0;
+        final h1 = (28.0 + (i % 3) * 15.0) * progress;
+        final h2 = (20.0 + ((i + 1) % 3) * 18.0) * progress;
         canvas.drawRect(Rect.fromLTWH(x, plot.bottom - h1, 10.0, h1), bar);
         canvas.drawRect(
           Rect.fromLTWH(x + 11.0, plot.bottom - h2, 10.0, h2),
@@ -372,5 +468,7 @@ class _ReportChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ReportChartPainter oldDelegate) =>
-      oldDelegate.margin != margin || oldDelegate.bars != bars;
+      oldDelegate.margin != margin ||
+      oldDelegate.bars != bars ||
+      oldDelegate.progress != progress;
 }
