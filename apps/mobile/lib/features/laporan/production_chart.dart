@@ -165,8 +165,9 @@ class _ProductionChartState extends State<ProductionChart> {
                         ((position.dx - plot.left) / plot.width * days.length)
                             .floor()
                             .clamp(0, days.length - 1);
-                    if (_selectedDay != days[index].day)
+                    if (_selectedDay != days[index].day) {
                       setState(() => _selectedDay = days[index].day);
+                    }
                   }
 
                   return Semantics(
@@ -338,7 +339,7 @@ class _ProductionPainter extends CustomPainter {
     for (var i = 0; i < days.length; i++) {
       final day = days[i];
       final x = plot.left + slot * (i + .5);
-      if (i == selected)
+      if (i == selected) {
         canvas.drawRRect(
           RRect.fromRectAndRadius(
             Rect.fromLTWH(x - slot / 2 + 1, plot.top, slot - 2, plot.height),
@@ -346,6 +347,7 @@ class _ProductionPainter extends CustomPainter {
           ),
           Paint()..color = const Color(0x0D174B35),
         );
+      }
       if (grade) {
         var bottom = plot.bottom;
         for (final (value, color) in [
