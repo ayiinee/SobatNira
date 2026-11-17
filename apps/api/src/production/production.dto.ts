@@ -4,7 +4,8 @@ import { FactoryAccess, UUID_PATTERN } from '../auth/auth.types';
 export interface Pagination { limit: number; offset: number }
 export interface SupplierInput { name?: string; isActive?: boolean }
 export interface LotInput { supplierId?: string; displayCode?: string | null; receivedAt?: string }
-export interface SupplierQuery extends Pagination { q?: string; isActive?: boolean }
+export interface CatalogQuery extends Pagination { q?: string; isActive?: boolean }
+export type SupplierQuery = CatalogQuery;
 export interface LotQuery extends Pagination { q?: string; supplierId?: string; receivedFrom?: string; receivedBefore?: string }
 
 export function object(input: unknown, allowed: string[]): Record<string, unknown> {
@@ -21,6 +22,12 @@ export function text(input: unknown, field: string, max: number): string {
     throw new BadRequestException(`${field} harus berisi 1–${max} karakter tanpa karakter kontrol.`);
   }
   return result;
+}
+
+export function caneTypeCode(input: unknown, field: string): string {
+  const code = text(input, field, 40);
+  if (!/^[A-Za-z0-9_-]+$/.test(code)) throw new BadRequestException(`${field} tidak valid.`);
+  return code;
 }
 
 export function uuid(input: unknown, field = 'id'): string {
@@ -76,9 +83,9 @@ export function parseLotInput(input: unknown, patch = false): LotInput {
   return result;
 }
 
-export function parseSupplierQuery(input: unknown): SupplierQuery {
+export function parseCatalogQuery(input: unknown): CatalogQuery {
   const record = object(input, ['q', 'isActive', 'limit', 'offset']);
-  const query: SupplierQuery = pagination(record);
+  const query: CatalogQuery = pagination(record);
   if (record.q !== undefined) query.q = text(record.q, 'q', 100);
   if (record.isActive !== undefined) {
     if (record.isActive !== 'true' && record.isActive !== 'false') throw new BadRequestException('isActive harus true atau false.');
@@ -86,6 +93,8 @@ export function parseSupplierQuery(input: unknown): SupplierQuery {
   }
   return query;
 }
+
+export const parseSupplierQuery = parseCatalogQuery;
 
 export function parseLotQuery(input: unknown): LotQuery {
   const record = object(input, ['q', 'supplierId', 'receivedFrom', 'receivedBefore', 'limit', 'offset']);
