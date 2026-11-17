@@ -88,6 +88,7 @@ class _KloterRecapState extends State<_KloterRecap> {
       children: [
         DetailMetrics([
           ('Tebu', lot.cane ?? 'Belum tersedia'),
+          if (lot.juice != null) ('Nira dihasilkan', lot.juice!),
           ('Gula final', lot.sugar),
         ]),
         const SizedBox(height: NiraSpace.sm),

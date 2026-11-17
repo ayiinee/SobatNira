@@ -11,14 +11,25 @@ import 'production_lot_editor.dart';
 import 'lot_closure_page.dart';
 import 'juice_transfer_page.dart';
 
+typedef FactoryHomeBuilder =
+    Widget Function(
+      ReviewApi api,
+      List<FactoryScope> factories,
+      FactoryScope scope,
+      ValueChanged<FactoryScope> selectFactory,
+      VoidCallback signOut,
+    );
+
 class ConnectedKloterPage extends StatefulWidget {
   const ConnectedKloterPage({
     super.key,
     this.signIn = ReviewApi.signIn,
     this.invalidConfiguration = const [],
+    this.homeBuilder,
   });
   final Future<ReviewApi> Function(String email, String password) signIn;
   final List<String> invalidConfiguration;
+  final FactoryHomeBuilder? homeBuilder;
 
   @override
   State<ConnectedKloterPage> createState() => _ConnectedKloterPageState();
@@ -93,7 +104,7 @@ class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
       setState(() {
         _factories = factories;
         _scope = factories.firstOrNull;
-        _load();
+        if (widget.homeBuilder == null) _load();
       });
     } catch (_) {
       // A transient failure leaves access unloaded so the user can retry.
@@ -227,6 +238,15 @@ class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
           : LoginWelcomePage(
               onContinue: () => setState(() => _showLogin = true),
             );
+    }
+    final scope = _scope;
+    final buildHome = widget.homeBuilder;
+    if (scope != null && buildHome != null) {
+      return buildHome(api, _factories!, scope, (selected) {
+        if (selected != _scope && _factories!.contains(selected)) {
+          setState(() => _scope = selected);
+        }
+      }, _endSession);
     }
     return Scaffold(
       appBar: AppBar(

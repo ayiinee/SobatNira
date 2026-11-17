@@ -1,5 +1,6 @@
 import '../kloter/demo_production.dart';
 import 'demo_analytics.dart';
+import '../kloter/kloter_date_filter.dart';
 import 'production_recap.dart';
 
 enum PrintableReportKind { profit, production }
@@ -12,6 +13,7 @@ class PrintableReport {
     required this.period,
     required List<AnalyticsRow> rows,
     ProductionRecap? recap,
+    this.connected = false,
   }) : rows = List.unmodifiable({for (final row in rows) row.code: row}.values),
        recap = kind == PrintableReportKind.production
            ? recap ?? ProductionRecap.fromRows(rows)
@@ -61,6 +63,27 @@ class PrintableReport {
     );
   }
 
+  factory PrintableReport.fromApprovedLots(
+    PrintableReportKind kind, {
+    required String factory,
+    required KloterDateFilter? filter,
+    required List<DemoKloter> lots,
+  }) => PrintableReport(
+    kind: kind,
+    factory: factory,
+    period: filter == null
+        ? 'Semua tanggal'
+        : '${formatDate(filter.range.start)} - ${formatDate(filter.range.end)}',
+    rows: const [],
+    recap: kind == PrintableReportKind.production
+        ? ProductionRecap.fromApprovedLots(
+            lots.where((lot) => filter?.contains(lot.date) ?? true),
+          )
+        : null,
+    connected: true,
+  );
+
+  final bool connected;
   final PrintableReportKind kind;
   final String factory;
   final String period;
@@ -86,7 +109,9 @@ class PrintableReport {
         ),
   );
   String get totalDisplay {
-    if (!isProfit && rows.isEmpty && recap!.kloter.isNotEmpty) return '-';
+    if (connected || (!isProfit && rows.isEmpty && recap!.kloter.isNotEmpty)) {
+      return '-';
+    }
     final amount = formatRecapNumber(total);
     return isProfit ? 'Rp$amount' : '${amount}Kg';
   }

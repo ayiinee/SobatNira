@@ -9,11 +9,15 @@ class KloterListPage extends StatefulWidget {
   const KloterListPage({
     required this.kloter,
     required this.onOpenKloter,
+    this.onCreate,
+    this.statusMessage,
     super.key,
   });
 
   final List<DemoKloter> kloter;
   final ValueChanged<DemoKloter> onOpenKloter;
+  final VoidCallback? onCreate;
+  final Widget? statusMessage;
 
   @override
   State<KloterListPage> createState() => _KloterListPageState();
@@ -41,7 +45,11 @@ class _KloterListPageState extends State<KloterListPage> {
 
   Future<void> _selectDate() async {
     FocusScope.of(context).unfocus();
-    final result = await showKloterDateFilter(context, _dateFilter);
+    final result = await showKloterDateFilter(
+      context,
+      _dateFilter,
+      today: widget.onCreate == null ? null : DateTime.now(),
+    );
     if (!mounted || result == null) return;
     _scrollToTop();
     setState(() => _dateFilter = result.selection);
@@ -54,7 +62,9 @@ class _KloterListPageState extends State<KloterListPage> {
     final matching = widget.kloter
         .where(
           (item) =>
-              item.code.toLowerCase().contains(term) &&
+              (item.code.toLowerCase().contains(term) ||
+                  (item.id != null &&
+                      item.supplier.toLowerCase().contains(term))) &&
               (_dateFilter?.contains(item.date) ?? true),
         )
         .toList();
@@ -90,6 +100,12 @@ class _KloterListPageState extends State<KloterListPage> {
                 ),
               ),
               _filterButton(context),
+              if (widget.onCreate case final create?)
+                IconButton(
+                  tooltip: 'Tambah kloter',
+                  onPressed: create,
+                  icon: const Icon(Icons.add, color: niraGreen),
+                ),
             ],
           ),
         ),
@@ -118,7 +134,9 @@ class _KloterListPageState extends State<KloterListPage> {
               NiraSpace.lg,
             ),
             children: [
-              if (visible.isEmpty)
+              if (widget.statusMessage case final status?)
+                status
+              else if (visible.isEmpty)
                 _empty()
               else
                 for (final date in dates)

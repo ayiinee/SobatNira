@@ -9,12 +9,14 @@ class HargaBiayaPage extends StatefulWidget {
     required this.settings,
     required this.onNavigate,
     this.operationalFirst = false,
+    this.unavailable = false,
     super.key,
   });
 
   final SettingsDemo settings;
   final ValueChanged<NiraTab> onNavigate;
   final bool operationalFirst;
+  final bool unavailable;
 
   @override
   State<HargaBiayaPage> createState() => _HargaBiayaPageState();
@@ -68,51 +70,57 @@ class _HargaBiayaPageState extends State<HargaBiayaPage> {
     tab: widget.operationalFirst ? NiraTab.beranda : NiraTab.pengaturan,
     onNavigate: widget.onNavigate,
     subtitle: 'Harga jual per grade dan biaya operasional',
-    bottomAction: NiraButton('Simpan perubahan', _save),
+    bottomAction: NiraButton(
+      'Simpan perubahan',
+      widget.unavailable ? null : _save,
+    ),
     children: [
-      Form(
-        key: _form,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (widget.operationalFirst) ...[
-              ..._operationalFields(),
-              const SizedBox(height: NiraSpace.lg),
-            ],
-            Text(
-              'Harga per grade',
-              style: niraText(NiraType.section, weight: FontWeight.w700),
-            ),
-            const SizedBox(height: 4),
-            const SettingsNote('Harga jual gula per kilogram'),
-            const SizedBox(height: 12),
-            if (_grades.isEmpty) const SettingsNote('Belum ada grade aktif.'),
-            for (final grade in _grades)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 13),
-                child: _moneyField(
-                  label: grade.value.name,
-                  controller: _prices[grade.id]!,
-                  unit: '/kg',
-                  optional: widget.settings.priceFor(grade.id) == null,
+      if (widget.unavailable)
+        const SettingsNote('Data harga dan biaya operasional belum tersedia.')
+      else
+        Form(
+          key: _form,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (widget.operationalFirst) ...[
+                ..._operationalFields(),
+                const SizedBox(height: NiraSpace.lg),
+              ],
+              Text(
+                'Harga per grade',
+                style: niraText(NiraType.section, weight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
+              const SettingsNote('Harga jual gula per kilogram'),
+              const SizedBox(height: 12),
+              if (_grades.isEmpty) const SettingsNote('Belum ada grade aktif.'),
+              for (final grade in _grades)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 13),
+                  child: _moneyField(
+                    label: grade.value.name,
+                    controller: _prices[grade.id]!,
+                    unit: '/kg',
+                    optional: widget.settings.priceFor(grade.id) == null,
+                  ),
+                ),
+              if (!widget.operationalFirst) ...[
+                const SizedBox(height: 6),
+                ..._operationalFields(),
+              ],
+              const SizedBox(height: 14),
+              const SettingsNote('Perubahan tersimpan selama sesi demo.'),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () => Navigator.maybePop(context),
+                  child: const Text('Batal'),
                 ),
               ),
-            if (!widget.operationalFirst) ...[
-              const SizedBox(height: 6),
-              ..._operationalFields(),
             ],
-            const SizedBox(height: 14),
-            const SettingsNote('Perubahan tersimpan selama sesi demo.'),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                onPressed: () => Navigator.maybePop(context),
-                child: const Text('Batal'),
-              ),
-            ),
-          ],
+          ),
         ),
-      ),
     ],
   );
 

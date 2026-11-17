@@ -62,12 +62,14 @@ class FactoryScope {
     : tenantId = row['tenantId'] as String,
       tenantName = row['tenantName'] as String,
       factoryId = row['factoryId'] as String,
-      factoryName = row['factoryName'] as String;
+      factoryName = row['factoryName'] as String,
+      role = row['role'] as String?;
 
   final String tenantId;
   final String tenantName;
   final String factoryId;
   final String factoryName;
+  final String? role;
 
   List<String> get _base => ['tenants', tenantId, 'factories', factoryId];
   List<String> get _lots => [..._base, 'lots'];
@@ -277,11 +279,14 @@ class ReviewApi {
     FactoryScope scope, {
     required int offset,
     required String search,
+    int limit = 20,
+    bool includeSummary = false,
   }) => _productionGet(
     scope._lots,
     query: {
-      'limit': '20',
+      'limit': '$limit',
       'offset': '$offset',
+      if (includeSummary) 'includeSummary': 'true',
       if (search.isNotEmpty) 'q': search,
     },
   );

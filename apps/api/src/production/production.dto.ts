@@ -6,7 +6,7 @@ export interface SupplierInput { name?: string; isActive?: boolean }
 export interface LotInput { supplierId?: string; displayCode?: string | null; receivedAt?: string }
 export interface CatalogQuery extends Pagination { q?: string; isActive?: boolean }
 export type SupplierQuery = CatalogQuery;
-export interface LotQuery extends Pagination { q?: string; supplierId?: string; receivedFrom?: string; receivedBefore?: string }
+export interface LotQuery extends Pagination { q?: string; supplierId?: string; receivedFrom?: string; receivedBefore?: string; includeSummary?: boolean }
 
 export function object(input: unknown, allowed: string[]): Record<string, unknown> {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new BadRequestException('Gunakan objek JSON atau parameter query yang valid.');
@@ -97,8 +97,14 @@ export function parseCatalogQuery(input: unknown): CatalogQuery {
 export const parseSupplierQuery = parseCatalogQuery;
 
 export function parseLotQuery(input: unknown): LotQuery {
-  const record = object(input, ['q', 'supplierId', 'receivedFrom', 'receivedBefore', 'limit', 'offset']);
+  const record = object(input, ['q', 'supplierId', 'receivedFrom', 'receivedBefore', 'includeSummary', 'limit', 'offset']);
   const query: LotQuery = pagination(record);
+  if (record.includeSummary !== undefined) {
+    if (record.includeSummary !== 'true' && record.includeSummary !== 'false') {
+      throw new BadRequestException('includeSummary harus true atau false.');
+    }
+    query.includeSummary = record.includeSummary === 'true';
+  }
   if (record.q !== undefined) query.q = text(record.q, 'q', 100);
   if (record.supplierId !== undefined) query.supplierId = uuid(record.supplierId, 'supplierId');
   if (record.receivedFrom !== undefined) query.receivedFrom = timestamp(record.receivedFrom, 'receivedFrom');

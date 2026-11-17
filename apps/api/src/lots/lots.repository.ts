@@ -21,15 +21,21 @@ interface ApprovedLotRecord {
   };
 }
 
-export interface LotDetail extends Lot {
-  synthetic: boolean;
+export interface LotSummary extends Lot {
   status: 'open' | 'closed';
+  netWeightGrams: string | null;
+  caneTypeCode: string | null;
+  brix: string | null;
+  juiceProducedLiters: string | null;
+  intake: ApprovedLotRecord | null;
+  milling: ApprovedLotRecord | null;
+}
+
+export interface LotDetail extends LotSummary {
+  synthetic: boolean;
   closureId: string | null;
   closedAt: Date | null;
   closedBy: string | null;
-  netWeightGrams: string | null;
-  intake: ApprovedLotRecord | null;
-  milling: ApprovedLotRecord | null;
 }
 
 const COLUMNS = `l.id, l.tenant_id AS "tenantId", l.factory_id AS "factoryId", l.supplier_id AS "supplierId",
@@ -48,15 +54,38 @@ function approvedRecord(alias: 'i' | 'm') {
   ) END`;
 }
 
+const SUMMARY_COLUMNS = `
+  CASE WHEN c.lot_id IS NULL THEN 'open' ELSE 'closed' END AS status,
+  trim_scale(i.net_weight_kg * 1000)::text AS "netWeightGrams",
+  i.cane_type_code AS "caneTypeCode", trim_scale(i.brix)::text AS brix,
+  trim_scale(COALESCE(mc.quantity_after, m.juice_produced_liters))::text AS "juiceProducedLiters",
+  ${approvedRecord('i')} AS intake, ${approvedRecord('m')} AS milling`;
+
+function summaryJoins(synthetic: '$5' | 'false') {
+  return `
+      LEFT JOIN sobatnira.intake_records i ON i.tenant_id = l.tenant_id AND i.factory_id = l.factory_id
+        AND i.lot_id = l.id AND i.is_synthetic = ${synthetic}
+      LEFT JOIN sobatnira.milling_records m ON m.tenant_id = l.tenant_id AND m.factory_id = l.factory_id
+        AND m.lot_id = l.id AND m.is_synthetic = ${synthetic}
+      LEFT JOIN LATERAL (SELECT revision_id,created_at FROM sobatnira.stock_reconciliations
+        WHERE intake_record_id=i.id ORDER BY revision_version DESC LIMIT 1) ic ON true
+      LEFT JOIN LATERAL (SELECT revision_id,created_at,quantity_after FROM sobatnira.stock_reconciliations
+        WHERE milling_record_id=m.id ORDER BY revision_version DESC LIMIT 1) mc ON true
+      LEFT JOIN sobatnira.lot_closures c ON c.tenant_id = l.tenant_id AND c.factory_id = l.factory_id
+        AND c.lot_id = l.id AND c.is_synthetic = ${synthetic} AND c.reopened_at IS NULL`;
+}
+
 @Injectable()
 export class LotsRepository {
   constructor(private readonly database: DatabaseService) {}
 
   list(access: FactoryAccess, query: LotQuery) {
-    return queryPage<Lot>(this.database, `${FACTORY_SCOPE_CTE}, filtered AS (
-      SELECT ${COLUMNS}, s.name AS "supplierName" FROM sobatnira.lots l
+    return queryPage<Lot | LotSummary>(this.database, `${FACTORY_SCOPE_CTE}, filtered AS (
+      SELECT ${COLUMNS}, s.name AS "supplierName"${query.includeSummary ? `, ${SUMMARY_COLUMNS}` : ''}
+      FROM sobatnira.lots l
       JOIN authorized_scope scope ON scope."tenantId" = l.tenant_id AND scope."factoryId" = l.factory_id
       JOIN sobatnira.suppliers s ON s.tenant_id = l.tenant_id AND s.id = l.supplier_id
+      ${query.includeSummary ? summaryJoins('false') : ''}
       WHERE ($4::text IS NULL OR strpos(lower(COALESCE(l.display_code, '')), lower($4)) > 0 OR strpos(lower(s.name), lower($4)) > 0)
         AND ($5::uuid IS NULL OR l.supplier_id = $5)
         AND ($6::timestamptz IS NULL OR l.received_at >= $6)
@@ -69,23 +98,12 @@ export class LotsRepository {
     const result = await this.database.query<LotDetail>(`
       WITH ${FACTORY_SCOPE_CTE}
       SELECT ${COLUMNS}, s.name AS "supplierName", $5::boolean AS synthetic,
-        CASE WHEN c.lot_id IS NULL THEN 'open' ELSE 'closed' END AS status,
         c.id AS "closureId", c.closed_at AS "closedAt", c.closed_by AS "closedBy",
-        trim_scale(i.net_weight_kg * 1000)::text AS "netWeightGrams",
-        ${approvedRecord('i')} AS intake, ${approvedRecord('m')} AS milling
+        ${SUMMARY_COLUMNS}
       FROM sobatnira.lots l
       JOIN authorized_scope scope ON scope."tenantId" = l.tenant_id AND scope."factoryId" = l.factory_id
       JOIN sobatnira.suppliers s ON s.tenant_id = l.tenant_id AND s.id = l.supplier_id
-      LEFT JOIN sobatnira.intake_records i ON i.tenant_id = l.tenant_id AND i.factory_id = l.factory_id
-        AND i.lot_id = l.id AND i.is_synthetic = $5
-      LEFT JOIN sobatnira.milling_records m ON m.tenant_id = l.tenant_id AND m.factory_id = l.factory_id
-        AND m.lot_id = l.id AND m.is_synthetic = $5
-      LEFT JOIN LATERAL (SELECT revision_id,created_at FROM sobatnira.stock_reconciliations
-        WHERE intake_record_id=i.id ORDER BY revision_version DESC LIMIT 1) ic ON true
-      LEFT JOIN LATERAL (SELECT revision_id,created_at FROM sobatnira.stock_reconciliations
-        WHERE milling_record_id=m.id ORDER BY revision_version DESC LIMIT 1) mc ON true
-      LEFT JOIN sobatnira.lot_closures c ON c.tenant_id = l.tenant_id AND c.factory_id = l.factory_id
-        AND c.lot_id = l.id AND c.is_synthetic = $5 AND c.reopened_at IS NULL
+      ${summaryJoins('$5')}
       WHERE l.id = $4::uuid
     `, [...scopeValues(access), id, synthetic]);
     return result.rows[0];
