@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../sobatnira_ui.dart';
 import 'demo_production.dart';
 
+double caneOverlayOpacity(bool pending) => pending ? .82 : .55;
+
 class KloterCard extends StatelessWidget {
   const KloterCard({required this.kloter, required this.onTap, super.key});
 
@@ -39,7 +41,7 @@ class KloterCard extends StatelessWidget {
                 bottom: -28,
                 child: IgnorePointer(
                   child: Opacity(
-                    opacity: pending ? .75 : .45,
+                    opacity: caneOverlayOpacity(pending),
                     child: Image.asset(
                       'assets/sobatnira/art/cane.png',
                       width: 120,

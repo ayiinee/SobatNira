@@ -92,6 +92,7 @@ class DemoProduction extends ChangeNotifier {
   }
 
   void setGrade(DemoBatch batch, String grade, String weight) {
+    if (batch.review.verified) return;
     if (batch.grade == grade && batch.gradeWeight == weight) return;
     batch.grade = grade;
     batch.gradeWeight = weight;
@@ -99,15 +100,26 @@ class DemoProduction extends ChangeNotifier {
     notifyListeners();
   }
 
+  void editBatch(DemoBatch batch, DemoField field, String value) {
+    if (batch.review.verified) return;
+    edit(batch.review, field, value);
+  }
+
   void verify(DemoReview review) {
     if (review.verified) return;
     review.verified = true;
     notifyListeners();
   }
+
+  void reopenBatch(DemoBatch batch) {
+    if (!batch.review.verified) return;
+    batch.review.verified = false;
+    notifyListeners();
+  }
 }
 
 class DemoKloter {
-  DemoKloter(this.code, int day, this.status, String supplier)
+  DemoKloter(this.code, int day, KloterStatus status, String supplier)
     : date = DateTime(2026, 10, day),
       intake = DemoReview([
         DemoField('Tanggal masuk', formatDate(DateTime(2026, 10, day))),
@@ -131,7 +143,10 @@ class DemoKloter {
 
   final String code;
   final DateTime date;
-  final KloterStatus status;
+  KloterStatus get status =>
+      intake.verified && milling.verified && batchesToReview == 0
+      ? KloterStatus.done
+      : KloterStatus.review;
   final DemoReview intake;
   final DemoReview milling;
   final List<DemoBatch> batches;

@@ -29,6 +29,8 @@ Perintah ini menggunakan Python yang tersedia di PATH, menjalankan Flutter pada 
 
 Jalankan dari akar repo untuk langsung membuka Beranda, Kloter, Laporan, dan Pengaturan. Onboarding dan login demo dinonaktifkan sementara. Perubahan data lokal kembali ke kondisi awal ketika aplikasi dimulai ulang.
 
+Pada demo lokal, batch yang tervalidasi terkunci untuk edit. Gunakan ikon silang **Batalkan validasi batch** di sebelah tombol status untuk membuka koreksi; batch kembali ke status perlu ditinjau (kuning). Pembatalan hanya berlaku untuk batch yang dipilih. Nilai yang sudah dicatat tetap disimpan selama sesi demo. Alur ini belum mengubah pengesahan dokumen atau stok pada API.
+
 ```sh
 cd apps/mobile
 flutter pub get --enforce-lockfile

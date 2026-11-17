@@ -32,15 +32,12 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
       return NiraScaffold(
         tab: NiraTab.kloter,
         onNavigate: widget.onNavigate,
-        bottomAction: _tab == 0
-            ? NiraButton(
-                reviewed ? 'Batch tervalidasi' : 'Validasi',
-                reviewed
-                    ? null
-                    : () =>
-                          verifyDemoReview(context, widget.demo, _batch.review),
-              )
-            : null,
+        bottomAction: BatchReviewActions(
+          label: reviewed ? 'Batch tervalidasi' : 'Validasi',
+          verified: reviewed,
+          onVerify: () => verifyDemoReview(context, widget.demo, _batch.review),
+          onReopen: () => widget.demo.reopenBatch(_batch),
+        ),
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -99,7 +96,10 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
     const SizedBox(height: NiraSpace.md),
     const DetailSectionTitle('Ringkasan proses'),
     const SizedBox(height: NiraSpace.sm),
-    EditableFields(fields: _batch.review.fields, onEdit: _editField),
+    EditableFields(
+      fields: _batch.review.fields,
+      onEdit: _batch.review.verified ? null : _editField,
+    ),
     const SizedBox(height: NiraSpace.sm),
     const DetailSectionTitle('Harga pengesahan'),
     _priceHeader(),
@@ -131,7 +131,10 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
   List<Widget> _cooking() => [
     const DetailSectionTitle('Data pemasakan'),
     const SizedBox(height: NiraSpace.sm),
-    EditableFields(fields: _batch.cooking, onEdit: _editField),
+    EditableFields(
+      fields: _batch.cooking,
+      onEdit: _batch.review.verified ? null : _editField,
+    ),
     const SizedBox(height: NiraSpace.md),
     DocumentLink(
       'Foto pemasakan',
@@ -156,7 +159,7 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
         weight: _GradeWeight(
           grade: grade,
           weight: _batch.grade == grade ? _batch.gradeWeight : '–',
-          onTap: () => _editGrade(grade),
+          onTap: _batch.review.verified ? null : () => _editGrade(grade),
         ),
         price: Text(
           '${DemoBatch.gradePrices[grade]}/Kg',
@@ -176,16 +179,18 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
   );
 
   Future<void> _editField(DemoField field) async {
+    if (_batch.review.verified) return;
     final value = await editDemoValue(
       context,
       label: field.label,
       initial: field.value,
       unit: field.unit,
     );
-    if (mounted && value != null) widget.demo.edit(_batch.review, field, value);
+    if (mounted && value != null) widget.demo.editBatch(_batch, field, value);
   }
 
   Future<void> _editGrade(String grade) async {
+    if (_batch.review.verified) return;
     final value = await editDemoValue(
       context,
       label: 'Berat grade $grade',
@@ -291,12 +296,14 @@ class _GradeWeight extends StatelessWidget {
 
   final String grade;
   final String weight;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) => Semantics(
-    label: 'Edit berat grade $grade',
-    button: true,
+    label: onTap == null
+        ? 'Berat grade $grade, terkunci'
+        : 'Edit berat grade $grade',
+    button: onTap != null,
     child: Material(
       color: Colors.white,
       shape: RoundedRectangleBorder(

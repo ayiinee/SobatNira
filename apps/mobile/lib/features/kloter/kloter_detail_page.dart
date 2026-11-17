@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../sobatnira_ui.dart';
 import 'batch_detail_page.dart';
 import 'demo_production.dart';
+import 'kloter_card.dart';
 import 'kloter_detail_widgets.dart';
 import 'kloter_process_page.dart';
 
@@ -19,12 +20,12 @@ class KloterDetailPage extends StatelessWidget {
   final ValueChanged<NiraTab> onNavigate;
 
   @override
-  Widget build(BuildContext context) => NiraScaffold(
-    tab: NiraTab.kloter,
-    onNavigate: onNavigate,
-    body: ListenableBuilder(
-      listenable: demo,
-      builder: (context, _) => CustomScrollView(
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: demo,
+    builder: (context, _) => NiraScaffold(
+      tab: NiraTab.kloter,
+      onNavigate: onNavigate,
+      body: CustomScrollView(
         slivers: [
           SliverList.list(
             children: [
@@ -150,7 +151,7 @@ class _BatchTile extends StatelessWidget {
               bottom: -20,
               child: IgnorePointer(
                 child: Opacity(
-                  opacity: pending ? .75 : .45,
+                  opacity: caneOverlayOpacity(pending),
                   child: Image.asset(
                     'assets/sobatnira/art/cane.png',
                     width: 104,
@@ -192,9 +193,9 @@ class _BatchTile extends StatelessWidget {
                             ],
                           ),
                           const SizedBox(height: NiraSpace.sm),
-                          _info('Nira batch', '180L', foreground),
+                          _info(context, 'Nira batch', '180L', foreground),
                           const SizedBox(height: NiraSpace.xs),
-                          _info('Hasil fisik', '90Kg', foreground),
+                          _info(context, 'Hasil fisik', '90Kg', foreground),
                         ],
                       )
                     : Row(
@@ -216,9 +217,19 @@ class _BatchTile extends StatelessWidget {
                             flex: 66,
                             child: Column(
                               children: [
-                                _info('Nira batch', '180L', foreground),
+                                _info(
+                                  context,
+                                  'Nira batch',
+                                  '180L',
+                                  foreground,
+                                ),
                                 const SizedBox(height: NiraSpace.xs),
-                                _info('Hasil fisik', '90Kg', foreground),
+                                _info(
+                                  context,
+                                  'Hasil fisik',
+                                  '90Kg',
+                                  foreground,
+                                ),
                               ],
                             ),
                           ),
@@ -237,22 +248,23 @@ class _BatchTile extends StatelessWidget {
     );
   }
 
-  Widget _info(String label, String value, Color foreground) => Row(
+  Widget _info(
+    BuildContext context,
+    String label,
+    String value,
+    Color foreground,
+  ) => Row(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Expanded(
-        flex: 3,
+      SizedBox(
+        width: MediaQuery.textScalerOf(context).scale(14) * 5.2,
         child: Text(label, style: niraText(NiraType.body, color: foreground)),
       ),
+      const SizedBox(width: NiraSpace.sm),
+      Text(':', style: niraText(NiraType.body, color: foreground)),
+      const SizedBox(width: NiraSpace.sm),
       Expanded(
-        flex: 3,
-        child: Padding(
-          padding: const EdgeInsets.only(left: NiraSpace.xs),
-          child: Text(
-            ':   $value',
-            style: niraText(NiraType.body, color: foreground),
-          ),
-        ),
+        child: Text(value, style: niraText(NiraType.body, color: foreground)),
       ),
     ],
   );

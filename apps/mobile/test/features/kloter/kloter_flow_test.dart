@@ -4,7 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sobatnira/features/kloter/kloter_card.dart';
 import 'package:sobatnira/features/kloter/demo_production.dart';
 import 'package:sobatnira/features/kloter/kloter_list_page.dart';
+import 'package:sobatnira/features/kloter/kloter_detail_widgets.dart';
 import 'package:sobatnira/main.dart';
+import 'package:sobatnira/sobatnira_ui.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -161,7 +163,10 @@ void main() {
 
     await tap(tester, find.text('Masak'));
     expect(find.text('Data pemasakan'), findsOneWidget);
-    await tap(tester, find.text('Grade'));
+    await tap(
+      tester,
+      find.descendant(of: find.byType(NiraTabs), matching: find.text('Grade')),
+    );
     await tap(tester, find.bySemanticsLabel(RegExp('Edit berat grade B')));
     await tester.enterText(find.byType(TextFormField), 'bukan angka');
     await tap(tester, find.text('Simpan'));
@@ -173,10 +178,85 @@ void main() {
     await tap(tester, find.text('Ringkasan'));
     await tap(tester, find.text('Validasi'));
     expect(find.text('Batch tervalidasi'), findsOneWidget);
+    expect(
+      tester.widget<EditableFields>(find.byType(EditableFields)).onEdit,
+      isNull,
+    );
+    await tap(
+      tester,
+      find.descendant(of: find.byType(NiraTabs), matching: find.text('Grade')),
+    );
+    expect(find.bySemanticsLabel(RegExp('Edit berat grade')), findsNothing);
+    await tap(tester, find.byTooltip('Batalkan validasi batch'));
+    expect(find.bySemanticsLabel(RegExp('Edit berat grade B')), findsOneWidget);
+    await tap(tester, find.text('Validasi'));
+    await tap(tester, find.text('Ringkasan'));
     await tester.pump(const Duration(seconds: 5));
     await tap(tester, find.byTooltip('Kembali'));
     expect(find.text('Semua batch telah ditinjau'), findsOneWidget);
     expect(find.text('Batch 5'), findsOneWidget);
+  });
+
+  testWidgets('pembatalan validasi hanya tersedia pada batch yang dipilih', (
+    tester,
+  ) async {
+    await openDemo(tester);
+    await tap(tester, find.bySemanticsLabel('Kloter'));
+    await tap(tester, find.text('MJT-260926-1A'));
+    expect(find.byTooltip('Batalkan validasi batch'), findsNothing);
+    expect(find.text('Kloter tervalidasi'), findsNothing);
+    await tap(tester, find.text('Data tebu dan penggilingan'));
+    expect(find.byTooltip('Batalkan validasi batch'), findsNothing);
+    await tap(tester, find.byTooltip('Kembali'));
+    await tap(tester, find.text('Batch 1'));
+    expect(find.byIcon(Icons.close_rounded), findsOneWidget);
+    expect(
+      tester.widget<EditableFields>(find.byType(EditableFields)).onEdit,
+      isNull,
+    );
+    await tap(tester, find.byTooltip('Batalkan validasi batch'));
+    expect(
+      tester.widget<EditableFields>(find.byType(EditableFields)).onEdit,
+      isNotNull,
+    );
+    await tap(tester, find.byTooltip('Kembali'));
+    expect(find.text('1 Batch perlu ditinjau'), findsOneWidget);
+    await tap(tester, find.byTooltip('Kembali'));
+    final card = tester.widget<KloterCard>(
+      find.ancestor(
+        of: find.text('MJT-260926-1A'),
+        matching: find.byType(KloterCard),
+      ),
+    );
+    expect(card.kloter.status, KloterStatus.review);
+    final material = tester.widget<Material>(
+      find
+          .descendant(of: find.byWidget(card), matching: find.byType(Material))
+          .first,
+    );
+    expect(material.color, niraGold);
+  });
+
+  testWidgets('pratinjau foto bisa diperbesar, dizoom dan ditutup', (
+    tester,
+  ) async {
+    await openDemo(tester);
+    await tap(tester, find.text('MJT-260926-2A'));
+    await tap(tester, find.text('Data tebu dan penggilingan'));
+    await tap(tester, find.byTooltip('Perbesar foto'));
+    final viewer = tester.widget<InteractiveViewer>(
+      find.byType(InteractiveViewer),
+    );
+    await tap(tester, find.byTooltip('Perbesar gambar'));
+    expect(
+      viewer.transformationController!.value.getMaxScaleOnAxis(),
+      greaterThan(1),
+    );
+    await tap(tester, find.text('Atur ulang'));
+    expect(viewer.transformationController!.value.getMaxScaleOnAxis(), 1);
+    await tap(tester, find.byTooltip('Tutup nota'));
+    expect(find.byType(InteractiveViewer), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('konten dapat digulir ketika ukuran teks diperbesar', (
