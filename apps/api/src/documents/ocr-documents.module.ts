@@ -15,6 +15,7 @@ import { TruckIntake } from './truck-intake';
 import { MillingModule } from '../milling/milling.module';
 import { ProductionMilling } from './production-milling';
 import { StockReconciliation } from './stock-reconciliation';
+import { Operators, OperatorsController } from './operators';
 
 @Injectable()
 class AdapterGuard implements CanActivate {
@@ -196,8 +197,8 @@ class MobileReviewController {
 
 @Module({
   imports: [MillingModule],
-  controllers: [WhatsAppController, OcrMediaController, MobileReviewController],
+  controllers: [WhatsAppController, OcrMediaController, MobileReviewController, OperatorsController],
   providers: [AdapterGuard, Database, DocumentProcessor, Intake, MediaStorage, Notices, Review, TruckIntake,
-    ProductionMilling, StockReconciliation],
+    ProductionMilling, StockReconciliation, Operators],
 })
 export class OcrDocumentsModule {}
