@@ -7,7 +7,6 @@ import 'features/kloter/kloter_list_page.dart';
 import 'features/laporan/demo_analytics.dart';
 import 'features/laporan/laporan_page.dart';
 import 'features/laporan/report_detail_page.dart';
-import 'features/pekerjaan/pekerjaan_page.dart';
 import 'features/pengaturan/pengaturan_page.dart';
 import 'features/pengaturan/settings_demo.dart';
 import 'sobatnira_ui.dart';
@@ -34,11 +33,8 @@ class _SobatNiraAppState extends State<SobatNiraApp> {
     () => switch (tab) {
       NiraTab.beranda => ListenableBuilder(
         listenable: _demo,
-        builder: (context, _) => BerandaPage(
-          kloter: _demo.kloter,
-          onOpenKloter: _openKloter,
-          onOpenPekerjaan: _openPekerjaan,
-        ),
+        builder: (context, _) =>
+            BerandaPage(kloter: _demo.kloter, onOpenKloter: _openKloter),
       ),
       NiraTab.kloter => ListenableBuilder(
         listenable: _demo,
@@ -76,17 +72,6 @@ class _SobatNiraAppState extends State<SobatNiraApp> {
     _navigator.currentState!.push(
       MaterialPageRoute<void>(
         builder: (_) => ReportDetailPage(kind: kind, onNavigate: _navigate),
-      ),
-    );
-  }
-
-  void _openPekerjaan() {
-    _navigator.currentState!.push(
-      MaterialPageRoute<void>(
-        builder: (_) => Scaffold(
-          appBar: AppBar(),
-          body: const SafeArea(child: PekerjaanPage(active: true)),
-        ),
       ),
     );
   }

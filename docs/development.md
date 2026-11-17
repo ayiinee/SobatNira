@@ -19,6 +19,14 @@ Gunakan [panduan kontribusi](contributing.md) untuk membuat branch dan membuka P
 
 ## Flutter dengan data sintetis lokal
 
+Untuk menjalankan Chrome dari Command Prompt di akar repo dengan hot reload otomatis saat file Dart berubah:
+
+```bat
+dev-mobile.cmd
+```
+
+Perintah ini menggunakan Python yang tersedia di PATH, menjalankan Flutter pada port 8085, dan memantau `apps/mobile/lib`. Perubahan dari editor atau alat lain memicu hot reload setelah jeda 0,7 detik. Hentikan proses dengan Ctrl+C. Jika port sudah dipakai, hentikan sesi lama atau jalankan `dev-mobile.cmd --port 8086`. Perubahan yang membutuhkan hot restart tetap memerlukan menjalankan ulang sesi ini.
+
 Jalankan dari akar repo untuk langsung membuka Beranda, Kloter, Laporan, dan Pengaturan. Onboarding dan login demo dinonaktifkan sementara. Perubahan data lokal kembali ke kondisi awal ketika aplikasi dimulai ulang.
 
 ```sh
