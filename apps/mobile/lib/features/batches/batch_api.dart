@@ -6,14 +6,30 @@ const _apiBaseUrl = String.fromEnvironment('API_BASE_URL');
 const _useFixture = bool.fromEnvironment('USE_LOCAL_FIXTURE', defaultValue: false);
 
 class BatchApi {
-  BatchApi({http.Client? client}) : _client = client ?? http.Client();
+  BatchApi({http.Client? client, String role = 'owner'})
+    : _client = client ?? http.Client(),
+      _role = role;
   final http.Client _client;
-  static const _scope = {
+  final String _role;
+  Map<String, String> get _scope => {
     'x-dev-user-id': 'demo-user',
     'x-dev-tenant-id': 'tenant-demo',
     'x-dev-factory-id': 'factory-demo',
-    'x-dev-role': 'owner',
+    'x-dev-role': _role,
   };
+
+  Future<Map<String, dynamic>> _write(String path, Map<String, dynamic> body, {String? requestId}) async {
+    final response = await _client.post(Uri.parse('$_apiBaseUrl$path'), headers: {..._scope, 'Content-Type': 'application/json', if (requestId != null) 'idempotency-key': requestId}, body: jsonEncode(body));
+    if (response.statusCode >= 400) throw Exception('API produksi gagal (${response.statusCode})');
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> create(Map<String, dynamic> body, {String? requestId}) => _write('/batches', body, requestId: requestId);
+  Future<Map<String, dynamic>> contribution(String id, Map<String, dynamic> body, {String? requestId}) => _write('/batches/$id/contributions', body, requestId: requestId);
+  Future<Map<String, dynamic>> cooking(String id, Map<String, dynamic> body, {String? requestId}) => _write('/batches/$id/cooking', body, requestId: requestId);
+  Future<Map<String, dynamic>> weighing(String id, {required double sugarWeightKg, double? caneWeightKg, String? occurredAt, String? requestId}) => _write('/batches/$id/weighing', {'sugarWeightKg': sugarWeightKg, if (caneWeightKg != null) 'caneWeightKg': caneWeightKg, if (occurredAt != null) 'occurredAt': occurredAt}, requestId: requestId);
+  Future<Map<String, dynamic>> grading(String id, String gradeCode, {String? occurredAt, String? requestId}) => _write('/batches/$id/grading', {'gradeCode': gradeCode, if (occurredAt != null) 'occurredAt': occurredAt}, requestId: requestId);
+  Future<Map<String, dynamic>> rework(String id, String receivingBatchId, double weightKg, {String? occurredAt, String? requestId}) => _write('/batches/$id/reworks', {'receivingBatchId': receivingBatchId, 'weightKg': weightKg, if (occurredAt != null) 'occurredAt': occurredAt}, requestId: requestId);
 
   Future<List<BatchSummary>> list() async {
     if (_useFixture || _apiBaseUrl.isEmpty) return BatchSummary.fixture;
