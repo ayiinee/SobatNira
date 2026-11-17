@@ -131,7 +131,7 @@ export class DocumentProcessor implements OnModuleInit, OnModuleDestroy {
   private async extract(work: Work, requestId: string) {
     const token = process.env.AI_SERVICE_INTERNAL_TOKEN;
     if (!token) throw new Error('OCR_UNAVAILABLE');
-    const base = process.env.AI_SERVICE_BASE_URL ?? process.env.AI_BASE_URL ?? 'http://127.0.0.1:8000';
+    const base = process.env.AI_SERVICE_BASE_URL || process.env.AI_BASE_URL || 'http://127.0.0.1:8000';
     const ids = { request_id: requestId, document_id: work.document_id, submission_id: work.submission_id,
       revision_id: work.id, source_asset_id: work.media_asset_id };
     const response = await fetch(new URL('/internal/v1/ocr/extract', base), {

@@ -43,4 +43,4 @@ Ukuran ini menjadi dasar bersama. Penyesuaian berikutnya sebaiknya mengikuti fun
 
 Onboarding dan login demo dinonaktifkan sementara dari alur aplikasi. Aplikasi langsung membuka Beranda. Autentikasi API Pekerjaan tetap mengikuti konfigurasi dan izin backend.
 
-Navbar utama berisi empat menu: Beranda, Kloter, Laporan, dan Pengaturan. Pekerjaan tidak ditampilkan pada navbar. Header detail menggunakan panah kembali yang dirapatkan secara konsisten ke margin kiri konten.
+Navbar utama berisi empat menu: Beranda, Kloter, Laporan, dan Pengaturan. Tombol Pekerjaan di Beranda membuka antrean review nota. Sesi review tersimpan selama halaman Pekerjaan terbuka. Header detail menggunakan panah kembali yang dirapatkan secara konsisten ke margin kiri konten.

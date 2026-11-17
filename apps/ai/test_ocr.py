@@ -14,7 +14,7 @@ from PIL import Image
 from benchmark_ocr import evaluate, load_cases
 from main import app
 from ocr_parser import Token, extract
-from ocr_service import SCHEMAS
+from ocr_service import SCHEMAS, validate_runtime
 
 
 def token(text, x, y):
@@ -118,6 +118,15 @@ class OcrTest(TestCase):
     def test_service_auth_rejects_access(self):
         with patch.dict("os.environ", {"AI_SERVICE_INTERNAL_TOKEN": "test-token"}):
             self.assertEqual(self.post().status_code, 401)
+
+    def test_ocr_auth_requires_a_secure_media_origin(self):
+        env = {"SOBATNIRA_MODE": "local", "AI_SERVICE_INTERNAL_TOKEN": "x" * 32}
+        for url in ("http://api.example.invalid", "https://user:synthetic@api.example.invalid", "http://127.0.0.1?query=synthetic"):
+            with self.subTest(url=url), patch.dict("os.environ", {**env, "OCR_MEDIA_BASE_URL": url}, clear=True):
+                with self.assertRaisesRegex(RuntimeError, r"^FastAPI: OCR_MEDIA_BASE_URL$"):
+                    validate_runtime()
+        with patch.dict("os.environ", {**env, "OCR_MEDIA_BASE_URL": "http://127.0.0.1:3000"}, clear=True):
+            validate_runtime()
 
     def test_benchmark_scores_normalized_values_and_missing_fields(self):
         with TemporaryDirectory() as folder:

@@ -1,5 +1,5 @@
 import { BadRequestException, Body, CanActivate, Controller, ExecutionContext, Get, Header, Headers,
-  HttpCode, Injectable, Module, NotFoundException, Param, Patch, Post, Query, StreamableFile,
+  HttpCode, Injectable, Module, NotFoundException, Param, Patch, Post, Query, ServiceUnavailableException, StreamableFile,
   UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Public } from '../auth/auth.decorators';
@@ -25,7 +25,16 @@ class AdapterGuard implements CanActivate {
 @Controller('internal/v1/whatsapp')
 @UseGuards(AdapterGuard)
 class WhatsAppController {
-  constructor(private readonly intake: Intake, private readonly notices: Notices) {}
+  constructor(private readonly intake: Intake, private readonly notices: Notices, private readonly db: Database) {}
+
+  @Get('ready')
+  @Header('Cache-Control', 'private, no-store')
+  async readiness() {
+    if (process.env.DOCUMENT_WORKER_ENABLED !== 'true') throw new ServiceUnavailableException('Periksa DOCUMENT_WORKER_ENABLED');
+    try { await this.db.assertMigrationsApplied(); }
+    catch { throw new ServiceUnavailableException('Periksa DATABASE_URL dan jalankan db:migrate:ocr'); }
+    return { status: 'ok', component: 'sobatnira-whatsapp-intake' };
+  }
 
   @Post('notices/claim')
   @HttpCode(200)

@@ -46,3 +46,11 @@ Untuk revisi, pencocokan otomatis memakai label blok dan pasangan kode wajan ser
 - Kapan Brix produksi diukur, apa fungsi kolom tertutup, dan bagaimana cara baku membaca pecahan satuan gamping? Nilai disimpan dengan tahap `UNKNOWN`, kolom yang belum dipetakan, dan `CUSTOM_MEASURE`.
 - Field produksi apa yang wajib diisi untuk validasi ketika foto baru mencakup tahap pemasakan? Draf tetap dapat menyimpan kolom hasil dan grade yang belum tercatat.
 - Berapa lama foto dan audit perlu disimpan, dan apakah notifikasi harus dikirim saat aplikasi ditutup? Bukti tersimpan privat. Badge admin tersedia di Pekerjaan.
+
+## Pemeriksaan kesiapan pada baseline `506d9c7`
+
+- Lockfile Flutter diperbarui dengan SDK 3.44.6 yang dipakai CI. `flutter pub get --enforce-lockfile`, `flutter analyze --no-pub` dan 16 tes aplikasi lulus.
+- `setup.js check` memeriksa seluruh migration OCR dan mengirim request bertoken ke NestJS serta FastAPI. Tes PostgreSQL memeriksa penolakan token, worker yang dinonaktifkan, dan migration yang belum lengkap. Adapter hanya menerima HTTP pada alamat loopback untuk permintaan yang membawa token internal.
+- OpenClaw 2026.11.4 dengan paket WhatsApp versi yang sama memvalidasi konfigurasi contoh pada state terisolasi. Inspeksi runtime menemukan `reply_dispatch`, layanan `sobatnira-notices`, dan izin akses percakapan. Gateway mencapai status siap dan layanan mengirim permintaan polling bertoken ke endpoint uji loopback. Pengujian ini berjalan sebelum pairing.
+- Antrean Pekerjaan kembali dapat dibuka dari Beranda melalui tombol tersendiri. Tes navigasi membuka antrean dari aplikasi utama, lalu kembali ke Beranda. Badge dan sesi review tersedia saat halaman antrean terbuka.
+- Pemeriksaan konfigurasi tim mengonfirmasi PostgreSQL, Supabase Auth dan R2 termasuk probe akses anonim. Pemeriksaan schema baca-saja menemukan schema bisnis sudah terpasang. Tabel intake OCR masih menunggu migration. Pemeriksaan kesiapan penuh mengembalikan kegagalan yang menyebut komponen dan variabel untuk migration, layanan yang belum terhubung, serta key/model yang masih kosong.
