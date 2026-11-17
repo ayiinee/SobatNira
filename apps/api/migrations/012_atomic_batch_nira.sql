@@ -11,6 +11,7 @@ BEGIN
   IF available < p_quantity_ml THEN RAISE EXCEPTION 'NIRA_STOCK_INSUFFICIENT' USING ERRCODE='23514'; END IF;
   INSERT INTO sobatnira.juice_reservations(tenant_id,factory_id,lot_id,request_id,batch_id,quantity_ml,is_synthetic,state,created_by,origin_lot_id,finalized_by,finalized_at)
     VALUES(p_tenant_id,p_factory_id,p_lot_id,p_request_id,p_batch_id,p_quantity_ml,false,'consumed',p_user_id,p_lot_id,p_user_id,clock_timestamp());
-  INSERT INTO batch_nira_contributions(tenant_id,factory_id,batch_id,kloter_id,volume_ml,occurred_at)
+  INSERT INTO sobatnira.batch_nira_contributions(tenant_id,factory_id,batch_id,kloter_id,volume_ml,occurred_at)
     VALUES(p_tenant_id,p_factory_id,p_batch_id,p_lot_id,round(p_quantity_ml),p_occurred_at);
 END $$;
+
