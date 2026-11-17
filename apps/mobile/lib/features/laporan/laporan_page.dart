@@ -43,31 +43,34 @@ class _LaporanPageState extends State<LaporanPage> {
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: widget.analytics,
-    builder: (context, _) => CustomScrollView(
-      key: const PageStorageKey('laporan-scroll'),
-      slivers: [
-        SliverPadding(
+    builder: (context, _) => Column(
+      children: [
+        Padding(
           padding: const EdgeInsets.fromLTRB(
             niraInset,
             NiraSpace.lg,
             niraInset,
             NiraSpace.sm,
           ),
-          sliver: SliverToBoxAdapter(child: _searchRow()),
+          child: _searchRow(),
         ),
-        SliverToBoxAdapter(
-          child: NiraTabs(
-            labels: const ['Produksi', 'Margin'],
-            selected: widget.analytics.tab.index,
-            height: 43,
-            inset: 20,
-            onSelected: (index) =>
-                widget.analytics.setTab(ReportTab.values[index]),
-          ),
+        NiraTabs(
+          labels: const ['Produksi', 'Margin'],
+          selected: widget.analytics.tab.index,
+          height: 43,
+          inset: 20,
+          onSelected: (index) =>
+              widget.analytics.setTab(ReportTab.values[index]),
         ),
-        SliverPadding(
-          padding: EdgeInsets.fromLTRB(niraInset, 13, niraInset, NiraSpace.lg),
-          sliver: SliverList.list(
+        Expanded(
+          child: ListView(
+            key: const PageStorageKey('laporan-scroll'),
+            padding: const EdgeInsets.fromLTRB(
+              niraInset,
+              NiraSpace.md,
+              niraInset,
+              NiraSpace.lg,
+            ),
             children: [
               if (widget.analytics.tab == ReportTab.production)
                 _production()
@@ -113,6 +116,7 @@ class _LaporanPageState extends State<LaporanPage> {
           borderRadius: BorderRadius.circular(niraRadius),
           child: InkWell(
             onTap: _dateFilter,
+            overlayColor: niraGreenOverlay,
             borderRadius: BorderRadius.circular(niraRadius),
             child: const SizedBox.square(
               dimension: 48,
