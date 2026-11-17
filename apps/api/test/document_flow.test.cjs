@@ -12,6 +12,7 @@ const { Database } = require('../dist/documents/database.js');
 const { assertBusinessMigrationsApplied } = require('../dist/database/migrations.js');
 const { DocumentProcessor } = require('../dist/documents/processing.js');
 const { mergeProduction } = require('../dist/documents/revisions.js');
+const { intakeFixture } = require('./integration/intake-fixture.cjs');
 
 const fixture = (name) => readFile(join(__dirname, '../../../docs/ai/examples', `${name}.example.json`), 'utf8').then(JSON.parse);
 const phone = (suffix) => '+' + [1, 202, 555, String(suffix).padStart(4, '0')].join('');
@@ -48,6 +49,93 @@ function form(metadata, image = png) {
   body.append('media', new Blob([image], { type: 'image/png' }), 'synthetic.png');
   return body;
 }
+
+test('operator management scopes contacts and gates new WhatsApp photos', {
+  skip: !process.env.TEST_DATABASE_URL, timeout: 30_000,
+}, async () => {
+  const schema = 'sobatnira_operator_test_' + randomUUID().replaceAll('-', '');
+  const admin = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
+  const connection = new URL(process.env.TEST_DATABASE_URL);
+  connection.searchParams.set('options', '-c search_path=' + schema);
+  const folder = await mkdtemp(join(tmpdir(), 'sobatnira-operator-media-'));
+  const env = {
+    DATABASE_URL: connection.toString(),
+    DOCUMENT_WORKER_ENABLED: 'false',
+    DOCUMENT_MEDIA_DIR: folder,
+    WHATSAPP_ADAPTER_INTERNAL_TOKEN: tokenHeaders['X-Internal-Service-Token'],
+    SOBATNIRA_MODE: 'legacy',
+    R2_ENDPOINT: '', R2_ACCOUNT_ID: '', R2_ACCESS_KEY_ID: '', R2_SECRET_ACCESS_KEY: '',
+  };
+  const prior = Object.fromEntries(Object.keys(env).map((name) => [name, process.env[name]]));
+  let f;
+  try {
+    await admin.query('CREATE SCHEMA ' + schema);
+    Object.assign(process.env, env);
+    f = await intakeFixture(true);
+    await f.app.get(Database).migrate();
+
+    const path = f.root + '/operators';
+    assert.equal((await f.request(path, 'GET', undefined, null)).status, 401);
+    assert.equal((await f.request(f.siblingRoot + '/operators', 'GET', undefined, 'fixture-owner')).status, 403);
+    assert.equal((await f.request(path, 'POST', { displayName: 'Synthetic operator', phoneE164: '081234567890' })).status, 400);
+
+    const input = { displayName: 'Synthetic operator', phoneE164: phone(742) };
+    const created = await f.request(path, 'POST', input, 'fixture-owner');
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    const { id } = created.body;
+    assert.deepEqual(created.body, { id, factoryId: f.ids.factory, ...input, isActive: true });
+    const contactPath = path + '/' + id;
+    const list = await f.request(path + '?q=OPERATOR&isActive=true&limit=1');
+    assert.equal(list.status, 200);
+    assert.deepEqual(list.body, { items: [created.body], total: 1, limit: 1, offset: 0 });
+    const otherPath = f.otherRoot + '/operators';
+    assert.deepEqual((await f.request(otherPath)).body.items, []);
+    assert.equal((await f.request(otherPath + '/' + id + '/history')).status, 404);
+    assert.equal((await f.request(f.siblingRoot + '/operators/' + id, 'PATCH', { isActive: false })).status, 404);
+    assert.equal((await f.request(otherPath, 'POST', input)).status, 409);
+    assert.equal((await f.request(contactPath, 'PATCH', { phoneE164: phone(743) })).status, 400);
+
+    const photo = (messageId) => fetch(f.base + '/internal/v1/whatsapp/inbound', {
+      method: 'POST',
+      body: form(event(messageId, 'IMAGE', input.phoneE164), imageFor(messageId)),
+      headers: { ...tokenHeaders, 'Idempotency-Key': 'baileys:' + messageId },
+    });
+    const accepted = await photo('synthetic-active-operator');
+    assert.equal(accepted.status, 202, await accepted.text());
+    const updated = await f.request(contactPath, 'PATCH', { displayName: 'Renamed operator', isActive: false });
+    assert.equal(updated.status, 200, JSON.stringify(updated.body));
+    assert.equal(updated.body.isActive, false);
+    assert.equal((await f.request(path + '?isActive=true')).body.total, 0);
+    assert.deepEqual((await f.request(path + '?isActive=false')).body.items, [updated.body]);
+    const blocked = await photo('synthetic-deactivated-operator');
+    assert.equal(blocked.status, 403);
+    assert.equal((await blocked.json()).message, 'OPERATOR_NOT_ACTIVE');
+
+    assert.equal((await f.request(contactPath, 'PATCH', { isActive: false })).status, 200);
+    const history = await f.request(contactPath + '/history');
+    assert.equal(history.status, 200);
+    assert.deepEqual(history.body.items.map(({ action, actorId, before, after }) => ({ action, actorId, before, after })), [
+      { action: 'updated', actorId: f.ids.admin, before: { displayName: input.displayName, isActive: true },
+        after: { displayName: 'Renamed operator', isActive: false } },
+      { action: 'created', actorId: f.ids.owner, before: null, after: { displayName: input.displayName, isActive: true } },
+    ]);
+
+    assert.equal((await f.request(contactPath, 'PATCH', { isActive: true }, 'fixture-owner')).status, 200);
+    const reactivated = await photo('synthetic-reactivated-operator');
+    assert.equal(reactivated.status, 202, await reactivated.text());
+  } finally {
+    try {
+      await f?.close();
+    } finally {
+      for (const [name, value] of Object.entries(prior)) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
+      try { await admin.query('DROP SCHEMA IF EXISTS ' + schema + ' CASCADE'); }
+      finally { await admin.end(); await rm(folder, { recursive: true, force: true }); }
+    }
+  }
+});
 
 test('progressive merge preserves evidence and distinct runs with reused wajan', async () => {
   const original = await fixture('production-note-progressive-update');

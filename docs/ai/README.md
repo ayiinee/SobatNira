@@ -108,6 +108,21 @@ Jalankan gateway, NestJS dan FastAPI pada host yang sama untuk memakai alamat lo
 
 Gateway hanya menangani DM pada akun yang dikonfigurasi. NestJS mengotorisasi setiap perubahan dan membatasi rujukan kutipan ke percakapan serta pabrik yang sama. Pakai `REVISI <dokumen>` jika kutipan belum bisa dipetakan. Foto dengan byte yang sama pada operator dan chat yang sama memakai kembali pengiriman terdahulu. `BARU` menyatakan nota baru, dan `FOTO ULANG` menyatakan penggantian revisi secara eksplisit. Pesan ringkasan dapat terkirim ulang jika gateway berhenti setelah WhatsApp menerima pesan dan sebelum PostgreSQL mencatat receipt. Penerimaan foto, revisi dan konfirmasi tetap memakai idempotensi backend.
 
+## Pengelolaan operator WhatsApp
+
+Admin dan owner dengan membership aktif dapat mengelola operator pada pabrik yang dipilih. Kirim token akses Supabase sebagai `Authorization: Bearer <access_token>`. Route dasar memakai `/tenants/:tenantId/factories/:factoryId/operators`.
+
+| Metode dan path relatif | Fungsi |
+| --- | --- |
+| `GET /` | Daftar operator dengan pencarian nama atau nomor (`q`), filter `isActive`, serta `limit` dan `offset`. |
+| `POST /` | Daftarkan operator aktif dengan `displayName` dan `phoneE164` dalam format E.164. Nomor yang sudah terdaftar menghasilkan `409 Conflict`. |
+| `PATCH /:operatorId` | Ubah `displayName` atau `isActive`. Kirim `isActive: false` untuk menonaktifkan dan `isActive: true` untuk mengaktifkan kembali. |
+| `GET /:operatorId/history` | Baca riwayat pembuatan dan perubahan, termasuk akun yang bertindak, waktu, serta nama dan status sebelum dan sesudah. Mendukung `limit` dan `offset`. |
+
+Nomor terikat pada satu pabrik. Untuk mengganti nomor operator, tambahkan kontak dengan nomor baru lalu nonaktifkan kontak lama. Setelah dinonaktifkan, pengiriman nota baru dari nomor tersebut ditolak. Foto, dokumen, dan riwayat yang sudah tersimpan tetap tersedia melalui alur yang berwenang.
+
+Sebelum menggunakan API ini, terapkan migration OCR `006_operator_management_audit.sql` dengan `npm run db:migrate:ocr` dari `apps/api` dengan konfigurasi database tujuan. Untuk mode terhubung, perbarui juga allowlist OpenClaw agar nomor aktif baru dapat mengirim pesan ke gateway.
+
 ## Tes komponen
 
 - `apps/api`: siapkan PostgreSQL pengujian dengan role `anon`, `authenticated` dan tabel `auth.users` sintetis sesuai langkah CI. Jalankan `npm run db:migrate` dengan `DATABASE_URL` pengujian, lalu `npm test` dengan `TEST_DATABASE_URL` menunjuk database yang sama. Tes menyiapkan dan membersihkan schema OCR sendiri.
