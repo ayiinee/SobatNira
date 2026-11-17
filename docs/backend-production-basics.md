@@ -32,7 +32,7 @@ Semua endpoint memakai prefix:
 | `GET /suppliers/:supplierId/history` | Riwayat perubahan pemasok yang berasal dari pabrik pada URL |
 | `POST /lots` | Membuat identitas dasar kloter |
 | `GET /lots` | Daftar/pencarian kloter pada pabrik |
-| `GET /lots/:lotId` | Detail kloter dan nama pemasok saat ini |
+| `GET /lots/:lotId` | Detail kloter, pemasok, berat resmi, penutupan, dan referensi revisi sah. Lihat [kontrak detail kloter](backend-juice-and-closure.md#detail-kloter-untuk-backend-b). |
 | `PATCH /lots/:lotId` | Koreksi metadata dasar kloter |
 | `GET /lots/:lotId/history` | Riwayat perubahan kloter |
 
