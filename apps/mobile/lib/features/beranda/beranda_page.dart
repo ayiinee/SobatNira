@@ -10,11 +10,13 @@ class BerandaPage extends StatefulWidget {
   const BerandaPage({
     required this.kloter,
     required this.onOpenKloter,
+    required this.onOpenPekerjaan,
     super.key,
   });
 
   final List<DemoKloter> kloter;
   final ValueChanged<DemoKloter> onOpenKloter;
+  final VoidCallback onOpenPekerjaan;
 
   @override
   State<BerandaPage> createState() => _BerandaPageState();
@@ -42,12 +44,18 @@ class _BerandaPageState extends State<BerandaPage> {
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: const [
-                  _Profile(),
-                  SizedBox(height: NiraSpace.lg),
-                  _ProductionSummary(),
-                  SizedBox(height: NiraSpace.lg),
-                  _QuickActions(),
+                children: [
+                  const _Profile(),
+                  const SizedBox(height: NiraSpace.lg),
+                  const _ProductionSummary(),
+                  const SizedBox(height: NiraSpace.lg),
+                  const _QuickActions(),
+                  const SizedBox(height: NiraSpace.md),
+                  OutlinedButton.icon(
+                    onPressed: widget.onOpenPekerjaan,
+                    icon: const Icon(Icons.assignment_outlined),
+                    label: const Text('Pekerjaan'),
+                  ),
                 ],
               ),
             ),

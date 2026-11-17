@@ -5,6 +5,9 @@ import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 import { loadConfiguration } from '../config/backend.config';
 import { postgresClientOptions } from '../database/postgres.config';
 
+const directory = resolve(__dirname, '../../migrations/ocr');
+const migrationFiles = async () => (await readdir(directory)).filter((name) => /^\d+_.*\.sql$/.test(name)).sort();
+
 @Injectable()
 export class Database implements OnModuleDestroy {
   private pool?: Pool;
@@ -38,8 +41,7 @@ export class Database implements OnModuleDestroy {
   }
 
   async migrate() {
-    const directory = resolve(__dirname, '../../migrations/ocr');
-    const files = (await readdir(directory)).filter((name) => /^\d+_.*\.sql$/.test(name)).sort();
+    const files = await migrationFiles();
     await this.transaction(async (db) => {
       await db.query("SELECT pg_advisory_xact_lock(hashtext('sobatnira_schema_migrations'))");
       await db.query('CREATE TABLE IF NOT EXISTS sobatnira_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
@@ -51,6 +53,13 @@ export class Database implements OnModuleDestroy {
         await db.query('INSERT INTO sobatnira_migrations (name) VALUES ($1)', [file]);
       }
     });
+  }
+
+  async assertMigrationsApplied() {
+    const files = await migrationFiles();
+    const { rows } = await this.query<{ name: string }>('SELECT name FROM sobatnira_migrations');
+    const applied = new Set(rows.map(({ name }) => name));
+    if (files.some((name) => !applied.has(name))) throw new Error('OCR migrations are pending');
   }
 
   async onModuleDestroy() {

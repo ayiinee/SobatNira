@@ -46,7 +46,11 @@ def validate_runtime():
         missing.append("FastAPI: AI_SERVICE_INTERNAL_TOKEN")
     try:
         parsed = urlsplit(os.getenv("OCR_MEDIA_BASE_URL", ""))
-        valid_media_url = parsed.scheme in {"http", "https"} and parsed.hostname and not parsed.username and not parsed.password
+        valid_media_url = (
+            parsed.hostname and not parsed.username and not parsed.password and not parsed.query and not parsed.fragment
+            and parsed.path in {"", "/"}
+            and (parsed.scheme == "https" or (parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}))
+        )
     except ValueError:
         valid_media_url = False
     if not valid_media_url:

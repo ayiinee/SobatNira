@@ -222,7 +222,9 @@ export default {
     if (mode !== 'local' && mode !== 'connected') throw new Error('OpenClaw: SOBATNIRA_MODE wajib');
     const connected = mode === 'connected';
     const target = URL.canParse(apiUrl ?? '') ? new URL(apiUrl) : null;
-    if (!target || !['https:', 'http:'].includes(target.protocol) || target.username || target.password ||
+    const localHttp = target?.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(target.hostname);
+    if (!target || (target.protocol !== 'https:' && !localHttp) || target.username || target.password ||
+        target.search || target.hash || target.pathname !== '/' ||
         !token || token.length < 32 || !accountId || !mediaDir || !isAbsolute(mediaDir) ||
         (connected && process.env.SOBATNIRA_WHATSAPP_ACCOUNT_ID !== accountId)) {
       throw new Error('OpenClaw: periksa SOBATNIRA_API_URL, WHATSAPP_ADAPTER_INTERNAL_TOKEN, SOBATNIRA_WHATSAPP_ACCOUNT_ID dan konfigurasi accountId/mediaDir');

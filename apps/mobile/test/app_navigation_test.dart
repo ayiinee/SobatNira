@@ -23,6 +23,13 @@ void main() {
     expect(find.byType(PekerjaanPage, skipOffstage: false), findsNothing);
     expect(tester.takeException(), isNull);
 
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Pekerjaan'));
+    await tester.pumpAndSettle();
+    expect(find.byType(PekerjaanPage), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.byType(BerandaPage), findsOneWidget);
+
     await tester.tap(find.bySemanticsLabel('Kloter'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'MJT-260926-2A');
