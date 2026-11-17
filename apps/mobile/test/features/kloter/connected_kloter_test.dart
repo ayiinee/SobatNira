@@ -58,6 +58,16 @@ void main() {
               'reservedMl': '10000',
               'availableMl': '80000.25',
             },
+            '/tenants/tenant/factories/B/lots/lot-b/closure' => {
+              'status': 'open',
+              'closureId': null,
+            },
+            '/tenants/tenant/factories/B/lots/lot-b/closure/history' => {
+              'items': [],
+              'total': 0,
+              'offset': 0,
+              'limit': 20,
+            },
             '/api/v1/mobile/review-tasks' => {'items': []},
             '/api/v1/mobile/review-notifications' => {'unread_count': 1},
             _ => throw StateError('Unexpected route ${request.url.path}'),
@@ -98,6 +108,25 @@ void main() {
       await tester.tap(find.text('OCR-B'));
       await tester.pumpAndSettle();
       expect(find.text('1250010 g'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('Penutupan dan riwayat'), 100);
+      await tester.tap(find.text('Penutupan dan riwayat'));
+      await tester.pumpAndSettle();
+      expect(find.text('Tutup kloter'), findsOneWidget);
+      expect(
+        requests
+            .where((uri) => uri.path.endsWith('/closure/history'))
+            .single
+            .path,
+        '/tenants/tenant/factories/B/lots/lot-b/closure/history',
+      );
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(
+        requests.where(
+          (uri) => uri.path == '/tenants/tenant/factories/B/lots/lot-b',
+        ),
+        hasLength(2),
+      );
       await tester.scrollUntilVisible(find.text('80000.25 mL'), 200);
       expect(find.text('80000.25 mL'), findsOneWidget);
       await tester.scrollUntilVisible(find.text('Nota Produksi'), 200);
