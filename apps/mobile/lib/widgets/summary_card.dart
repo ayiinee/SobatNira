@@ -2,6 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../sobatnira_ui.dart';
 
+const niraSummaryGradient = LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [Color(0xFF0B231A), Color(0xFF205D42), niraGreen],
+  stops: [0, .6, 1],
+);
+
 class NiraSummaryCard extends StatelessWidget {
   const NiraSummaryCard(
     this.label,
@@ -21,12 +28,7 @@ class NiraSummaryCard extends StatelessWidget {
     clipBehavior: Clip.antiAlias,
     decoration: BoxDecoration(
       borderRadius: BorderRadius.circular(niraRadius),
-      gradient: const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xFF0B231A), Color(0xFF205D42), niraGreen],
-        stops: [0, .6, 1],
-      ),
+      gradient: niraSummaryGradient,
     ),
     child: Stack(
       children: [
@@ -41,7 +43,7 @@ class NiraSummaryCard extends StatelessWidget {
                 'assets/sobatnira/art/hero-cane.png',
                 fit: BoxFit.contain,
                 alignment: Alignment.bottomRight,
-                opacity: const AlwaysStoppedAnimation(.125),
+                opacity: const AlwaysStoppedAnimation(.24),
                 excludeFromSemantics: true,
               ),
             ),

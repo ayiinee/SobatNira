@@ -116,7 +116,6 @@ class _SobatNiraAppState extends State<SobatNiraApp> {
     valueListenable: _tab,
     builder: (context, tab, _) => NiraScaffold(
       floatingNavigation: true,
-      extendBehindNavigation: tab == NiraTab.beranda,
       topGap: tab == NiraTab.laporan ? 4 : 12,
       tab: tab,
       onNavigate: _navigate,

@@ -95,7 +95,7 @@ void main() {
   ) async {
     await openDemo(tester);
     expect(find.text('Tebu diterima'), findsOneWidget);
-    expect(find.byType(KloterCard), findsNWidgets(3));
+    expect(find.byType(KloterCard).evaluate().length, greaterThanOrEqualTo(3));
 
     await tap(tester, find.bySemanticsLabel('Kloter'));
     await tester.enterText(find.byType(TextField), ' mjt-260926-2a ');

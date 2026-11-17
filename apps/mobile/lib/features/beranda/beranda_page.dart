@@ -179,7 +179,7 @@ class _BerandaPageState extends State<BerandaPage> {
                           niraInset,
                           NiraSpace.md,
                           niraInset,
-                          MediaQuery.viewPaddingOf(context).bottom + 90,
+                          NiraSpace.lg,
                         ),
                         itemCount: items.length,
                         itemBuilder: (context, index) => Padding(
@@ -316,21 +316,6 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                 child: IgnorePointer(
                   child: RepaintBoundary(
                     child: CustomPaint(painter: _CanePatternPainter()),
-                  ),
-                ),
-              ),
-              Positioned(
-                right: -9,
-                bottom: 0,
-                top: 0,
-                width: 153,
-                child: IgnorePointer(
-                  child: Image.asset(
-                    'assets/sobatnira/art/hero-cane.png',
-                    fit: BoxFit.contain,
-                    alignment: Alignment.bottomRight,
-                    opacity: const AlwaysStoppedAnimation(.9),
-                    excludeFromSemantics: true,
                   ),
                 ),
               ),

@@ -21,6 +21,19 @@ void main() {
       demo.dispose();
       await tester.pumpWidget(const SobatNiraApp());
       await tester.pumpAndSettle();
+      final amount = find.text('Rp15.745.000');
+      final eye = find.byTooltip('Sembunyikan keuntungan');
+      expect(
+        tester.getCenter(eye).dx,
+        greaterThan(tester.getRect(amount).right),
+      );
+      expect(tester.getCenter(eye).dy, closeTo(tester.getCenter(amount).dy, 1));
+      await tester.tap(eye);
+      await tester.pumpAndSettle();
+      expect(find.text('Rp ••••••'), findsOneWidget);
+      await tester.tap(find.byTooltip('Tampilkan keuntungan'));
+      await tester.pumpAndSettle();
+      expect(amount, findsOneWidget);
       final handle = find.byKey(const ValueKey('beranda-kloter-handle'));
       final header = tester.getTopLeft(find.text('Keuntungan'));
       final originalHandle = tester.getTopLeft(handle);

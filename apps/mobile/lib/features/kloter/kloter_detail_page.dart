@@ -150,7 +150,7 @@ class _BatchTile extends StatelessWidget {
               bottom: -20,
               child: IgnorePointer(
                 child: Opacity(
-                  opacity: pending ? .65 : .30,
+                  opacity: pending ? .75 : .45,
                   child: Image.asset(
                     'assets/sobatnira/art/cane.png',
                     width: 104,

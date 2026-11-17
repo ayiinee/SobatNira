@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/summary_card.dart';
 import '../kloter/kloter_detail_widgets.dart';
 
 enum ReportDetailKind { rendemen, grade, margin }
@@ -45,47 +46,10 @@ class ReportDetailPage extends StatelessWidget {
     ),
   );
 
-  Widget _greenCard(String heading, String value, String caption) => Container(
-    padding: const EdgeInsets.fromLTRB(
-      NiraSpace.md,
-      NiraSpace.sm,
-      NiraSpace.md,
-      NiraSpace.md,
-    ),
-    decoration: BoxDecoration(
-      color: niraGreen,
-      borderRadius: BorderRadius.circular(niraRadius),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          heading,
-          style: niraText(
-            NiraType.section,
-            color: niraYellow,
-            weight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: NiraSpace.xs),
-        Text(
-          value,
-          style: niraText(
-            NiraType.metric,
-            color: niraYellow,
-            weight: FontWeight.w700,
-          ),
-        ),
-        if (caption.isNotEmpty)
-          Text(caption, style: niraText(NiraType.caption, color: Colors.white)),
-      ],
-    ),
-  );
-
   Widget _entityCard() => Container(
     padding: const EdgeInsets.all(NiraSpace.lg),
     decoration: BoxDecoration(
-      color: niraGreen,
+      gradient: niraSummaryGradient,
       borderRadius: BorderRadius.circular(niraRadius),
     ),
     child: Column(
@@ -130,7 +94,7 @@ class ReportDetailPage extends StatelessWidget {
   Widget _grade() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      _greenCard('Nilai produksi', 'Rp3.600.000', ''),
+      const NiraSummaryCard('Nilai produksi', 'Rp3.600.000'),
       const SizedBox(height: NiraSpace.md),
       const DetailMetrics([('Grade A', '360Kg'), ('Kloter asal', '4')]),
       const SizedBox(height: NiraSpace.lg),
@@ -157,17 +121,36 @@ class ReportDetailPage extends StatelessWidget {
       ]),
       const SizedBox(height: NiraSpace.md),
       const DetailSectionTitle('Rincian perhitungan'),
-      _moneyRow('Nilai produksi', 'Rp1.750.000'),
-      _moneyRow('Modal tebu', '-Rp1.000.000'),
-      _moneyRow('Biaya operasional', '-Rp180.000'),
-      const Divider(height: 12),
-      _moneyRow('Margin Produksi', 'Rp570.000', bold: true),
-      const SizedBox(height: NiraSpace.md),
+      const SizedBox(height: NiraSpace.sm),
+      NiraOutline(
+        Padding(
+          padding: const EdgeInsets.all(NiraSpace.sm),
+          child: Column(
+            children: [
+              _moneyRow('Komponen', 'Nilai', bold: true),
+              _moneyRow('Nilai produksi', 'Rp1.750.000'),
+              _moneyRow('Modal tebu', '-Rp1.000.000'),
+              _moneyRow('Biaya operasional', '-Rp180.000'),
+              const Divider(height: 12, thickness: 1, color: niraLine),
+              _moneyRow('Margin Produksi', 'Rp570.000', bold: true),
+            ],
+          ),
+        ),
+      ),
+      const SizedBox(height: NiraSpace.lg),
       const DetailSectionTitle('Kontribusi Batch'),
-      _moneyRow('Wajan 1', 'Rp600.000'),
-      _moneyRow('Wajan 2', 'Rp600.000'),
-      _moneyRow('Wajan 3', 'Rp600.000'),
-      _moneyRow('Wajan 4', 'Rp600.000'),
+      const SizedBox(height: NiraSpace.sm),
+      NiraOutline(
+        Padding(
+          padding: const EdgeInsets.all(NiraSpace.sm),
+          child: Column(
+            children: [
+              _moneyRow('Batch', 'Nilai', bold: true),
+              for (var i = 1; i <= 4; i++) _moneyRow('Wajan $i', 'Rp600.000'),
+            ],
+          ),
+        ),
+      ),
     ],
   );
 
