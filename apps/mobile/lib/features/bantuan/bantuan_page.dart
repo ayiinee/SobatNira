@@ -42,17 +42,19 @@ class _BantuanPageState extends State<BantuanPage> {
         mode: LaunchMode.externalApplication,
         webOnlyWindowName: '_blank',
       );
-      if (!opened && mounted)
+      if (!opened && mounted) {
         setState(
           () => _error =
               'WhatsApp belum bisa dibuka. Coba lagi atau hubungi nomor di atas.',
         );
+      }
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _error =
               'WhatsApp belum bisa dibuka. Coba lagi atau hubungi nomor di atas.',
         );
+      }
     } finally {
       if (mounted) setState(() => _opening = false);
     }
