@@ -31,7 +31,7 @@ void main() {
       await tester.pumpAndSettle();
       final plot = find.byKey(const ValueKey('production-chart-plot'));
       final detail = find.byKey(const ValueKey('production-chart-detail'));
-      expect(find.text('Rendemen (%)'), findsOneWidget);
+      expect(find.text('Gula final (kg)'), findsOneWidget);
       expect(detail, findsNothing);
       final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
       await mouse.addPointer(location: Offset.zero);
@@ -45,13 +45,24 @@ void main() {
       await tester.pumpAndSettle();
       expect(detail, findsNothing);
       await mouse.removePointer();
+      final buttonBottom = tester
+          .getRect(find.byTooltip('Jenis grafik'))
+          .bottom;
       await tester.tap(find.byTooltip('Jenis grafik'));
       await tester.pumpAndSettle();
+      expect(
+        tester.getRect(find.byKey(const ValueKey('chart-option-rendemen'))).top,
+        closeTo(buttonBottom, 1),
+      );
+      expect(
+        tester.widget<Text>(find.text('Rendemen').last).style?.color,
+        Colors.white,
+      );
       await tester.tap(find.text('Grade').last);
       await tester.pumpAndSettle();
       expect(analytics.variant, ProductionVariant.grade);
       expect(find.text('Grade A'), findsOneWidget);
-      expect(find.text('Total (kg)'), findsOneWidget);
+      expect(find.text('Grade C'), findsOneWidget);
       await tester.tapAt(point);
       await tester.pumpAndSettle();
       expect(detail, findsOneWidget);

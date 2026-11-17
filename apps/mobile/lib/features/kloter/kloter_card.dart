@@ -31,6 +31,7 @@ class KloterCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
+          overlayColor: niraGreenOverlay,
           child: Stack(
             children: [
               Positioned(

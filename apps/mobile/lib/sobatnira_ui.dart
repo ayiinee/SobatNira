@@ -4,6 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 const niraGreen = Color(0xFF174B35);
+const niraGreenHover = Color(0xFF2B624B);
+final niraGreenOverlay = WidgetStateProperty.resolveWith<Color?>((states) {
+  if (states.contains(WidgetState.disabled)) return null;
+  if (states.contains(WidgetState.pressed)) return const Color(0x24FFFFFF);
+  if (states.contains(WidgetState.hovered) ||
+      states.contains(WidgetState.focused)) {
+    return const Color(0x18FFFFFF);
+  }
+  return null;
+});
 const niraLeaf = Color(0xFF4A7160);
 const niraGold = Color(0xFFD3A734);
 const niraYellow = Color(0xFFFACA4D);
@@ -85,7 +95,7 @@ ThemeData niraTheme() {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(niraRadius),
         ),
-      ),
+      ).copyWith(overlayColor: niraGreenOverlay),
     ),
   );
 }
@@ -351,6 +361,7 @@ class _BottomNavigation extends StatelessWidget {
       excludeSemantics: true,
       child: InkWell(
         onTap: () => onNavigate(item),
+        overlayColor: niraGreenOverlay,
         borderRadius: BorderRadius.circular(29),
         child: SizedBox(
           height: 58,
@@ -574,7 +585,7 @@ class NiraButton extends StatelessWidget {
         elevation: shadow && onPressed != null ? 3 : 0,
         shadowColor: Colors.black54,
         textStyle: niraText(NiraType.body, weight: FontWeight.w600),
-      ),
+      ).copyWith(overlayColor: niraGreenOverlay),
       child: Text(label, textAlign: TextAlign.center),
     ),
   );
