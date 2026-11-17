@@ -84,3 +84,8 @@ Untuk revisi, pencocokan otomatis memakai label blok dan pasangan kode wajan ser
 - OpenClaw menerima model eksplisit dengan akhiran `:free`. Pengaturan `OPENROUTER_AGENT_DISABLE_REASONING` memungkinkan klasifikasi singkat untuk model yang mendukungnya. Anggaran waktu 5 detik tetap berlaku untuk satu percobaan atau dua percobaan dengan fallback.
 - Migrasi produksi `016` diverifikasi dan migrasi OCR `006_operator_management_audit.sql` diterapkan di database tim. RLS tabel audit operator dan probe privasi R2 lulus. Kredensial hanya tersedia pada konfigurasi privat. Scope akun dan operator serta pairing WhatsApp masih mengikuti langkah setup.
 - Readiness NestJS dan FastAPI terhubung lulus. Suite lokal lulus dengan 56 tes NestJS dan PostgreSQL, 11 tes FastAPI, serta 46 tes Flutter. Satu tes Flutter memerlukan fixture backend tambahan dan dilewati pada suite standar.
+
+## Pairing WhatsApp pada Windows
+
+- Gateway SobatNira memakai profil dan port tersendiri agar perintah login memakai state yang sama dengan proses gateway. OpenClaw 2026.11.4 menampilkan QR, menautkan akun WhatsApp `sobatnira`, dan mengembalikan status `connected` serta `healthy`.
+- Readiness mode terhubung lulus dengan akun, operator, dan pabrik demo yang terpisah. Login Flutter dengan Supabase dan akses antrean Pekerjaan untuk pabrik demo diverifikasi di browser.

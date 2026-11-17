@@ -89,6 +89,18 @@ Jalankan gateway, NestJS dan FastAPI pada host yang sama untuk memakai alamat lo
    Terapkan bagian relevan dari [contoh konfigurasi OpenClaw](openclaw.example.json) ke `<state-dir>/openclaw.json`. State directory bawaan berada di `~/.openclaw`. Ganti nomor contoh dengan nomor operator terdaftar, isi `mediaDir` dengan path absolut `<state-dir>/media`, dan pertahankan entri lain yang dipakai gateway di `plugins.allow`. Gunakan `openclaw channels login --channel whatsapp --account sobatnira` dan pindai QR dari **Perangkat tertaut** pada nomor WhatsApp SobatNira.
 
    Berikan `SOBATNIRA_MODE`, `SOBATNIRA_API_URL`, `SOBATNIRA_WHATSAPP_ACCOUNT_ID`, `WHATSAPP_ADAPTER_INTERNAL_TOKEN`, serta pengaturan `OPENROUTER_*` dari langkah 1 melalui lingkungan proses gateway atau file privat `<state-dir>/.env`. Jika gateway memakai autentikasi token, isi `OPENCLAW_GATEWAY_TOKEN` dengan nilai acak terpisah. Jalankan `openclaw config validate` untuk memeriksa contoh konfigurasi. Pada `openclaw plugins inspect sobatnira-intake --runtime`, pastikan status `loaded` dengan hook `reply_dispatch` dan layanan `sobatnira-notices`. Jalankan `openclaw gateway` dan periksa `openclaw channels status --probe`. Akun `sobatnira` harus terhubung dan plugin harus aktif. [Pairing WhatsApp](https://docs.openclaw.ai/channels/whatsapp), [hook pesan](https://docs.openclaw.ai/plugins/hooks/messages), [lingkungan gateway](https://docs.openclaw.ai/help/environment).
+
+   Bila Windows sudah memiliki layanan OpenClaw, siapkan instance SobatNira dengan profil, file konfigurasi, direktori state, workspace, dan port tersendiri. Jalankan pemasangan plugin dan validasi dengan profil yang sama. Set `gateway.port` pada konfigurasi profil agar perintah pairing dan status menargetkan gateway SobatNira. Tunggu gateway siap di terminal pertama, lalu jalankan pairing di terminal kedua dengan lingkungan profil yang sama.
+
+   ```powershell
+   # Terminal gateway
+   openclaw --profile sobatnira-demo gateway --port 19089
+   # Terminal pairing
+   openclaw --profile sobatnira-demo channels login --channel whatsapp --account sobatnira --verbose
+   openclaw --profile sobatnira-demo channels status --probe
+   ```
+
+   Jika CLI melaporkan direktori state yang berbeda, periksa profil, port, `OPENCLAW_STATE_DIR`, dan `OPENCLAW_CONFIG_PATH` pada kedua terminal. Mode `--verbose` menampilkan alasan kegagalan login. [Beberapa gateway pada satu host](https://docs.openclaw.ai/gateway/multiple-gateways).
 5. Dari `apps/api`, jalankan `node --env-file=../../.env.connected dist/documents/setup.js check`. Perintah memeriksa migration OCR dan produksi, token internal, worker, mode NestJS dan FastAPI, operator aktif dan kedua lapisan membership reviewer untuk pabrik yang sama, PostgreSQL, Supabase Auth, R2, PaddleOCR serta akses API/model Gemini dan OpenRouter. Kesalahan menampilkan komponen dan nama variabel untuk diperiksa. Untuk pemeriksaan terpisah gunakan `check-scope` atau `check-media-privacy`.
 
    Dari `apps/mobile`, buat build web dengan mode terhubung dan konfigurasi publik proyek. Ganti ketiga nilai contoh berikut sebelum build.
