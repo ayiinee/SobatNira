@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'features/beranda/beranda_page.dart';
+import 'features/bantuan/bantuan_page.dart';
+import 'features/beranda/quick_action_icon.dart';
 import 'features/kloter/connected_kloter_page.dart';
 import 'features/kloter/demo_production.dart';
 import 'features/kloter/kloter_detail_page.dart';
@@ -8,9 +10,12 @@ import 'features/kloter/kloter_list_page.dart';
 import 'features/laporan/demo_analytics.dart';
 import 'features/laporan/laporan_page.dart';
 import 'features/laporan/report_detail_page.dart';
+import 'features/laporan/report_export_page.dart';
+import 'features/laporan/printable_report.dart';
 import 'features/pekerjaan/review_api.dart';
 import 'features/pengaturan/pengaturan_page.dart';
 import 'features/pengaturan/settings_demo.dart';
+import 'features/pengaturan/harga_biaya_page.dart';
 import 'sobatnira_ui.dart';
 
 void main() => runApp(const SobatNiraApp());
@@ -35,8 +40,11 @@ class _SobatNiraAppState extends State<SobatNiraApp> {
     () => switch (tab) {
       NiraTab.beranda => ListenableBuilder(
         listenable: _demo,
-        builder: (context, _) =>
-            BerandaPage(kloter: _demo.kloter, onOpenKloter: _openKloter),
+        builder: (context, _) => BerandaPage(
+          kloter: _demo.kloter,
+          onOpenKloter: _openKloter,
+          onQuickAction: _openQuickAction,
+        ),
       ),
       NiraTab.kloter => ListenableBuilder(
         listenable: _demo,
@@ -74,6 +82,39 @@ class _SobatNiraAppState extends State<SobatNiraApp> {
     _navigator.currentState!.push(
       MaterialPageRoute<void>(
         builder: (_) => ReportDetailPage(kind: kind, onNavigate: _navigate),
+      ),
+    );
+  }
+
+  void _openQuickAction(QuickActionKind action) {
+    final kind = switch (action) {
+      QuickActionKind.profit => PrintableReportKind.profit,
+      QuickActionKind.recap => PrintableReportKind.production,
+      _ => null,
+    };
+    if (kind == null) {
+      _navigator.currentState!.push(
+        MaterialPageRoute<void>(
+          builder: (_) => action == QuickActionKind.expenses
+              ? HargaBiayaPage(
+                  settings: _settings,
+                  onNavigate: _navigate,
+                  operationalFirst: true,
+                )
+              : BantuanPage(onNavigate: _navigate),
+        ),
+      );
+      return;
+    }
+    _navigator.currentState!.push(
+      MaterialPageRoute<void>(
+        builder: (_) => ReportExportPage(
+          kind: kind,
+          analytics: _analytics,
+          production: _demo,
+          factory: _settings.factory.name,
+          onNavigate: _navigate,
+        ),
       ),
     );
   }

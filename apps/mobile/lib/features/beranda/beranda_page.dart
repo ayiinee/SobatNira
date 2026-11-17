@@ -11,11 +11,13 @@ class BerandaPage extends StatefulWidget {
   const BerandaPage({
     required this.kloter,
     required this.onOpenKloter,
+    this.onQuickAction,
     super.key,
   });
 
   final List<DemoKloter> kloter;
   final ValueChanged<DemoKloter> onOpenKloter;
+  final ValueChanged<QuickActionKind>? onQuickAction;
 
   @override
   State<BerandaPage> createState() => _BerandaPageState();
@@ -80,8 +82,8 @@ class _BerandaPageState extends State<BerandaPage> {
                 child: CustomPaint(
                   key: _headerKey,
                   painter: const _BerandaGeometryPainter(),
-                  child: const Padding(
-                    padding: EdgeInsets.fromLTRB(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
                       niraInset,
                       0,
                       niraInset,
@@ -90,11 +92,11 @@ class _BerandaPageState extends State<BerandaPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _Profile(),
-                        SizedBox(height: NiraSpace.lg),
-                        _ProductionSummary(),
-                        SizedBox(height: NiraSpace.lg),
-                        _QuickActions(),
+                        const _Profile(),
+                        const SizedBox(height: NiraSpace.lg),
+                        const _ProductionSummary(),
+                        const SizedBox(height: NiraSpace.lg),
+                        _QuickActions(onSelected: widget.onQuickAction),
                       ],
                     ),
                   ),
@@ -516,12 +518,13 @@ class _BerandaGeometryPainter extends CustomPainter {
 }
 
 class _QuickActions extends StatelessWidget {
-  const _QuickActions();
+  const _QuickActions({this.onSelected});
+  final ValueChanged<QuickActionKind>? onSelected;
 
   static const _actions = [
     ('Laba', QuickActionKind.profit),
-    ('Biaya Ops', QuickActionKind.expenses),
     ('Rekap', QuickActionKind.recap),
+    ('Biaya Ops', QuickActionKind.expenses),
     ('Bantuan', QuickActionKind.help),
   ];
 
@@ -542,7 +545,13 @@ class _QuickActions extends StatelessWidget {
           for (final (label, icon) in _actions)
             SizedBox(
               width: width,
-              child: _QuickActionTile(label: label, icon: icon),
+              child: _QuickActionTile(
+                label: label,
+                icon: icon,
+                onTap: () => onSelected == null
+                    ? showUnavailable(context)
+                    : onSelected!(icon),
+              ),
             ),
         ],
       );
@@ -551,10 +560,15 @@ class _QuickActions extends StatelessWidget {
 }
 
 class _QuickActionTile extends StatefulWidget {
-  const _QuickActionTile({required this.label, required this.icon});
+  const _QuickActionTile({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
 
   final String label;
   final QuickActionKind icon;
+  final VoidCallback onTap;
 
   @override
   State<_QuickActionTile> createState() => _QuickActionTileState();
@@ -581,7 +595,7 @@ class _QuickActionTileState extends State<_QuickActionTile> {
     return Semantics(
       button: true,
       child: InkWell(
-        onTap: () => showUnavailable(context),
+        onTap: widget.onTap,
         onHover: (value) => setState(() => _hovered = value),
         onFocusChange: (value) => setState(() => _focused = value),
         onHighlightChanged: (value) => setState(() => _pressed = value),

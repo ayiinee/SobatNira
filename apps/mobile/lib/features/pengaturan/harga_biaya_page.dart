@@ -8,11 +8,13 @@ class HargaBiayaPage extends StatefulWidget {
   const HargaBiayaPage({
     required this.settings,
     required this.onNavigate,
+    this.operationalFirst = false,
     super.key,
   });
 
   final SettingsDemo settings;
   final ValueChanged<NiraTab> onNavigate;
+  final bool operationalFirst;
 
   @override
   State<HargaBiayaPage> createState() => _HargaBiayaPageState();
@@ -62,7 +64,8 @@ class _HargaBiayaPageState extends State<HargaBiayaPage> {
 
   @override
   Widget build(BuildContext context) => SettingsPageFrame(
-    title: 'Harga & Biaya',
+    title: widget.operationalFirst ? 'Biaya Operasional' : 'Harga & Biaya',
+    tab: widget.operationalFirst ? NiraTab.beranda : NiraTab.pengaturan,
     onNavigate: widget.onNavigate,
     subtitle: 'Harga jual per grade dan biaya operasional',
     bottomAction: NiraButton('Simpan perubahan', _save),
@@ -72,6 +75,10 @@ class _HargaBiayaPageState extends State<HargaBiayaPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (widget.operationalFirst) ...[
+              ..._operationalFields(),
+              const SizedBox(height: NiraSpace.lg),
+            ],
             Text(
               'Harga per grade',
               style: niraText(NiraType.section, weight: FontWeight.w700),
@@ -90,14 +97,10 @@ class _HargaBiayaPageState extends State<HargaBiayaPage> {
                   optional: widget.settings.priceFor(grade.id) == null,
                 ),
               ),
-            const SizedBox(height: 6),
-            _moneyField(
-              label: 'Biaya Operasional',
-              controller: _cost,
-              unit: '/kloter',
-            ),
-            const SizedBox(height: 7),
-            const SettingsNote('Dikenakan satu kali setiap kloter'),
+            if (!widget.operationalFirst) ...[
+              const SizedBox(height: 6),
+              ..._operationalFields(),
+            ],
             const SizedBox(height: 14),
             const SettingsNote('Perubahan tersimpan selama sesi demo.'),
             Align(
@@ -112,6 +115,12 @@ class _HargaBiayaPageState extends State<HargaBiayaPage> {
       ),
     ],
   );
+
+  List<Widget> _operationalFields() => [
+    _moneyField(label: 'Biaya Operasional', controller: _cost, unit: '/kloter'),
+    const SizedBox(height: 7),
+    const SettingsNote('Dikenakan satu kali setiap kloter'),
+  ];
 
   Widget _moneyField({
     required String label,
