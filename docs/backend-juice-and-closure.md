@@ -4,6 +4,20 @@ Semua rute Backend A di bawah diawali `/tenants/{tenantId}/factories/{factoryId}
 
 Setelah menjalankan `npm run db:migrate` di `apps/api`, uji alur dengan `npm run test:juice-db`. Fixture PostgreSQL memakai akun, nota, dan data sintetis; panggilan Backend B dalam tes diarahkan ke server lokal tiruan.
 
+## Detail kloter untuk Backend B
+
+Panggil `GET /tenants/{tenantId}/factories/{factoryId}/lots/{lotId}` dengan access token pengguna. Respons memuat `id`, `tenantId`, `factoryId`, `supplierId`, `supplierName`, `displayCode`, dan `receivedAt` dari kloter.
+
+| Field | Arti |
+| --- | --- |
+| `synthetic` | Kategori data yang diminta. Bawaan `false`. Gunakan `?synthetic=true` untuk fixture. |
+| `netWeightGrams` | Berat penerimaan yang sudah sah dalam gram, berupa string desimal eksak atau `null` sebelum penerimaan sah. Contoh 1250,01 kg menjadi `"1250010"`. Nilai ini tetap menunjukkan berat penerimaan setelah tebu digiling. |
+| `status`, `closedAt`, `closedBy` | `open` sampai kloter ditutup pada kategori yang diminta. Kloter yang terbuka mengembalikan dua field penutupan sebagai `null`. |
+| `intake`, `milling` | `null` atau objek `{id, approvedAt, document}` untuk penerimaan dan penggilingan yang sudah dibukukan. |
+| `document` | `{source, documentId, revisionId, revisionNumber}`. Sumber `ocr` membawa UUID revisi sah pada `revisionId`. Sumber `synthetic` membawa nomor revisi sah pada `revisionNumber`. Field revisi yang tidak dipakai bernilai `null`. |
+
+Backend B bisa memeriksa `intake` dan `milling` untuk mengetahui tahap yang sudah sah, sedangkan `status` mengikuti penutupan kloter. Gunakan `/juice/availability` untuk saldo nira yang dapat direservasi.
+
 ## Saldo dan reservasi
 
 | Method dan path | Request atau hasil |
