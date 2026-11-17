@@ -5,7 +5,7 @@ import 'batch_api.dart';
 import 'production_dashboard_page.dart';
 
 class BatchListPage extends StatefulWidget {
-  BatchListPage({super.key, BatchApi? api}) : api = api ?? BatchApi();
+  BatchListPage({super.key, BatchApi? api}) : api = api ?? BatchApi(role: 'admin');
   final BatchApi api;
   @override
   State<BatchListPage> createState() => _BatchListPageState();
@@ -76,6 +76,23 @@ class BatchDetailPage extends StatefulWidget {
 
 class _BatchDetailPageState extends State<BatchDetailPage> {
   late Future<BatchDetail> _future = widget.api.detail(widget.id);
+  bool _working = false;
+  Future<void> _submit(Future<Map<String, dynamic>> Function() action) async {
+    setState(() => _working = true);
+    try { await action(); if (mounted) setState(() => _future = widget.api.detail(widget.id)); }
+    catch (error) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error'))); }
+    finally { if (mounted) setState(() => _working = false); }
+  }
+  Future<double?> _number(String title) async {
+    final input = TextEditingController();
+    final result = await showDialog<double>(context: context, builder: (context) => AlertDialog(title: Text(title), content: TextField(controller: input, keyboardType: const TextInputType.numberWithOptions(decimal: true)), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')), FilledButton(onPressed: () => Navigator.pop(context, double.tryParse(input.text)), child: const Text('Simpan'))]));
+    input.dispose(); return result;
+  }
+  Future<String?> _text(String title, String initial) async {
+    final input = TextEditingController(text: initial);
+    final result = await showDialog<String>(context: context, builder: (context) => AlertDialog(title: Text(title), content: TextField(controller: input), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')), FilledButton(onPressed: () => Navigator.pop(context, input.text.trim()), child: const Text('Simpan'))]));
+    input.dispose(); return result;
+  }
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: Text(widget.id), backgroundColor: const Color(0xFF174B35), foregroundColor: Colors.white),
@@ -88,6 +105,10 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
         final total = batch.contributions.fold<int>(0, (sum, item) => sum + item.volumeMl);
         return ListView(padding: const EdgeInsets.all(16), children: [
           Text('Status ${batch.status}', style: Theme.of(context).textTheme.titleLarge),
+          if (_working) const LinearProgressIndicator(),
+          if (batch.status == 'DRAFT') FilledButton(onPressed: _working ? null : () => _submit(() => widget.api.cooking(widget.id, {'startedAt': DateTime.now().toUtc().toIso8601String()})), child: const Text('Catat pemasakan')),
+          if (batch.status == 'COOKED') FilledButton(onPressed: _working ? null : () async { final value = await _number('Berat gula (kg)'); if (value != null) await _submit(() => widget.api.weighing(widget.id, sugarWeightKg: value)); }, child: const Text('Catat penimbangan')),
+          if (batch.status == 'WEIGHED') FilledButton(onPressed: _working ? null : () async { final value = await _text('Kode grade', 'A'); if (value != null && value.isNotEmpty) await _submit(() => widget.api.grading(widget.id, value)); }, child: const Text('Catat grading')),
           const SizedBox(height: 16),
           _Section(title: 'Sumber nira', child: Column(children: batch.contributions.map((item) => ListTile(contentPadding: EdgeInsets.zero, title: Text(item.kloterId), subtitle: Text('${item.volumeMl} ml â€¢ ${(item.volumeMl / total * 100).toStringAsFixed(1)}%'))).toList())),
           _Section(title: 'Pemasakan', child: Text(batch.cooking == null ? 'Belum dicatat' : 'Tercatat')),
