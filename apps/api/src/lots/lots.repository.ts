@@ -35,12 +35,13 @@ const COLUMNS = `l.id, l.tenant_id AS "tenantId", l.factory_id AS "factoryId", l
   l.display_code AS "displayCode", l.received_at AS "receivedAt", l.created_at AS "createdAt", l.updated_at AS "updatedAt"`;
 
 function approvedRecord(alias: 'i' | 'm') {
+  const correction = alias === 'i' ? 'ic' : 'mc';
   return `CASE WHEN ${alias}.id IS NOT NULL THEN jsonb_build_object(
-    'id', ${alias}.id, 'approvedAt', ${alias}.approved_at,
+    'id', ${alias}.id, 'approvedAt', COALESCE(${correction}.created_at,${alias}.approved_at),
     'document', jsonb_build_object(
       'source', CASE WHEN ${alias}.is_synthetic THEN 'synthetic' ELSE 'ocr' END,
       'documentId', COALESCE(${alias}.ocr_document_id, ${alias}.document_id),
-      'revisionId', ${alias}.ocr_revision_id,
+      'revisionId', COALESCE(${correction}.revision_id,${alias}.ocr_revision_id),
       'revisionNumber', ${alias}.document_revision
     )
   ) END`;
@@ -78,6 +79,10 @@ export class LotsRepository {
         AND i.lot_id = l.id AND i.is_synthetic = $5
       LEFT JOIN sobatnira.milling_records m ON m.tenant_id = l.tenant_id AND m.factory_id = l.factory_id
         AND m.lot_id = l.id AND m.is_synthetic = $5
+      LEFT JOIN LATERAL (SELECT revision_id,created_at FROM sobatnira.stock_reconciliations
+        WHERE intake_record_id=i.id ORDER BY revision_version DESC LIMIT 1) ic ON true
+      LEFT JOIN LATERAL (SELECT revision_id,created_at FROM sobatnira.stock_reconciliations
+        WHERE milling_record_id=m.id ORDER BY revision_version DESC LIMIT 1) mc ON true
       LEFT JOIN sobatnira.lot_closures c ON c.tenant_id = l.tenant_id AND c.factory_id = l.factory_id
         AND c.lot_id = l.id AND c.is_synthetic = $5
       WHERE l.id = $4::uuid

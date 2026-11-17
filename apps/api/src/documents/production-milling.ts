@@ -72,8 +72,13 @@ export class ProductionMilling {
 
   async posted(db: DatabaseSession, factoryId: string, documentId: string, version: number) {
     const { rows } = await db.query<PostedMilling>(`SELECT m.id,m.ocr_cane_label AS cane_label,m.lot_id,
-      m.juice_produced_liters::text AS juice_produced_liters,m.occurred_at,m.ocr_revision_id AS revision_id
+      COALESCE(c.quantity_after,m.juice_produced_liters)::text AS juice_produced_liters,
+      m.occurred_at,COALESCE(c.revision_id,m.ocr_revision_id) AS revision_id
       FROM sobatnira.milling_records m JOIN document_revisions r ON r.id=m.ocr_revision_id AND r.document_id=m.ocr_document_id
+      LEFT JOIN LATERAL (
+        SELECT revision_id,quantity_after FROM sobatnira.stock_reconciliations
+          WHERE milling_record_id=m.id AND revision_version<=$3 ORDER BY revision_version DESC LIMIT 1
+      ) c ON true
       WHERE m.factory_id=$1 AND m.ocr_document_id=$2 AND r.version<=$3 ORDER BY m.ocr_cane_label`,
     [factoryId, documentId, version]);
     return rows;
