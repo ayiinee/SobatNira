@@ -29,6 +29,7 @@ void main() {
       await tester.enterText(cost, '175000');
       await tap(tester, find.text('Simpan perubahan'));
       expect(tester.widget<TextFormField>(cost).controller!.text, '175.000');
+      await tester.pump(const Duration(seconds: 5));
       await tap(tester, find.bySemanticsLabel('Pengaturan'));
       await tap(tester, find.text('Harga & Biaya'));
       expect(tester.widget<TextFormField>(cost).controller!.text, '175.000');
