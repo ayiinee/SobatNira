@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 import httpx
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from benchmark_ocr import evaluate, load_cases
 from main import app
@@ -35,6 +35,48 @@ class OcrTest(TestCase):
 
     def post(self):
         return self.client.post("/internal/v1/ocr/extract", json=self.request, headers=self.headers)
+
+    def test_whatsapp_jpeg_reaches_extraction(self):
+        self.request["image"]["mime_type"] = "image/jpeg"
+        jpeg = BytesIO()
+        Image.new("RGB", (300, 240), "white").save(jpeg, "JPEG")
+        tokens = [token(text, .1, .1 + i * .1) for i, text in enumerate([
+            "TANGGAL: 26-09-2026", "PENGIRIM: PEMASOK DEMO", "NO KENDARAAN: UJI-001", "BERAT BERSIH: 5050",
+        ])]
+        with (patch.dict("os.environ", {"AI_SERVICE_INTERNAL_TOKEN": self.headers["X-Internal-Service-Token"]}),
+              patch("ocr_service.load_media", return_value=jpeg.getvalue()),
+              patch("ocr_service.recognize", return_value=tokens) as recognize):
+            response = self.post()
+        recognize.assert_called_once()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["extraction"]["header"]["net_weight_kg"]["normalized_value"], 5050)
+
+    def test_ruled_sheet_recognizes_two_blocks_with_skewed_and_stacked_headers(self):
+        image = Image.new("RGB", (1000, 1000), "white")
+        draw = ImageDraw.Draw(image)
+        for y in (100, 350, 600):
+            draw.line((150, y, 480, y + 3), fill="black", width=4)
+        tokens = [
+            token("DATA PRODUKSI BULAN", .28, .02), token("TEBU", .28, .065),
+            Token("WAIAN", .88, (.48, .057, .067, .036)), token("BRIX", .53, .064),
+            token("151", .61, .065), Token("CAMPING", .91, (.68, .054, .062, .043)),
+            token("?", .75, .067), token("HASIL", .83, .065),
+            Token("JAM", .99, (.93, .058, .04, .012)), Token("turun", .98, (.93, .083, .04, .010)),
+        ]
+        for y, pan, sticker in ((.15, "1", "NOTA DEMO A"), (.21, "2", "PENGIRIM DEMO"), (.43, "1", "NOTA DEMO B")):
+            tokens.extend(Token(text, .95, (x, y, .02, .018)) for x, text in [
+                (.27, sticker), (.495, pan), (.551, "17"), (.634, "50+65"), (.704, "1 1/2"),
+                (.779, "?",), (.855, "22"), (.943, "15.35"),
+            ])
+        result = extract(tokens, self.request["image"]["asset_id"], "1.0.0", "1.0.0", image)
+        SCHEMAS["production-note"].validate(result)
+        self.assertEqual([len(block["batches"]) for block in result["cane_blocks"]], [2, 1])
+        self.assertEqual(result["cane_blocks"][0]["cane_label"]["status"], "AMBIGUOUS")
+        batch = result["cane_blocks"][0]["batches"][0]
+        self.assertEqual(batch["cooking"]["isi_kg"]["status"], "AMBIGUOUS")
+        self.assertEqual(batch["cooking"]["gamping"]["normalized_value"], "1 1/2")
+        self.assertEqual(batch["cooking"]["jam_turun"]["normalized_value"], "15:35")
+        self.assertEqual(batch["unmapped_cells"][0]["header_raw"], "?")
 
     def test_examples_conform_to_note_schemas(self):
         directory = Path(__file__).resolve().parents[2] / "docs" / "ai" / "examples"

@@ -140,7 +140,7 @@ async function boot() {
     headers: { 'X-Internal-Service-Token': process.env.AI_SERVICE_INTERNAL_TOKEN } });
   if (!readiness.ok) throw new Error('PaddleOCR belum siap');
   plugin.register({ config: {}, pluginConfig: { accountId: 'local', mediaDir: staging }, logger: { warn: () => {} },
-    on(name, callback) { assert.equal(name,'reply_dispatch'); handler = callback; }, registerService(value) { service = value; },
+    on(name, callback) { if (name === 'reply_dispatch') handler = callback; }, registerService(value) { service = value; },
     runtime: { channel: { outbound: { async loadAdapter(channel) {
       assert.equal(channel,'whatsapp');
       return { async sendText(args) {
@@ -176,17 +176,21 @@ async function smoke() {
     return reply;
   };
   const photo = (file, caption = '', meta = {}) => body(randomUUID(), caption, { media: [{ path: resolve(staging, file), contentType: 'image/png' }], ...meta });
-  const parse = (reply) => {
-    const result = /STATUS ([a-f0-9-]{36}) ([a-f0-9-]{36})/.exec(reply);
-    if (!result) throw new Error('Adapter tidak mengembalikan referensi nota');
-    return { document: result[1], revision: result[2] };
+  const submitPhoto = async (event) => {
+    assert.match(await receive(event), /sudah diterima|sudah tercatat/);
+    const { rows: [message] } = await db.query('SELECT outcome FROM whatsapp_inbound_messages WHERE provider_message_id=$1', [event.MessageSid]);
+    return { document: message.outcome.document_id, revision: message.outcome.revision_id };
   };
+  const receiptFor = (target) => waitFor(async () => {
+    const { rows: [notice] } = await db.query("SELECT provider_message_id FROM whatsapp_notices WHERE revision_id=$1 AND status='SENT'", [target.revision]);
+    return notice && receipts.find(({ id }) => id === notice.provider_message_id);
+  }, 'Ringkasan WhatsApp belum dikirim');
   const inactive = await receive(photo('truck.png', '', { SenderE164: phone(102) }));
   assert.match(inactive, /belum aktif/);
   const input = photo('truck.png', 'BARU');
-  const first = parse(await receive(input));
-  assert.deepEqual(parse(await receive(input)), first);
-  assert.deepEqual(parse(await receive(photo('truck.png'))), first);
+  const first = await submitPhoto(input);
+  assert.deepEqual(await submitPhoto(input), first);
+  assert.deepEqual(await submitPhoto(photo('truck.png')), first);
   const client = createBridge({ apiUrl: url(ports.api), token: process.env.WHATSAPP_ADAPTER_INTERNAL_TOKEN, mediaDir: staging });
   const ready = (target) => waitFor(async () => {
     const status = await client.status(phone(101), target.document, target.revision);
@@ -194,32 +198,33 @@ async function smoke() {
   }, 'OCR belum menyelesaikan nota', 180_000);
   const truck = await ready(first);
   assert.equal(truck.extraction.header.net_weight_kg.normalized_value,1250);
-  await waitFor(() => receipts.some(({ text }) => text.includes(first.revision)), 'Ringkasan WhatsApp tidak dikirim');
-  assert.match(await receive(body(randomUUID(),`KONFIRMASI ${first.document} ${first.revision}`)),/masuk antrean/);
+  assert.match(await receive(body(randomUUID(),'STATUS')), /Nota Kedatangan Truk/);
+  const truckReceipt = await receiptFor(first);
+  assert.match(await receive(body(randomUUID(),'KONFIRMASI', { ReplyToId: truckReceipt.id })),/masuk antrean/);
   const production = photo('production.png', 'BARU');
-  const initial = parse(await receive(production));
+  const initial = await submitPhoto(production);
   assert.equal((await ready(initial)).extraction.cane_blocks.length,2);
-  const botReceipt = await waitFor(() => receipts.find(({ text }) => text.includes(initial.revision)),
-    'Ringkasan produksi WhatsApp belum terkirim');
-  const updated = parse(await receive(photo('update.png', '', { ReplyToId: botReceipt.id })));
+  const botReceipt = await receiptFor(initial);
+  const updated = await submitPhoto(photo('update.png', '', { ReplyToId: botReceipt.id }));
   assert.equal(updated.document,initial.document);
   assert.notEqual(updated.revision,initial.revision);
   assert.equal((await ready(updated)).extraction.cane_blocks[0].batches[0].output.hasil_kg.normalized_value,26);
   assert.doesNotMatch(await receive(body(randomUUID(),`KONFIRMASI ${initial.document} ${initial.revision}`)),/masuk antrean/);
   assert.match(await receive(body(randomUUID(),`KONFIRMASI ${updated.document} ${updated.revision}`)),/masuk antrean/);
-  const ambiguous = parse(await receive(photo('ambiguous.png', 'BARU')));
+  const ambiguous = await submitPhoto(photo('ambiguous.png', 'BARU'));
   const question = (await ready(ambiguous)).pending_question;
   assert.equal(question.field_path,'header.net_weight_kg');
   const answer = `JAWAB ${ambiguous.document} ${ambiguous.revision} ${question.id} 1250`;
-  assert.match(await receive(body(randomUUID(), answer)), /OPERATOR|1250 kg/);
+  assert.match(await receive(body(randomUUID(), answer)), /1\.250 kg/);
   assert.match(await receive(body(randomUUID(), answer)), /revisi berubah/);
-  const invalid = parse(await receive(photo('unreadable.png', 'BARU')));
+  const invalid = await submitPhoto(photo('unreadable.png', 'BARU'));
   const failed = await ready(invalid);
   assert.equal(failed.processing_status,'MANUAL_REVIEW_REQUIRED');
-  const retake = parse(await receive(photo('truck.png', `FOTO ULANG ${invalid.document} ${invalid.revision}`)));
+  const invalidReceipt = await receiptFor(invalid);
+  const retake = await submitPhoto(photo('truck.png', 'FOTO ULANG', { ReplyToId: invalidReceipt.id }));
   assert.equal(retake.document,invalid.document);
   assert.equal((await ready(retake)).extraction.document_type,'TRUCK_ARRIVAL_NOTE');
-  const manual = parse(await receive(photo('manual.png', 'BARU')));
+  const manual = await submitPhoto(photo('manual.png', 'BARU'));
   assert.equal((await ready(manual)).processing_status,'MANUAL_REVIEW_REQUIRED');
   const taskFor = async ({ revision }) => {
     const { rows } = await db.query('SELECT id FROM admin_review_tasks WHERE revision_id=$1', [revision]);

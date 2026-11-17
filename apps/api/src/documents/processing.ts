@@ -11,7 +11,8 @@ type Job = { id: string; revision_id: string; attempts: number; claim_token: str
 type Work = Revision & { factory_id: string; document_type: DocumentType; parent_revision_id: string | null;
   media_asset_id: string; object_key: string; mime_type: string; explicit_new: boolean };
 const MAX_ATTEMPTS = 3;
-const TIMEOUT = 120_000;
+const TIMEOUT = 240_000;
+const LEASE = TIMEOUT + 30_000;
 
 @Injectable()
 export class DocumentProcessor implements OnModuleInit, OnModuleDestroy {
@@ -41,8 +42,8 @@ export class DocumentProcessor implements OnModuleInit, OnModuleDestroy {
       const { rows: [job] } = await db.query<Job>(`WITH candidate AS (
         SELECT id FROM document_jobs WHERE (status='QUEUED' AND available_at<=now()) OR
           (status='PROCESSING' AND lease_until<=now()) ORDER BY available_at LIMIT 1 FOR UPDATE SKIP LOCKED
-        ) UPDATE document_jobs j SET status='PROCESSING',attempts=j.attempts+1,lease_until=now()+interval '150 seconds',
-          claim_token=$1 FROM candidate WHERE j.id=candidate.id RETURNING j.*`, [randomUUID()]);
+        ) UPDATE document_jobs j SET status='PROCESSING',attempts=j.attempts+1,lease_until=now()+$2*interval '1 millisecond',
+          claim_token=$1 FROM candidate WHERE j.id=candidate.id RETURNING j.*`, [randomUUID(), LEASE]);
       if (!job) return null;
       const { rows: [work] } = await db.query<Work>(`SELECT r.*,d.factory_id,d.document_type,s.media_asset_id,s.explicit_new,a.object_key,a.mime_type
         FROM document_revisions r JOIN source_documents d ON d.id=r.document_id

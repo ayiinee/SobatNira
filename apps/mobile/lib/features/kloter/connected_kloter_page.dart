@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../auth/login_pages.dart';
 import '../pekerjaan/pekerjaan_page.dart';
 import '../pekerjaan/review_api.dart';
 import 'production_catalog_page.dart';
@@ -22,73 +25,100 @@ class ConnectedKloterPage extends StatefulWidget {
 }
 
 class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
-  final _email = TextEditingController();
-  final _password = TextEditingController();
   final _searchInput = TextEditingController();
   ReviewApi? _api;
-  List<FactoryScope> _factories = [];
+  List<FactoryScope>? _factories;
   FactoryScope? _scope;
   Future<Json>? _lots;
   String _search = '';
   int _offset = 0;
+  bool _showLogin = false;
   bool _signingIn = false;
-  String? _error;
+  bool _checkingAccess = false;
+  String? _loginMessage;
 
   @override
   void dispose() {
     _api?.close();
-    _email.dispose();
-    _password.dispose();
     _searchInput.dispose();
     super.dispose();
   }
 
-  Future<void> _signIn() async {
-    if (_signingIn) return;
-    if (_email.text.trim().isEmpty || _password.text.isEmpty) {
-      setState(() => _error = 'Isi email dan kata sandi.');
-      return;
-    }
+  Future<void> _signIn(String email, String password) async {
+    if (_signingIn || _api != null) return;
     setState(() {
       _signingIn = true;
-      _error = null;
+      _loginMessage = null;
     });
-    ReviewApi? api;
     try {
-      api = await widget.signIn(_email.text.trim(), _password.text);
-      final factories = await api.factories();
-      if (!mounted) return;
-      _password.clear();
-      setState(() {
-        _api = api;
-        _factories = factories;
-        _scope = factories.firstOrNull;
-        _load();
+      final api = await widget.signIn(email, password);
+      if (!mounted) {
+        api.close();
+        return;
+      }
+      api.onSessionExpired = () => scheduleMicrotask(() {
+        if (mounted && identical(_api, api)) _endSession(expired: true);
       });
+      _api = api;
+      unawaited(_checkAccess(api));
     } catch (error) {
       if (mounted) {
-        setState(
-          () => _error = error is ReviewApiError && error.status == 503
-              ? error.message
-              : 'Gagal masuk. Periksa akun dan koneksi.',
-        );
+        setState(() {
+          _loginMessage = switch (error) {
+            ReviewApiError(status: 429) =>
+              'Terlalu banyak percobaan. Tunggu sebentar sebelum mencoba lagi.',
+            ReviewApiError(authCode: 'invalid_credentials') =>
+              'Email atau kata sandi tidak cocok.',
+            ReviewApiError(authCode: 'email_not_confirmed') =>
+              'Email belum dikonfirmasi. Periksa kotak masuk atau hubungi pengelola pabrik.',
+            ReviewApiError(authCode: 'user_banned') =>
+              'Akun ini tidak bisa digunakan. Hubungi pengelola pabrik.',
+            ReviewApiError(status: >= 500) || TimeoutException() =>
+              'Belum bisa masuk. Periksa koneksi dan coba lagi.',
+            _ => 'Belum bisa masuk. Coba lagi atau hubungi pengelola pabrik.',
+          };
+        });
       }
     } finally {
-      if (!identical(_api, api)) api?.close();
       if (mounted) setState(() => _signingIn = false);
     }
   }
 
-  void _signOut() {
+  Future<void> _checkAccess(ReviewApi api) async {
+    if (_checkingAccess) return;
+    setState(() => _checkingAccess = true);
+    try {
+      final factories = await api.factories();
+      if (!mounted || !identical(_api, api)) return;
+      setState(() {
+        _factories = factories;
+        _scope = factories.firstOrNull;
+        _load();
+      });
+    } catch (_) {
+      // A transient failure leaves access unloaded so the user can retry.
+      // ReviewApi handles expired sessions before returning a 401 error.
+    } finally {
+      if (mounted && identical(_api, api)) {
+        setState(() => _checkingAccess = false);
+      }
+    }
+  }
+
+  void _endSession({bool expired = false}) {
+    Navigator.of(context).popUntil((route) => route.isFirst);
     _api?.close();
     _searchInput.clear();
     setState(() {
       _api = null;
-      _factories = [];
+      _factories = null;
       _scope = null;
       _lots = null;
       _search = '';
       _offset = 0;
+      _checkingAccess = false;
+      _showLogin = true;
+      _loginMessage = expired ? 'Sesi berakhir. Masuk kembali.' : null;
     });
   }
 
@@ -97,6 +127,8 @@ class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
     _lots = scope == null
         ? null
         : _api!.lots(scope, offset: _offset, search: _search);
+    // A fast response can fail before the next frame attaches FutureBuilder.
+    _lots?.ignore();
   }
 
   void _changeSearch(String value) => setState(() {
@@ -106,22 +138,28 @@ class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
   });
 
   Future<void> _openCatalog(FactoryScope scope, ProductionCatalog kind) async {
+    final api = _api!;
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) =>
-            ProductionCatalogPage(api: _api!, scope: scope, kind: kind),
+            ProductionCatalogPage(api: api, scope: scope, kind: kind),
       ),
     );
-    if (mounted) setState(_load);
+    if (mounted &&
+        identical(_api, api) &&
+        kind != ProductionCatalog.operators) {
+      setState(_load);
+    }
   }
 
   Future<void> _createLot(FactoryScope scope) async {
+    final api = _api!;
     final saved = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => ProductionLotEditor(api: _api!, scope: scope),
+        builder: (_) => ProductionLotEditor(api: api, scope: scope),
       ),
     );
-    if (mounted && saved == true) {
+    if (mounted && identical(_api, api) && saved == true) {
       setState(() {
         _offset = 0;
         _load();
@@ -130,12 +168,13 @@ class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
   }
 
   Future<void> _openLot(FactoryScope scope, Json lot) async {
+    final api = _api!;
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (_) => _ConnectedLotDetail(api: _api!, scope: scope, lot: lot),
+        builder: (_) => _ConnectedLotDetail(api: api, scope: scope, lot: lot),
       ),
     );
-    if (mounted) setState(_load);
+    if (mounted && identical(_api, api)) setState(_load);
   }
 
   void _openReview(FactoryScope scope) {
@@ -157,56 +196,85 @@ class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: Text(_api == null ? 'SobatNira' : 'Kloter'),
-      actions: [
-        if (_api != null)
-          TextButton(onPressed: _signOut, child: const Text('Keluar')),
-      ],
-    ),
-    body: SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.all(NiraSpace.lg),
-        children: widget.invalidConfiguration.isNotEmpty
-            ? [
-                Text(
-                  'Periksa konfigurasi Flutter ${widget.invalidConfiguration.join(', ')}.',
-                ),
-              ]
-            : _api == null
-            ? _login()
-            : _production(),
+  Widget build(BuildContext context) {
+    final api = _api;
+    if (widget.invalidConfiguration.isNotEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('SobatNira')),
+        body: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.all(NiraSpace.lg),
+            children: [
+              const Text('Layanan masuk belum dikonfigurasi.'),
+              const Text('Hubungi pengelola SobatNira untuk bantuan.'),
+              Text('Periksa ${widget.invalidConfiguration.join(', ')}.'),
+            ],
+          ),
+        ),
+      );
+    }
+    if (api == null) {
+      return _showLogin
+          ? LoginFormPage(
+              busy: _signingIn,
+              message: _loginMessage,
+              onSubmit: _signIn,
+              onBack: () => setState(() {
+                _showLogin = false;
+                _loginMessage = null;
+              }),
+            )
+          : LoginWelcomePage(
+              onContinue: () => setState(() => _showLogin = true),
+            );
+    }
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_scope == null ? 'Akses pabrik' : 'Kloter'),
+        actions: [
+          TextButton(onPressed: _endSession, child: const Text('Keluar')),
+        ],
       ),
-    ),
-  );
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(NiraSpace.lg),
+          children: _factories == null ? _accessPending(api) : _production(),
+        ),
+      ),
+    );
+  }
 
-  List<Widget> _login() => [
-    TextField(
-      controller: _email,
-      decoration: const InputDecoration(labelText: 'Email'),
-      keyboardType: TextInputType.emailAddress,
-      autofillHints: const [AutofillHints.username],
-    ),
-    TextField(
-      controller: _password,
-      decoration: const InputDecoration(labelText: 'Kata sandi'),
-      obscureText: true,
-      autofillHints: const [AutofillHints.password],
-      onSubmitted: (_) => _signIn(),
-    ),
-    const SizedBox(height: NiraSpace.lg),
-    FilledButton(
-      onPressed: _signingIn ? null : _signIn,
-      child: Text(_signingIn ? 'Memeriksa akun…' : 'Masuk'),
-    ),
-    if (_error case final String message) Text(message),
-  ];
+  List<Widget> _accessPending(ReviewApi api) => _checkingAccess
+      ? [
+          const LinearProgressIndicator(),
+          const SizedBox(height: NiraSpace.lg),
+          Semantics(
+            liveRegion: true,
+            child: const Text('Memeriksa akses pabrik…'),
+          ),
+        ]
+      : [
+          Semantics(
+            liveRegion: true,
+            child: const Text(
+              'Akses pabrik belum dapat diperiksa. Periksa koneksi dan coba lagi.',
+            ),
+          ),
+          const SizedBox(height: NiraSpace.lg),
+          NiraButton('Coba lagi', () => _checkAccess(api), shadow: false),
+        ];
 
   List<Widget> _production() {
     final scope = _scope;
     if (scope == null) {
-      return [const Text('Akun ini belum memiliki akses pabrik aktif.')];
+      return [
+        Semantics(
+          liveRegion: true,
+          child: const Text('Akun ini belum memiliki akses pabrik aktif.'),
+        ),
+        const SizedBox(height: NiraSpace.sm),
+        const Text('Hubungi pengelola pabrik untuk mendapatkan akses.'),
+      ];
     }
     return [
       DropdownButtonFormField<FactoryScope>(
@@ -214,7 +282,7 @@ class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
         isExpanded: true,
         decoration: const InputDecoration(labelText: 'Pabrik'),
         items: [
-          for (final factory in _factories)
+          for (final factory in _factories!)
             DropdownMenuItem(
               value: factory,
               child: Text(

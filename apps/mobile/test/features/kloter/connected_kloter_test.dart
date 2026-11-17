@@ -91,6 +91,8 @@ void main() {
         ),
       );
       expect(requests, isEmpty);
+      await tester.tap(find.text('Masuk'));
+      await tester.pumpAndSettle();
       await tester.enterText(
         find.byType(TextField).first,
         'admin@example.invalid',

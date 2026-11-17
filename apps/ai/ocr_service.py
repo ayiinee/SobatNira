@@ -116,7 +116,8 @@ def decode_image(data, mime):
         raise ValueError("IMAGE_TOO_LARGE")
     try:
         with Image.open(BytesIO(data), formats=["JPEG", "PNG"]) as image:
-            if Image.MIME.get(image.format) != mime or image.width * image.height > MAX_PIXELS or image.n_frames != 1:
+            if (Image.MIME.get(image.format) != mime or image.width * image.height > MAX_PIXELS
+                    or getattr(image, "n_frames", 1) != 1):
                 raise ValueError("INVALID_IMAGE")
             image.verify()
         with Image.open(BytesIO(data)) as image:
@@ -132,6 +133,7 @@ def paddle_engine():
     return PaddleOCR(
         lang="en", device="cpu", use_doc_orientation_classify=False,
         use_doc_unwarping=False, use_textline_orientation=False, enable_mkldnn=False,
+        cpu_threads=4, text_recognition_batch_size=12,
     )
 
 
@@ -268,7 +270,7 @@ def run_extraction(request: ExtractionRequest, x_internal_service_token: str = H
             {"text": token.text, "confidence": token.confidence, **token.evidence(str(request.image.asset_id))}
             for token in tokens
         ]
-        note = extract(tokens, str(request.image.asset_id), request.schema_version, request.template_version)
+        note = extract(tokens, str(request.image.asset_id), request.schema_version, request.template_version, image)
         if note is None or request.document_type_hint not in (None, note["document_type"]):
             response.update(status="NEEDS_REVIEW", issues=[{"code": "UNKNOWN_LAYOUT", "severity": "ERROR", "message": "Template nota perlu ditinjau."}])
         else:

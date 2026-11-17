@@ -61,11 +61,13 @@ async function readiness(db: Database, infrastructureOnly: boolean) {
         if (!token || !model || !/^[a-z0-9._-]+$/i.test(model)) throw new Error('Missing configuration');
         await ok(`https://generativelanguage.googleapis.com/v1beta/models/${model}`, { 'x-goog-api-key': token });
       }),
-      check('OpenRouter [OPENROUTER_API_KEY, OPENROUTER_AGENT_MODEL, OPENROUTER_AGENT_FALLBACK_MODEL, OPENROUTER_ALLOWED_PROVIDERS]', async () => {
+      check('OpenRouter [OPENROUTER_API_KEY, OPENROUTER_AGENT_MODEL, OPENROUTER_AGENT_FALLBACK_MODEL, OPENROUTER_ALLOWED_PROVIDERS, OPENROUTER_AGENT_DISABLE_REASONING]', async () => {
         const key = process.env.OPENROUTER_API_KEY;
+        const disableReasoning = process.env.OPENROUTER_AGENT_DISABLE_REASONING;
         const models = [process.env.OPENROUTER_AGENT_MODEL, process.env.OPENROUTER_AGENT_FALLBACK_MODEL].filter(Boolean);
         if (!key || !process.env.OPENROUTER_AGENT_MODEL || !process.env.OPENROUTER_ALLOWED_PROVIDERS ||
-            models.some((model) => !/^[a-z0-9._-]+\/[a-z0-9._-]+$/i.test(model!))) throw new Error('Missing configuration');
+            (disableReasoning && !['true', 'false'].includes(disableReasoning)) ||
+            models.some((model) => !/^[a-z0-9._-]+\/[a-z0-9._-]+(?::free)?$/i.test(model!))) throw new Error('Missing configuration');
         const headers = { Authorization: `Bearer ${key}` };
         await ok('https://openrouter.ai/api/v1/key', headers);
         await Promise.all([...new Set(models)].map((model) => ok(`https://openrouter.ai/api/v1/models/${model}/endpoints`, headers)));

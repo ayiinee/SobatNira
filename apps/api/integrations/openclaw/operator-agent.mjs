@@ -11,24 +11,28 @@ const intentTool = {
 };
 
 function modelId(model) {
-  return typeof model === 'string' && /^[a-z0-9._-]+\/[a-z0-9._-]+$/i.test(model) && !/(?:^|[/.\-_])(?:auto|latest)(?:$|[/.\-_])/i.test(model);
+  return typeof model === 'string' && /^[a-z0-9._-]+\/[a-z0-9._-]+(?::free)?$/i.test(model) &&
+    !/(?:^|[/.\-_])(?:auto|latest)(?:$|[/:.\-_])/i.test(model);
 }
 
-export function createOperatorAgent({ key, model, fallbackModel, providers, request = fetch }) {
+export function createOperatorAgent({ key, model, fallbackModel, providers, disableReasoning = false, request = fetch }) {
   if (!key) return undefined;
   const allowed = [...new Set((providers ?? '').split(',').map((name) => name.trim()).filter(Boolean))];
   if (!modelId(model) || (fallbackModel && !modelId(fallbackModel)) || !allowed.length ||
       allowed.some((name) => !/^[a-z0-9][a-z0-9._/-]+$/i.test(name))) {
     throw new Error('OpenRouter needs explicit model IDs and approved providers');
   }
+  const fallback = fallbackModel !== model ? fallbackModel : undefined;
+  const timeoutMs = fallback ? 2_500 : 5_000;
 
   async function classify(text, selected) {
     let response;
     try {
       response = await request(endpoint, {
-        method: 'POST', redirect: 'error', signal: AbortSignal.timeout(2500),
+        method: 'POST', redirect: 'error', signal: AbortSignal.timeout(timeoutMs),
         headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: selected, max_tokens: 96, temperature: 0,
+          ...(disableReasoning ? { reasoning: { effort: 'none' } } : {}),
           provider: { only: allowed, require_parameters: true, data_collection: 'deny', zdr: true },
           tools: [intentTool], tool_choice: { type: 'function', function: { name: 'select_help_intent' } },
           messages: [
@@ -56,7 +60,7 @@ export function createOperatorAgent({ key, model, fallbackModel, providers, requ
       .replace(/\+?\d[\d(). -]{6,}\d/g, '[ANGKA]').replace(/\S+@\S+\.\S+/g, '[EMAIL]').slice(0, 300);
     if (!redacted.trim()) return undefined;
     const primary = await classify(redacted, model);
-    if (!primary.retryable || !fallbackModel || fallbackModel === model) return primary.intent;
-    return (await classify(redacted, fallbackModel)).intent;
+    if (!primary.retryable || !fallback) return primary.intent;
+    return (await classify(redacted, fallback)).intent;
   };
 }

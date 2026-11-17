@@ -77,3 +77,23 @@ Untuk revisi, pencocokan otomatis memakai label blok dan pasangan kode wajan ser
 - Parser truk menyatukan fragmen nama pengirim dalam satu baris hingga label berikutnya, termasuk ketika OCR melewatkan titik dua. Jika skor salah satu fragmen di bawah 0,90, skor belum tersedia, atau nilai tidak memuat huruf, parser menyimpan raw value dan evidence dengan status `AMBIGUOUS`. Gemini, bila diaktifkan, menerima crop yang mencakup fragmen nama pada baris yang sama. Perbedaan bacaan tetap membutuhkan klarifikasi.
 - Parser produksi memisahkan label kolom yang melekat dalam satu kotak OCR. Kombinasi `WAJAN`, `ISI`, dan `GAMPING` dengan baris memasak cukup untuk membentuk draf sebelum `GRADE` dan `HASIL` diisi. Perkiraan posisi header dipakai untuk mengelompokkan sel, sedangkan evidence tetap memakai koordinat OCR asli. Kolom yang tidak dikenal tetap tersedia sebagai `UNMAPPED`.
 - Sebelas tes FastAPI lulus. PaddleOCR CPU memproses tiga foto sintetis yang lolos schema, termasuk `cooking.png` yang menghasilkan satu kotak `WAJAN ISI GAMPING`. Buat ulang foto dengan `uv run --locked --extra paddle python synthetic_notes.py ../../.tmp/ocr-regression` dari `apps/ai`. Akurasi dua nota lapangan di laporan tim masih perlu diuji ulang menggunakan foto atau token OCR yang dianonimkan.
+
+## Aktivasi provider Gemini dan OpenRouter
+
+- Gemini Direct dengan `gemini-3.1-flash-lite` membaca crop angka sintetis. Uji `/internal/v1/ocr/extract` menjalankan PaddleOCR CPU dan Gemini live dengan foto dari fixture, memvalidasi envelope, serta mempertahankan nilai ambigu untuk klarifikasi. OpenRouter menjawab `SHOW_DRAFT` melalui bridge operator dengan tool call yang sah. Smoke OpenRouter memakai rujukan percakapan sintetis dan endpoint `antdigital/fp8` dengan zero data retention.
+- OpenClaw menerima model eksplisit dengan akhiran `:free`. Pengaturan `OPENROUTER_AGENT_DISABLE_REASONING` memungkinkan klasifikasi singkat untuk model yang mendukungnya. Anggaran waktu 5 detik tetap berlaku untuk satu percobaan atau dua percobaan dengan fallback.
+- Migrasi produksi `016` diverifikasi dan migrasi OCR `006_operator_management_audit.sql` diterapkan di database tim. RLS tabel audit operator dan probe privasi R2 lulus. Kredensial hanya tersedia pada konfigurasi privat. Scope akun dan operator serta pairing WhatsApp masih mengikuti langkah setup.
+- Readiness NestJS dan FastAPI terhubung lulus. Suite lokal lulus dengan 56 tes NestJS dan PostgreSQL, 11 tes FastAPI, serta 46 tes Flutter. Satu tes Flutter memerlukan fixture backend tambahan dan dilewati pada suite standar.
+
+## Pairing WhatsApp pada Windows
+
+- Gateway SobatNira memakai profil dan port tersendiri agar perintah login memakai state yang sama dengan proses gateway. OpenClaw 2026.11.4 menampilkan QR, menautkan akun WhatsApp `sobatnira`, dan mengembalikan status `connected` serta `healthy`.
+- Readiness mode terhubung lulus dengan akun, operator, dan pabrik demo yang terpisah. Login Flutter dengan Supabase dan akses antrean Pekerjaan untuk pabrik demo diverifikasi di browser.
+
+## JPEG WhatsApp dan percakapan operator
+
+- Dua foto WhatsApp tersimpan sebagai JPEG. Sebelumnya decoder meminta atribut jumlah frame yang tidak disediakan Pillow untuk JPEG biasa, sehingga FastAPI mengembalikan HTTP 500. Tes regresi memastikan JPEG mencapai OCR dan pembatasan multi-frame tetap berlaku.
+- Parser nota produksi bergaris mengenali header miring dan bertumpuk. Pemisah horizontal pada area TEBU membantu mengelompokkan baris masak. Label gabungan dari stiker ditandai ambigu dan kolom tanpa judul jelas tetap tidak dipetakan. Bukti tetap memakai koordinat OCR asli.
+- Chat memberi ringkasan berbahasa Indonesia dan menerima `STATUS` tanpa UUID. `KONFIRMASI`, `JAWAB`, `FOTO ULANG`, dan `COBA LAGI` pada ringkasan otomatis diverifikasi terhadap operator, pabrik, percakapan, dan revisi aktif. Percobaan ulang OCR menggunakan foto yang sudah disimpan dan menambah revisi. Adapter membatasi balasan agent bawaan OpenClaw untuk akun SobatNira.
+- Lulus 57 tes NestJS dengan PostgreSQL dan 13 tes FastAPI. Foto contoh dan hasil analisis lokal disimpan di luar Git.
+- Halaman produksi padat memerlukan lebih banyak waktu CPU daripada nota truk. PaddleOCR memakai empat thread dan batch pengenalan 12 crop. Pekerjaan OCR memberi waktu hingga 240 detik per percobaan, dengan lease 30 detik lebih panjang daripada batas request.

@@ -15,6 +15,7 @@ import { TruckIntake } from './truck-intake';
 import { MillingModule } from '../milling/milling.module';
 import { ProductionMilling } from './production-milling';
 import { StockReconciliation } from './stock-reconciliation';
+import { Operators, OperatorsController } from './operators';
 
 @Injectable()
 class AdapterGuard implements CanActivate {
@@ -76,11 +77,20 @@ class WhatsAppController {
   @Get('quoted-context')
   @Header('Cache-Control', 'private, no-store')
   quotedContext(@Headers('x-operator-phone') phone: string, @Headers('x-chat-id') chat: string,
-    @Headers('x-quoted-message-id') quote: string) {
+    @Headers('x-quoted-message-id') quote: string, @Query('action') action?: string) {
     if (!/^\+[1-9][0-9]{7,14}$/.test(phone) || !chat || chat.length > 255 || !quote || quote.length > 255) {
       throw new BadRequestException('Rujukan percakapan tidak valid');
     }
-    return this.intake.quotedContext(phone, chat, quote);
+    return action === 'true' ? this.intake.quotedActionContext(phone, chat, quote) : this.intake.quotedContext(phone, chat, quote);
+  }
+
+  @Get('latest-context')
+  @Header('Cache-Control', 'private, no-store')
+  latestContext(@Headers('x-operator-phone') phone: string, @Headers('x-chat-id') chat: string) {
+    if (!/^\+[1-9][0-9]{7,14}$/.test(phone) || !chat || chat.length > 255) {
+      throw new BadRequestException('Percakapan tidak valid');
+    }
+    return this.intake.latestContext(phone, chat);
   }
 
   @Post('text-events')
@@ -196,8 +206,8 @@ class MobileReviewController {
 
 @Module({
   imports: [MillingModule],
-  controllers: [WhatsAppController, OcrMediaController, MobileReviewController],
+  controllers: [WhatsAppController, OcrMediaController, MobileReviewController, OperatorsController],
   providers: [AdapterGuard, Database, DocumentProcessor, Intake, MediaStorage, Notices, Review, TruckIntake,
-    ProductionMilling, StockReconciliation],
+    ProductionMilling, StockReconciliation, Operators],
 })
 export class OcrDocumentsModule {}

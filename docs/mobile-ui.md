@@ -41,6 +41,6 @@ Saat teks diperbesar, kartu ringkasan dapat disusun vertikal, empat aksi Beranda
 
 Ukuran ini menjadi dasar bersama. Penyesuaian berikutnya sebaiknya mengikuti fungsi teks/komponen, bukan menambahkan ukuran pecahan untuk tiap halaman.
 
-Onboarding dan login demo dinonaktifkan sementara dari alur aplikasi. Aplikasi langsung membuka Beranda. Autentikasi API Pekerjaan tetap mengikuti konfigurasi dan izin backend.
+Mode demo langsung membuka Beranda. Mode terhubung membuka sambutan dan form login email, lalu memeriksa akses pabrik melalui API sebelum membuka Kloter. Kloter dan Pekerjaan berbagi sesi di memori. Saat keluar atau sesi berakhir, pengguna kembali ke form masuk.
 
-Navbar utama berisi empat menu: Beranda, Kloter, Laporan, dan Pengaturan. Tombol Pekerjaan di Beranda membuka antrean review nota. Sesi review tersimpan selama halaman Pekerjaan terbuka. Header detail menggunakan panah kembali yang dirapatkan secara konsisten ke margin kiri konten.
+Di mode demo, navbar utama berisi Beranda, Kloter, Laporan, dan Pengaturan. Tombol Pekerjaan di Beranda membuka antrean review nota. Sesi review tersimpan selama halaman Pekerjaan terbuka. Header detail menggunakan panah kembali yang dirapatkan secara konsisten ke margin kiri konten.
