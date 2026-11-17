@@ -132,6 +132,12 @@ test('lot closure checks drained stock and Backend B, then blocks new stock oper
     assert.equal(closed.status, 200, JSON.stringify(closed.body));
     assert.equal(closed.body.status, 'closed');
     assert.equal(closed.body.closedBy, admin);
+    const lotDetail = await f.request(f.root + '/lots/' + lot + '?synthetic=true');
+    assert.equal(lotDetail.status, 200);
+    assert.equal(lotDetail.body.status, 'closed');
+    assert.equal(lotDetail.body.closedAt, closed.body.closedAt);
+    assert.equal(lotDetail.body.closedBy, admin);
+    assert.equal((await f.request(f.root + '/lots/' + lot)).body.status, 'open');
     assert.deepEqual((await close()).body, closed.body);
     assert.equal(calls.length, 3);
     assert.equal((await f.request(closure)).body.status, 'open');

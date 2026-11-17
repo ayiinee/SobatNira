@@ -33,13 +33,15 @@ test('real milling can debit an OCR receipt and credit nira while preserving rev
   try {
     const repo = app.get(MillingRepository);
     const access = { userId: ids.admin, tenantId: ids.tenant, factoryId: ids.factory, role: 'admin' };
+    const truckDocumentId = randomUUID();
+    const truckRevisionId = randomUUID();
     const ocrDocumentId = randomUUID();
     const ocrRevisionId = randomUUID();
     const quantity = '251.000000000000000001';
     await repo.mutate(access, async (tx) => {
       const receipt = await app.get(TruckIntake).post(tx, {
         userId: ids.admin, factoryId: ids.factory, lotId: ids.lot, supplierId: ids.supplier,
-        documentId: randomUUID(), revisionId: randomUUID(),
+        documentId: truckDocumentId, revisionId: truckRevisionId,
         note: { document_type: 'TRUCK_ARRIVAL_NOTE', header: {
           cane_type: { status: 'READ', normalized_value: 'BL' },
           net_weight_kg: { status: 'READ', unit: 'kg', normalized_value: '1250.01' },
@@ -60,6 +62,16 @@ test('real milling can debit an OCR receipt and credit nira while preserving rev
     assert.equal(milling.ocrDocumentId, ocrDocumentId);
     assert.equal(milling.ocrRevisionId, ocrRevisionId);
     assert.equal(milling.caneConsumedKg, '1250.01');
+    const detail = await request(root + '/lots/' + ids.lot);
+    assert.equal(detail.status, 200);
+    assert.equal(detail.body.netWeightGrams, '1250010');
+    assert.deepEqual(detail.body.intake.document, {
+      source: 'ocr', documentId: truckDocumentId, revisionId: truckRevisionId, revisionNumber: null,
+    });
+    assert.deepEqual(detail.body.milling.document, {
+      source: 'ocr', documentId: ocrDocumentId, revisionId: ocrRevisionId, revisionNumber: null,
+    });
+    assert.equal((await request(root + '/lots/' + ids.lot + '?synthetic=true')).body.netWeightGrams, null);
   } finally { await f.close(); }
 });
 
