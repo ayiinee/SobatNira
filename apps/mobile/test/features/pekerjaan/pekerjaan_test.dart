@@ -10,6 +10,91 @@ import 'package:sobatnira/features/pekerjaan/pekerjaan_page.dart';
 import 'package:sobatnira/sobatnira_ui.dart';
 
 void main() {
+  testWidgets('Koreksi stok opens the new approved task and retains the reason', (
+    tester,
+  ) async {
+    final api = ReviewApi(
+      'synthetic-token',
+      client: MockClient((request) async {
+        final endpoint = request.url.path.replaceFirst('/api/v1/mobile/', '');
+        if (endpoint.endsWith('/assets/photo')) return http.Response('', 404);
+        if (endpoint == 'review-tasks/original' ||
+            endpoint == 'review-tasks/reconciled') {
+          final corrected = endpoint.endsWith('/reconciled');
+          return http.Response(
+            jsonEncode({
+              'document_id': 'truck',
+              'revision_id': corrected ? 'revision-2' : 'revision-1',
+              'document_type': 'TRUCK_ARRIVAL_NOTE',
+              'version': corrected ? 2 : 1,
+              'media_asset_id': 'photo',
+              'status': 'VALIDATED',
+              'actions': ['RECONCILE'],
+              'intake': {
+                'lot_id': 'lot',
+                'net_weight_kg': corrected ? '1249.75' : '1252',
+              },
+              'issues': [],
+              'revisions': [],
+              'reconciliations': [
+                if (corrected)
+                  {
+                    'revision_version': 2,
+                    'material': 'sugarcane',
+                    'quantity_before': '1252',
+                    'quantity_after': '1249.75',
+                    'reason': 'Timbang ulang',
+                  },
+              ],
+            }),
+            200,
+          );
+        }
+        expect(endpoint, 'documents/truck/reconcile');
+        expect(request.headers['Idempotency-Key'], isNotEmpty);
+        expect(jsonDecode(request.body), {
+          'revision_id': 'revision-1',
+          'expected_version': 1,
+          'lot_id': 'lot',
+          'quantity': '1249.75',
+          'reason': 'Timbang ulang',
+        });
+        return http.Response(
+          '{"task_id":"reconciled","revision_id":"revision-2","version":2,"status":"VALIDATED"}',
+          200,
+        );
+      }),
+    );
+    addTearDown(api.close);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ReviewDetailPage(api: api, taskId: 'original'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final reconcile = find.widgetWithText(
+      OutlinedButton,
+      'Koreksi stok nota sah',
+    );
+    await tester.ensureVisible(reconcile);
+    await tester.tap(reconcile);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Kuantitas yang benar (kg)'),
+      '1249,75',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Alasan koreksi'),
+      'Timbang ulang',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sahkan koreksi stok'));
+    await tester.pumpAndSettle();
+    expect(find.text('Stok tebu tercatat: 1249.75 kg'), findsOneWidget);
+    expect(find.text('Revisi 2 · 1252 → 1249.75 kg'), findsOneWidget);
+    expect(find.text('Timbang ulang'), findsOneWidget);
+  });
+
   testWidgets('Nota produksi sends liters and zoned time for new blocks only', (
     tester,
   ) async {

@@ -10,6 +10,7 @@ import '../../sobatnira_ui.dart';
 import 'review_api.dart';
 import 'manual_note_form.dart';
 import 'intake_lot_dialog.dart';
+import 'stock_reconciliation_dialog.dart';
 
 class ReviewDetailPage extends StatefulWidget {
   const ReviewDetailPage({required this.api, required this.taskId, super.key});
@@ -21,6 +22,7 @@ class ReviewDetailPage extends StatefulWidget {
 }
 
 class _ReviewDetailPageState extends State<ReviewDetailPage> {
+  late String _taskId = widget.taskId;
   late Future<Json> _task = _load();
   String? _asset;
   List<Json> _evidence = [];
@@ -30,7 +32,7 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
   bool _notificationRead = false;
 
   Future<Json> _load() async {
-    final task = await widget.api.detail(widget.taskId);
+    final task = await widget.api.detail(_taskId);
     if (mounted && !_notificationRead && task['role'] == 'ADMIN') {
       unawaited(_markNotificationRead());
     }
@@ -39,7 +41,7 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
 
   Future<void> _markNotificationRead() async {
     try {
-      await widget.api.markNotificationRead(widget.taskId);
+      await widget.api.markNotificationRead(_taskId);
       _notificationRead = true;
     } catch (_) {
       // Loading the note succeeds even if the notification is still unread.
@@ -54,10 +56,20 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
     }
     setState(() => _saving = true);
     try {
-      await widget.api.change(task, action, values, key: _retryKey!);
+      final outcome = await widget.api.change(
+        task,
+        action,
+        values,
+        key: _retryKey!,
+      );
       if (!mounted) return;
       _retrySignature = null;
       setState(() {
+        if (action == 'reconcile') {
+          _taskId = outcome['task_id'] as String;
+          _asset = null;
+          _evidence = [];
+        }
         _task = _load();
       });
       ScaffoldMessenger.of(
@@ -159,8 +171,7 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
     if (task['document_type'] == 'TRUCK_ARRIVAL_NOTE') {
       final selected = await showDialog<Json>(
         context: context,
-        builder: (context) =>
-            IntakeLotDialog(api: widget.api, taskId: widget.taskId),
+        builder: (context) => IntakeLotDialog(api: widget.api, taskId: _taskId),
       );
       if (!mounted || selected == null) return;
       values['lot_id'] = selected['id'];
@@ -197,7 +208,7 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
           context: context,
           builder: (context) => IntakeLotDialog(
             api: widget.api,
-            taskId: widget.taskId,
+            taskId: _taskId,
             millingLabel: label,
             excludedLots: selectedLots,
           ),
@@ -209,6 +220,17 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
       values['milling'] = mappings;
     }
     await _change(task, 'validate', values);
+  }
+
+  Future<void> _reconcile(Json task) async {
+    final values = await showDialog<Json>(
+      context: context,
+      builder: (context) => StockReconciliationDialog(
+        intake: task['intake'] as Json?,
+        milling: (task['milling'] as List? ?? []).cast<Json>(),
+      ),
+    );
+    if (mounted && values != null) await _change(task, 'reconcile', values);
   }
 
   @override
@@ -265,6 +287,14 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
               Text(
                 '${item['cane_label']} · Nira tercatat ${item['juice_produced_liters']} L',
               ),
+            for (final entry
+                in (task['reconciliations'] as List? ?? []).cast<Json>())
+              ListTile(
+                title: Text(
+                  'Revisi ${entry['revision_version']} · ${entry['quantity_before']} → ${entry['quantity_after']} ${entry['material'] == 'sugarcane' ? 'kg' : 'L'}',
+                ),
+                subtitle: Text('${entry['reason']}'),
+              ),
             if (confirmation != null)
               Text(
                 'Dikonfirmasi ${confirmation['confirmed_by']} pada revisi ${confirmation['version']}',
@@ -273,7 +303,7 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
             _Photo(
               key: ValueKey(asset),
               api: widget.api,
-              taskId: widget.taskId,
+              taskId: _taskId,
               asset: asset,
               evidence: _evidence,
             ),
@@ -355,6 +385,11 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
               FilledButton(
                 onPressed: _saving ? null : () => _validate(task),
                 child: const Text('Validasi revisi ini'),
+              ),
+            if (actions.contains('RECONCILE'))
+              OutlinedButton(
+                onPressed: _saving ? null : () => _reconcile(task),
+                child: const Text('Koreksi stok nota sah'),
               ),
             if (actions.contains('RETURN'))
               OutlinedButton(

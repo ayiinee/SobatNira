@@ -8,13 +8,15 @@ import { correctField } from './revisions';
 import { manualNote } from './manual-note';
 import { enqueueNotice } from './notices';
 import { supabaseKey } from './config';
-import { PostedIntake, postedIntakeColumns, TruckIntake } from './truck-intake';
+import { PostedIntake, TruckIntake } from './truck-intake';
 import { ProductionMilling } from './production-milling';
+import { requireProductionAccess } from './production-access';
+import { parseStockReconciliation, StockReconciliation } from './stock-reconciliation';
 
 @Injectable()
 export class Review {
   constructor(private readonly db: Database, private readonly truckIntake: TruckIntake,
-    private readonly productionMilling: ProductionMilling) {}
+    private readonly productionMilling: ProductionMilling, private readonly stockReconciliation: StockReconciliation) {}
 
   async user(authorization?: string) {
     if (!authorization || !/^Bearer \S{1,8192}$/.test(authorization)) throw new UnauthorizedException();
@@ -72,16 +74,24 @@ export class Review {
         ORDER BY e.created_at,e.id`, [task.document_id, task.version]);
       let intake: PostedIntake | null = null;
       if (task.document_type === 'TRUCK_ARRIVAL_NOTE' && task.status === 'VALIDATED') {
-        const result = await db.query<PostedIntake>(`SELECT ${postedIntakeColumns} FROM sobatnira.intake_records
-          WHERE factory_id=$1 AND ocr_document_id=$2 AND ocr_revision_id=$3`,
+        const result = await db.query<PostedIntake>(`SELECT i.id,i.lot_id,i.supplier_id,
+          COALESCE(c.quantity_after,i.initial_net_weight_kg)::text AS net_weight_kg,
+          i.occurred_at AS received_at,i.ocr_document_id AS document_id,
+          COALESCE(c.revision_id,i.ocr_revision_id) AS revision_id
+          FROM sobatnira.intake_records i LEFT JOIN sobatnira.stock_reconciliations c
+            ON c.intake_record_id=i.id AND c.revision_id=$3
+          WHERE i.factory_id=$1 AND i.ocr_document_id=$2 AND (i.ocr_revision_id=$3 OR c.revision_id=$3)`,
         [task.factory_id, task.document_id, task.revision_id]);
         intake = result.rows[0] ?? null;
       }
       const milling = task.document_type === 'PRODUCTION_NOTE'
         ? await this.productionMilling.posted(db, task.factory_id, task.document_id, task.version) : [];
+      const reconciliations = await this.stockReconciliation.history(db, task.factory_id, task.document_id, task.version);
       return { ...task, revisions: history, operator_confirmation: history.find((row) => row.confirmed_at) ?? null,
-        intake, milling, audit: auditTrail, actions: task.current_revision_id !== task.revision_id ? [] : task.status === 'PENDING_VALIDATION'
-          ? ['CORRECT', 'VALIDATE', 'RETURN'] : task.status === 'MANUAL_REVIEW_REQUIRED' ? ['MANUAL_ENTRY', 'RETURN'] : [] };
+        intake, milling, reconciliations, audit: auditTrail,
+        actions: task.current_revision_id !== task.revision_id ? [] : task.status === 'PENDING_VALIDATION'
+          ? ['CORRECT', 'VALIDATE', 'RETURN'] : task.status === 'MANUAL_REVIEW_REQUIRED' ? ['MANUAL_ENTRY', 'RETURN']
+            : task.status === 'VALIDATED' && (intake || milling.length) ? ['RECONCILE'] : [] };
     });
   }
 
@@ -131,22 +141,24 @@ export class Review {
     return record as { object_key: string; mime_type: string };
   }
 
-  async change(user: string, document: string, action: 'CORRECT' | 'VALIDATE' | 'RETURN' | 'MANUAL_ENTRY', key: string | undefined,
+  async change(user: string, document: string, action: 'CORRECT' | 'VALIDATE' | 'RETURN' | 'MANUAL_ENTRY' | 'RECONCILE', key: string | undefined,
     body: Record<string, unknown> | undefined) {
     if (!body || !key || !/^[A-Za-z0-9_-]{12,128}$/.test(key) || !Number.isSafeInteger(body.expected_version)) {
       throw new BadRequestException('Versi revisi dan Idempotency-Key wajib');
     }
     const revisionId = requireUuid(body.revision_id);
+    const reconciliation = action === 'RECONCILE' ? parseStockReconciliation(body) : null;
     const lotSelection = body.lot_id === undefined && body.supplier_id === undefined ? [] : [body.lot_id, body.supplier_id];
     const fingerprint = createHash('sha256').update(JSON.stringify([document, action, revisionId, body.expected_version,
       body.field_path, body.value, body.decision, body.reason_code, body.comment, body.request_operator_follow_up, body.note,
       ...(action === 'MANUAL_ENTRY' ? [body.document_type, body.values, body.rows_per_block] : []), ...lotSelection,
-      ...(body.milling === undefined ? [] : [body.milling])])).digest('hex');
+      ...(body.milling === undefined ? [] : [body.milling]), ...(reconciliation ? [reconciliation] : [])])).digest('hex');
     return this.db.transaction(async (db) => {
       const { rows: [doc] } = await db.query(`SELECT d.* FROM source_documents d
         JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1 AND a.active
         WHERE d.id=$2 FOR UPDATE OF d FOR SHARE OF a`, [user, document]);
       if (!doc) throw new NotFoundException('Dokumen tidak ditemukan');
+      const productionAccess = reconciliation ? await requireProductionAccess(db, user, doc.factory_id) : null;
       await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`mobile:${user}:${key}`]);
       const { rows: [prior] } = await db.query(`SELECT * FROM mobile_review_actions WHERE user_id=$1 AND idempotency_key=$2`, [user, key]);
       if (prior) {
@@ -156,15 +168,35 @@ export class Review {
       if (doc.current_revision_id !== revisionId) throw new ConflictException('STALE_REVISION');
       const { rows: [base] } = await db.query<Revision>('SELECT * FROM document_revisions WHERE id=$1', [revisionId]);
       if (base.version !== body.expected_version) throw new ConflictException('STALE_REVISION');
-      const { rows: [task] } = await db.query(`SELECT * FROM admin_review_tasks WHERE revision_id=$1 AND status IN
-        ('PENDING_VALIDATION','MANUAL_REVIEW_REQUIRED') FOR UPDATE`, [revisionId]);
-      if (!task) throw new ConflictException('Revisi tidak berada di antrean terbuka');
+      const { rows: [task] } = await db.query(`SELECT * FROM admin_review_tasks WHERE revision_id=$1
+        AND status=ANY($2::text[]) FOR UPDATE`, [revisionId, reconciliation
+        ? ['VALIDATED'] : ['PENDING_VALIDATION', 'MANUAL_REVIEW_REQUIRED']]);
+      if (!task) throw new ConflictException(reconciliation ? 'Koreksi stok memerlukan revisi sah.' : 'Revisi tidak berada di antrean terbuka');
       if ((action === 'MANUAL_ENTRY' && task.status !== 'MANUAL_REVIEW_REQUIRED') ||
           (['CORRECT','VALIDATE'].includes(action) && task.status !== 'PENDING_VALIDATION')) {
         throw new ConflictException('Aksi tidak tersedia untuk status tugas ini');
       }
       let outcome;
-      if (action === 'MANUAL_ENTRY') {
+      if (reconciliation && productionAccess) {
+        if (!base.extraction) throw new ConflictException('Revisi sah belum memiliki data nota.');
+        let extraction = base.extraction;
+        if (extraction.document_type === 'TRUCK_ARRIVAL_NOTE') {
+          const weight = Number(reconciliation.quantity);
+          if (weight <= 0 || String(weight) !== reconciliation.quantity) {
+            throw new BadRequestException('Berat kg harus positif dan presisinya harus dapat disimpan pada revisi nota.');
+          }
+          extraction = correctField(extraction, 'header.net_weight_kg', weight, 'ADMIN_CORRECTION');
+        }
+        const revision = await editRevision(db, base, extraction, '', 'ADMIN');
+        const adjustment = await this.stockReconciliation.post(db, productionAccess, base, revision, reconciliation);
+        await db.query(`INSERT INTO document_approvals (document_id,revision_id,user_id,note) VALUES ($1,$2,$3,$4)`,
+          [document, revision.id, user, reconciliation.reason]);
+        const nextTask = await db.query<{ id: string }>(`INSERT INTO admin_review_tasks (document_id,revision_id,status)
+          VALUES ($1,$2,'VALIDATED') RETURNING id`, [document, revision.id]);
+        await audit(db, revision, 'ADMIN_STOCK_RECONCILED', user, adjustment);
+        outcome = { task_id: nextTask.rows[0].id, revision_id: revision.id, version: revision.version,
+          status: 'VALIDATED', reconciliation: adjustment };
+      } else if (action === 'MANUAL_ENTRY') {
         if (base.extraction || typeof body.note !== 'string' || !body.note.trim() || body.note.length > 1000) {
           throw new BadRequestException('Catatan pemeriksaan foto wajib untuk isian manual');
         }

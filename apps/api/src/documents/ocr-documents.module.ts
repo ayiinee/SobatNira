@@ -14,6 +14,7 @@ import { Notices } from './notices';
 import { TruckIntake } from './truck-intake';
 import { MillingModule } from '../milling/milling.module';
 import { ProductionMilling } from './production-milling';
+import { StockReconciliation } from './stock-reconciliation';
 
 @Injectable()
 class AdapterGuard implements CanActivate {
@@ -178,6 +179,13 @@ class MobileReviewController {
     return this.review.change(await this.review.user(token), requireUuid(id), 'MANUAL_ENTRY', key, body);
   }
 
+  @Post('documents/:id/reconcile')
+  @HttpCode(200)
+  async reconcile(@Headers('authorization') token: string, @Headers('idempotency-key') key: string,
+    @Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.review.change(await this.review.user(token), requireUuid(id), 'RECONCILE', key, body);
+  }
+
   @Post('documents/:id/return')
   @HttpCode(200)
   async return(@Headers('authorization') token: string, @Headers('idempotency-key') key: string,
@@ -189,6 +197,7 @@ class MobileReviewController {
 @Module({
   imports: [MillingModule],
   controllers: [WhatsAppController, OcrMediaController, MobileReviewController],
-  providers: [AdapterGuard, Database, DocumentProcessor, Intake, MediaStorage, Notices, Review, TruckIntake, ProductionMilling],
+  providers: [AdapterGuard, Database, DocumentProcessor, Intake, MediaStorage, Notices, Review, TruckIntake,
+    ProductionMilling, StockReconciliation],
 })
 export class OcrDocumentsModule {}

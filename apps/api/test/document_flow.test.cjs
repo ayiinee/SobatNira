@@ -228,7 +228,8 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     t.after(async () => {
       const clean = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
       try {
-        for (const table of ['sugarcane_stock_movements', 'juice_stock_movements', 'milling_records', 'intake_records', 'lots', 'suppliers', 'factory_memberships',
+        for (const table of ['stock_reconciliations', 'juice_reservations', 'sugarcane_stock_movements', 'juice_stock_movements',
+          'milling_records', 'intake_records', 'lots', 'suppliers', 'factory_memberships',
           'tenant_memberships', 'factories']) {
           await clean.query(`DELETE FROM sobatnira.${table} WHERE tenant_id=$1`, [tenant]);
         }
@@ -451,6 +452,25 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     assert.deepEqual((await mobile(`review-tasks/${taskId}`).then((response) => response.json())).intake, booked.intake);
     assert.equal((await db.query('SELECT count(*)::int AS count FROM document_approvals')).rows[0].count, 1);
 
+    const caneCorrection = { revision_id: detail.revision_id, expected_version: detail.version, lot_id: lot,
+      quantity: '1249.75', reason: 'Timbang ulang sebelum digiling' };
+    const correctionKey = randomUUID();
+    const caneResults = await Promise.all([
+      change(detail, 'reconcile', caneCorrection, correctionKey),
+      change(detail, 'reconcile', caneCorrection, correctionKey),
+    ]);
+    for (const result of caneResults) assert.equal(result.status, 200, await result.clone().text());
+    const adjustedCane = await caneResults[0].json();
+    assert.deepEqual(await caneResults[1].json(), adjustedCane);
+    assert.equal(adjustedCane.reconciliation.quantity_delta, '-2.25');
+    assert.equal((await change(detail, 'reconcile', { ...caneCorrection, quantity: '1250' }, correctionKey)).status, 409);
+    assert.equal((await change(detail, 'reconcile', caneCorrection, randomUUID())).status, 409);
+    const adjustedTruck = await mobile(`review-tasks/${adjustedCane.task_id}`).then((response) => response.json());
+    assert.equal(adjustedTruck.intake.net_weight_kg, '1249.75');
+    assert.equal(adjustedTruck.extraction.header.net_weight_kg.normalized_value, 1249.75);
+    assert.equal(adjustedTruck.reconciliations.length, 1);
+    assert.deepEqual(await stock(), [{ quantity_delta_kg: '1252', is_synthetic: false }]);
+
     const production = await fixture('production-note-progressive-update');
     production.cane_blocks[0].cane_label.normalized_value = 'SYNTHETIC-A';
     notes.push(production);
@@ -483,8 +503,12 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
       JOIN sobatnira.sugarcane_stock_movements c ON c.milling_record_id=m.id
       JOIN sobatnira.juice_stock_movements j ON j.milling_record_id=m.id
       WHERE m.lot_id=$1 AND NOT m.is_synthetic`, [lot])).rows;
-    assert.deepEqual(await millingStock(), [{ cane: '-1252', juice: '250.125',
+    assert.deepEqual(await millingStock(), [{ cane: '-1249.75', juice: '250.125',
       reported_batches: [{ rowReference: production.cane_blocks[0].batches[0].row_reference, wokNumber: 1, contentsKg: 115, finishTime: '15:35' }] }]);
+    assert.equal((await change(adjustedTruck, 'reconcile', { ...caneCorrection, revision_id: adjustedTruck.revision_id,
+      expected_version: adjustedTruck.version, quantity: '1250' }, randomUUID())).status, 409);
+    assert.equal((await db.query('SELECT sum(quantity_delta_kg)::text AS balance FROM sobatnira.cane_stock_entries WHERE lot_id=$1',
+      [lot])).rows[0].balance, '0.00');
     const update = structuredClone(production);
     const weight = update.cane_blocks[0].batches[0].output.hasil_kg;
     Object.assign(weight, { raw_value: '25', normalized_value: 25, status: 'READ' });
@@ -525,6 +549,24 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     assert.equal(latestApproval.status, 200, await latestApproval.clone().text());
     assert.deepEqual((await latestApproval.json()).milling, posted);
     assert.equal((await millingStock()).length, 1);
+
+    const juiceCorrection = { revision_id: followUpDetail.revision_id, expected_version: followUpDetail.version,
+      lot_id: lot, quantity: '240.25', reason: 'Ukur ulang sebelum dipakai' };
+    const adjustJuice = await change(followUpDetail, 'reconcile', juiceCorrection, randomUUID());
+    assert.equal(adjustJuice.status, 200, await adjustJuice.clone().text());
+    const adjustedJuice = await adjustJuice.json();
+    assert.equal(adjustedJuice.reconciliation.quantity_delta, '-9.875');
+    const newProduction = await mobile(`review-tasks/${adjustedJuice.task_id}`).then((response) => response.json());
+    assert.equal(newProduction.milling[0].juice_produced_liters, '240.25');
+    assert.equal(newProduction.milling[0].revision_id, adjustedJuice.revision_id);
+    assert.equal((await millingStock())[0].juice, '250.125');
+    assert.equal((await db.query('SELECT trim_scale(sum(on_hand_ml))::text AS balance FROM sobatnira.juice_balance_entries WHERE lot_id=$1',
+      [lot])).rows[0].balance, '240250');
+    await db.query(`INSERT INTO sobatnira.juice_reservations(tenant_id,factory_id,lot_id,origin_lot_id,request_id,batch_id,quantity_ml,is_synthetic,created_by)
+      VALUES ($1,$2,$3,$3,$4,$5,1000,false,$6)`, [tenant, factory, lot, randomUUID(), randomUUID(), reviewer]);
+    assert.equal((await change(newProduction, 'reconcile', { ...juiceCorrection, revision_id: newProduction.revision_id,
+      expected_version: newProduction.version, quantity: '235' }, randomUUID())).status, 409);
+    assert.equal((await db.query('SELECT count(*)::int AS count FROM sobatnira.stock_reconciliations WHERE lot_id=$1', [lot])).rows[0].count, 2);
 
     notes.push(update);
     const ambiguous = await photo(event('production-ambiguous')).then((response) => response.json());

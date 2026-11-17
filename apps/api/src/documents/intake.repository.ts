@@ -190,7 +190,7 @@ export class IntakeRepository {
   async balance(access: FactoryAccess, synthetic: boolean, lotId?: string) {
     const result = await this.database.query<{ quantityKg: string }>(`WITH ${FACTORY_SCOPE_CTE}
       SELECT COALESCE(sum(m.quantity_delta_kg), 0)::text AS "quantityKg"
-      FROM sobatnira.sugarcane_stock_movements m JOIN authorized_scope scope
+      FROM sobatnira.cane_stock_entries m JOIN authorized_scope scope
         ON scope."tenantId" = m.tenant_id AND scope."factoryId" = m.factory_id
       WHERE m.is_synthetic = $4 AND ($5::uuid IS NULL OR m.lot_id = $5)`,
     [...scopeValues(access), synthetic, lotId ?? null]);
