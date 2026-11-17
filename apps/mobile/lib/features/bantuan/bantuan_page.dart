@@ -91,7 +91,7 @@ class _BantuanPageState extends State<BantuanPage> {
           decoration: settingsInputDecoration(
             'Pesan bantuan',
             hint: 'Tulis pertanyaan atau kendala yang kamu alami…',
-          ),
+        ).copyWith(alignLabelWithHint: true),
           validator: (value) => value == null || value.trim().isEmpty
               ? 'Tulis pesan terlebih dahulu.'
               : null,

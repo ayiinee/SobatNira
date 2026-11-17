@@ -14,6 +14,7 @@ void main() {
 
   Future<void> tap(WidgetTester tester, Finder target) async {
     await tester.ensureVisible(target);
+    await tester.pumpAndSettle();
     await tester.tap(target);
     await tester.pumpAndSettle();
   }
