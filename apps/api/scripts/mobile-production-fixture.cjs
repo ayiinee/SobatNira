@@ -1,4 +1,5 @@
 const { intakeFixture } = require('../test/integration/intake-fixture.cjs');
+const { mobileClosureFixture } = require('../test/integration/mobile-closure-fixture.cjs');
 
 // This server keeps all synthetic changes inside one rollback-only transaction.
 async function main() {
@@ -10,7 +11,7 @@ async function main() {
   process.env.DATABASE_SSL_CA_FILE = '';
   process.env.NODE_ENV = 'test';
   process.env.SOBATNIRA_MODE = 'legacy';
-  const fixture = await intakeFixture(false);
+  const fixture = process.argv.includes('--closure') ? await mobileClosureFixture() : await intakeFixture(false);
   let stopping = false;
   const stop = async () => {
     if (stopping) return;
@@ -26,6 +27,7 @@ async function main() {
     PRODUCTION_TEST_API: fixture.base,
     PRODUCTION_TEST_TENANT: fixture.ids.tenant,
     PRODUCTION_TEST_FACTORY: fixture.ids.factory,
+    ...(fixture.closureLotId ? { PRODUCTION_TEST_CLOSURE_LOT: fixture.closureLotId } : {}),
   }));
 }
 

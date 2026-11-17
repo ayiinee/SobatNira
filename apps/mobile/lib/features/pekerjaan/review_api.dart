@@ -210,6 +210,45 @@ class ReviewApi {
   Future<Json> saveLot(FactoryScope scope, Json values, {String? id}) =>
       _productionWrite(scope._lots, values, id: id);
 
+  Future<Json> lotClosure(FactoryScope scope, String lotId) =>
+      _productionGet([...scope._lots, lotId, 'closure']);
+
+  Future<Json> lotClosureHistory(
+    FactoryScope scope,
+    String lotId, {
+    int offset = 0,
+  }) => _productionGet(
+    [...scope._lots, lotId, 'closure', 'history'],
+    query: {'limit': '20', 'offset': '$offset'},
+  );
+
+  Future<Json> changeLotClosure(
+    FactoryScope scope,
+    String lotId, {
+    String? closureId,
+    String? reason,
+  }) async {
+    final request = http.Request(
+      'POST',
+      Uri.parse(baseUrl).replace(
+        pathSegments: [
+          '',
+          ...scope._lots,
+          lotId,
+          'closure',
+          if (closureId != null) 'reopen',
+        ],
+      ),
+    );
+    request.headers.addAll({..._headers, 'Content-Type': 'application/json'});
+    request.body = jsonEncode(
+      closureId == null
+          ? <String, dynamic>{}
+          : {'closureId': closureId, 'reason': reason},
+    );
+    return _json(_client.send(request).then(http.Response.fromStream));
+  }
+
   Future<List<Json>> list(String status, int page, {String? factoryId}) async {
     final response = await _json(
       _client.get(

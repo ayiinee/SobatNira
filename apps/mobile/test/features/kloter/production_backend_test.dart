@@ -5,12 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/io_client.dart';
 import 'package:sobatnira/features/kloter/production_catalog_page.dart';
+import 'package:sobatnira/features/kloter/lot_closure_page.dart';
 import 'package:sobatnira/features/kloter/production_lot_editor.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
 
 const _base = String.fromEnvironment('PRODUCTION_TEST_API');
 const _tenant = String.fromEnvironment('PRODUCTION_TEST_TENANT');
 const _factory = String.fromEnvironment('PRODUCTION_TEST_FACTORY');
+const _closureLot = String.fromEnvironment('PRODUCTION_TEST_CLOSURE_LOT');
 
 class _LocalHttpOverrides extends HttpOverrides {}
 
@@ -211,6 +213,63 @@ void main() {
     );
     expect(history.statusCode, 200);
     expect((jsonDecode(history.body) as Json)['total'], 2);
+
+    if (_closureLot.isNotEmpty) {
+      Future<void> showClosure(String lotId) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            key: UniqueKey(),
+            home: LotClosurePage(api: api, scope: scope, lotId: lotId),
+          ),
+        );
+        await waitFor(find.text('Tutup kloter'));
+      }
+
+      // The lot created by the form has no approved milling yet.
+      await showClosure(created['id'] as String);
+      await press('Tutup kloter');
+      await press('Tutup kloter');
+      await waitFor(find.textContaining('Kloter belum dapat ditutup.'));
+      expect(find.text('Terbuka'), findsOneWidget);
+
+      await showClosure(_closureLot);
+      await press('Tutup kloter');
+      await press('Tutup kloter');
+      await waitFor(find.text('Buka kembali kloter'));
+      final closed = await backend(() => api.lotClosure(scope, _closureLot));
+      expect(closed['status'], 'closed');
+      final closureId = closed['closureId'] as String;
+      await press('Buka kembali kloter');
+      await tester.enterText(
+        find.byType(TextFormField),
+        'Catat transfer susulan dari uji UI',
+      );
+      await press('Buka kembali');
+      await waitFor(find.text('Tutup kloter'));
+      final open = await backend(() => api.lotClosure(scope, _closureLot));
+      expect(open['status'], 'open');
+      final log = await backend(
+        () => api.lotClosureHistory(scope, _closureLot),
+      );
+      final entry = (log['items'] as List).single as Json;
+      expect(entry['id'], closureId);
+      expect(entry['reason'], 'Catat transfer susulan dari uji UI');
+      expect(entry['closedBy'], isNotNull);
+      expect(entry['reopenedBy'], isNotNull);
+      expect(entry['reopenedAt'], isNotNull);
+      await press('Sudah dibuka kembali');
+      await tester.ensureVisible(find.text(entry['reason'] as String));
+      expect(find.text(entry['reason'] as String), findsOneWidget);
+      await press('Tutup kloter');
+      await press('Tutup kloter');
+      await waitFor(find.text('Buka kembali kloter'));
+      final reclosed = await backend(() => api.lotClosure(scope, _closureLot));
+      expect(reclosed['closureId'], isNot(closureId));
+      final newLog = await backend(
+        () => api.lotClosureHistory(scope, _closureLot),
+      );
+      expect(newLog['total'], 2);
+    }
     await tester.pumpWidget(const SizedBox.shrink());
     api.close();
     await tester.pump();
