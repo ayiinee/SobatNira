@@ -5,10 +5,120 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
+import 'package:sobatnira/features/pekerjaan/review_detail_page.dart';
 import 'package:sobatnira/features/pekerjaan/pekerjaan_page.dart';
 import 'package:sobatnira/sobatnira_ui.dart';
 
 void main() {
+  testWidgets('Nota produksi sends liters and zoned time for new blocks only', (
+    tester,
+  ) async {
+    var validated = false;
+    final api = ReviewApi(
+      'synthetic-token',
+      client: MockClient((request) async {
+        final endpoint = request.url.path.replaceFirst('/api/v1/mobile/', '');
+        if (endpoint == 'review-tasks/production-task') {
+          return http.Response(
+            jsonEncode({
+              'document_id': 'production-document',
+              'revision_id': 'production-revision',
+              'document_type': 'PRODUCTION_NOTE',
+              'version': 3,
+              'media_asset_id': 'photo',
+              'status': validated ? 'VALIDATED' : 'PENDING_VALIDATION',
+              'actions': validated ? [] : ['VALIDATE'],
+              'extraction': {
+                'cane_blocks': [
+                  {
+                    'cane_label': {
+                      'status': 'READ',
+                      'normalized_value': 'DEMO-A',
+                    },
+                  },
+                  {
+                    'cane_label': {
+                      'status': 'READ',
+                      'normalized_value': 'DEMO-B',
+                    },
+                  },
+                ],
+              },
+              'milling': [
+                {'cane_label': 'DEMO-A', 'juice_produced_liters': '250'},
+                if (validated)
+                  {'cane_label': 'DEMO-B', 'juice_produced_liters': '180.25'},
+              ],
+              'issues': [],
+              'revisions': [],
+            }),
+            200,
+          );
+        }
+        if (endpoint.endsWith('/assets/photo')) return http.Response('', 404);
+        if (endpoint.endsWith('/milling-lots')) {
+          return http.Response(
+            jsonEncode({
+              'items': [
+                {
+                  'id': 'lot-b',
+                  'displayCode': 'KLOTER-B',
+                  'receivedAt': '2026-11-16T01:00:00Z',
+                  'supplierName': 'Pemasok Demo',
+                },
+              ],
+              'next_offset': null,
+            }),
+            200,
+          );
+        }
+        expect(endpoint, 'documents/production-document/validate');
+        expect(jsonDecode(request.body), {
+          'revision_id': 'production-revision',
+          'expected_version': 3,
+          'decision': 'VALIDATED',
+          'milling': [
+            {
+              'lot_id': 'lot-b',
+              'cane_label': 'DEMO-B',
+              'occurred_at': '2026-11-16T09:00:00+07:00',
+              'juice_produced_liters': '180.25',
+            },
+          ],
+        });
+        validated = true;
+        return http.Response('{"status":"VALIDATED"}', 200);
+      }),
+    );
+    addTearDown(api.close);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ReviewDetailPage(api: api, taskId: 'production-task'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final validate = find.text('Validasi revisi ini');
+    await tester.ensureVisible(validate);
+    await tester.tap(validate);
+    await tester.pumpAndSettle();
+    expect(find.text('Penggilingan DEMO-B'), findsOneWidget);
+    await tester.tap(find.text('KLOTER-B'));
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Total nira hasil giling (L)'),
+      '180,25',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Waktu penggilingan dan zona waktu'),
+      '2026-11-16T09:00:00+07:00',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Gunakan data penggilingan'));
+    await tester.pumpAndSettle();
+    expect(validated, isTrue);
+    expect(find.text('DEMO-B · Nira tercatat 180.25 L'), findsOneWidget);
+  });
+
   testWidgets('Pekerjaan loads the API and validates the displayed revision', (
     tester,
   ) async {
