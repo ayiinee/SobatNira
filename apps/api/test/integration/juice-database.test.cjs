@@ -90,7 +90,7 @@ test('transfer and reservation serialize, conserve ml and preserve origin throug
   } finally { await f.close(); }
 });
 
-test('lot closure checks drained stock and Backend B, then blocks new stock operations', async () => {
+test('lot closure and reopening preserve history and guard stock operations', async () => {
   const calls = [];
   let reply = { canClose: false };
   const batches = createServer((req, res) => {
@@ -103,7 +103,7 @@ test('lot closure checks drained stock and Backend B, then blocks new stock oper
   let f;
   try {
     f = await intakeFixture(true, { BATCH_API_BASE_URL: 'http://127.0.0.1:' + batches.address().port });
-    const { lot, secondLot, tenant, factory, admin } = f.ids;
+    const { lot, secondLot, tenant, factory, admin, owner } = f.ids;
     const closure = f.root + '/lots/' + lot + '/closure';
     const status = () => f.request(closure + '?synthetic=true');
     const close = () => f.request(closure, 'POST', { synthetic: true });
@@ -132,9 +132,11 @@ test('lot closure checks drained stock and Backend B, then blocks new stock oper
     assert.equal(closed.status, 200, JSON.stringify(closed.body));
     assert.equal(closed.body.status, 'closed');
     assert.equal(closed.body.closedBy, admin);
+    assert.match(closed.body.closureId, /^[0-9a-f-]{36}$/);
     const lotDetail = await f.request(f.root + '/lots/' + lot + '?synthetic=true');
     assert.equal(lotDetail.status, 200);
     assert.equal(lotDetail.body.status, 'closed');
+    assert.equal(lotDetail.body.closureId, closed.body.closureId);
     assert.equal(lotDetail.body.closedAt, closed.body.closedAt);
     assert.equal(lotDetail.body.closedBy, admin);
     assert.equal((await f.request(f.root + '/lots/' + lot)).body.status, 'open');
@@ -147,6 +149,60 @@ test('lot closure checks drained stock and Backend B, then blocks new stock oper
     })).status, 409);
     assert.equal((await f.request(consume, 'POST')).body.state, 'consumed');
     assert.equal((await f.request(f.siblingRoot + '/lots/' + lot + '/closure')).status, 404);
+
+    const input = { closureId: closed.body.closureId, synthetic: true, reason: 'Catat transfer susulan' };
+    const reopen = (body = input, token = 'fixture-owner') => f.request(closure + '/reopen', 'POST', body, token);
+    assert.equal((await reopen(input, null)).status, 401);
+    assert.equal((await reopen({ ...input, reason: ' ' })).status, 400);
+    assert.equal((await reopen({ ...input, synthetic: false })).status, 409);
+    assert.equal((await reopen({ ...input, closureId: randomUUID() })).status, 409);
+    assert.equal((await f.request(f.siblingRoot + '/lots/' + lot + '/closure/reopen', 'POST', input)).status, 404);
+    const both = await Promise.all([reopen(), reopen()]);
+    for (const result of both) assert.equal(result.status, 200, JSON.stringify(result.body));
+    const receipt = both[0].body;
+    assert.deepEqual(both[1].body, receipt);
+    assert.equal(receipt.closureId, closed.body.closureId);
+    assert.equal(receipt.reopenedBy, owner);
+    assert.equal(receipt.reason, input.reason);
+    assert.equal((await reopen({ ...input, reason: 'Alasan berbeda' })).status, 409);
+    assert.equal(calls.length, 3);
+    assert.deepEqual((await status()).body, { lotId: lot, synthetic: true, status: 'open',
+      closureId: null, closedAt: null, closedBy: null });
+    const openLot = await f.request(f.root + '/lots/' + lot + '?synthetic=true');
+    assert.equal(openLot.body.status, 'open');
+    assert.equal(openLot.body.closedBy, null);
+    assert.equal(openLot.body.closureId, null);
+    assert.deepEqual(openLot.body.milling, lotDetail.body.milling);
+    assert.equal((await f.request(root(f) + '/availability?synthetic=true')).body.onHandMl, '0');
+
+    const back = await f.request(root(f, secondLot) + '/transfers', 'POST', {
+      requestId: randomUUID(), toLotId: lot, originLotId: lot, quantityMl: '1', synthetic: true,
+    });
+    assert.equal(back.status, 201, JSON.stringify(back.body));
+    assert.equal((await close()).status, 409);
+    const newReservation = requestFor('1');
+    assert.equal((await reserve(f, newReservation)).status, 201);
+    assert.equal((await f.request(root(f) + '/reservations/' + newReservation.requestId + '/consume', 'POST')).status, 200);
+    const reclosed = await close();
+    assert.equal(reclosed.status, 200, JSON.stringify(reclosed.body));
+    assert.equal(reclosed.body.status, 'closed');
+    assert.notEqual(reclosed.body.closureId, closed.body.closureId);
+    assert.equal(calls.length, 4);
+    assert.deepEqual((await reopen()).body, receipt);
+    assert.deepEqual((await status()).body, reclosed.body);
+    assert.equal((await reserve(f, requestFor('1'))).status, 409);
+
+    const history = await f.request(closure + '/history?synthetic=true');
+    assert.equal(history.status, 200, JSON.stringify(history.body));
+    assert.equal(history.body.total, 2);
+    assert.deepEqual(history.body.items.map(({ id, closedBy, reopenedBy, reason }) => ({ id, closedBy, reopenedBy, reason })), [
+      { id: reclosed.body.closureId, closedBy: admin, reopenedBy: null, reason: null },
+      { id: closed.body.closureId, closedBy: admin, reopenedBy: owner, reason: input.reason },
+    ]);
+    assert.equal(history.body.items[1].reopenedAt, receipt.reopenedAt);
+    assert.equal((await f.request(closure + '/history?synthetic=true&limit=1&offset=1')).body.items[0].id, closed.body.closureId);
+    assert.equal((await f.request(closure + '/history')).body.total, 0);
+    assert.equal((await f.request(f.otherRoot + '/lots/' + lot + '/closure/history?synthetic=true')).status, 404);
   } finally {
     try { await f?.close(); }
     finally {
