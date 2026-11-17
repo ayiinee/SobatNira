@@ -1,0 +1,11 @@
+{
+  "synthetic": true,
+  "unit": { "nira": "ml", "weight": "grams", "money": "rupiah" },
+  "batches": [
+    { "id": "batch-normal", "label": "synthetic normal", "status": "COOKED", "contributions": [{ "kloterId": "kloter-101", "volumeMl": 100000 }] },
+    { "id": "batch-mixed", "label": "synthetic mix 20/80", "status": "DRAFT", "contributions": [{ "kloterId": "kloter-102", "volumeMl": 20000 }, { "kloterId": "kloter-103", "volumeMl": 80000 }] },
+    { "id": "batch-weighed", "label": "synthetic weighed", "status": "WEIGHED", "sugarWeightGrams": 1250000 },
+    { "id": "batch-graded", "label": "synthetic graded", "status": "GRADED", "gradeCode": "A" },
+    { "id": "batch-rework", "label": "synthetic rework separate", "status": "GRADED", "reworkWeightGrams": 10000 }
+  ]
+}

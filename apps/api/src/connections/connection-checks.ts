@@ -3,6 +3,7 @@ import { Redis } from 'ioredis';
 import { Client } from 'pg';
 import { BackendConfig } from '../config/backend.config';
 import { postgresClientOptions } from '../database/postgres.config';
+import { s3Send } from './s3-client';
 export { postgresClientOptions } from '../database/postgres.config';
 
 export type ConnectionName = 'supabase' | 'postgresql' | 'r2' | 'redis' | 'fastapi';
@@ -71,7 +72,7 @@ export function createConnectionProbes(config: BackendConfig): ConnectionProbes 
         requestHandler: { connectionTimeout: timeout, requestTimeout: timeout },
       });
       try {
-        await client.send(new HeadBucketCommand({ Bucket: settings.bucket }), {
+        await s3Send(client, new HeadBucketCommand({ Bucket: settings.bucket }), {
           abortSignal: AbortSignal.timeout(timeout),
         });
       } finally { client.destroy(); }

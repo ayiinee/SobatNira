@@ -10,3 +10,5 @@ __pycache__/
 /docs/internal/
 /docs.zip
 *.log
+
+knowledge-pack/

@@ -4,6 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { BACKEND_CONFIG, BackendConfig } from '../config/backend.config';
 import { EvidenceImage, MAX_EVIDENCE_BYTES, StoredEvidence } from './evidence.types';
+import { s3Send } from '../connections/s3-client';
 
 @Injectable()
 export class R2EvidenceStorage implements OnModuleDestroy {
@@ -30,7 +31,7 @@ export class R2EvidenceStorage implements OnModuleDestroy {
     const key = `privacy-checks/${randomUUID()}.txt`;
     let error: unknown;
     try {
-      await this.s3().send(new PutObjectCommand({ Bucket: this.settings().bucket, Key: key,
+      await s3Send(this.s3(), new PutObjectCommand({ Bucket: this.settings().bucket, Key: key,
         Body: 'SobatNira synthetic privacy probe', ContentType: 'text/plain', CacheControl: 'no-store' }),
       { abortSignal: AbortSignal.timeout(this.config.timeoutMs) });
       const response = await fetch(new URL(key, new URL(publicBase).origin + '/'), {
@@ -53,7 +54,7 @@ export class R2EvidenceStorage implements OnModuleDestroy {
 
   async put(key: string, image: EvidenceImage) {
     try {
-      await this.s3().send(new PutObjectCommand({
+      await s3Send(this.s3(), new PutObjectCommand({
         Bucket: this.settings().bucket, Key: key, Body: image.bytes, ContentLength: image.byteSize,
         ContentType: image.contentType, CacheControl: 'private, no-store', Metadata: { sha256: image.sha256 },
       }), { abortSignal: AbortSignal.timeout(this.config.timeoutMs) });
@@ -64,7 +65,7 @@ export class R2EvidenceStorage implements OnModuleDestroy {
     let stream: Readable | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const object = await this.s3().send(new GetObjectCommand({ Bucket: this.settings().bucket, Key: evidence.objectKey }),
+      const object = await s3Send<{ Body?: { transformToByteArray(): Promise<Uint8Array> }; ContentLength?: number; ContentType?: string }>(this.s3(), new GetObjectCommand({ Bucket: this.settings().bucket, Key: evidence.objectKey }),
         { abortSignal: AbortSignal.timeout(this.config.timeoutMs) });
       stream = object.Body as Readable | undefined;
       if (!stream || object.ContentLength !== evidence.byteSize || object.ContentLength > MAX_EVIDENCE_BYTES || object.ContentType !== evidence.contentType) {
@@ -91,7 +92,7 @@ export class R2EvidenceStorage implements OnModuleDestroy {
 
   async remove(key: string) {
     try {
-      await this.s3().send(new DeleteObjectCommand({ Bucket: this.settings().bucket, Key: key }),
+      await s3Send(this.s3(), new DeleteObjectCommand({ Bucket: this.settings().bucket, Key: key }),
         { abortSignal: AbortSignal.timeout(this.config.timeoutMs) });
     } catch { throw new ServiceUnavailableException('Objek R2 belum dapat dibersihkan.'); }
   }

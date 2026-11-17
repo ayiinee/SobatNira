@@ -10,5 +10,6 @@ import { LotClosureService } from './lot-closure.service';
   imports: [DatabaseModule],
   controllers: [JuiceController, LotClosureController],
   providers: [JuiceRepository, ClosureCheckService, LotClosureService],
+  exports: [JuiceRepository, ClosureCheckService],
 })
 export class JuiceModule {}

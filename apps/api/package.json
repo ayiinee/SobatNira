@@ -7,7 +7,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "npm run build && node dist/main.js",
+    "dev": "npm run build && node --env-file-if-exists=.env dist/main.js",
     "test": "npm run build && node --test test/*.test.cjs",
     "check:connections": "npm run build && node dist/connections/check-connections.js",
     "db:migrate": "npm run build && node dist/database/migrate.js",
