@@ -40,13 +40,13 @@ class ProductionDashboardApi {
 }
 
 class ProductionDashboard {
-  const ProductionDashboard({required this.batchCount, required this.totalNiraMl, required this.sugarWeightGrams, required this.status});
+  const ProductionDashboard({required this.batchCount, required this.totalNiraMl, required this.sugarWeightKg, required this.status});
   final int batchCount;
   final int totalNiraMl;
-  final int sugarWeightGrams;
+  final double sugarWeightKg;
   final Map<String, int> status;
-  factory ProductionDashboard.fromJson(Map<String, dynamic> json) => ProductionDashboard(batchCount: json['batchCount'] as int, totalNiraMl: json['totalNiraMl'] as int, sugarWeightGrams: json['officialSugarWeightGrams'] as int, status: (json['status'] as Map<String, dynamic>).map((key, value) => MapEntry(key, value as int)));
-  static const fixture = ProductionDashboard(batchCount: 5, totalNiraMl: 490000, sugarWeightGrams: 3300000, status: {'DRAFT': 1, 'COOKED': 1, 'WEIGHED': 1, 'GRADED': 2, 'VALIDATED': 0});
+  factory ProductionDashboard.fromJson(Map<String, dynamic> json) => ProductionDashboard(batchCount: json['batchCount'] as int, totalNiraMl: json['totalNiraMl'] as int, sugarWeightKg: (json['officialSugarWeightKg'] as num?)?.toDouble() ?? ((json['officialSugarWeightGrams'] as num?)?.toDouble() ?? 0) / 1000, status: (json['status'] as Map<String, dynamic>).map((key, value) => MapEntry(key, value as int)));
+  static const fixture = ProductionDashboard(batchCount: 5, totalNiraMl: 490000, sugarWeightKg: 3300, status: {'DRAFT': 1, 'COOKED': 1, 'WEIGHED': 1, 'GRADED': 2, 'VALIDATED': 0});
 }
 
 class AnalyticsPoint {
@@ -82,7 +82,7 @@ class _ProductionDashboardPageState extends State<ProductionDashboardPage> {
         final dashboard = snapshot.data!.$1;
         final points = snapshot.data!.$2;
         return ListView(padding: const EdgeInsets.all(16), children: [
-          Row(children: [Expanded(child: _Metric('Batch', '${dashboard.batchCount}')), const SizedBox(width: 8), Expanded(child: _Metric('Nira', '${(dashboard.totalNiraMl / 1000).toStringAsFixed(0)} L')), const SizedBox(width: 8), Expanded(child: _Metric('Gula', '${(dashboard.sugarWeightGrams / 1000).toStringAsFixed(0)} Kg'))]),
+          Row(children: [Expanded(child: _Metric('Batch', '${dashboard.batchCount}')), const SizedBox(width: 8), Expanded(child: _Metric('Nira', '${(dashboard.totalNiraMl / 1000).toStringAsFixed(0)} L')), const SizedBox(width: 8), Expanded(child: _Metric('Gula', '${dashboard.sugarWeightKg.toStringAsFixed(0)} Kg'))]),
           const SizedBox(height: 16),
           _Panel(title: 'Status batch', child: Wrap(spacing: 8, runSpacing: 8, children: dashboard.status.entries.map((entry) => Chip(label: Text('${entry.key}: ${entry.value}'))).toList())),
           _Panel(title: 'Analitik harian', child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: points.map((point) => Text('${point.date}: ${point.batchCount} batch • ${(point.niraMl / 1000).toStringAsFixed(0)} L nira • ${(point.sugarWeightGrams / 1000).toStringAsFixed(0)} Kg gula')).toList())),

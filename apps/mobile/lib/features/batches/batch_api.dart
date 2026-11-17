@@ -7,8 +7,7 @@ const _useFixture = bool.fromEnvironment('USE_LOCAL_FIXTURE', defaultValue: fals
 
 class BatchApi {
   BatchApi({http.Client? client, String role = 'owner'})
-    : _client = client ?? http.Client(),
-      _role = role;
+    : _client = client ?? http.Client(), _role = role;
   final http.Client _client;
   final String _role;
   Map<String, String> get _scope => {
@@ -19,6 +18,7 @@ class BatchApi {
   };
 
   Future<Map<String, dynamic>> _write(String path, Map<String, dynamic> body, {String? requestId}) async {
+    if (_apiBaseUrl.isEmpty || _useFixture) return body;
     final response = await _client.post(Uri.parse('$_apiBaseUrl$path'), headers: {..._scope, 'Content-Type': 'application/json', if (requestId != null) 'idempotency-key': requestId}, body: jsonEncode(body));
     if (response.statusCode >= 400) throw Exception('API produksi gagal (${response.statusCode})');
     return jsonDecode(response.body) as Map<String, dynamic>;
