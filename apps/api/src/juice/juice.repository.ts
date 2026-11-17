@@ -96,7 +96,7 @@ export class JuiceRepository {
 
   private async assertOpen(tx: DatabaseSession, access: FactoryAccess, ids: string[], synthetic: boolean) {
     const closed = await tx.query(`SELECT lot_id FROM sobatnira.lot_closures
-      WHERE tenant_id = $1 AND factory_id = $2 AND lot_id = ANY($3::uuid[]) AND is_synthetic = $4`,
+      WHERE tenant_id = $1 AND factory_id = $2 AND lot_id = ANY($3::uuid[]) AND is_synthetic = $4 AND reopened_at IS NULL`,
     [...this.scope(access), ids, synthetic]);
     if (closed.rows.length) throw new ConflictException('Kloter sudah ditutup.');
   }
