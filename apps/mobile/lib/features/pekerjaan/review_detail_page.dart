@@ -165,6 +165,48 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
       if (!mounted || selected == null) return;
       values['lot_id'] = selected['id'];
       values['supplier_id'] = selected['supplierId'];
+    } else if (task['document_type'] == 'PRODUCTION_NOTE') {
+      final extraction = task['extraction'] as Json?;
+      final blocks = (extraction?['cane_blocks'] as List? ?? []).cast<Json>();
+      final labels = [
+        for (final block in blocks)
+          if (block['cane_label'] case {
+            'status': 'READ',
+            'normalized_value': final String label,
+          } when label.trim().isNotEmpty)
+            label.trim(),
+      ];
+      if (labels.length != blocks.length ||
+          labels.isEmpty ||
+          labels.toSet().length != labels.length) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Lengkapi label tebu yang unik pada setiap blok.'),
+          ),
+        );
+        return;
+      }
+      final booked = (task['milling'] as List? ?? [])
+          .cast<Json>()
+          .map((item) => item['cane_label'])
+          .toSet();
+      final mappings = <Json>[];
+      final selectedLots = <String>{};
+      for (final label in labels.where((label) => !booked.contains(label))) {
+        final mapping = await showDialog<Json>(
+          context: context,
+          builder: (context) => IntakeLotDialog(
+            api: widget.api,
+            taskId: widget.taskId,
+            millingLabel: label,
+            excludedLots: selectedLots,
+          ),
+        );
+        if (!mounted || mapping == null) return;
+        mappings.add(mapping);
+        selectedLots.add(mapping['lot_id'] as String);
+      }
+      values['milling'] = mappings;
     }
     await _change(task, 'validate', values);
   }
@@ -219,6 +261,10 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
             Text('Status: ${task['status']}'),
             if (intake != null)
               Text('Stok tebu tercatat: ${intake['net_weight_kg']} kg'),
+            for (final item in (task['milling'] as List? ?? []).cast<Json>())
+              Text(
+                '${item['cane_label']} · Nira tercatat ${item['juice_produced_liters']} L',
+              ),
             if (confirmation != null)
               Text(
                 'Dikonfirmasi ${confirmation['confirmed_by']} pada revisi ${confirmation['version']}',

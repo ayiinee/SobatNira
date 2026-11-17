@@ -221,7 +221,7 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     t.after(async () => {
       const clean = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
       try {
-        for (const table of ['sugarcane_stock_movements', 'intake_records', 'lots', 'suppliers', 'factory_memberships',
+        for (const table of ['sugarcane_stock_movements', 'juice_stock_movements', 'milling_records', 'intake_records', 'lots', 'suppliers', 'factory_memberships',
           'tenant_memberships', 'factories']) {
           await clean.query(`DELETE FROM sobatnira.${table} WHERE tenant_id=$1`, [tenant]);
         }
@@ -449,6 +449,35 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     notes.push(production);
     const stage1 = await photo(event('production-01')).then((response) => response.json());
     assert.equal(await processor.processOne(), true);
+    const firstProduction = await action(event('production-confirm', 'TEXT'), stage1);
+    assert.equal(firstProduction.status, 200, await firstProduction.clone().text());
+    const firstTask = (await firstProduction.json()).task_id;
+    const firstDetail = await mobile(`review-tasks/${firstTask}`).then((response) => response.json());
+    const millingChoices = await mobile(`review-tasks/${firstTask}/milling-lots`).then((response) => response.json());
+    assert.deepEqual(millingChoices.items.map(({ id }) => id), [lot]);
+    const milling = { cane_label: 'SYNTHETIC-A', lot_id: lot, occurred_at: '2026-11-16T09:00:00+07:00',
+      juice_produced_liters: '250.125' };
+    const millingDecision = { revision_id: firstDetail.revision_id, expected_version: firstDetail.version, decision: 'VALIDATED' };
+    assert.equal((await change(firstDetail, 'validate', millingDecision, randomUUID())).status, 400);
+    assert.equal((await change(firstDetail, 'validate', { ...millingDecision, milling: [{ ...milling, lot_id: otherLot }] },
+      randomUUID())).status, 409);
+    assert.equal((await change(firstDetail, 'validate', { ...millingDecision, milling: [{ ...milling, occurred_at: '2026-11-15T00:00:00Z' }] },
+      randomUUID())).status, 409);
+    const productionKey = randomUUID();
+    const body = { ...millingDecision, milling: [milling] };
+    const posting = await change(firstDetail, 'validate', body, productionKey);
+    assert.equal(posting.status, 200, await posting.clone().text());
+    const posted = (await posting.json()).milling;
+    assert.equal(posted[0].juice_produced_liters, '250.125');
+    assert.equal(posted[0].revision_id, stage1.revision_id);
+    assert.deepEqual((await change(firstDetail, 'validate', body, productionKey).then((response) => response.json())).milling, posted);
+    const millingStock = async () => (await db.query(`SELECT m.reported_batches, c.quantity_delta_kg::text AS cane,
+      j.quantity_delta_liters::text AS juice FROM sobatnira.milling_records m
+      JOIN sobatnira.sugarcane_stock_movements c ON c.milling_record_id=m.id
+      JOIN sobatnira.juice_stock_movements j ON j.milling_record_id=m.id
+      WHERE m.lot_id=$1 AND NOT m.is_synthetic`, [lot])).rows;
+    assert.deepEqual(await millingStock(), [{ cane: '-1252', juice: '250.125',
+      reported_batches: [{ rowReference: production.cane_blocks[0].batches[0].row_reference, wokNumber: 1, contentsKg: 115, finishTime: '15:35' }] }]);
     const update = structuredClone(production);
     const weight = update.cane_blocks[0].batches[0].output.hasil_kg;
     Object.assign(weight, { raw_value: '25', normalized_value: 25, status: 'READ' });
@@ -477,6 +506,18 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     assert.equal(followUp.operator_status, 'PENDING');
     assert.equal(followUp.follow_up.comment, 'Periksa hasil timbang.');
     assert.equal((await action(event('returned-stale-confirm', 'TEXT', phone(102)), stage2)).status, 409);
+    const followUpConfirmation = await action(event('follow-up-confirm', 'TEXT', phone(102)),
+      { ...stage2, revision_id: followUp.id });
+    assert.equal(followUpConfirmation.status, 200, await followUpConfirmation.clone().text());
+    const followUpTask = (await followUpConfirmation.json()).task_id;
+    const followUpDetail = await mobile(`review-tasks/${followUpTask}`).then((response) => response.json());
+    const followUpDecision = { revision_id: followUpDetail.revision_id, expected_version: followUpDetail.version, decision: 'VALIDATED' };
+    assert.equal((await change(followUpDetail, 'validate', { ...followUpDecision, milling: [{ ...milling, juice_produced_liters: '300' }] },
+      randomUUID())).status, 409);
+    const latestApproval = await change(followUpDetail, 'validate', { ...followUpDecision, milling: [] }, randomUUID());
+    assert.equal(latestApproval.status, 200, await latestApproval.clone().text());
+    assert.deepEqual((await latestApproval.json()).milling, posted);
+    assert.equal((await millingStock()).length, 1);
 
     notes.push(update);
     const ambiguous = await photo(event('production-ambiguous')).then((response) => response.json());

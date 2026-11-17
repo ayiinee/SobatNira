@@ -32,6 +32,10 @@ const JOINS = `FROM sobatnira.milling_documents d
   JOIN sobatnira.milling_document_revisions r ON r.tenant_id = d.tenant_id AND r.factory_id = d.factory_id
     AND r.document_id = d.id AND r.revision = d.current_revision`;
 
+type MillingSource =
+  | { synthetic: true; documentId: string; documentRevision: number }
+  | { synthetic: false; ocrDocumentId: string; ocrRevisionId: string; caneLabel: string };
+
 @Injectable()
 export class MillingRepository {
   constructor(private readonly database: DatabaseService) {}
@@ -101,37 +105,50 @@ export class MillingRepository {
       WHERE tenant_id = $1 AND factory_id = $2 AND id = $3`, [access.tenantId, access.factoryId, id, revision, access.userId]);
   }
 
-  async intakeAndBalance(tx: DatabaseSession, access: FactoryAccess, lotId: string) {
+  async intakeAndBalance(tx: DatabaseSession, access: FactoryAccess, lotId: string, synthetic = true) {
     return (await tx.query<{ id: string; netWeightKg: string; occurredAt: Date; stockMatches: boolean; alreadyMilled: boolean }>(`
       SELECT i.id, i.net_weight_kg::text AS "netWeightKg", i.occurred_at AS "occurredAt",
         COALESCE((SELECT sum(s.quantity_delta_kg) FROM sobatnira.sugarcane_stock_movements s
           WHERE s.tenant_id = i.tenant_id AND s.factory_id = i.factory_id AND s.lot_id = i.lot_id AND s.is_synthetic = i.is_synthetic), 0)
           = i.net_weight_kg AS "stockMatches",
         EXISTS(SELECT 1 FROM sobatnira.milling_records m WHERE m.tenant_id = i.tenant_id AND m.factory_id = i.factory_id AND m.lot_id = i.lot_id) AS "alreadyMilled"
-      FROM sobatnira.intake_records i WHERE i.tenant_id = $1 AND i.factory_id = $2 AND i.lot_id = $3 AND i.is_synthetic = true`,
-    [access.tenantId, access.factoryId, lotId])).rows[0];
+      FROM sobatnira.intake_records i WHERE i.tenant_id = $1 AND i.factory_id = $2 AND i.lot_id = $3 AND i.is_synthetic = $4`,
+    [access.tenantId, access.factoryId, lotId, synthetic])).rows[0];
   }
 
   async approve(tx: DatabaseSession, access: FactoryAccess, doc: MillingDocument,
     fields: ReturnType<typeof completeMillingFields>, intake: { id: string; netWeightKg: string }) {
-    const record = (await tx.query<{ id: string; approvedAt: Date }>(`INSERT INTO sobatnira.milling_records
-      (tenant_id, factory_id, lot_id, intake_record_id, document_id, document_revision, cane_consumed_kg,
-        juice_produced_liters, occurred_at, approved_by, is_synthetic, reported_batches)
-      VALUES ($1, $2, $3, $4, $5, $6, $7::numeric, $8::numeric, $9::timestamptz, $10, true, $11::jsonb)
-      RETURNING id, approved_at AS "approvedAt"`,
-    [access.tenantId, access.factoryId, doc.lotId, intake.id, doc.id, doc.currentRevision, intake.netWeightKg,
-      fields.juiceProducedLiters, fields.occurredAt, access.userId, JSON.stringify(fields.reportedBatches)])).rows[0];
-    await tx.query(`INSERT INTO sobatnira.sugarcane_stock_movements
-      (tenant_id, factory_id, lot_id, milling_record_id, movement_type, quantity_delta_kg, occurred_at, is_synthetic)
-      VALUES ($1, $2, $3, $4, 'milling', -($5::numeric), $6::timestamptz, true)`,
-    [access.tenantId, access.factoryId, doc.lotId, record.id, intake.netWeightKg, fields.occurredAt]);
-    await tx.query(`INSERT INTO sobatnira.juice_stock_movements
-      (tenant_id, factory_id, lot_id, milling_record_id, movement_type, quantity_delta_liters, occurred_at, is_synthetic)
-      VALUES ($1, $2, $3, $4, 'milling', $5::numeric, $6::timestamptz, true)`,
-    [access.tenantId, access.factoryId, doc.lotId, record.id, fields.juiceProducedLiters, fields.occurredAt]);
+    const record = await this.postMilling(tx, access, fields, intake, {
+      synthetic: true, documentId: doc.id, documentRevision: doc.currentRevision,
+    });
     await tx.query(`UPDATE sobatnira.milling_documents SET status = 'approved', approved_revision = current_revision,
       approved_by = $4, approved_at = $5, updated_at = clock_timestamp() WHERE tenant_id = $1 AND factory_id = $2 AND id = $3`,
     [access.tenantId, access.factoryId, doc.id, access.userId, record.approvedAt]);
+  }
+
+  // The caller holds the lot lock and checks the approved receipt and its balance in this transaction.
+  async postMilling(tx: DatabaseSession, access: FactoryAccess,
+    fields: { lotId: string; occurredAt: string; juiceProducedLiters: string; reportedBatches: readonly unknown[] },
+    intake: { id: string; netWeightKg: string }, source: MillingSource) {
+    const record = (await tx.query<{ id: string; approvedAt: Date }>(`INSERT INTO sobatnira.milling_records
+      (tenant_id, factory_id, lot_id, intake_record_id, document_id, document_revision, cane_consumed_kg,
+        juice_produced_liters, occurred_at, approved_by, is_synthetic, reported_batches, ocr_document_id, ocr_revision_id, ocr_cane_label)
+      VALUES ($1, $2, $3, $4, $5, $6, $7::numeric, $8::numeric, $9::timestamptz, $10, $11, $12::jsonb, $13, $14, $15)
+      RETURNING id, approved_at AS "approvedAt"`,
+    [access.tenantId, access.factoryId, fields.lotId, intake.id,
+      source.synthetic ? source.documentId : null, source.synthetic ? source.documentRevision : null, intake.netWeightKg,
+      fields.juiceProducedLiters, fields.occurredAt, access.userId, source.synthetic, JSON.stringify(fields.reportedBatches),
+      source.synthetic ? null : source.ocrDocumentId, source.synthetic ? null : source.ocrRevisionId,
+      source.synthetic ? null : source.caneLabel])).rows[0];
+    await tx.query(`INSERT INTO sobatnira.sugarcane_stock_movements
+      (tenant_id, factory_id, lot_id, milling_record_id, movement_type, quantity_delta_kg, occurred_at, is_synthetic)
+      VALUES ($1, $2, $3, $4, 'milling', -($5::numeric), $6::timestamptz, $7)`,
+    [access.tenantId, access.factoryId, fields.lotId, record.id, intake.netWeightKg, fields.occurredAt, source.synthetic]);
+    await tx.query(`INSERT INTO sobatnira.juice_stock_movements
+      (tenant_id, factory_id, lot_id, milling_record_id, movement_type, quantity_delta_liters, occurred_at, is_synthetic)
+      VALUES ($1, $2, $3, $4, 'milling', $5::numeric, $6::timestamptz, $7)`,
+    [access.tenantId, access.factoryId, fields.lotId, record.id, fields.juiceProducedLiters, fields.occurredAt, source.synthetic]);
+    return record;
   }
   event(tx: DatabaseSession, access: FactoryAccess, id: string, action: string, before: MillingDocument | null, after: MillingDocument) {
     return tx.query(`INSERT INTO sobatnira.milling_document_events
@@ -168,6 +185,9 @@ export class MillingRepository {
         'documentRevision', m.document_revision, 'caneConsumedKg', m.cane_consumed_kg::text,
         'juiceProducedLiters', m.juice_produced_liters::text, 'reportedBatchCount', m.reported_batch_count,
         'reportedBatches', m.reported_batches, 'occurredAt', m.occurred_at, 'approvedAt', m.approved_at, 'synthetic', m.is_synthetic)
+        || CASE WHEN m.is_synthetic THEN '{}'::jsonb
+          ELSE jsonb_build_object('ocrDocumentId', m.ocr_document_id, 'ocrRevisionId', m.ocr_revision_id,
+            'ocrCaneLabel', m.ocr_cane_label) END
         FROM sobatnira.milling_records m WHERE m.tenant_id = l.tenant_id AND m.factory_id = l.factory_id
           AND m.lot_id = l.id AND m.is_synthetic = $5) AS milling
       FROM sobatnira.lots l JOIN authorized_scope scope ON scope."tenantId" = l.tenant_id AND scope."factoryId" = l.factory_id

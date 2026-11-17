@@ -30,7 +30,7 @@ Kontrak dan kriteria penerimaan terperinci tersedia di paket PRD internal tim.
 
 [Panduan intake AI](ai/README.md) menjelaskan setup bridge OpenClaw/Baileys, database, dan layar Pekerjaan. [Demo integrasi lokal](development.md#jalankan-integrasi-di-tiga-terminal) tetap tersedia dengan `lib/main_demo.dart` dan menampilkan fixture dari FastAPI melalui NestJS.
 
-Pengesahan nota truk di Pekerjaan mencatat penerimaan resmi dan stok tebu per kloter. Pembukuan penggilingan dari nota hasil produksi masih memakai fixture sintetis. Lihat [penerimaan dari nota OCR](backend-intake-documents.md#penerimaan-dari-nota-ocr) dan [alur penggilingan](backend-milling-documents.md).
+Pengesahan nota truk di Pekerjaan mencatat penerimaan resmi dan stok tebu per kloter. Saat mengesahkan nota produksi, peninjau memilih kloter per blok tebu lalu mengisi volume nira dan waktu penggilingan. NestJS membukukan debit tebu dan kredit nira dari revisi yang disahkan. Lihat [penerimaan dari nota OCR](backend-intake-documents.md#penerimaan-dari-nota-ocr) dan [alur penggilingan](backend-milling-documents.md).
 
 ## Menggunakan acuan tim
 

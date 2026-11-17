@@ -1,9 +1,9 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
-import { ACTIVE_ACCESS_SQL } from '../auth/access.sql';
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { DatabaseSession } from '../database/database.service';
 import { Pagination } from '../production/production.dto';
 import { completeFields } from './intake.dto';
 import { Field, Note } from './contracts';
+import { requireProductionAccess } from './production-access';
 
 type Lot = {
   id: string; tenantId: string; supplierId: string; supplierName: string; displayCode: string | null; receivedAt: Date;
@@ -25,23 +25,17 @@ export type PostedIntake = {
 @Injectable()
 export class TruckIntake {
   async choices(db: DatabaseSession, userId: string, factoryId: string, page: Pagination) {
-    await this.requireAccess(db, userId, factoryId);
+    await requireProductionAccess(db, userId, factoryId);
     const { rows } = await db.query<Lot>(`SELECT ${lotColumns} ${lots}
       ORDER BY l.received_at DESC,l.id LIMIT $2 OFFSET $3`, [factoryId, page.limit + 1, page.offset]);
     return { items: rows.slice(0, page.limit), next_offset: rows.length > page.limit ? page.offset + page.limit : null };
-  }
-
-  private async requireAccess(db: DatabaseSession, userId: string, factoryId: string) {
-    const { rows } = await db.query(`${ACTIVE_ACCESS_SQL} AND fm.factory_id=$2 AND fm.role IN ('admin','owner')
-      FOR SHARE OF fm,tm,f,t`, [userId, factoryId]);
-    if (!rows.length) throw new ForbiddenException('Akses produksi pada pabrik ini diperlukan.');
   }
 
   async post(db: DatabaseSession, input: { documentId: string; revisionId: string; userId: string; factoryId: string;
     lotId: string; supplierId: string; note: Note }) {
     const { documentId, revisionId, userId, factoryId, lotId, supplierId, note } = input;
     if (note.document_type !== 'TRUCK_ARRIVAL_NOTE') throw new ConflictException('Jenis revisi tidak cocok dengan penerimaan tebu.');
-    await this.requireAccess(db, userId, factoryId);
+    await requireProductionAccess(db, userId, factoryId);
     // Lock the same lot as synthetic intake and validate the balance in a fresh statement.
     const { rows: [lot] } = await db.query<Lot>(`SELECT ${lotColumns} FROM sobatnira.lots l
       JOIN sobatnira.suppliers s ON s.tenant_id=l.tenant_id AND s.id=l.supplier_id
