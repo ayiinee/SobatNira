@@ -57,6 +57,9 @@ void main() {
               'onHandMl': '90000.25',
               'reservedMl': '10000',
               'availableMl': '80000.25',
+              'origins': [
+                {'originLotId': 'lot-b', 'availableMl': '80000.25'},
+              ],
             },
             '/tenants/tenant/factories/B/lots/lot-b/closure' => {
               'status': 'open',
@@ -129,6 +132,13 @@ void main() {
       );
       await tester.scrollUntilVisible(find.text('80000.25 mL'), 200);
       expect(find.text('80000.25 mL'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('Transfer nira'), 100);
+      await tester.tap(find.text('Transfer nira'));
+      await tester.pumpAndSettle();
+      expect(find.text('Kirim transfer'), findsOneWidget);
+      expect(find.text('80.00025 L'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
       await tester.scrollUntilVisible(find.text('Nota Produksi'), 200);
       await tester.tap(find.text('Nota Produksi'));
       await tester.pumpAndSettle();

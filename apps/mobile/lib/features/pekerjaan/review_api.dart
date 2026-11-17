@@ -20,6 +20,30 @@ const connectedMobile =
 
 typedef Json = Map<String, dynamic>;
 
+class JuiceTransferRequest {
+  const JuiceTransferRequest({
+    required this.requestId,
+    required this.toLotId,
+    required this.toLabel,
+    required this.originLotId,
+    required this.originLabel,
+    required this.quantityMl,
+  });
+  final String requestId;
+  final String toLotId;
+  final String toLabel;
+  final String originLotId;
+  final String originLabel;
+  final String quantityMl;
+
+  Json get body => {
+    'requestId': requestId,
+    'toLotId': toLotId,
+    'originLotId': originLotId,
+    'quantityMl': quantityMl,
+  };
+}
+
 enum ProductionCatalog {
   suppliers('suppliers', 'Pemasok'),
   caneTypes('cane-types', 'Jenis tebu');
@@ -71,6 +95,69 @@ class ReviewApi {
   final String _token;
   final http.Client _client;
   final String baseUrl;
+  final _pendingTransfers = <String, JuiceTransferRequest>{};
+
+  String _transferKey(FactoryScope scope, String lotId) =>
+      '${scope.tenantId}/${scope.factoryId}/$lotId';
+
+  JuiceTransferRequest? pendingTransfer(FactoryScope scope, String lotId) =>
+      _pendingTransfers[_transferKey(scope, lotId)];
+
+  JuiceTransferRequest prepareTransfer(
+    FactoryScope scope,
+    String lotId, {
+    required String toLotId,
+    required String toLabel,
+    required String originLotId,
+    required String originLabel,
+    required String quantityMl,
+  }) => _pendingTransfers.putIfAbsent(
+    _transferKey(scope, lotId),
+    () => JuiceTransferRequest(
+      requestId: _requestUuid(),
+      toLotId: toLotId,
+      toLabel: toLabel,
+      originLotId: originLotId,
+      originLabel: originLabel,
+      quantityMl: quantityMl,
+    ),
+  );
+
+  Future<Json> transferJuice(
+    FactoryScope scope,
+    String lotId,
+    JuiceTransferRequest transfer,
+  ) async {
+    try {
+      final receipt = await _productionWrite([
+        ...scope._lots,
+        lotId,
+        'juice',
+        'transfers',
+      ], transfer.body);
+      if (receipt['requestId'] != transfer.requestId) {
+        throw const FormatException('Transfer receipt does not match.');
+      }
+      _pendingTransfers.remove(_transferKey(scope, lotId));
+      return receipt;
+    } on ReviewApiError catch (error) {
+      if (error.status == 400 || error.status == 409) {
+        _pendingTransfers.remove(_transferKey(scope, lotId));
+      }
+      rethrow;
+    }
+  }
+
+  static String _requestUuid() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    bytes[6] = (bytes[6] & 15) | 64;
+    bytes[8] = (bytes[8] & 63) | 128;
+    final hex = bytes
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+        .join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+  }
 
   static List<String> get invalidConfiguration => [
     if (!_validOrigin(supabaseProject)) 'SUPABASE_URL',
