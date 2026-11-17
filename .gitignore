@@ -8,4 +8,5 @@ __pycache__/
 !.env.connected.example
 .tmp/
 /docs/internal/
+/docs.zip
 *.log
