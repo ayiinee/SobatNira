@@ -77,11 +77,20 @@ class WhatsAppController {
   @Get('quoted-context')
   @Header('Cache-Control', 'private, no-store')
   quotedContext(@Headers('x-operator-phone') phone: string, @Headers('x-chat-id') chat: string,
-    @Headers('x-quoted-message-id') quote: string) {
+    @Headers('x-quoted-message-id') quote: string, @Query('action') action?: string) {
     if (!/^\+[1-9][0-9]{7,14}$/.test(phone) || !chat || chat.length > 255 || !quote || quote.length > 255) {
       throw new BadRequestException('Rujukan percakapan tidak valid');
     }
-    return this.intake.quotedContext(phone, chat, quote);
+    return action === 'true' ? this.intake.quotedActionContext(phone, chat, quote) : this.intake.quotedContext(phone, chat, quote);
+  }
+
+  @Get('latest-context')
+  @Header('Cache-Control', 'private, no-store')
+  latestContext(@Headers('x-operator-phone') phone: string, @Headers('x-chat-id') chat: string) {
+    if (!/^\+[1-9][0-9]{7,14}$/.test(phone) || !chat || chat.length > 255) {
+      throw new BadRequestException('Percakapan tidak valid');
+    }
+    return this.intake.latestContext(phone, chat);
   }
 
   @Post('text-events')

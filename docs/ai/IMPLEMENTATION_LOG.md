@@ -89,3 +89,10 @@ Untuk revisi, pencocokan otomatis memakai label blok dan pasangan kode wajan ser
 
 - Gateway SobatNira memakai profil dan port tersendiri agar perintah login memakai state yang sama dengan proses gateway. OpenClaw 2026.11.4 menampilkan QR, menautkan akun WhatsApp `sobatnira`, dan mengembalikan status `connected` serta `healthy`.
 - Readiness mode terhubung lulus dengan akun, operator, dan pabrik demo yang terpisah. Login Flutter dengan Supabase dan akses antrean Pekerjaan untuk pabrik demo diverifikasi di browser.
+
+## JPEG WhatsApp dan percakapan operator
+
+- Dua foto WhatsApp tersimpan sebagai JPEG. Sebelumnya decoder meminta atribut jumlah frame yang tidak disediakan Pillow untuk JPEG biasa, sehingga FastAPI mengembalikan HTTP 500. Tes regresi memastikan JPEG mencapai OCR dan pembatasan multi-frame tetap berlaku.
+- Parser nota produksi bergaris mengenali header miring dan bertumpuk. Pemisah horizontal pada area TEBU membantu mengelompokkan baris masak. Label gabungan dari stiker ditandai ambigu dan kolom tanpa judul jelas tetap tidak dipetakan. Bukti tetap memakai koordinat OCR asli.
+- Chat memberi ringkasan berbahasa Indonesia dan menerima `STATUS` tanpa UUID. `KONFIRMASI`, `JAWAB`, `FOTO ULANG`, dan `COBA LAGI` pada ringkasan otomatis diverifikasi terhadap operator, pabrik, percakapan, dan revisi aktif. Percobaan ulang OCR menggunakan foto yang sudah disimpan dan menambah revisi. Adapter membatasi balasan agent bawaan OpenClaw untuk akun SobatNira.
+- Lulus 57 tes NestJS dengan PostgreSQL dan 13 tes FastAPI. Foto contoh dan hasil analisis lokal disimpan di luar Git.
