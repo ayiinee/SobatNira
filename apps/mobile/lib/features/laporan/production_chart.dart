@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/chart_growth.dart';
 import 'demo_analytics.dart';
 
 // Synthetic presentation fixture; no production calculation is performed here.
@@ -66,23 +67,23 @@ class _ProductionChartState extends State<ProductionChart> {
                 Expanded(
                   child: Text(
                     'Gula final per hari (Kg)',
-                    style: niraText(NiraType.body, weight: FontWeight.w600),
+                    style: niraText(NiraType.body, weight: FontWeight.w700),
                   ),
                 ),
                 const SizedBox(width: NiraSpace.sm),
                 PopupMenuButton<ProductionVariant>(
                   tooltip: 'Jenis grafik',
-                  initialValue: widget.analytics.variant,
                   onSelected: (variant) {
                     setState(() => _selectedDay = null);
                     widget.analytics.setVariant(variant);
                   },
                   color: niraPaper,
                   position: PopupMenuPosition.under,
-                  offset: const Offset(0, 6),
+                  offset: Offset.zero,
                   elevation: 4,
                   shadowColor: const Color(0x33174B35),
-                  menuPadding: const EdgeInsets.all(1),
+                  menuPadding: EdgeInsets.zero,
+                  clipBehavior: Clip.antiAlias,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(niraRadius),
                     side: const BorderSide(color: niraGreen, width: 1.2),
@@ -96,9 +97,12 @@ class _ProductionChartState extends State<ProductionChart> {
                         ProductionVariant.grade,
                     ])
                       PopupMenuItem(
+                        key: ValueKey('chart-option-${variant.name}'),
                         value: variant,
+                        height: 0,
                         padding: EdgeInsets.zero,
                         child: Container(
+                          constraints: const BoxConstraints(minHeight: 44),
                           color: variant == widget.analytics.variant
                               ? niraGreen
                               : niraPaper,
@@ -193,7 +197,13 @@ class _ProductionChartState extends State<ProductionChart> {
               LayoutBuilder(
                 builder: (context, constraints) {
                   final width = constraints.maxWidth;
-                  final plot = Rect.fromLTRB(32, 32, width - 8, 194);
+                  final plot = Rect.fromLTRB(32, 16, width - 8, 154);
+                  final detailWidth = selected < 0
+                      ? 0.0
+                      : math.min(
+                          width,
+                          _detailWidth(context, days[selected], grade),
+                        );
                   void select(Offset position) {
                     if (!plot.contains(position)) return;
                     final index =
@@ -220,17 +230,24 @@ class _ProductionChartState extends State<ProductionChart> {
                             select(event.localPosition),
                         child: SizedBox(
                           key: const ValueKey('production-chart-plot'),
-                          height: 228,
+                          height: 180,
                           child: Stack(
                             children: [
                               Positioned.fill(
-                                child: CustomPaint(
-                                  painter: _ProductionPainter(
-                                    days: days,
-                                    grade: grade,
-                                    selected: selected,
-                                    plot: plot,
-                                    textDirection: Directionality.of(context),
+                                child: ChartGrowth(
+                                  replayKey: (
+                                    widget.analytics.variant,
+                                    widget.analytics.dateFilter,
+                                  ),
+                                  builder: (context, progress) => CustomPaint(
+                                    painter: _ProductionPainter(
+                                      days: days,
+                                      grade: grade,
+                                      selected: selected,
+                                      plot: plot,
+                                      textDirection: Directionality.of(context),
+                                      progress: progress,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -241,13 +258,13 @@ class _ProductionChartState extends State<ProductionChart> {
                                                   (selected + .5) *
                                                       plot.width /
                                                       days.length) -
-                                              76)
+                                              detailWidth / 2)
                                           .clamp(
                                             0.0,
-                                            math.max(0.0, width - 152),
+                                            math.max(0.0, width - detailWidth),
                                           ),
                                   top: 0,
-                                  width: math.min(152, width),
+                                  width: detailWidth,
                                   child: IgnorePointer(
                                     child: _detail(days[selected], grade),
                                   ),
@@ -282,6 +299,36 @@ class _ProductionChartState extends State<ProductionChart> {
     ],
   );
 
+  List<String> _detailLines(_ChartDay day, bool grade) => [
+    '${day.day} Oktober 2026',
+    'Gula final: ${day.kg.toInt()} kg',
+    grade
+        ? 'A: ${day.a.toInt()} · B: ${day.b.toInt()} · C: ${day.c.toInt()} kg'
+        : 'Rendemen: ${day.rendemen.toStringAsFixed(1).replaceAll('.', ',')}%',
+  ];
+
+  TextStyle _detailStyle(int index) => niraText(
+    NiraType.caption,
+    color: index == 2 ? niraYellow : Colors.white,
+    height: 1.2,
+    weight: index == 0 ? FontWeight.w600 : FontWeight.w400,
+  );
+
+  double _detailWidth(BuildContext context, _ChartDay day, bool grade) {
+    final lines = _detailLines(day, grade);
+    var widest = 0.0;
+    for (var i = 0; i < lines.length; i++) {
+      final text = TextPainter(
+        text: TextSpan(text: lines[i], style: _detailStyle(i)),
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+      )..layout();
+      widest = math.max(widest, text.width);
+      text.dispose();
+    }
+    return widest.ceilToDouble() + 12;
+  }
+
   Widget _detail(_ChartDay day, bool grade) => Container(
     key: const ValueKey('production-chart-detail'),
     padding: const EdgeInsets.all(6),
@@ -292,25 +339,8 @@ class _ProductionChartState extends State<ProductionChart> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '${day.day} Oktober 2026',
-          style: niraText(
-            NiraType.caption,
-            color: Colors.white,
-            height: 1.2,
-            weight: FontWeight.w600,
-          ),
-        ),
-        Text(
-          'Gula final: ${day.kg.toInt()} kg',
-          style: niraText(NiraType.caption, color: Colors.white, height: 1.2),
-        ),
-        Text(
-          grade
-              ? 'A: ${day.a.toInt()} · B: ${day.b.toInt()} · C: ${day.c.toInt()} kg'
-              : 'Rendemen: ${day.rendemen.toStringAsFixed(1).replaceAll('.', ',')}%',
-          style: niraText(NiraType.caption, color: niraYellow, height: 1.2),
-        ),
+        for (var i = 0; i < 3; i++)
+          Text(_detailLines(day, grade)[i], style: _detailStyle(i)),
       ],
     ),
   );
@@ -323,12 +353,14 @@ class _ProductionPainter extends CustomPainter {
     required this.selected,
     required this.plot,
     required this.textDirection,
+    required this.progress,
   });
   final List<_ChartDay> days;
   final bool grade;
   final int selected;
   final Rect plot;
   final TextDirection textDirection;
+  final double progress;
 
   void _text(
     Canvas canvas,
@@ -369,7 +401,7 @@ class _ProductionPainter extends CustomPainter {
           (day.b, _gradeB),
           (day.a, niraGreen),
         ]) {
-          final h = value / 100 * plot.height;
+          final h = value / 100 * plot.height * progress;
           canvas.drawRect(
             Rect.fromLTWH(x - barWidth / 2, bottom - h, barWidth, h),
             Paint()
@@ -380,7 +412,7 @@ class _ProductionPainter extends CustomPainter {
           bottom -= h;
         }
       } else {
-        final h = day.kg / 100 * plot.height;
+        final h = day.kg / 100 * plot.height * progress;
         canvas.drawRRect(
           RRect.fromRectAndRadius(
             Rect.fromLTWH(x - barWidth / 2, plot.bottom - h, barWidth, h),
@@ -395,6 +427,7 @@ class _ProductionPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ProductionPainter old) =>
+      old.progress != progress ||
       old.grade != grade ||
       old.selected != selected ||
       old.plot != plot ||
