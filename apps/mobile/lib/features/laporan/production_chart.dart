@@ -316,7 +316,7 @@ class _ProductionChartState extends State<ProductionChart> {
   TextStyle _detailStyle(int index) => niraText(
     NiraType.caption,
     color: index == 2 ? niraYellow : Colors.white,
-    height: 1.2,
+    height: 1.3,
     weight: index == 0 ? FontWeight.w600 : FontWeight.w400,
   );
 
@@ -332,12 +332,12 @@ class _ProductionChartState extends State<ProductionChart> {
       widest = math.max(widest, text.width);
       text.dispose();
     }
-    return widest.ceilToDouble() + 12;
+    return widest.ceilToDouble() + 20;
   }
 
   Widget _detail(_ChartDay day, bool grade) => Container(
     key: const ValueKey('production-chart-detail'),
-    padding: const EdgeInsets.all(6),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
     decoration: BoxDecoration(
       color: niraGreen,
       borderRadius: BorderRadius.circular(niraRadius),
@@ -345,8 +345,10 @@ class _ProductionChartState extends State<ProductionChart> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (var i = 0; i < 3; i++)
+        for (var i = 0; i < 3; i++) ...[
+          if (i > 0) const SizedBox(height: 2),
           Text(_detailLines(day, grade)[i], style: _detailStyle(i)),
+        ],
       ],
     ),
   );

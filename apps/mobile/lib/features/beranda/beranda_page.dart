@@ -175,11 +175,11 @@ class _BerandaPageState extends State<BerandaPage> {
                       child: ListView.builder(
                         key: const ValueKey('beranda-kloter-list'),
                         controller: scrollController,
-                        padding: const EdgeInsets.fromLTRB(
+                        padding: EdgeInsets.fromLTRB(
                           niraInset,
                           NiraSpace.md,
                           niraInset,
-                          NiraSpace.lg,
+                          MediaQuery.viewPaddingOf(context).bottom + 90,
                         ),
                         itemCount: items.length,
                         itemBuilder: (context, index) => Padding(
@@ -344,18 +344,33 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Text(
+                      'Keuntungan',
+                      style: niraText(
+                        NiraType.section,
+                        color: Colors.white,
+                        weight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: NiraSpace.sm),
                     Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Expanded(
-                          child: Text(
-                            'Keuntungan',
-                            style: niraText(
-                              NiraType.section,
-                              color: Colors.white,
-                              weight: FontWeight.w700,
+                        Flexible(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              _showProfit ? 'Rp15.745.000' : 'Rp ••••••',
+                              style: niraText(
+                                NiraType.hero,
+                                color: niraYellow,
+                                weight: FontWeight.w700,
+                              ),
                             ),
                           ),
                         ),
+                        const SizedBox(width: NiraSpace.xs),
                         IconButton(
                           constraints: const BoxConstraints(
                             minWidth: 44,
@@ -377,17 +392,6 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                           ),
                         ),
                       ],
-                    ),
-                    Transform.translate(
-                      offset: const Offset(0, -4),
-                      child: Text(
-                        _showProfit ? 'Rp -' : 'Rp ••••••',
-                        style: niraText(
-                          NiraType.hero,
-                          color: niraYellow,
-                          weight: FontWeight.w700,
-                        ),
-                      ),
                     ),
                     const SizedBox(height: NiraSpace.sm),
                     Row(
