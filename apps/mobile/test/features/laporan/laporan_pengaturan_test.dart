@@ -58,7 +58,8 @@ void main() {
     await tap(tester, find.text('Reset'));
     expect(find.text('Sugeng'), findsOneWidget);
 
-    await tap(tester, find.text('Grade').first);
+    await tap(tester, find.byTooltip('Jenis grafik'));
+    await tap(tester, find.text('Grade').last);
     expect(find.text('Komposisi Grade'), findsOneWidget);
     await tap(tester, find.text('Grade A').last);
     expect(find.text('Detail Grade'), findsOneWidget);
