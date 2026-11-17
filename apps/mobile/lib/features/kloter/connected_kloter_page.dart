@@ -112,7 +112,7 @@ class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
             ProductionCatalogPage(api: _api!, scope: scope, kind: kind),
       ),
     );
-    if (mounted) setState(_load);
+    if (mounted && kind != ProductionCatalog.operators) setState(_load);
   }
 
   Future<void> _createLot(FactoryScope scope) async {
