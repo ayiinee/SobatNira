@@ -16,7 +16,7 @@ const _demoDays = [
   _ChartDay(21, 45, 6.8, 27, 11, 7),
   _ChartDay(22, 50, 7.3, 30, 13, 7),
 ];
-const _barColor = Color(0xFFD9E4DD);
+const _barColor = niraGreen;
 const _gradeB = Color(0xFFD3A734);
 const _gradeC = Color(0xFFDCE6DE);
 
@@ -78,18 +78,62 @@ class _ProductionChartState extends State<ProductionChart> {
                     widget.analytics.setVariant(variant);
                   },
                   color: niraPaper,
+                  position: PopupMenuPosition.under,
+                  offset: const Offset(0, 6),
+                  elevation: 4,
+                  shadowColor: const Color(0x33174B35),
+                  menuPadding: const EdgeInsets.all(1),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(niraRadius),
+                    side: const BorderSide(color: niraGreen, width: 1.2),
                   ),
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(
-                      value: ProductionVariant.rendemen,
-                      child: Text('Rendemen'),
-                    ),
-                    PopupMenuItem(
-                      value: ProductionVariant.grade,
-                      child: Text('Grade'),
-                    ),
+                  itemBuilder: (_) => [
+                    for (final variant in [
+                      widget.analytics.variant,
+                      if (grade)
+                        ProductionVariant.rendemen
+                      else
+                        ProductionVariant.grade,
+                    ])
+                      PopupMenuItem(
+                        value: variant,
+                        padding: EdgeInsets.zero,
+                        child: Container(
+                          color: variant == widget.analytics.variant
+                              ? niraGreen
+                              : niraPaper,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: NiraSpace.md,
+                            vertical: NiraSpace.md,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  variant == ProductionVariant.grade
+                                      ? 'Grade'
+                                      : 'Rendemen',
+                                  style: niraText(
+                                    NiraType.caption,
+                                    color: variant == widget.analytics.variant
+                                        ? Colors.white
+                                        : niraGreen,
+                                    weight: variant == widget.analytics.variant
+                                        ? FontWeight.w600
+                                        : FontWeight.w400,
+                                  ),
+                                ),
+                              ),
+                              if (variant == widget.analytics.variant)
+                                const Icon(
+                                  Icons.check,
+                                  size: 16,
+                                  color: Colors.white,
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
                   ],
                   child: Container(
                     constraints: const BoxConstraints(minHeight: 44),
@@ -132,12 +176,8 @@ class _ProductionChartState extends State<ProductionChart> {
                       _legend('Grade A', niraGreen),
                       _legend('Grade B', _gradeB),
                       _legend('Grade C', _gradeC),
-                      _legend('Total (kg)', niraGreen, line: true),
                     ]
-                  : [
-                      _legend('Gula final (kg)', _barColor),
-                      _legend('Rendemen (%)', niraGreen, line: true),
-                    ],
+                  : [_legend('Gula final (kg)', _barColor)],
             ),
             const SizedBox(height: NiraSpace.sm),
             if (days.isEmpty)
@@ -153,12 +193,7 @@ class _ProductionChartState extends State<ProductionChart> {
               LayoutBuilder(
                 builder: (context, constraints) {
                   final width = constraints.maxWidth;
-                  final plot = Rect.fromLTRB(
-                    32,
-                    32,
-                    width - (grade ? 8 : 30),
-                    194,
-                  );
+                  final plot = Rect.fromLTRB(32, 32, width - 8, 194);
                   void select(Offset position) {
                     if (!plot.contains(position)) return;
                     final index =
@@ -171,8 +206,8 @@ class _ProductionChartState extends State<ProductionChart> {
 
                   return Semantics(
                     label: grade
-                        ? 'Grafik batang grade A, B, C dan garis total gula dalam kilogram.'
-                        : 'Grafik batang gula dalam kilogram dan garis rendemen dalam persen.',
+                        ? 'Grafik batang grade A, B, C dalam kilogram.'
+                        : 'Grafik batang gula dalam kilogram. Ketuk untuk detail gula dan rendemen.',
                     child: MouseRegion(
                       cursor: SystemMouseCursors.precise,
                       onHover: (event) => select(event.localPosition),
@@ -205,13 +240,13 @@ class _ProductionChartState extends State<ProductionChart> {
                                                   (selected + .5) *
                                                       plot.width /
                                                       days.length) -
-                                              86)
+                                              76)
                                           .clamp(
                                             0.0,
-                                            math.max(0.0, width - 172),
+                                            math.max(0.0, width - 152),
                                           ),
                                   top: 0,
-                                  width: math.min(172, width),
+                                  width: math.min(152, width),
                                   child: IgnorePointer(
                                     child: _detail(days[selected], grade),
                                   ),
@@ -224,27 +259,18 @@ class _ProductionChartState extends State<ProductionChart> {
                   );
                 },
               ),
-            Text(
-              'Oktober 2026 · Data simulasi',
-              style: niraText(NiraType.caption, color: niraLeaf),
-            ),
-            const SizedBox(height: NiraSpace.xs),
-            Text(
-              'Arahkan kursor atau ketuk grafik untuk detail.',
-              style: niraText(NiraType.caption, color: niraLeaf),
-            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _legend(String label, Color color, {bool line = false}) => Row(
+  Widget _legend(String label, Color color) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
       Container(
-        width: line ? 18 : 10,
-        height: line ? 3 : 10,
+        width: 10,
+        height: 10,
         decoration: BoxDecoration(
           color: color,
           borderRadius: BorderRadius.circular(2),
@@ -257,7 +283,7 @@ class _ProductionChartState extends State<ProductionChart> {
 
   Widget _detail(_ChartDay day, bool grade) => Container(
     key: const ValueKey('production-chart-detail'),
-    padding: const EdgeInsets.all(NiraSpace.sm),
+    padding: const EdgeInsets.all(6),
     decoration: BoxDecoration(
       color: niraGreen,
       borderRadius: BorderRadius.circular(niraRadius),
@@ -270,18 +296,19 @@ class _ProductionChartState extends State<ProductionChart> {
           style: niraText(
             NiraType.caption,
             color: Colors.white,
+            height: 1.2,
             weight: FontWeight.w600,
           ),
         ),
         Text(
           'Gula final: ${day.kg.toInt()} kg',
-          style: niraText(NiraType.caption, color: Colors.white),
+          style: niraText(NiraType.caption, color: Colors.white, height: 1.2),
         ),
         Text(
           grade
               ? 'A: ${day.a.toInt()} · B: ${day.b.toInt()} · C: ${day.c.toInt()} kg'
               : 'Rendemen: ${day.rendemen.toStringAsFixed(1).replaceAll('.', ',')}%',
-          style: niraText(NiraType.caption, color: niraYellow),
+          style: niraText(NiraType.caption, color: niraYellow, height: 1.2),
         ),
       ],
     ),
@@ -328,24 +355,12 @@ class _ProductionPainter extends CustomPainter {
       final y = plot.bottom - tick * plot.height / 4;
       canvas.drawLine(Offset(plot.left, y), Offset(plot.right, y), grid);
       _text(canvas, '${tick * 25}', Offset(plot.left - 18, y));
-      if (!grade) _text(canvas, '${tick * 2}', Offset(plot.right + 17, y));
     }
-    _text(canvas, 'kg', Offset(plot.left - 18, plot.top - 18));
-    if (!grade) _text(canvas, '%', Offset(plot.right + 17, plot.top - 18));
     final slot = plot.width / days.length;
     final barWidth = math.min(19.0, slot * .48);
-    final points = <Offset>[];
     for (var i = 0; i < days.length; i++) {
       final day = days[i];
       final x = plot.left + slot * (i + .5);
-      if (i == selected)
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            Rect.fromLTWH(x - slot / 2 + 1, plot.top, slot - 2, plot.height),
-            const Radius.circular(4),
-          ),
-          Paint()..color = const Color(0x0D174B35),
-        );
       if (grade) {
         var bottom = plot.bottom;
         for (final (value, color) in [
@@ -356,7 +371,10 @@ class _ProductionPainter extends CustomPainter {
           final h = value / 100 * plot.height;
           canvas.drawRect(
             Rect.fromLTWH(x - barWidth / 2, bottom - h, barWidth, h),
-            Paint()..color = color,
+            Paint()
+              ..color = i == selected
+                  ? Color.lerp(color, Colors.white, .12)!
+                  : color,
           );
           bottom -= h;
         }
@@ -367,40 +385,10 @@ class _ProductionPainter extends CustomPainter {
             Rect.fromLTWH(x - barWidth / 2, plot.bottom - h, barWidth, h),
             const Radius.circular(4),
           ),
-          Paint()..color = i == selected ? niraLeaf : _barColor,
+          Paint()..color = i == selected ? niraGreenHover : _barColor,
         );
       }
-      points.add(
-        Offset(
-          x,
-          plot.bottom - (grade ? day.kg / 100 : day.rendemen / 8) * plot.height,
-        ),
-      );
       _text(canvas, '${day.day}', Offset(x, plot.bottom + 16));
-    }
-    final line = Path()..moveTo(points.first.dx, points.first.dy);
-    for (var i = 1; i < points.length; i++) {
-      line.lineTo(points[i].dx, points[i].dy);
-    }
-    canvas.drawPath(
-      line,
-      Paint()
-        ..color = niraGreen
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..strokeJoin = StrokeJoin.round,
-    );
-    for (var i = 0; i < points.length; i++) {
-      canvas.drawCircle(
-        points[i],
-        i == selected ? 5 : 3,
-        Paint()..color = niraGreen,
-      );
-      canvas.drawCircle(
-        points[i],
-        i == selected ? 2.5 : 1.5,
-        Paint()..color = Colors.white,
-      );
     }
   }
 
