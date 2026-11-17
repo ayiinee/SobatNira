@@ -5,11 +5,205 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
-import 'package:sobatnira/main.dart';
-
-import '../../support/demo_login.dart';
+import 'package:sobatnira/features/pekerjaan/review_detail_page.dart';
+import 'package:sobatnira/features/pekerjaan/pekerjaan_page.dart';
+import 'package:sobatnira/sobatnira_ui.dart';
 
 void main() {
+  testWidgets('Koreksi stok opens the new approved task and retains the reason', (
+    tester,
+  ) async {
+    final api = ReviewApi(
+      'synthetic-token',
+      client: MockClient((request) async {
+        final endpoint = request.url.path.replaceFirst('/api/v1/mobile/', '');
+        if (endpoint.endsWith('/assets/photo')) return http.Response('', 404);
+        if (endpoint == 'review-tasks/original' ||
+            endpoint == 'review-tasks/reconciled') {
+          final corrected = endpoint.endsWith('/reconciled');
+          return http.Response(
+            jsonEncode({
+              'document_id': 'truck',
+              'revision_id': corrected ? 'revision-2' : 'revision-1',
+              'document_type': 'TRUCK_ARRIVAL_NOTE',
+              'version': corrected ? 2 : 1,
+              'media_asset_id': 'photo',
+              'status': 'VALIDATED',
+              'actions': ['RECONCILE'],
+              'intake': {
+                'lot_id': 'lot',
+                'net_weight_kg': corrected ? '1249.75' : '1252',
+              },
+              'issues': [],
+              'revisions': [],
+              'reconciliations': [
+                if (corrected)
+                  {
+                    'revision_version': 2,
+                    'material': 'sugarcane',
+                    'quantity_before': '1252',
+                    'quantity_after': '1249.75',
+                    'reason': 'Timbang ulang',
+                  },
+              ],
+            }),
+            200,
+          );
+        }
+        expect(endpoint, 'documents/truck/reconcile');
+        expect(request.headers['Idempotency-Key'], isNotEmpty);
+        expect(jsonDecode(request.body), {
+          'revision_id': 'revision-1',
+          'expected_version': 1,
+          'lot_id': 'lot',
+          'quantity': '1249.75',
+          'reason': 'Timbang ulang',
+        });
+        return http.Response(
+          '{"task_id":"reconciled","revision_id":"revision-2","version":2,"status":"VALIDATED"}',
+          200,
+        );
+      }),
+    );
+    addTearDown(api.close);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ReviewDetailPage(api: api, taskId: 'original'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final reconcile = find.widgetWithText(
+      OutlinedButton,
+      'Koreksi stok nota sah',
+    );
+    await tester.ensureVisible(reconcile);
+    await tester.tap(reconcile);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Kuantitas yang benar (kg)'),
+      '1249,75',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Alasan koreksi'),
+      'Timbang ulang',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sahkan koreksi stok'));
+    await tester.pumpAndSettle();
+    expect(find.text('Stok tebu tercatat: 1249.75 kg'), findsOneWidget);
+    expect(find.text('Revisi 2 · 1252 → 1249.75 kg'), findsOneWidget);
+    expect(find.text('Timbang ulang'), findsOneWidget);
+  });
+
+  testWidgets('Nota produksi sends liters and zoned time for new blocks only', (
+    tester,
+  ) async {
+    var validated = false;
+    final api = ReviewApi(
+      'synthetic-token',
+      client: MockClient((request) async {
+        final endpoint = request.url.path.replaceFirst('/api/v1/mobile/', '');
+        if (endpoint == 'review-tasks/production-task') {
+          return http.Response(
+            jsonEncode({
+              'document_id': 'production-document',
+              'revision_id': 'production-revision',
+              'document_type': 'PRODUCTION_NOTE',
+              'version': 3,
+              'media_asset_id': 'photo',
+              'status': validated ? 'VALIDATED' : 'PENDING_VALIDATION',
+              'actions': validated ? [] : ['VALIDATE'],
+              'extraction': {
+                'cane_blocks': [
+                  {
+                    'cane_label': {
+                      'status': 'READ',
+                      'normalized_value': 'DEMO-A',
+                    },
+                  },
+                  {
+                    'cane_label': {
+                      'status': 'READ',
+                      'normalized_value': 'DEMO-B',
+                    },
+                  },
+                ],
+              },
+              'milling': [
+                {'cane_label': 'DEMO-A', 'juice_produced_liters': '250'},
+                if (validated)
+                  {'cane_label': 'DEMO-B', 'juice_produced_liters': '180.25'},
+              ],
+              'issues': [],
+              'revisions': [],
+            }),
+            200,
+          );
+        }
+        if (endpoint.endsWith('/assets/photo')) return http.Response('', 404);
+        if (endpoint.endsWith('/milling-lots')) {
+          return http.Response(
+            jsonEncode({
+              'items': [
+                {
+                  'id': 'lot-b',
+                  'displayCode': 'KLOTER-B',
+                  'receivedAt': '2026-11-16T01:00:00Z',
+                  'supplierName': 'Pemasok Demo',
+                },
+              ],
+              'next_offset': null,
+            }),
+            200,
+          );
+        }
+        expect(endpoint, 'documents/production-document/validate');
+        expect(jsonDecode(request.body), {
+          'revision_id': 'production-revision',
+          'expected_version': 3,
+          'decision': 'VALIDATED',
+          'milling': [
+            {
+              'lot_id': 'lot-b',
+              'cane_label': 'DEMO-B',
+              'occurred_at': '2026-11-16T09:00:00+07:00',
+              'juice_produced_liters': '180.25',
+            },
+          ],
+        });
+        validated = true;
+        return http.Response('{"status":"VALIDATED"}', 200);
+      }),
+    );
+    addTearDown(api.close);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ReviewDetailPage(api: api, taskId: 'production-task'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final validate = find.text('Validasi revisi ini');
+    await tester.ensureVisible(validate);
+    await tester.tap(validate);
+    await tester.pumpAndSettle();
+    expect(find.text('Penggilingan DEMO-B'), findsOneWidget);
+    await tester.tap(find.text('KLOTER-B'));
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Total nira hasil giling (L)'),
+      '180,25',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Waktu penggilingan dan zona waktu'),
+      '2026-11-16T09:00:00+07:00',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Gunakan data penggilingan'));
+    await tester.pumpAndSettle();
+    expect(validated, isTrue);
+    expect(find.text('DEMO-B · Nira tercatat 180.25 L'), findsOneWidget);
+  });
+
   testWidgets('Pekerjaan loads the API and validates the displayed revision', (
     tester,
   ) async {
@@ -54,12 +248,30 @@ void main() {
         if (endpoint == 'review-tasks/task-demo/assets/photo-demo') {
           return http.Response('', 404);
         }
+        if (endpoint == 'review-tasks/task-demo/intake-lots') {
+          return http.Response(
+            jsonEncode({
+              'items': [
+                {
+                  'id': 'lot-demo',
+                  'supplierId': 'supplier-demo',
+                  'supplierName': 'Pemasok Demo',
+                  'displayCode': 'KLOTER-DEMO',
+                  'receivedAt': '2026-11-16T01:00:00Z',
+                },
+              ],
+              'next_offset': null,
+            }),
+            200,
+          );
+        }
         if (endpoint == 'review-tasks/task-demo') {
           return http.Response(
             jsonEncode({
               ...task,
               'role': 'ADMIN',
               'status': validated ? 'VALIDATED' : 'PENDING_VALIDATION',
+              if (validated) 'intake': {'net_weight_kg': '1250'},
               'actions': validated ? [] : ['CORRECT', 'VALIDATE', 'RETURN'],
               'issues': [],
               'extraction': {
@@ -97,6 +309,8 @@ void main() {
           'revision_id': 'revision-demo',
           'expected_version': 2,
           'decision': 'VALIDATED',
+          'lot_id': 'lot-demo',
+          'supplier_id': 'supplier-demo',
         });
         validated = true;
         return http.Response('{"status":"VALIDATED"}', 200);
@@ -104,16 +318,12 @@ void main() {
     );
     addTearDown(api.close);
 
-    await tester.pumpWidget(SobatNiraApp(reviewApi: api));
-    await tester.pumpAndSettle();
-    await openDemoLogin(tester);
-    await submitDemoLogin(tester);
-    final semantics = tester.ensureSemantics();
-    try {
-      await tester.tap(find.bySemanticsLabel('Pekerjaan'));
-    } finally {
-      semantics.dispose();
-    }
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: niraTheme(),
+        home: Scaffold(body: PekerjaanPage(api: api, active: true)),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.text('Menunggu validasi'), findsOneWidget);
     expect(find.text('1 laporan baru'), findsOneWidget);
@@ -129,7 +339,14 @@ void main() {
     await tester.ensureVisible(validate);
     await tester.tap(validate);
     await tester.pumpAndSettle();
+    expect(find.text('Pilih kloter penerimaan'), findsOneWidget);
+    expect(validated, isFalse);
+    await tester.tap(find.text('KLOTER-DEMO'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sahkan dan catat stok'));
+    await tester.pumpAndSettle();
     expect(find.text('Status: VALIDATED'), findsOneWidget);
+    expect(find.text('Stok tebu tercatat: 1250 kg'), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('Belum ada laporan pada status ini.'), findsOneWidget);

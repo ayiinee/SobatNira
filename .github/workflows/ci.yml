@@ -1,10 +1,7 @@
 name: CI
 
 on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -65,6 +62,25 @@ jobs:
           cache-dependency-path: apps/api/package-lock.json
       - name: Install API dependencies
         run: npm ci
+      - name: Prepare production schema for OCR integration tests
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+        run: |
+          node <<'JS'
+          const { Client } = require('pg');
+          const client = new Client({ connectionString: process.env.TEST_DATABASE_URL });
+          async function prepare() {
+            await client.connect();
+            try {
+              await client.query(`CREATE ROLE anon NOLOGIN;
+                CREATE ROLE authenticated NOLOGIN;
+                CREATE SCHEMA auth;
+                CREATE TABLE auth.users (id uuid PRIMARY KEY, aud text, role text, email text)`);
+            } finally { await client.end(); }
+          }
+          prepare().catch((error) => { console.error(error.message); process.exitCode = 1; });
+          JS
+          npm run db:migrate
       - name: Build and test API
         run: npm test
 

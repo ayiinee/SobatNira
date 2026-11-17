@@ -9,8 +9,44 @@ export interface Lot {
   id: string; tenantId: string; factoryId: string; supplierId: string; supplierName: string;
   displayCode: string | null; receivedAt: Date; createdAt: Date; updatedAt: Date;
 }
+
+interface ApprovedLotRecord {
+  id: string;
+  approvedAt: string;
+  document: {
+    source: 'ocr' | 'synthetic';
+    documentId: string;
+    revisionId: string | null;
+    revisionNumber: number | null;
+  };
+}
+
+export interface LotDetail extends Lot {
+  synthetic: boolean;
+  status: 'open' | 'closed';
+  closureId: string | null;
+  closedAt: Date | null;
+  closedBy: string | null;
+  netWeightGrams: string | null;
+  intake: ApprovedLotRecord | null;
+  milling: ApprovedLotRecord | null;
+}
+
 const COLUMNS = `l.id, l.tenant_id AS "tenantId", l.factory_id AS "factoryId", l.supplier_id AS "supplierId",
   l.display_code AS "displayCode", l.received_at AS "receivedAt", l.created_at AS "createdAt", l.updated_at AS "updatedAt"`;
+
+function approvedRecord(alias: 'i' | 'm') {
+  const correction = alias === 'i' ? 'ic' : 'mc';
+  return `CASE WHEN ${alias}.id IS NOT NULL THEN jsonb_build_object(
+    'id', ${alias}.id, 'approvedAt', COALESCE(${correction}.created_at,${alias}.approved_at),
+    'document', jsonb_build_object(
+      'source', CASE WHEN ${alias}.is_synthetic THEN 'synthetic' ELSE 'ocr' END,
+      'documentId', COALESCE(${alias}.ocr_document_id, ${alias}.document_id),
+      'revisionId', COALESCE(${correction}.revision_id,${alias}.ocr_revision_id),
+      'revisionNumber', ${alias}.document_revision
+    )
+  ) END`;
+}
 
 @Injectable()
 export class LotsRepository {
@@ -29,14 +65,29 @@ export class LotsRepository {
       query.receivedFrom ?? null, query.receivedBefore ?? null], query, '"receivedAt" DESC, id');
   }
 
-  async find(access: FactoryAccess, id: string): Promise<Lot | undefined> {
-    const result = await this.database.query<Lot>(`
+  async find(access: FactoryAccess, id: string, synthetic = false): Promise<LotDetail | undefined> {
+    const result = await this.database.query<LotDetail>(`
       WITH ${FACTORY_SCOPE_CTE}
-      SELECT ${COLUMNS}, s.name AS "supplierName" FROM sobatnira.lots l
+      SELECT ${COLUMNS}, s.name AS "supplierName", $5::boolean AS synthetic,
+        CASE WHEN c.lot_id IS NULL THEN 'open' ELSE 'closed' END AS status,
+        c.id AS "closureId", c.closed_at AS "closedAt", c.closed_by AS "closedBy",
+        trim_scale(i.net_weight_kg * 1000)::text AS "netWeightGrams",
+        ${approvedRecord('i')} AS intake, ${approvedRecord('m')} AS milling
+      FROM sobatnira.lots l
       JOIN authorized_scope scope ON scope."tenantId" = l.tenant_id AND scope."factoryId" = l.factory_id
       JOIN sobatnira.suppliers s ON s.tenant_id = l.tenant_id AND s.id = l.supplier_id
+      LEFT JOIN sobatnira.intake_records i ON i.tenant_id = l.tenant_id AND i.factory_id = l.factory_id
+        AND i.lot_id = l.id AND i.is_synthetic = $5
+      LEFT JOIN sobatnira.milling_records m ON m.tenant_id = l.tenant_id AND m.factory_id = l.factory_id
+        AND m.lot_id = l.id AND m.is_synthetic = $5
+      LEFT JOIN LATERAL (SELECT revision_id,created_at FROM sobatnira.stock_reconciliations
+        WHERE intake_record_id=i.id ORDER BY revision_version DESC LIMIT 1) ic ON true
+      LEFT JOIN LATERAL (SELECT revision_id,created_at FROM sobatnira.stock_reconciliations
+        WHERE milling_record_id=m.id ORDER BY revision_version DESC LIMIT 1) mc ON true
+      LEFT JOIN sobatnira.lot_closures c ON c.tenant_id = l.tenant_id AND c.factory_id = l.factory_id
+        AND c.lot_id = l.id AND c.is_synthetic = $5 AND c.reopened_at IS NULL
       WHERE l.id = $4::uuid
-    `, [...scopeValues(access), id]);
+    `, [...scopeValues(access), id, synthetic]);
     return result.rows[0];
   }
 

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../sobatnira_ui.dart';
 import 'batch_detail_page.dart';
 import 'demo_production.dart';
+import 'kloter_card.dart';
 import 'kloter_detail_widgets.dart';
 import 'kloter_process_page.dart';
 
@@ -19,12 +20,12 @@ class KloterDetailPage extends StatelessWidget {
   final ValueChanged<NiraTab> onNavigate;
 
   @override
-  Widget build(BuildContext context) => NiraScaffold(
-    tab: NiraTab.kloter,
-    onNavigate: onNavigate,
-    body: ListenableBuilder(
-      listenable: demo,
-      builder: (context, _) => CustomScrollView(
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: demo,
+    builder: (context, _) => NiraScaffold(
+      tab: NiraTab.kloter,
+      onNavigate: onNavigate,
+      body: CustomScrollView(
         slivers: [
           SliverList.list(
             children: [
@@ -33,9 +34,9 @@ class KloterDetailPage extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(
                   niraInset,
-                  21,
+                  NiraSpace.xl,
                   niraInset,
-                  17,
+                  NiraSpace.lg,
                 ),
                 child: Column(
                   children: [
@@ -44,7 +45,7 @@ class KloterDetailPage extends StatelessWidget {
                       ('Brix tebu', '90Kg'),
                       ('Nira tercatat', '360L'),
                     ]),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: NiraSpace.lg),
                     DocumentLink('Data tebu dan penggilingan', () {
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
@@ -75,30 +76,30 @@ class KloterDetailPage extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(
                   niraInset,
-                  14,
+                  NiraSpace.lg,
                   niraInset,
-                  10,
+                  NiraSpace.md,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const DetailSectionTitle('Batch kloter'),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: NiraSpace.xs),
                     Text(
                       kloter.batchesToReview == 0
                           ? 'Semua batch telah ditinjau'
                           : '${kloter.batchesToReview} Batch perlu ditinjau',
                       style: niraText(
-                        11.5,
+                        NiraType.caption,
                         color: kloter.batchesToReview == 0
                             ? niraLeaf
                             : niraOchre,
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: NiraSpace.md),
                     for (final batch in kloter.batches)
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 13),
+                        padding: const EdgeInsets.only(bottom: NiraSpace.md),
                         child: _BatchTile(
                           batch,
                           () => Navigator.of(context).push(
@@ -132,75 +133,138 @@ class _BatchTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pending = !batch.review.verified;
-    final foreground = pending && MediaQuery.highContrastOf(context)
-        ? niraGreen
-        : Colors.white;
+    const foreground = Colors.white;
     return Material(
-      color: pending ? niraGold : niraLeaf,
+      color: pending ? niraGold : niraGreen,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(7),
+        borderRadius: BorderRadius.circular(niraRadius),
         side: BorderSide(color: pending ? niraOchre : niraGreen, width: 1),
       ),
       child: InkWell(
         onTap: onTap,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 63),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  flex: 24,
-                  child: Text(
-                    'Batch ${batch.number}',
-                    style: niraText(
-                      14.2,
-                      color: foreground,
-                      weight: FontWeight.w700,
-                    ),
+        overlayColor: niraGreenOverlay,
+        child: Stack(
+          children: [
+            Positioned(
+              right: 0,
+              bottom: -20,
+              child: IgnorePointer(
+                child: Opacity(
+                  opacity: caneOverlayOpacity(pending),
+                  child: Image.asset(
+                    'assets/sobatnira/art/cane.png',
+                    width: 104,
+                    height: 63,
+                    excludeFromSemantics: true,
                   ),
                 ),
-                const SizedBox(width: 5),
-                Expanded(
-                  flex: 66,
-                  child: Column(
-                    children: [
-                      _info('Nira batch', '180L', foreground),
-                      const SizedBox(height: 3),
-                      _info('Hasil fisik', '90Kg', foreground),
-                      const SizedBox(height: 3),
-                      _info(
-                        'Bagian dari kloter',
-                        batch.review.fields[3].display,
-                        foreground,
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(Icons.chevron_right, size: 20, color: foreground),
-              ],
+              ),
             ),
-          ),
+            ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 63),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: NiraSpace.md,
+                  vertical: NiraSpace.sm,
+                ),
+                child:
+                    MediaQuery.textScalerOf(context).scale(NiraType.body) > 17
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Batch ${batch.number}',
+                                  style: niraText(
+                                    NiraType.section,
+                                    color: pending ? foreground : niraYellow,
+                                    weight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              Icon(
+                                Icons.chevron_right,
+                                color: foreground,
+                                size: 20,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: NiraSpace.sm),
+                          _info(context, 'Nira batch', '180L', foreground),
+                          const SizedBox(height: NiraSpace.xs),
+                          _info(context, 'Hasil fisik', '90Kg', foreground),
+                        ],
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            flex: 24,
+                            child: Text(
+                              'Batch ${batch.number}',
+                              style: niraText(
+                                NiraType.section,
+                                color: pending ? foreground : niraYellow,
+                                weight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: NiraSpace.xs),
+                          Expanded(
+                            flex: 66,
+                            child: Column(
+                              children: [
+                                _info(
+                                  context,
+                                  'Nira batch',
+                                  '180L',
+                                  foreground,
+                                ),
+                                const SizedBox(height: NiraSpace.xs),
+                                _info(
+                                  context,
+                                  'Hasil fisik',
+                                  '90Kg',
+                                  foreground,
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.chevron_right,
+                            size: 20,
+                            color: foreground,
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _info(String label, String value, Color foreground) => Row(
+  Widget _info(
+    BuildContext context,
+    String label,
+    String value,
+    Color foreground,
+  ) => Row(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Expanded(
-        flex: 3,
-        child: Text(label, style: niraText(11.5, color: foreground)),
+      SizedBox(
+        width: MediaQuery.textScalerOf(context).scale(14) * 5.2,
+        child: Text(label, style: niraText(NiraType.body, color: foreground)),
       ),
+      const SizedBox(width: NiraSpace.sm),
+      Text(':', style: niraText(NiraType.body, color: foreground)),
+      const SizedBox(width: NiraSpace.sm),
       Expanded(
-        flex: 3,
-        child: Padding(
-          padding: const EdgeInsets.only(left: 4),
-          child: Text(':   $value', style: niraText(11.5, color: foreground)),
-        ),
+        child: Text(value, style: niraText(NiraType.body, color: foreground)),
       ),
     ],
   );

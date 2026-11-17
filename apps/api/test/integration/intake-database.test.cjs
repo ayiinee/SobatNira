@@ -62,6 +62,16 @@ test('synthetic intake flows through revisions, confirmation and atomic admin ap
     assert.equal((await request(root + '/intake-documents?offset=99')).body.total, 1);
     const lot = await request(root + '/lots/' + ids.lot);
     assert.equal(lot.body.receivedAt, '2026-11-16T02:00:00.000Z');
+    assert.equal(lot.body.netWeightGrams, null);
+    assert.equal(lot.body.intake, null);
+    assert.equal(lot.body.milling, null);
+    assert.equal(lot.body.status, 'open');
+    const syntheticLot = await request(root + '/lots/' + ids.lot + '?synthetic=true');
+    assert.equal(syntheticLot.body.netWeightGrams, '1300000.000000000000001');
+    assert.deepEqual(syntheticLot.body.intake.document, {
+      source: 'synthetic', documentId: id, revisionId: null, revisionNumber: 4,
+    });
+    assert.equal((await request(root + '/lots/' + ids.lot + '?synthetic=yes')).status, 400);
     assert.equal((await request(root + '/lots/' + ids.lot, 'PATCH', { receivedAt: '2026-11-17T00:00:00Z' })).status, 409);
     assert.equal((await request(root + '/lots/' + ids.lot, 'PATCH', { supplierId: ids.replacementSupplier })).status, 409);
     assert.equal((await request(root + '/lots/' + ids.lot, 'PATCH', { displayCode: 'DEMO-CORRECTED' })).status, 200);

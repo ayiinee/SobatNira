@@ -4,7 +4,7 @@ Pasang Git dan alat sesuai area yang kamu kerjakan. Untuk menjalankan integrasi,
 
 | Area | Alat | Titik awal |
 | --- | --- | --- |
-| Flutter | Flutter stable 3.44.6 (Dart 3.12.2) dan Chrome | `apps/mobile/lib/main.dart`. Mulai dari onboarding demo dengan data sintetis. |
+| Flutter | Flutter stable 3.44.6 (Dart 3.12.2) dan Chrome | `apps/mobile/lib/main.dart`. Mulai langsung dari Beranda dengan data sintetis. |
 | API bisnis | Node.js 24 dengan npm | `apps/api/src/app.module.ts`. Mulai dari kontrak dan validasi dokumen atau data kloter dan batch. |
 | AI | Python 3.13 dengan uv | `apps/ai/main.py`. Mulai dari pemetaan field dan fixture draf ekstraksi. |
 
@@ -19,7 +19,17 @@ Gunakan [panduan kontribusi](contributing.md) untuk membuat branch dan membuka P
 
 ## Flutter dengan data sintetis lokal
 
-Jalankan dari akar repo untuk membuka onboarding. Isi nama pengguna dan kata sandi dengan teks sintetis untuk mengakses Beranda, Kloter, Laporan, dan Pengaturan. Sesi demo dan perubahan data lokal kembali ke kondisi awal ketika aplikasi dimulai ulang.
+Untuk menjalankan Chrome dari Command Prompt di akar repo dengan hot reload otomatis saat file Dart berubah:
+
+```bat
+dev-mobile.cmd
+```
+
+Perintah ini menggunakan Python yang tersedia di PATH, menjalankan Flutter pada port 8085, dan memantau `apps/mobile/lib`. Perubahan dari editor atau alat lain memicu hot reload setelah jeda 0,7 detik. Hentikan proses dengan Ctrl+C. Jika port sudah dipakai, hentikan sesi lama atau jalankan `dev-mobile.cmd --port 8086`. Perubahan yang membutuhkan hot restart tetap memerlukan menjalankan ulang sesi ini.
+
+Jalankan dari akar repo untuk langsung membuka Beranda, Kloter, Laporan, dan Pengaturan. Onboarding dan login demo dinonaktifkan sementara. Perubahan data lokal kembali ke kondisi awal ketika aplikasi dimulai ulang.
+
+Pada demo lokal, batch yang tervalidasi terkunci untuk edit. Gunakan ikon silang **Batalkan validasi batch** di sebelah tombol status untuk membuka koreksi; batch kembali ke status perlu ditinjau (kuning). Pembatalan hanya berlaku untuk batch yang dipilih. Nilai yang sudah dicatat tetap disimpan selama sesi demo. Alur ini belum mengubah pengesahan dokumen atau stok pada API.
 
 ```sh
 cd apps/mobile
@@ -127,7 +137,7 @@ Untuk cek layanan langsung, buka `http://127.0.0.1:8000/health`, `http://127.0.0
 
 Setup ini memakai satu fixture yang dilayani FastAPI, diteruskan NestJS, dan ditampilkan Flutter. PostgreSQL/Supabase, Redis, WhatsApp, R2 dan provider OCR belum dibutuhkan untuk smoke test ini.
 
-Untuk pekerjaan intake WhatsApp, OCR, atau antrean Pekerjaan, rujuk PRD AI Engineering melalui indeks dokumen internal tim. Kriteria ujinya mencakup dua jenis nota, revisi foto, konfirmasi operator, dan peninjauan mobile. Tes fixture pada setup ini membuktikan koneksi ketiga aplikasi.
+Untuk intake WhatsApp, OCR, dan antrean Pekerjaan, ikuti [panduan setup dan smoke test AI](ai/README.md). Alur tersebut memakai PostgreSQL, PaddleOCR dan Flutter dengan fixture foto untuk dua jenis nota.
 
 ## Jika setup tersendat
 

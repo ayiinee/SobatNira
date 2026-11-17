@@ -1,10 +1,10 @@
 import { open, realpath } from 'node:fs/promises';
 import { isAbsolute, relative } from 'node:path';
-import { setTimeout as delay } from 'node:timers/promises';
 import { createOperatorAgent } from './operator-agent.mjs';
 
 const uuid = '[a-f0-9-]{36}';
-const command = new RegExp(`^(STATUS|KONFIRMASI|KOREKSI)\\s+(${uuid})\\s+(${uuid})(?:\\s+(.+))?$`, 'i');
+const command = new RegExp(`^(STATUS|KONFIRMASI|KOREKSI|JAWAB)\\s+(${uuid})\\s+(${uuid})(?:\\s+(.+))?$`, 'i');
+const answer = new RegExp(`^(${uuid})\\s+(.+)$`, 'i');
 const maxBytes = 10 * 1024 * 1024;
 const terminal = new Set(['EXTRACTED', 'NEEDS_CLARIFICATION', 'MANUAL_REVIEW_REQUIRED', 'FAILED_FINAL']);
 const operatorHelp = 'Kirim satu foto nota atau gunakan perintah STATUS, KOREKSI, atau KONFIRMASI dari ringkasan draf.';
@@ -47,15 +47,25 @@ function summary(revision, document, id, page = 1) {
     return ['Pilih dokumen sebelumnya dengan mengirim ulang satu foto berjudul REVISI <ID dokumen>, atau kirim dengan caption BARU untuk nota baru.',
       ...(revision.candidate_documents ?? []).map((candidate) => `REVISI ${candidate}`)].join('\n');
   }
-  if (!revision.extraction) return 'Draf belum dapat dibaca. Periksa foto, lalu kirim ulang dengan gambar yang jelas.';
   id = revision.id ?? id;
+  const retake = `Kirim satu foto dengan caption FOTO ULANG ${document} ${id}.`;
+  if (!revision.extraction) return [revision.follow_up?.comment ? `Alasan pengembalian: ${revision.follow_up.comment}` :
+    'Draf belum dapat dibaca. Pastikan semua kolom terlihat dan foto cukup terang.',
+    ...(revision.photo_retake_allowed ? [retake] : [])].join('\n');
   const lines = draftLines(revision.extraction);
   const pageSize = 20;
   const pages = Math.max(1, Math.ceil(lines.length / pageSize));
   if (!Number.isInteger(page) || page < 1 || page > pages) return `Pilih halaman antara 1 dan ${pages}.`;
   const sections = [`Draf ${revision.extraction.document_type} · revisi ${revision.version} · halaman ${page}/${pages}`,
-    ...lines.slice((page - 1) * pageSize, page * pageSize)];
+    `STATUS ${document} ${id}`, ...lines.slice((page - 1) * pageSize, page * pageSize)];
   if (revision.follow_up?.comment) sections.push(`Alasan pengembalian: ${revision.follow_up.comment}`);
+  const question = revision.pending_question;
+  if (question && page === 1) {
+    sections.push(`Periksa nilai ${question.field_path}${question.unit ? ` (${question.unit})` : ''}.`);
+    if (question.candidates.length) sections.push(`Kandidat pembacaan: ${question.candidates.map((value) => JSON.stringify(value)).join(' / ')}`);
+    sections.push(`JAWAB ${document} ${id} ${question.id} <nilai JSON>`);
+  }
+  if (revision.photo_retake_allowed && page === 1) sections.push(retake);
   if (page < pages) sections.push(`STATUS ${document} ${id} ${page + 1}`);
   if (revision.operator_status === 'PENDING' && page === pages) {
     sections.push(`KONFIRMASI ${document} ${id}`, `KOREKSI ${document} ${id} <field_path>=<nilai JSON>`);
@@ -78,7 +88,7 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
         reason === 'DOCUMENT_REFERENCE_REQUIRED' || reason === 'DOCUMENT_REFERENCE_CONFLICT' ? 'Rujuk ID nota produksi atau gunakan caption BARU.' :
         result.status === 409 ? 'Pilihan atau revisi berubah. Periksa ID dan ambil draf aktif.' :
         result.status < 500 ? 'Metadata, foto, atau perintah tidak dapat diterima. Periksa kembali.' : 'SobatNira sementara tidak tersedia. Coba lagi.';
-      throw new BridgeError(response);
+      throw new BridgeError(response, result.status);
     }
     return result.json();
   };
@@ -99,6 +109,7 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
       case 'SHOW_DRAFT':
         return summary(revision, document, id);
       case 'EXPLAIN_ISSUE': {
+        if (revision.pending_question) return summary(revision, document, id);
         const lines = draftLines(revision.extraction).filter((line) => /\[(ILLEGIBLE|AMBIGUOUS)\]$/.test(line));
         if (lines.length) return [`Bidang yang perlu diperiksa:`, ...lines.slice(0, 3), `Lihat draf lengkap dengan STATUS ${commandTarget}`].join('\n');
         return summary(revision, document, id);
@@ -110,7 +121,8 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
         if (revision.operator_status === 'PENDING') return `Periksa semua halaman dengan STATUS ${commandTarget}. Perintah konfirmasi tersedia pada halaman terakhir.`;
         return summary(revision, document, id);
       case 'RETAKE_PHOTO':
-        return 'Potret nota dari atas dengan cahaya merata. Pastikan semua kolom terlihat dan kirim satu foto dengan rujukan yang sesuai.';
+        return revision.photo_retake_allowed ? `Potret semua kolom dengan cahaya merata. Kirim dengan caption FOTO ULANG ${commandTarget}.` :
+          'Foto ulang tidak tersedia untuk revisi ini. Periksa status draf.';
       default:
         return operatorHelp;
     }
@@ -143,8 +155,8 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
         form.set('event', JSON.stringify({ ...metadata, message_type: 'IMAGE', media_mime_type: media.contentType }));
         form.set('media', new Blob([bytes], { type: media.contentType }), 'nota');
         const accepted = await call('inbound', { method: 'POST', body: form }, messageId);
-        return { text: `Foto diterima. Cek dengan STATUS ${accepted.document_id} ${accepted.revision_id}`,
-          pending: accepted.duplicate ? null : { phone, document: accepted.document_id, revision: accepted.revision_id } };
+        const acknowledgement = accepted.duplicate ? 'Foto ini sudah tercatat.' : 'Foto diterima.';
+        return { text: `${acknowledgement} Cek dengan STATUS ${accepted.document_id} ${accepted.revision_id}` };
       }
       const parsed = command.exec(content);
       if (!parsed) return { text: await help(phone, chatId, metadata.quoted_message_id, content) };
@@ -157,6 +169,12 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
         try { Object.assign(action, { action: 'CORRECT', field_path: correction[1], value: JSON.parse(correction[2]) }); }
         catch { return { text: 'Gunakan angka JSON atau apit nilai teks dengan tanda kutip.' }; }
       }
+      if (verb.toUpperCase() === 'JAWAB') {
+        const reply = answer.exec(tail ?? '');
+        if (!reply) return { text: 'Gunakan JAWAB <dokumen> <revisi> <pertanyaan> <nilai JSON> dari ringkasan draf.' };
+        try { Object.assign(action, { action: 'ANSWER', question_id: reply[1].toLowerCase(), value: JSON.parse(reply[2]) }); }
+        catch { return { text: 'Gunakan angka JSON atau apit nilai teks dengan tanda kutip.' }; }
+      }
       const result = await call('text-events', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ event: { ...metadata, message_type: 'TEXT' }, action }) }, messageId);
       return { text: action.action === 'CONFIRM' ? 'Draf dikonfirmasi dan masuk antrean admin.' :
@@ -165,10 +183,33 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
       return { text: error instanceof BridgeError ? error.message : 'SobatNira sementara tidak tersedia. Coba lagi.' };
     }
   }
-  return { handle, status };
+  async function deliverNotice(send) {
+    const { notice } = await call('notices/claim', { method: 'POST' });
+    if (!notice) return false;
+    let outcome = 'RETRY';
+    let receipt;
+    try {
+      const revision = await status(notice.phone_e164, notice.document_id, notice.revision_id);
+      if (revision.id !== notice.revision_id || (notice.kind === 'OCR_RESULT' && revision.operator_status === 'CONFIRMED')) {
+        outcome = 'CANCELLED';
+      } else {
+        const text = summary(revision, notice.document_id, notice.revision_id);
+        receipt = await send({ to: notice.phone_e164, text, replyToId: notice.reply_to_id });
+        outcome = 'SENT';
+      }
+    } catch (error) {
+      if (error instanceof BridgeError && error.status === 404) outcome = 'CANCELLED';
+    }
+    await call(`notices/${notice.id}/result`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ claim_token: notice.claim_token, outcome, provider_message_id: receipt }) });
+    return true;
+  }
+  return { handle, status, deliverNotice };
 }
 
-class BridgeError extends Error {}
+class BridgeError extends Error {
+  constructor(message, status) { super(message); this.status = status; }
+}
 
 export default {
   id: 'sobatnira-intake',
@@ -177,41 +218,70 @@ export default {
     const { accountId, mediaDir } = api.pluginConfig ?? {};
     const apiUrl = process.env.SOBATNIRA_API_URL;
     const token = process.env.WHATSAPP_ADAPTER_INTERNAL_TOKEN;
-    if (!apiUrl || !token || !accountId || !mediaDir) throw new Error('SobatNira bridge configuration is incomplete');
+    const mode = process.env.SOBATNIRA_MODE;
+    if (mode !== 'local' && mode !== 'connected') throw new Error('OpenClaw: SOBATNIRA_MODE wajib');
+    const connected = mode === 'connected';
+    const target = URL.canParse(apiUrl ?? '') ? new URL(apiUrl) : null;
+    const localHttp = target?.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(target.hostname);
+    if (!target || (target.protocol !== 'https:' && !localHttp) || target.username || target.password ||
+        target.search || target.hash || target.pathname !== '/' ||
+        !token || token.length < 32 || !accountId || !mediaDir || !isAbsolute(mediaDir) ||
+        (connected && process.env.SOBATNIRA_WHATSAPP_ACCOUNT_ID !== accountId)) {
+      throw new Error('OpenClaw: periksa SOBATNIRA_API_URL, WHATSAPP_ADAPTER_INTERNAL_TOKEN, SOBATNIRA_WHATSAPP_ACCOUNT_ID dan konfigurasi accountId/mediaDir');
+    }
     let classifyIntent;
     try {
       classifyIntent = createOperatorAgent({ key: process.env.OPENROUTER_API_KEY, model: process.env.OPENROUTER_AGENT_MODEL,
         fallbackModel: process.env.OPENROUTER_AGENT_FALLBACK_MODEL, providers: process.env.OPENROUTER_ALLOWED_PROVIDERS });
     } catch {
+      if (connected) throw new Error('OpenRouter: periksa OPENROUTER_AGENT_MODEL, OPENROUTER_AGENT_FALLBACK_MODEL, OPENROUTER_ALLOWED_PROVIDERS');
       api.logger.warn('Konfigurasi OpenRouter tidak lengkap. Panduan operator memakai template.');
     }
+    if (connected && !classifyIntent) throw new Error('OpenRouter: OPENROUTER_API_KEY wajib');
+    if (!api.runtime.channel?.outbound?.loadAdapter || !api.registerService) {
+      throw new Error('OpenClaw: SDK outbound dan registerService wajib');
+    }
     const bridge = createBridge({ apiUrl, token, mediaDir, classifyIntent });
-    const system = api.runtime.system;
-    const waiting = new Map();
-    api.on('inbound_claim', async (event, context) => {
-      if (event.channel !== 'whatsapp' || (event.accountId ?? context.accountId ?? 'default') !== accountId) return;
-      if (event.isGroup) return { handled: true, reply: { text: 'Kirim nota melalui chat langsung.' } };
-      const result = await bridge.handle(event, context);
-      const sessionKey = context.sessionKey;
-      const agentId = context.agentId ?? /^agent:([^:]+):/.exec(sessionKey ?? '')?.[1];
-      if (result.pending && agentId && sessionKey && waiting.size < 16 && !waiting.has(result.pending.revision) &&
-          system?.captureSessionGeneration && system?.postSessionNotice) {
-        const { phone, document, revision } = result.pending;
-        const task = (async () => {
-          const generation = await system.captureSessionGeneration({ agentId, sessionKey });
-          if (!generation) return;
-          for (let attempt = 0; attempt < 45; attempt++) {
-            await delay(4_000, undefined, { ref: false });
-            const current = await bridge.status(phone, document, revision).catch(() => null);
-            if (!current || !terminal.has(current.processing_status)) continue;
-            await system.postSessionNotice({ generation, idempotencyKey: `sobatnira:${revision}`,
-              notice: { type: 'document-draft', text: summary(current, document, revision) }, deliver: {} });
-            return;
-          }
-        })().catch(() => api.logger.warn('SobatNira draft notice unavailable')).finally(() => waiting.delete(revision));
-        waiting.set(revision, task);
+    let timer;
+    let inFlight;
+    const send = async ({ to, text, replyToId }) => {
+      const whatsapp = await api.runtime.channel.outbound.loadAdapter('whatsapp');
+      if (!whatsapp?.sendText) throw new Error('WhatsApp outbound adapter unavailable');
+      const result = await whatsapp.sendText({
+        cfg: api.config, accountId, to, text, replyToId, signal: AbortSignal.timeout(12_000),
+      });
+      if (typeof result?.messageId !== 'string' || !result.messageId) throw new Error('WhatsApp provider receipt unavailable');
+      return result.messageId;
+    };
+    api.registerService({ id: 'sobatnira-notices', start() {
+      timer = setInterval(() => {
+        if (!inFlight) inFlight = bridge.deliverNotice(send).catch(() => api.logger.warn('SobatNira notice queue unavailable'))
+          .finally(() => { inFlight = undefined; });
+      }, 2_000);
+      timer.unref();
+    }, async stop() { clearInterval(timer); await inFlight; } });
+    api.on('reply_dispatch', async (event, context) => {
+      const inbound = event.ctx;
+      if ((event.originatingChannel ?? inbound.Provider) !== 'whatsapp' ||
+          (event.originatingAccountId ?? inbound.AccountId) !== accountId) return;
+      const direct = (event.originatingChatType ?? inbound.ChatType) === 'direct';
+      let queuedFinal = false;
+      if (direct && event.sendPolicy === 'allow') {
+        const phone = asPhone(inbound.SenderE164) ?? asPhone(inbound.SenderId);
+        const result = await bridge.handle({
+          senderId: phone,
+          conversationId: phone,
+          messageId: inbound.MessageSid ?? inbound.ProviderMessageId,
+          timestamp: inbound.ProviderMessageTimestamp ?? inbound.Timestamp,
+          body: inbound.BodyForCommands ?? inbound.RawBody ?? '',
+          replyToId: inbound.ReplyToId,
+          media: inbound.media,
+          mediaStagingPending: inbound.mediaStagingPending,
+        }, {});
+        queuedFinal = !event.suppressUserDelivery && context.dispatcher.sendFinalReply({ text: result.text });
       }
-      return { handled: true, reply: { text: result.text } };
-    });
+      context.recordProcessed('completed', { reason: 'sobatnira_intake' });
+      return { handled: true, queuedFinal, counts: context.dispatcher.getQueuedCounts() };
+    }, { eligibleDispatchKinds: ['agent'], timeoutMs: 35_000 });
   },
 };

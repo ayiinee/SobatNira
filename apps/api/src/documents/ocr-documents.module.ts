@@ -1,14 +1,21 @@
 import { BadRequestException, Body, CanActivate, Controller, ExecutionContext, Get, Header, Headers,
-  HttpCode, Injectable, Module, NotFoundException, Param, Patch, Post, Query, StreamableFile,
+  HttpCode, Injectable, Module, NotFoundException, Param, Patch, Post, Query, ServiceUnavailableException, StreamableFile,
   UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Public } from '../auth/auth.decorators';
+import { assertBusinessMigrationsApplied } from '../database/migrations';
 import { MAX_IMAGE_BYTES, readInbound, requireServiceToken, requireUuid } from './contracts';
 import { Database } from './database';
 import { Intake } from './intake';
 import { imageMime, MediaStorage } from './media';
 import { DocumentProcessor } from './processing';
 import { Review } from './review';
+import { Notices } from './notices';
+import { TruckIntake } from './truck-intake';
+import { MillingModule } from '../milling/milling.module';
+import { ProductionMilling } from './production-milling';
+import { StockReconciliation } from './stock-reconciliation';
+import { Operators, OperatorsController } from './operators';
 
 @Injectable()
 class AdapterGuard implements CanActivate {
@@ -23,7 +30,28 @@ class AdapterGuard implements CanActivate {
 @Controller('internal/v1/whatsapp')
 @UseGuards(AdapterGuard)
 class WhatsAppController {
-  constructor(private readonly intake: Intake) {}
+  constructor(private readonly intake: Intake, private readonly notices: Notices, private readonly db: Database) {}
+
+  @Get('ready')
+  @Header('Cache-Control', 'private, no-store')
+  async readiness() {
+    if (process.env.DOCUMENT_WORKER_ENABLED !== 'true') throw new ServiceUnavailableException('Periksa DOCUMENT_WORKER_ENABLED');
+    try { await this.db.assertMigrationsApplied(); }
+    catch { throw new ServiceUnavailableException('Periksa DATABASE_URL dan jalankan db:migrate:ocr'); }
+    try { await assertBusinessMigrationsApplied(this.db); }
+    catch { throw new ServiceUnavailableException('Periksa DATABASE_URL dan jalankan db:migrate'); }
+    return { status: 'ok', component: 'sobatnira-whatsapp-intake', mode: process.env.SOBATNIRA_MODE ?? 'legacy' };
+  }
+
+  @Post('notices/claim')
+  @HttpCode(200)
+  claimNotice() { return this.notices.claim(); }
+
+  @Post('notices/:id/result')
+  @HttpCode(200)
+  finishNotice(@Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.notices.result(requireUuid(id), body);
+  }
 
   @Post('inbound')
   @HttpCode(202)
@@ -41,6 +69,7 @@ class WhatsAppController {
   }
 
   @Get('documents/:documentId/revisions/:revisionId')
+  @Header('Cache-Control', 'private, no-store')
   status(@Param('documentId') id: string, @Param('revisionId') revision: string, @Headers('x-operator-phone') sender: string) {
     return this.intake.status(sender, requireUuid(id), requireUuid(revision));
   }
@@ -89,8 +118,8 @@ class MobileReviewController {
 
   @Get('review-notifications')
   @Header('Cache-Control', 'private, no-store')
-  async notifications(@Headers('authorization') token: string) {
-    return this.review.unreadNotifications(await this.review.user(token));
+  async notifications(@Headers('authorization') token: string, @Query('factory_id') factory?: string) {
+    return this.review.unreadNotifications(await this.review.user(token), factory);
   }
 
   @Patch('review-notifications/:id/read')
@@ -99,14 +128,28 @@ class MobileReviewController {
   }
 
   @Get('review-tasks')
+  @Header('Cache-Control', 'private, no-store')
   async list(@Headers('authorization') token: string, @Query('status') status = 'PENDING_VALIDATION',
-    @Query('page') page = '1', @Query('page_size') limit = '20') {
-    return this.review.list(await this.review.user(token), status, Number(page), Number(limit));
+    @Query('page') page = '1', @Query('page_size') limit = '20', @Query('factory_id') factory?: string) {
+    return this.review.list(await this.review.user(token), status, Number(page), Number(limit), factory);
   }
 
   @Get('review-tasks/:id')
+  @Header('Cache-Control', 'private, no-store')
   async detail(@Headers('authorization') token: string, @Param('id') id: string) {
     return this.review.detail(await this.review.user(token), requireUuid(id));
+  }
+
+  @Get('review-tasks/:id/intake-lots')
+  @Header('Cache-Control', 'private, no-store')
+  async intakeLots(@Headers('authorization') token: string, @Param('id') id: string, @Query() query: unknown) {
+    return this.review.intakeLots(await this.review.user(token), requireUuid(id), query);
+  }
+
+  @Get('review-tasks/:id/milling-lots')
+  @Header('Cache-Control', 'private, no-store')
+  async millingLots(@Headers('authorization') token: string, @Param('id') id: string, @Query() query: unknown) {
+    return this.review.productionLots(await this.review.user(token), requireUuid(id), query, 'PRODUCTION_NOTE');
   }
 
   @Get('review-tasks/:id/assets/:asset')
@@ -130,6 +173,20 @@ class MobileReviewController {
     return this.review.change(await this.review.user(token), requireUuid(id), 'VALIDATE', key, body);
   }
 
+  @Post('documents/:id/manual-draft')
+  @HttpCode(200)
+  async manualDraft(@Headers('authorization') token: string, @Headers('idempotency-key') key: string,
+    @Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.review.change(await this.review.user(token), requireUuid(id), 'MANUAL_ENTRY', key, body);
+  }
+
+  @Post('documents/:id/reconcile')
+  @HttpCode(200)
+  async reconcile(@Headers('authorization') token: string, @Headers('idempotency-key') key: string,
+    @Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.review.change(await this.review.user(token), requireUuid(id), 'RECONCILE', key, body);
+  }
+
   @Post('documents/:id/return')
   @HttpCode(200)
   async return(@Headers('authorization') token: string, @Headers('idempotency-key') key: string,
@@ -138,6 +195,10 @@ class MobileReviewController {
   }
 }
 
-@Module({ controllers: [WhatsAppController, OcrMediaController, MobileReviewController],
-  providers: [AdapterGuard, Database, DocumentProcessor, Intake, MediaStorage, Review] })
+@Module({
+  imports: [MillingModule],
+  controllers: [WhatsAppController, OcrMediaController, MobileReviewController, OperatorsController],
+  providers: [AdapterGuard, Database, DocumentProcessor, Intake, MediaStorage, Notices, Review, TruckIntake,
+    ProductionMilling, StockReconciliation, Operators],
+})
 export class OcrDocumentsModule {}

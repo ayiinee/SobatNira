@@ -52,6 +52,33 @@ class DemoProduction extends ChangeNotifier {
           'Pemasok Contoh A',
         ),
         DemoKloter('MJT-230926-1A', 17, KloterStatus.done, 'Pemasok Contoh B'),
+        DemoKloter(
+          'MJT-220926-1A',
+          16,
+          KloterStatus.review,
+          'Pemasok Contoh D',
+        ),
+        DemoKloter(
+          'MJT-220926-2A',
+          16,
+          KloterStatus.review,
+          'Pemasok Contoh E',
+        ),
+        DemoKloter(
+          'MJT-210926-1A',
+          15,
+          KloterStatus.review,
+          'Pemasok Contoh F',
+        ),
+        DemoKloter(
+          'MJT-200926-1A',
+          14,
+          KloterStatus.review,
+          'Pemasok Contoh G',
+        ),
+        DemoKloter('MJT-190926-1A', 13, KloterStatus.done, 'Pemasok Contoh D'),
+        DemoKloter('MJT-180926-1A', 12, KloterStatus.done, 'Pemasok Contoh E'),
+        DemoKloter('MJT-170926-1A', 11, KloterStatus.done, 'Pemasok Contoh F'),
       ];
 
   static final today = DateTime(2026, 10, 29);
@@ -65,6 +92,7 @@ class DemoProduction extends ChangeNotifier {
   }
 
   void setGrade(DemoBatch batch, String grade, String weight) {
+    if (batch.review.verified) return;
     if (batch.grade == grade && batch.gradeWeight == weight) return;
     batch.grade = grade;
     batch.gradeWeight = weight;
@@ -72,15 +100,26 @@ class DemoProduction extends ChangeNotifier {
     notifyListeners();
   }
 
+  void editBatch(DemoBatch batch, DemoField field, String value) {
+    if (batch.review.verified) return;
+    edit(batch.review, field, value);
+  }
+
   void verify(DemoReview review) {
     if (review.verified) return;
     review.verified = true;
     notifyListeners();
   }
+
+  void reopenBatch(DemoBatch batch) {
+    if (!batch.review.verified) return;
+    batch.review.verified = false;
+    notifyListeners();
+  }
 }
 
 class DemoKloter {
-  DemoKloter(this.code, int day, this.status, String supplier)
+  DemoKloter(this.code, int day, KloterStatus status, String supplier)
     : date = DateTime(2026, 10, day),
       intake = DemoReview([
         DemoField('Tanggal masuk', formatDate(DateTime(2026, 10, day))),
@@ -104,7 +143,10 @@ class DemoKloter {
 
   final String code;
   final DateTime date;
-  final KloterStatus status;
+  KloterStatus get status =>
+      intake.verified && milling.verified && batchesToReview == 0
+      ? KloterStatus.done
+      : KloterStatus.review;
   final DemoReview intake;
   final DemoReview milling;
   final List<DemoBatch> batches;

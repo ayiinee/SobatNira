@@ -5,7 +5,10 @@ __pycache__/
 .env
 .env.*
 !.env.example
+!.env.connected.example
 .tmp/
 /docs/internal/
-/knowledge-pack/
+/docs.zip
 *.log
+
+knowledge-pack/

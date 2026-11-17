@@ -56,19 +56,24 @@ Future<KloterFilterResult?> showKloterDateFilter(
   context: context,
   barrierDismissible: true,
   barrierLabel: 'Tutup filter tanggal',
-  barrierColor: const Color(0x28000000),
-  transitionDuration: const Duration(milliseconds: 140),
+  barrierColor: const Color(0x66000000),
+  transitionDuration: MediaQuery.disableAnimationsOf(context)
+      ? Duration.zero
+      : const Duration(milliseconds: 180),
   pageBuilder: (context, animation, secondaryAnimation) => SafeArea(
-    child: Align(
-      alignment: Alignment.topRight,
+    child: Center(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 102, 29, 20),
+        padding: const EdgeInsets.symmetric(
+          horizontal: NiraSpace.xl,
+          vertical: NiraSpace.xl,
+        ),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: niraPanelWidth),
+          constraints: const BoxConstraints(maxWidth: 390),
           child: Material(
+            key: const ValueKey('kloter-date-dialog'),
             color: Colors.white,
             elevation: 7,
-            borderRadius: BorderRadius.circular(13),
+            borderRadius: BorderRadius.circular(20),
             clipBehavior: Clip.antiAlias,
             child: SingleChildScrollView(child: _FilterPanel(current)),
           ),
@@ -76,6 +81,19 @@ Future<KloterFilterResult?> showKloterDateFilter(
       ),
     ),
   ),
+  transitionBuilder: (context, animation, secondaryAnimation, child) =>
+      FadeTransition(
+        opacity: animation.drive(CurveTween(curve: Curves.easeOutCubic)),
+        child: ScaleTransition(
+          scale: animation.drive(
+            Tween(
+              begin: .98,
+              end: 1.0,
+            ).chain(CurveTween(curve: Curves.easeOutCubic)),
+          ),
+          child: child,
+        ),
+      ),
 );
 
 class _FilterPanel extends StatefulWidget {
@@ -111,26 +129,40 @@ class _FilterPanelState extends State<_FilterPanel> {
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 12),
+      padding: const EdgeInsets.fromLTRB(
+        NiraSpace.lg,
+        NiraSpace.md,
+        NiraSpace.lg,
+        NiraSpace.xl,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 9),
+            padding: EdgeInsets.zero,
             child: Row(
               children: [
+                IconButton(
+                  tooltip: 'Tutup filter tanggal',
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close, color: niraLeaf, size: 22),
+                ),
                 Expanded(
                   child: Text(
                     'Filter tanggal',
-                    style: niraText(19, weight: FontWeight.w700),
+                    textAlign: TextAlign.center,
+                    style: niraText(NiraType.section, weight: FontWeight.w700),
                   ),
                 ),
                 TextButton(
                   onPressed: () => _apply(null),
                   style: TextButton.styleFrom(
                     foregroundColor: niraLeaf,
-                    textStyle: niraText(12.5, weight: FontWeight.w700),
-                    minimumSize: const Size(44, 32),
+                    textStyle: niraText(
+                      NiraType.caption,
+                      weight: FontWeight.w700,
+                    ),
+                    minimumSize: const Size(48, 44),
                     padding: EdgeInsets.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
@@ -139,18 +171,18 @@ class _FilterPanelState extends State<_FilterPanel> {
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(9, 0, 9, 7),
-            child: Text(
-              'Tampilkan kloter berdasarkan periode.',
-              style: niraText(12, color: niraLeaf),
-            ),
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8),
-            child: Divider(height: 10, thickness: 1, color: niraLine),
-          ),
-          for (final period in KloterPeriod.values) _periodRow(period),
+          const SizedBox(height: NiraSpace.sm),
+          for (final period in KloterPeriod.values) ...[
+            _periodRow(period),
+            if (period != KloterPeriod.values.last)
+              const Divider(
+                height: NiraSpace.sm,
+                thickness: 1,
+                indent: NiraSpace.md,
+                endIndent: NiraSpace.md,
+                color: niraLine,
+              ),
+          ],
         ],
       ),
     );
@@ -168,37 +200,60 @@ class _FilterPanelState extends State<_FilterPanel> {
     return Material(
       color: selected ? const Color(0xFFE8F1E5) : Colors.white,
       shape: RoundedRectangleBorder(
-        side: selected ? const BorderSide(color: niraGreen) : BorderSide.none,
-        borderRadius: BorderRadius.circular(7),
+        borderRadius: BorderRadius.circular(niraRadius),
       ),
       child: Semantics(
         selected: selected,
         child: InkWell(
-          borderRadius: BorderRadius.circular(7),
+          borderRadius: BorderRadius.circular(niraRadius),
+          hoverColor: const Color(0x14174B35),
           onTap: custom
               ? () => setState(() => _showRange = true)
               : () => _apply(filter),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 41),
+            constraints: const BoxConstraints(minHeight: 66),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              padding: const EdgeInsets.symmetric(
+                horizontal: NiraSpace.md,
+                vertical: NiraSpace.md,
+              ),
               child: Row(
                 children: [
+                  Icon(
+                    switch (period) {
+                      KloterPeriod.today => Icons.today_outlined,
+                      KloterPeriod.week => Icons.date_range_outlined,
+                      KloterPeriod.month => Icons.calendar_month_outlined,
+                      KloterPeriod.year => Icons.event_note_outlined,
+                      KloterPeriod.custom => Icons.tune,
+                    },
+                    size: 23,
+                    color: selected ? niraGreen : niraLeaf,
+                  ),
+                  const SizedBox(width: NiraSpace.lg),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           period.label,
-                          style: niraText(14.5, weight: FontWeight.w600),
+                          style: niraText(
+                            NiraType.body,
+                            weight: selected
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                          ),
                         ),
-                        const SizedBox(height: 3),
-                        Text(caption, style: niraText(11, color: niraLeaf)),
+                        const SizedBox(height: NiraSpace.xs),
+                        Text(
+                          caption,
+                          style: niraText(NiraType.caption, color: niraLeaf),
+                        ),
                       ],
                     ),
                   ),
                   if (selected)
-                    const Icon(Icons.check, size: 17, color: niraGreen)
+                    const Icon(Icons.check, size: 22, color: niraGreen)
                   else if (custom)
                     const Icon(Icons.chevron_right, size: 18, color: niraGreen),
                 ],
@@ -281,7 +336,12 @@ class _RangeEditorState extends State<_RangeEditor> {
     final leading = _month.weekday - 1;
     final rows = (days + leading + 6) ~/ 7;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 7, 16, 15),
+      padding: const EdgeInsets.fromLTRB(
+        NiraSpace.lg,
+        NiraSpace.sm,
+        NiraSpace.lg,
+        NiraSpace.lg,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -295,7 +355,7 @@ class _RangeEditorState extends State<_RangeEditor> {
               Expanded(
                 child: Text(
                   'Rentang tanggal',
-                  style: niraText(17, weight: FontWeight.w700),
+                  style: niraText(NiraType.section, weight: FontWeight.w700),
                 ),
               ),
               _iconButton(
@@ -305,12 +365,12 @@ class _RangeEditorState extends State<_RangeEditor> {
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: NiraSpace.xs),
           Text(
             'Pilih tanggal mulai dan selesai.',
-            style: niraText(10.5, color: niraLeaf),
+            style: niraText(NiraType.caption, color: niraLeaf),
           ),
-          const SizedBox(height: 15),
+          const SizedBox(height: NiraSpace.lg),
           Row(
             spacing: 8,
             children: [
@@ -318,7 +378,7 @@ class _RangeEditorState extends State<_RangeEditor> {
               Expanded(child: _dateField('Tanggal selesai', _end, false)),
             ],
           ),
-          const SizedBox(height: 9),
+          const SizedBox(height: NiraSpace.sm),
           Row(
             children: [
               _iconButton(
@@ -330,7 +390,7 @@ class _RangeEditorState extends State<_RangeEditor> {
                 child: Text(
                   formatMonth(_month),
                   textAlign: TextAlign.center,
-                  style: niraText(14, weight: FontWeight.w700),
+                  style: niraText(NiraType.body, weight: FontWeight.w700),
                 ),
               ),
               _iconButton(
@@ -347,11 +407,13 @@ class _RangeEditorState extends State<_RangeEditor> {
                 Expanded(
                   child: Center(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 7),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: NiraSpace.sm,
+                      ),
                       child: Text(
                         day,
                         style: niraText(
-                          9.5,
+                          NiraType.caption,
                           color: niraLeaf,
                           weight: FontWeight.w600,
                         ),
@@ -368,7 +430,7 @@ class _RangeEditorState extends State<_RangeEditor> {
                   Expanded(child: _dayCell(row * 7 + col - leading + 1, days)),
               ],
             ),
-          const SizedBox(height: 8),
+          const SizedBox(height: NiraSpace.sm),
           const Divider(height: 12, thickness: 1, color: niraLine),
           if (_valid)
             Row(
@@ -376,21 +438,21 @@ class _RangeEditorState extends State<_RangeEditor> {
                 Expanded(
                   child: Text(
                     _describeRange(DateTimeRange(start: _start, end: _end)),
-                    style: niraText(11.5, weight: FontWeight.w700),
+                    style: niraText(NiraType.caption, weight: FontWeight.w700),
                   ),
                 ),
                 Text(
                   '${DateTime.utc(_end.year, _end.month, _end.day).difference(DateTime.utc(_start.year, _start.month, _start.day)).inDays + 1} hari',
-                  style: niraText(10.5, color: niraLeaf),
+                  style: niraText(NiraType.caption, color: niraLeaf),
                 ),
               ],
             )
           else
             Text(
               'Tanggal selesai harus sama atau setelah tanggal mulai.',
-              style: niraText(11.5, color: const Color(0xFF8D2F22)),
+              style: niraText(NiraType.caption, color: const Color(0xFF8D2F22)),
             ),
-          const SizedBox(height: 12),
+          const SizedBox(height: NiraSpace.md),
           NiraButton(
             'Terapkan',
             _valid
@@ -410,31 +472,38 @@ class _RangeEditorState extends State<_RangeEditor> {
       children: [
         Text(
           label,
-          style: niraText(10, color: niraLeaf, weight: FontWeight.w600),
+          style: niraText(
+            NiraType.caption,
+            color: niraLeaf,
+            weight: FontWeight.w600,
+          ),
         ),
-        const SizedBox(height: 7),
+        const SizedBox(height: NiraSpace.sm),
         Material(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(niraRadius),
             side: BorderSide(color: selected ? niraGreen : niraLine),
           ),
           color: Colors.white,
           child: InkWell(
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(niraRadius),
             onTap: () => _chooseEndpoint(start),
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 42),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: NiraSpace.sm,
+                  vertical: NiraSpace.sm,
+                ),
                 child: Row(
                   children: [
                     Expanded(
                       child: Text(
                         formatDate(date, short: true),
-                        style: niraText(11.5),
+                        style: niraText(NiraType.caption),
                       ),
                     ),
-                    const SizedBox(width: 3),
+                    const SizedBox(width: NiraSpace.xs),
                     const NiraIcon('calendar', 15, color: niraGreen),
                   ],
                 ),
@@ -492,7 +561,7 @@ class _RangeEditorState extends State<_RangeEditor> {
                     child: Text(
                       '$day',
                       style: niraText(
-                        11.5,
+                        NiraType.caption,
                         weight: inRange ? FontWeight.w700 : FontWeight.w400,
                         color: selected ? Colors.white : niraGreen,
                       ),

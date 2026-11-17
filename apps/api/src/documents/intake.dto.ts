@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { object, Pagination, parsePage, text, timestamp, uuid } from '../production/production.dto';
+import { caneTypeCode, object, Pagination, parsePage, text, timestamp, uuid } from '../production/production.dto';
 import { decimal } from '../production/decimal';
 export { decimal } from '../production/decimal';
 
@@ -26,13 +26,6 @@ function brix(input: unknown): string {
   return result;
 }
 
-function caneCode(input: unknown): string {
-  // Preserve the supplied code; the complete code catalogue remains a product decision.
-  const code = text(input, 'caneTypeCode', 40);
-  if (!/^[A-Za-z0-9_-]+$/.test(code)) throw new BadRequestException('caneTypeCode tidak valid.');
-  return code;
-}
-
 export function expectedRevision(input: unknown): number {
   if (typeof input !== 'number' || !Number.isSafeInteger(input) || input < 1 || input > 2147483646) {
     throw new BadRequestException('expectedRevision harus berupa bilangan bulat positif.');
@@ -52,7 +45,7 @@ export function parseDraftUpdate(input: unknown): DraftUpdate {
   const parsed: DraftUpdate['changes'] = {};
   if ('lotId' in changes) parsed.lotId = uuid(changes.lotId, 'lotId');
   if ('occurredAt' in changes) parsed.occurredAt = changes.occurredAt === null ? null : timestamp(changes.occurredAt, 'occurredAt');
-  if ('caneTypeCode' in changes) parsed.caneTypeCode = changes.caneTypeCode === null ? null : caneCode(changes.caneTypeCode);
+  if ('caneTypeCode' in changes) parsed.caneTypeCode = changes.caneTypeCode === null ? null : caneTypeCode(changes.caneTypeCode, 'caneTypeCode');
   if ('netWeightKg' in changes) parsed.netWeightKg = changes.netWeightKg === null ? null : decimal(changes.netWeightKg, 'netWeightKg');
   if ('brix' in changes) parsed.brix = changes.brix === null ? null : brix(changes.brix);
   return { expectedRevision: expectedRevision(body.expectedRevision), reason: text(body.reason, 'reason', 500), changes: parsed };
@@ -67,7 +60,7 @@ export function completeFields(fields: IntakeFields): IntakeFields & { occurredA
     throw new BadRequestException('Lengkapi waktu kejadian, jenis tebu dan berat bersih sebelum konfirmasi/pengesahan.');
   }
   timestamp(fields.occurredAt, 'occurredAt');
-  caneCode(fields.caneTypeCode);
+  caneTypeCode(fields.caneTypeCode, 'caneTypeCode');
   decimal(fields.netWeightKg, 'netWeightKg');
   uuid(fields.lotId, 'lotId');
   uuid(fields.supplierId, 'supplierId');

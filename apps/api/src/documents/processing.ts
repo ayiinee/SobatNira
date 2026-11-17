@@ -4,6 +4,8 @@ import { SCHEMA_VERSION, DocumentType, Envelope, Issue, Note, readEnvelope } fro
 import { Database } from './database';
 import { audit, Revision } from './intake';
 import { mergeProduction } from './revisions';
+import { openClarifications } from './clarifications';
+import { enqueueNotice } from './notices';
 
 type Job = { id: string; revision_id: string; attempts: number; claim_token: string };
 type Work = Revision & { factory_id: string; document_type: DocumentType; parent_revision_id: string | null;
@@ -88,13 +90,14 @@ export class DocumentProcessor implements OnModuleInit, OnModuleDestroy {
       }
       if (extraction?.document_type === 'PRODUCTION_NOTE') {
         await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`production:${work.factory_id}`]);
-        if (work.parent_revision_id) {
-          const { rows: [previous] } = await db.query<{ extraction: Note | null }>('SELECT extraction FROM document_revisions WHERE id=$1', [work.parent_revision_id]);
-          if (previous?.extraction?.document_type === 'PRODUCTION_NOTE') {
-            const merged = mergeProduction(previous.extraction, extraction);
-            extraction = merged.note;
-            issues.push(...merged.issues);
-          }
+        const { rows: [previous] } = await db.query<{ extraction: Note }>(`SELECT r.extraction FROM document_revisions r
+          WHERE r.document_id=$1 AND r.version<$2 AND r.extraction->>'document_type'='PRODUCTION_NOTE'
+            AND NOT EXISTS (SELECT FROM jsonb_array_elements(r.issues) i WHERE i->>'severity'='BLOCKER')
+          ORDER BY r.version DESC LIMIT 1`, [work.document_id, work.version]);
+        if (previous) {
+          const merged = mergeProduction(previous.extraction, extraction);
+          extraction = merged.note;
+          issues.push(...merged.issues);
         } else if (!work.explicit_new) {
           const { rowCount: candidates } = await db.query(`SELECT 1 FROM source_documents d
             JOIN document_revisions r ON r.id=d.current_revision_id
@@ -105,17 +108,13 @@ export class DocumentProcessor implements OnModuleInit, OnModuleDestroy {
             message: 'Tentukan apakah foto ini dokumen baru atau revisi dari dokumen yang sudah ada.' });
         }
       }
-      if (issues.some(({ severity }) => severity === 'BLOCKER')) status = 'NEEDS_CLARIFICATION';
+      if (extraction && issues.some(({ severity }) => severity === 'BLOCKER')) status = 'NEEDS_CLARIFICATION';
       const operatorStatus = extraction && !issues.some(({ severity }) => severity === 'BLOCKER') ? 'PENDING' : 'NOT_REQUESTED';
       if (extraction) await db.query('UPDATE source_documents SET document_type=$2 WHERE id=$1 AND current_revision_id=$3',
         [work.document_id, extraction.document_type, work.id]);
       await db.query(`UPDATE document_revisions SET extraction=$2,issues=$3,processing_status=$4,operator_status=$5 WHERE id=$1`,
         [work.id, extraction ? JSON.stringify(extraction) : null, JSON.stringify(issues), status, operatorStatus]);
-      for (const issue of issues) {
-        if (issue.severity === 'INFO') continue;
-        await db.query('INSERT INTO clarification_requests (revision_id,issue_code,field_path) VALUES ($1,$2,$3)',
-          [work.id, issue.code, issue.field_path ?? null]);
-      }
+      if (extraction && operatorStatus === 'PENDING') await openClarifications(db, work.id, extraction, issues);
       await db.query(`UPDATE document_jobs SET status=$2,lease_until=NULL,claim_token=NULL WHERE id=$1`,
         [job.id, !result || result.status === 'FAILED' ? 'FAILED' : 'COMPLETED']);
       if (status === 'MANUAL_REVIEW_REQUIRED' || status === 'FAILED_FINAL') {
@@ -123,6 +122,7 @@ export class DocumentProcessor implements OnModuleInit, OnModuleDestroy {
           SELECT id,$2,'MANUAL_REVIEW_REQUIRED' FROM source_documents WHERE id=$1 AND current_revision_id=$2`,
         [work.document_id, work.id]);
       }
+      await enqueueNotice(db, work.id, 'OCR_RESULT');
       await audit(db, work, status, null, { attempt: job.attempts, request_id: requestId });
     });
     return true;
@@ -131,7 +131,7 @@ export class DocumentProcessor implements OnModuleInit, OnModuleDestroy {
   private async extract(work: Work, requestId: string) {
     const token = process.env.AI_SERVICE_INTERNAL_TOKEN;
     if (!token) throw new Error('OCR_UNAVAILABLE');
-    const base = process.env.AI_SERVICE_BASE_URL ?? process.env.AI_BASE_URL ?? 'http://127.0.0.1:8000';
+    const base = process.env.AI_SERVICE_BASE_URL || process.env.AI_BASE_URL || 'http://127.0.0.1:8000';
     const ids = { request_id: requestId, document_id: work.document_id, submission_id: work.submission_id,
       revision_id: work.id, source_asset_id: work.media_asset_id };
     const response = await fetch(new URL('/internal/v1/ocr/extract', base), {

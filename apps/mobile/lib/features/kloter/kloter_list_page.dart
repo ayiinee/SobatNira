@@ -23,6 +23,7 @@ class KloterListPage extends StatefulWidget {
 class _KloterListPageState extends State<KloterListPage> {
   final _search = TextEditingController();
   final _scroll = ScrollController();
+  final _expandedDates = <DateTime, bool>{};
   KloterDateFilter? _dateFilter;
   int _activeTab = 0;
 
@@ -65,16 +66,21 @@ class _KloterListPageState extends State<KloterListPage> {
         .where((item) => item.status == KloterStatus.review)
         .length;
     final groups = <DateTime, List<DemoKloter>>{};
-    if (status == null) {
-      for (final item in visible) {
-        groups.putIfAbsent(item.date, () => []).add(item);
-      }
+    for (final item in visible) {
+      final date = DateUtils.dateOnly(item.date);
+      groups.putIfAbsent(date, () => []).add(item);
     }
+    final dates = groups.keys.toList()..sort((a, b) => b.compareTo(a));
 
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(28, 13, 21, 3),
+          padding: const EdgeInsets.fromLTRB(
+            niraInset,
+            NiraSpace.lg,
+            niraInset,
+            NiraSpace.sm,
+          ),
           child: Row(
             spacing: 8,
             children: [
@@ -113,30 +119,101 @@ class _KloterListPageState extends State<KloterListPage> {
             key: const PageStorageKey('kloter-scroll'),
             controller: _scroll,
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.fromLTRB(niraInset, 10, niraInset, 88),
+            padding: EdgeInsets.fromLTRB(
+              niraInset,
+              10,
+              niraInset,
+              NiraSpace.lg,
+            ),
             children: [
               if (visible.isEmpty)
                 _empty()
-              else if (status == null)
-                for (final entry in groups.entries) ...[
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    color: niraMuted,
-                    padding: const EdgeInsets.fromLTRB(17, 5, 8, 5),
-                    child: Text(
-                      formatDate(entry.key),
-                      style: niraText(14.5, color: const Color(0xFF243B31)),
-                    ),
-                  ),
-                  for (final item in entry.value) _card(item),
-                  const SizedBox(height: 9),
-                ]
               else
-                for (final item in visible) _card(item),
+                for (final date in dates)
+                  _dateAccordion(
+                    date,
+                    groups[date]!,
+                    latest: date == dates.first,
+                  ),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _dateAccordion(
+    DateTime date,
+    List<DemoKloter> items, {
+    required bool latest,
+  }) {
+    final expanded = _expandedDates[date] ?? latest;
+    return Padding(
+      key: ValueKey(date),
+      padding: const EdgeInsets.only(bottom: NiraSpace.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Material(
+            color: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(niraRadius),
+              side: const BorderSide(color: niraLine),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Semantics(
+              expanded: expanded,
+              child: InkWell(
+                onTap: () {
+                  FocusScope.of(context).unfocus();
+                  setState(() => _expandedDates[date] = !expanded);
+                },
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: NiraSpace.lg,
+                      vertical: NiraSpace.md,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            formatDate(date),
+                            style: niraText(
+                              NiraType.body,
+                              weight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: NiraSpace.sm),
+                        Text(
+                          '${items.length} kloter',
+                          style: niraText(NiraType.caption, color: niraLeaf),
+                        ),
+                        const SizedBox(width: NiraSpace.sm),
+                        AnimatedRotation(
+                          turns: expanded ? .5 : 0,
+                          duration: const Duration(milliseconds: 200),
+                          child: const Icon(
+                            Icons.keyboard_arrow_down,
+                            color: niraLeaf,
+                            size: 22,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (expanded) ...[
+            const SizedBox(height: NiraSpace.sm),
+            for (final item in items) _card(item),
+          ],
+        ],
+      ),
     );
   }
 
@@ -156,16 +233,17 @@ class _KloterListPageState extends State<KloterListPage> {
         child: Material(
           color: niraGreen,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(7),
+            borderRadius: BorderRadius.circular(niraRadius),
             side: active
                 ? const BorderSide(color: niraGold, width: 2)
                 : BorderSide.none,
           ),
           child: InkWell(
             onTap: _selectDate,
-            borderRadius: BorderRadius.circular(7),
+            overlayColor: niraGreenOverlay,
+            borderRadius: BorderRadius.circular(niraRadius),
             child: const SizedBox.square(
-              dimension: 45,
+              dimension: 48,
               child: Center(
                 child: NiraIcon('calendar', 26, color: Colors.white),
               ),
@@ -178,13 +256,13 @@ class _KloterListPageState extends State<KloterListPage> {
 
   Widget _searchBox() {
     final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(7),
+      borderRadius: BorderRadius.circular(niraRadius),
       borderSide: const BorderSide(color: niraGreen, width: 1.35),
     );
     return TextField(
       controller: _search,
       textInputAction: TextInputAction.search,
-      style: niraText(13),
+      style: niraText(NiraType.body),
       cursorColor: niraGreen,
       onChanged: (_) {
         _scrollToTop();
@@ -192,18 +270,21 @@ class _KloterListPageState extends State<KloterListPage> {
       },
       decoration: InputDecoration(
         hintText: 'Telusuri Kloter berdasarkan ID',
-        hintStyle: niraText(12.2),
+        hintStyle: niraText(NiraType.body, color: niraLeaf),
         isDense: true,
         filled: true,
         fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: NiraSpace.sm,
+          vertical: NiraSpace.lg,
+        ),
         enabledBorder: border,
         focusedBorder: border.copyWith(
           borderSide: const BorderSide(color: niraGreen, width: 2),
         ),
         prefixIconConstraints: const BoxConstraints(minWidth: 42),
         prefixIcon: const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 11),
+          padding: EdgeInsets.symmetric(horizontal: NiraSpace.md),
           child: NiraIcon('search', 21, color: niraGreen),
         ),
         suffixIconConstraints: const BoxConstraints(minWidth: 40),
@@ -223,7 +304,7 @@ class _KloterListPageState extends State<KloterListPage> {
   }
 
   Widget _card(DemoKloter item) => Padding(
-    padding: const EdgeInsets.only(bottom: 9),
+    padding: const EdgeInsets.only(bottom: NiraSpace.sm),
     child: KloterCard(
       kloter: item,
       onTap: () {
@@ -239,13 +320,13 @@ class _KloterListPageState extends State<KloterListPage> {
       children: [
         Text(
           'Kloter tidak ditemukan',
-          style: niraText(15, weight: FontWeight.w700),
+          style: niraText(NiraType.section, weight: FontWeight.w700),
         ),
-        const SizedBox(height: 5),
+        const SizedBox(height: NiraSpace.xs),
         Text(
           'Coba ID, tab, atau rentang tanggal yang lain.',
           textAlign: TextAlign.center,
-          style: niraText(12.5, color: niraLeaf),
+          style: niraText(NiraType.caption, color: niraLeaf),
         ),
       ],
     ),

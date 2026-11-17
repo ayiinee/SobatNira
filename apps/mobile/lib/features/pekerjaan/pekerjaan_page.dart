@@ -2,12 +2,20 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../sobatnira_ui.dart';
+
 import 'review_api.dart';
 import 'review_detail_page.dart';
 
 class PekerjaanPage extends StatefulWidget {
-  const PekerjaanPage({this.api, required this.active, super.key});
+  const PekerjaanPage({
+    this.api,
+    this.factoryId,
+    required this.active,
+    super.key,
+  });
   final ReviewApi? api;
+  final String? factoryId;
   final bool active;
 
   @override
@@ -67,7 +75,7 @@ class _PekerjaanPageState extends State<PekerjaanPage>
     final api = _api;
     if (api == null) return;
     try {
-      final count = await api.unreadNotifications();
+      final count = await api.unreadNotifications(factoryId: widget.factoryId);
       if (mounted && identical(_api, api) && _unread != count) {
         setState(() => _unread = count);
       }
@@ -87,7 +95,7 @@ class _PekerjaanPageState extends State<PekerjaanPage>
   }
 
   void _load() {
-    _tasks = _api?.list(_status, _page);
+    _tasks = _api?.list(_status, _page, factoryId: widget.factoryId);
   }
 
   Future<void> _signIn() async {
@@ -149,7 +157,12 @@ class _PekerjaanPageState extends State<PekerjaanPage>
 
   @override
   Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.all(20),
+    padding: EdgeInsets.fromLTRB(
+      niraInset,
+      NiraSpace.lg,
+      niraInset,
+      NiraSpace.lg,
+    ),
     children: [
       Row(
         children: [

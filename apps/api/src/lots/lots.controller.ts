@@ -1,7 +1,8 @@
 import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { CurrentFactory, FactoryRoles } from '../auth/auth.decorators';
 import { FactoryAccess } from '../auth/auth.types';
-import { found, parseLotInput, parseLotQuery, parsePage, uuid } from '../production/production.dto';
+import { parseStockQuery } from '../documents/intake.dto';
+import { found, object, parseLotInput, parseLotQuery, parsePage, uuid } from '../production/production.dto';
 import { ProductionHistoryRepository } from '../production/production.repository';
 import { LotsRepository } from './lots.repository';
 
@@ -23,8 +24,9 @@ export class LotsController {
   }
 
   @Get(':lotId')
-  async detail(@CurrentFactory() access: FactoryAccess, @Param('lotId') id: string) {
-    return found(await this.lots.find(access, uuid(id, 'lotId')));
+  async detail(@CurrentFactory() access: FactoryAccess, @Param('lotId') id: string, @Query() query: unknown) {
+    const { synthetic } = parseStockQuery(object(query, ['synthetic']));
+    return found(await this.lots.find(access, uuid(id, 'lotId'), synthetic));
   }
 
   @Patch(':lotId')

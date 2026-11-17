@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
-import '../kloter/kloter_detail_widgets.dart';
 import 'settings_demo.dart';
+import 'settings_widgets.dart';
 
 class HargaBiayaPage extends StatefulWidget {
   const HargaBiayaPage({
@@ -19,156 +19,128 @@ class HargaBiayaPage extends StatefulWidget {
 }
 
 class _HargaBiayaPageState extends State<HargaBiayaPage> {
-  late final _a = TextEditingController(text: widget.settings.gradeA);
-  late final _b = TextEditingController(text: widget.settings.gradeB);
-  late final _c = TextEditingController(text: widget.settings.gradeC);
+  final _form = GlobalKey<FormState>();
+  late final _grades = widget.settings.grades
+      .where((grade) => grade.active)
+      .toList();
+  late final _prices = {
+    for (final grade in _grades)
+      grade.id: TextEditingController(text: widget.settings.priceFor(grade.id)),
+  };
   late final _cost = TextEditingController(
     text: widget.settings.operationalCost,
   );
 
   @override
   void dispose() {
-    _a.dispose();
-    _b.dispose();
-    _c.dispose();
+    for (final controller in _prices.values) {
+      controller.dispose();
+    }
     _cost.dispose();
     super.dispose();
   }
 
   void _save() {
-    final values = [_a.text, _b.text, _c.text, _cost.text];
-    if (values.any(
-      (value) => !RegExp(r'^\d+(?:[.]\d{3})?$').hasMatch(value.trim()),
-    )) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('Gunakan angka dengan format harga yang valid.'),
-          ),
-        );
-      return;
+    if (!_form.currentState!.validate()) return;
+    final prices = {
+      for (final entry in _prices.entries)
+        entry.key: _formatRupiah(entry.value.text.trim()),
+    };
+    final cost = _formatRupiah(_cost.text.trim());
+    widget.settings.savePrices(prices, cost);
+
+    for (final entry in prices.entries) {
+      _prices[entry.key]!.text = entry.value;
     }
-    widget.settings.update(
-      a: _a.text.trim(),
-      b: _b.text.trim(),
-      c: _c.text.trim(),
-      cost: _cost.text.trim(),
+    _cost.text = cost;
+    FocusScope.of(context).unfocus();
+    showSettingsSaved(
+      context,
+      message: 'Perubahan harga tersimpan selama sesi demo',
     );
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text('Perubahan harga tersimpan selama sesi demo'),
-        ),
-      );
   }
 
   @override
-  Widget build(BuildContext context) => NiraScaffold(
-    tab: NiraTab.pengaturan,
+  Widget build(BuildContext context) => SettingsPageFrame(
+    title: 'Harga & Biaya',
     onNavigate: widget.onNavigate,
+    subtitle: 'Harga jual per grade dan biaya operasional',
     bottomAction: NiraButton('Simpan perubahan', _save),
-    body: ListView(
-      padding: const EdgeInsets.fromLTRB(niraInset, 6, niraInset, 8),
-      children: [
-        const DetailTitle('Harga & Biaya'),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: niraInset),
-          child: Text(
-            'Berlaku untuk seluruh kloter dan batch',
-            style: niraText(11.5, color: niraLeaf),
-          ),
-        ),
-        const SizedBox(height: 17),
-        const _SectionLabel('Harga per grade', 'Harga jual gula per kilogram'),
-        const SizedBox(height: 13),
-        _MoneyField('Grade A', _a, '/kg'),
-        _MoneyField('Grade B', _b, '/kg'),
-        _MoneyField('Grade C', _c, '/kg'),
-        const SizedBox(height: 14),
-        _MoneyField('Biaya Operasional', _cost, '/kloter'),
-        const SizedBox(height: 7),
-        Text(
-          'Dikenakan satu kali setiap kloter',
-          style: niraText(10, color: niraMuted),
-        ),
-        const SizedBox(height: 14),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Form(
+        key: _form,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Icon(Icons.info_outline, size: 17, color: niraLeaf),
-            const SizedBox(width: 5),
-            Expanded(
-              child: Text(
-                'Perubahan berlaku untuk produksi selanjutnya. Data terdahulu tetap menggunakan nilai sebelumnya.',
-                style: niraText(9.5, color: niraLeaf),
+            Text(
+              'Harga per grade',
+              style: niraText(NiraType.section, weight: FontWeight.w700),
+            ),
+            const SizedBox(height: 4),
+            const SettingsNote('Harga jual gula per kilogram'),
+            const SizedBox(height: 12),
+            if (_grades.isEmpty) const SettingsNote('Belum ada grade aktif.'),
+            for (final grade in _grades)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 13),
+                child: _moneyField(
+                  label: grade.value.name,
+                  controller: _prices[grade.id]!,
+                  unit: '/kg',
+                  optional: widget.settings.priceFor(grade.id) == null,
+                ),
+              ),
+            const SizedBox(height: 6),
+            _moneyField(
+              label: 'Biaya Operasional',
+              controller: _cost,
+              unit: '/kloter',
+            ),
+            const SizedBox(height: 7),
+            const SettingsNote('Dikenakan satu kali setiap kloter'),
+            const SizedBox(height: 14),
+            const SettingsNote('Perubahan tersimpan selama sesi demo.'),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: () => Navigator.maybePop(context),
+                child: const Text('Batal'),
               ),
             ),
           ],
         ),
-      ],
-    ),
-  );
-}
-
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.title, this.subtitle);
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(title, style: niraText(14, weight: FontWeight.w700)),
-      const SizedBox(height: 3),
-      Text(subtitle, style: niraText(11, color: niraLeaf)),
+      ),
     ],
   );
+
+  Widget _moneyField({
+    required String label,
+    required TextEditingController controller,
+    required String unit,
+    bool optional = false,
+  }) => TextFormField(
+    controller: controller,
+    keyboardType: TextInputType.number,
+    style: niraText(NiraType.body, weight: FontWeight.w600),
+    decoration: settingsInputDecoration(
+      label,
+      prefix: 'Rp ',
+      suffix: unit,
+      hint: optional ? 'Belum diatur' : null,
+    ),
+    validator: (input) {
+      final value = input?.trim() ?? '';
+      if (value.isEmpty && optional) return null;
+      return RegExp(r'^(?:\d+|\d{1,3}(?:\.\d{3})+)$').hasMatch(value)
+          ? null
+          : 'Masukkan harga dalam Rupiah.';
+    },
+  );
 }
 
-class _MoneyField extends StatelessWidget {
-  const _MoneyField(this.label, this.controller, this.suffix);
-  final String label;
-  final TextEditingController controller;
-  final String suffix;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 11),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: niraText(11.5, weight: FontWeight.w600)),
-        const SizedBox(height: 5),
-        TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          style: niraText(13, weight: FontWeight.w600),
-          decoration: InputDecoration(
-            prefixText: 'Rp  ',
-            suffixText: suffix,
-            prefixStyle: niraText(12, color: niraLeaf),
-            suffixStyle: niraText(11, color: niraLeaf),
-            filled: true,
-            fillColor: Colors.white,
-            isDense: true,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 10,
-              vertical: 12,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(6),
-              borderSide: const BorderSide(color: niraGreen, width: 1.2),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(6),
-              borderSide: const BorderSide(color: niraGreen, width: 2),
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
+String _formatRupiah(String value) {
+  final digits = value
+      .replaceAll('.', '')
+      .replaceFirst(RegExp(r'^0+(?=\d)'), '');
+  return digits.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => '.');
 }

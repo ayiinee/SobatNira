@@ -20,7 +20,7 @@ Konfirmasi sementara memakai `confirmationSource=synthetic_admin` dan identitas 
 
 Semua dokumen/penerimaan/pergerakan yang dibuat alur ini berlabel sintetis. Saldo stok normal tidak memasukkan data tersebut; gunakan `synthetic=true` untuk melihat saldo demo. Pengesahan penerimaan tidak menyelesaikan seluruh produksi atau menutup kloter.
 
-Foto bukti dapat diunggah dan dibaca privat melalui [modul bukti R2](backend-evidence.md), lalu terhubung ke revisi dokumen. Sumber ekstraksi tetap disimpan sebagai payload fixture dengan `sourcePayload.evidence.kind=synthetic_fixture`; upload foto tidak menjalankan OCR. Webhook WhatsApp, pemrosesan OCR, penolakan laporan dan koreksi pascapengesahan belum dihubungkan.
+Foto bukti dapat diunggah dan dibaca privat melalui [modul bukti R2](backend-evidence.md), lalu terhubung ke revisi dokumen. Sumber ekstraksi fixture disimpan sebagai `sourcePayload.evidence.kind=synthetic_fixture`. Alur nota riil tersedia melalui [penerimaan dari nota OCR](#penerimaan-dari-nota-ocr).
 
 ## Endpoint
 
@@ -96,7 +96,7 @@ Jika foto akan dilampirkan, upload selama status masih `draft`; pemasangan foto 
 
 Berat wajib berupa string desimal positif dengan titik desimal, tanpa eksponen atau pemisah ribuan. Brix berupa string desimal 0–100 atau `null`. Nilai disimpan sebagai PostgreSQL `numeric` tanpa skala tetap dan dikembalikan sebagai string, sehingga tidak melewati pembulatan floating-point. Batas 64 karakter merupakan batas ukuran input; modul tidak menetapkan kebijakan pembulatan bisnis baru.
 
-Waktu harus berupa ISO 8601 dengan zona waktu eksplisit. Kode jenis tebu dipertahankan seperti yang diinput; fixture memakai BL, bukan katalog lengkap jenis tebu yang ditetapkan otomatis.
+Waktu harus berupa ISO 8601 dengan zona waktu eksplisit. Kode jenis tebu dipertahankan seperti yang diinput. Fixture memakai BL. [Katalog jenis tebu](backend-production-basics.md#mengelola-katalog-jenis-tebu) tersedia sebagai sumber pilihan pabrik.
 
 Draf boleh memakai `null` untuk waktu, jenis tebu atau berat yang belum terbaca. Konfirmasi dan pengesahan menolak draf yang belum lengkap. Brix bersifat opsional. Alasan koreksi wajib diisi, maksimal 500 karakter. Perubahan yang tidak mengubah nilai tidak membuat revisi baru.
 
@@ -184,4 +184,26 @@ Tes lokal tidak memuat kredensial asli. Tes integrasi memakai PostgreSQL develop
 
 Pemeriksaan mencakup draf tidak lengkap, koreksi setelah konfirmasi, audit/revisi, replay request, pengesahan ganda, dua dokumen untuk satu kloter, dua edit bersamaan, race perubahan metadata dengan pengesahan, rollback ketika audit gagal, desimal presisi tinggi, batas tenant/pabrik dan pemisahan saldo sintetis.
 
-Flutter masih memakai data lokal untuk Beranda/Kloter. Penyambungan layar Pekerjaan/detail bukti dan login dilakukan terpisah; kontrak FastAPI existing tidak berubah.
+Flutter masih memakai data lokal untuk Beranda/Kloter.
+
+## Penerimaan dari nota OCR
+
+Untuk nota truk, pengesahan di Pekerjaan juga mencatat penerimaan resmi. Jalankan `npm run db:migrate` dan `npm run db:migrate:ocr` dari `apps/api` pada database PostgreSQL yang sama. Akun peninjau memerlukan membership aktif di workflow OCR dan akses produksi pada pabrik yang sama.
+
+Di Pekerjaan, buka nota truk yang sudah dikonfirmasi operator. Koreksi berat bersih dalam kg dan kode jenis tebu bila perlu, lalu pilih kloter penerimaan yang sudah terdaftar beserta pemasoknya. API memakai pemasok dan waktu penerimaan yang tersimpan pada kloter pilihan. Bandingkan tanggal pada nota dengan waktu yang ditampilkan sebelum mengesahkan.
+
+- `GET /api/v1/mobile/review-tasks/{taskId}/intake-lots?offset=0` memberi kloter pada pabrik nota yang belum punya penerimaan, beserta `supplierId`, nama pemasok, waktu penerimaan dan `next_offset`.
+- `POST /api/v1/mobile/documents/{documentId}/validate` untuk nota truk mewajibkan `lot_id` dan `supplier_id` selain `revision_id`, `expected_version`, `decision: "VALIDATED"`, dan header `Idempotency-Key`. Draf, konfirmasi operator, dan koreksi admin tetap merupakan langkah sebelum pengesahan.
+- Respons pengesahan dan detail tugas memuat `intake` dengan ID penerimaan, kloter, pemasok, berat, waktu dan UUID dokumen/revisi OCR. Stok tebu riil dapat dibaca di `GET /tenants/{tenantId}/factories/{factoryId}/stock/sugarcane?lotId={lotId}`.
+- Pengesahan, satu penerimaan per kloter dan nota, kredit stok, serta audit disimpan dalam satu transaksi. Jika relasi berubah atau stok gagal dibukukan, tugas tetap menunggu validasi. Retry dengan kunci yang sama mengembalikan hasil tersimpan.
+- Nota yang sudah disahkan sebelum fitur ini tetap ada dalam riwayat. Penerimaan historisnya perlu rekonsiliasi tersendiri.
+
+## Koreksi stok nota sah
+
+Pada revisi terkini yang berstatus sah di Pekerjaan, pilih **Koreksi stok nota sah**. Pilih kloter bila nota produksi mencakup beberapa blok, lalu masukkan kuantitas yang benar dan alasannya. Peninjau memerlukan akses review dan produksi pada pabrik tersebut. Jika ada revisi foto yang lebih baru, selesaikan review revisi itu dahulu.
+
+- Nota truk memakai berat bersih dalam kg. Koreksi tersedia selama kloter masih terbuka dan tebu belum digiling.
+- Nota produksi memakai volume hasil giling dalam liter. Koreksi tersedia selama kloter masih terbuka dan nira belum dipakai, tidak memiliki reservasi aktif, serta belum terlibat dalam transfer. Reservasi yang sudah dilepas tidak mengurangi saldo.
+- API menerima `POST /api/v1/mobile/documents/{documentId}/reconcile` dengan `Idempotency-Key` dan body `{revision_id, expected_version, lot_id, quantity, reason}`. `quantity` adalah nilai akhir dalam string desimal, bukan selisih.
+- Respons mengembalikan task dan revisi sah baru serta `reconciliation` dengan kuantitas sebelum, sesudah, selisih, dan alasan. Tindakan yang sama dapat diulang dengan kunci yang sama. Koreksi terhadap revisi usang atau stok yang sudah terpakai menghasilkan 409.
+- Posting awal tetap tersimpan. Ledger memasukkan selisih koreksi, sedangkan detail kloter menunjukkan berat efektif dan referensi revisi yang memperbarui stok. Layar Pekerjaan menampilkan riwayat koreksi pada tiap revisi.
