@@ -5,6 +5,7 @@ import '../../widgets/summary_card.dart';
 import '../kloter/kloter_date_filter.dart';
 import 'demo_analytics.dart';
 import 'report_detail_page.dart';
+import 'production_chart.dart';
 
 class LaporanPage extends StatefulWidget {
   const LaporanPage({
@@ -163,78 +164,41 @@ class _LaporanPageState extends State<LaporanPage> {
     ],
   );
 
-  Widget _chartCard({bool margin = false}) => NiraOutline(
-    Padding(
-      padding: const EdgeInsets.fromLTRB(
-        NiraSpace.sm,
-        NiraSpace.sm,
-        NiraSpace.sm,
-        NiraSpace.sm,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            margin ? 'Margin per kloter (1000)' : 'Gula final per hari (Kg)',
-            style: niraText(NiraType.body, weight: FontWeight.w600),
-          ),
-          if (!margin) ...[
-            const SizedBox(height: NiraSpace.sm),
-            Wrap(
-              spacing: NiraSpace.sm,
-              runSpacing: NiraSpace.sm,
+  Widget _chartCard({bool margin = false}) => !margin
+      ? ProductionChart(analytics: widget.analytics)
+      : NiraOutline(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              NiraSpace.sm,
+              NiraSpace.sm,
+              NiraSpace.sm,
+              NiraSpace.sm,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _modeChip('Rendemen', ProductionVariant.rendemen),
-                _modeChip('Grade', ProductionVariant.grade),
+                Text(
+                  margin
+                      ? 'Margin per kloter (1000)'
+                      : 'Gula final per hari (Kg)',
+                  style: niraText(NiraType.body, weight: FontWeight.w600),
+                ),
+                const SizedBox(height: NiraSpace.sm),
+                SizedBox(
+                  height: 134,
+                  child: CustomPaint(
+                    painter: _ReportChartPainter(
+                      margin: margin,
+                      bars:
+                          margin ||
+                          widget.analytics.variant == ProductionVariant.grade,
+                    ),
+                  ),
+                ),
               ],
             ),
-          ],
-          const SizedBox(height: NiraSpace.sm),
-          SizedBox(
-            height: 134,
-            child: CustomPaint(
-              painter: _ReportChartPainter(
-                margin: margin,
-                bars:
-                    margin ||
-                    widget.analytics.variant == ProductionVariant.grade,
-              ),
-            ),
           ),
-        ],
-      ),
-    ),
-  );
-
-  Widget _modeChip(String label, ProductionVariant value) => Semantics(
-    label: label,
-    button: true,
-    selected: widget.analytics.variant == value,
-    child: InkWell(
-      onTap: () => widget.analytics.setVariant(value),
-      borderRadius: BorderRadius.circular(niraRadius),
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 48),
-        padding: const EdgeInsets.symmetric(
-          horizontal: NiraSpace.sm,
-          vertical: NiraSpace.xs,
-        ),
-        decoration: BoxDecoration(
-          color: widget.analytics.variant == value
-              ? const Color(0xFFE8F0E7)
-              : const Color(0xFFF2F2EF),
-          border: Border.all(
-            color: widget.analytics.variant == value ? niraLeaf : niraMuted,
-          ),
-          borderRadius: BorderRadius.circular(niraRadius),
-        ),
-        child: Text(
-          label,
-          style: niraText(NiraType.caption, weight: FontWeight.w600),
-        ),
-      ),
-    ),
-  );
+        );
 
   Widget _rendemenTable() => _tableSection(
     title: 'Rendemen',
