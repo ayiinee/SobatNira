@@ -7,16 +7,24 @@ import 'demo_analytics.dart';
 import 'report_detail_page.dart';
 import 'production_chart.dart';
 import 'margin_chart.dart';
+import '../kloter/demo_production.dart';
+import 'production_recap.dart';
+import 'production_recap_section.dart';
+import 'report_date_button.dart';
 
 class LaporanPage extends StatefulWidget {
   const LaporanPage({
     required this.analytics,
     required this.onOpenDetail,
+    this.approvedLots,
+    this.statusMessage,
     super.key,
   });
 
   final DemoAnalytics analytics;
   final ValueChanged<ReportDetailKind> onOpenDetail;
+  final List<DemoKloter>? approvedLots;
+  final Widget? statusMessage;
 
   @override
   State<LaporanPage> createState() => _LaporanPageState();
@@ -28,6 +36,7 @@ class _LaporanPageState extends State<LaporanPage> {
     final result = await showKloterDateFilter(
       context,
       widget.analytics.dateFilter,
+      today: widget.approvedLots == null ? null : DateTime.now(),
     );
     if (!mounted || result == null) return;
     widget.analytics.setDateFilter(result.selection);
@@ -56,7 +65,9 @@ class _LaporanPageState extends State<LaporanPage> {
               NiraSpace.lg,
             ),
             children: [
-              if (widget.analytics.tab == ReportTab.production)
+              if (widget.approvedLots != null)
+                _connectedReport()
+              else if (widget.analytics.tab == ReportTab.production)
                 _production()
               else
                 _margin(),
@@ -66,6 +77,42 @@ class _LaporanPageState extends State<LaporanPage> {
       ],
     ),
   );
+
+  Widget _connectedReport() {
+    if (widget.analytics.tab == ReportTab.margin) {
+      return const NiraSummaryCard('Margin produksi', 'Belum tersedia');
+    }
+    final lots = widget.approvedLots!
+        .where((lot) => widget.analytics.dateFilter?.contains(lot.date) ?? true)
+        .toList();
+    final weights = lots.map((lot) => lot.netWeightKg).nonNulls;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        NiraSummaryPair(
+          first: const NiraSummaryCard('Gula final', 'Belum tersedia'),
+          second: NiraSummaryCard(
+            'Tebu diterima',
+            formatQuantity(
+              weights.isEmpty ? null : weights.reduce((a, b) => a + b),
+              'kg',
+            ),
+            boxes: true,
+          ),
+        ),
+        const SizedBox(height: NiraSpace.md),
+        Align(
+          alignment: Alignment.centerRight,
+          child: ReportDateButton(onPressed: _dateFilter),
+        ),
+        const SizedBox(height: NiraSpace.md),
+        widget.statusMessage ??
+            ProductionRecapSection(
+              recap: ProductionRecap.fromApprovedLots(lots),
+            ),
+      ],
+    );
+  }
 
   Widget _production() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,

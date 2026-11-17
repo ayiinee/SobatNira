@@ -84,3 +84,25 @@ Untuk revisi, pencocokan otomatis memakai label blok dan pasangan kode wajan ser
 - OpenClaw menerima model eksplisit dengan akhiran `:free`. Pengaturan `OPENROUTER_AGENT_DISABLE_REASONING` memungkinkan klasifikasi singkat untuk model yang mendukungnya. Anggaran waktu 5 detik tetap berlaku untuk satu percobaan atau dua percobaan dengan fallback.
 - Migrasi produksi `016` diverifikasi dan migrasi OCR `006_operator_management_audit.sql` diterapkan di database tim. RLS tabel audit operator dan probe privasi R2 lulus. Kredensial hanya tersedia pada konfigurasi privat. Scope akun dan operator serta pairing WhatsApp masih mengikuti langkah setup.
 - Readiness NestJS dan FastAPI terhubung lulus. Suite lokal lulus dengan 56 tes NestJS dan PostgreSQL, 11 tes FastAPI, serta 46 tes Flutter. Satu tes Flutter memerlukan fixture backend tambahan dan dilewati pada suite standar.
+
+## Pairing WhatsApp pada Windows
+
+- Gateway SobatNira memakai profil dan port tersendiri agar perintah login memakai state yang sama dengan proses gateway. OpenClaw 2026.11.4 menampilkan QR, menautkan akun WhatsApp `sobatnira`, dan mengembalikan status `connected` serta `healthy`.
+- Readiness mode terhubung lulus dengan akun, operator, dan pabrik demo yang terpisah. Login Flutter dengan Supabase dan akses antrean Pekerjaan untuk pabrik demo diverifikasi di browser.
+
+## JPEG WhatsApp dan percakapan operator
+
+- Dua foto WhatsApp tersimpan sebagai JPEG. Sebelumnya decoder meminta atribut jumlah frame yang tidak disediakan Pillow untuk JPEG biasa, sehingga FastAPI mengembalikan HTTP 500. Tes regresi memastikan JPEG mencapai OCR dan pembatasan multi-frame tetap berlaku.
+- Parser nota produksi bergaris mengenali header miring dan bertumpuk. Pemisah horizontal pada area TEBU membantu mengelompokkan baris masak. Label gabungan dari stiker ditandai ambigu dan kolom tanpa judul jelas tetap tidak dipetakan. Bukti tetap memakai koordinat OCR asli.
+- Chat memberi ringkasan berbahasa Indonesia dan menerima `STATUS` tanpa UUID. `KONFIRMASI`, `JAWAB`, `FOTO ULANG`, dan `COBA LAGI` pada ringkasan otomatis diverifikasi terhadap operator, pabrik, percakapan, dan revisi aktif. Percobaan ulang OCR menggunakan foto yang sudah disimpan dan menambah revisi. Adapter membatasi balasan agent bawaan OpenClaw untuk akun SobatNira.
+- Lulus 57 tes NestJS dengan PostgreSQL dan 13 tes FastAPI. Foto contoh dan hasil analisis lokal disimpan di luar Git.
+- Halaman produksi padat memerlukan lebih banyak waktu CPU daripada nota truk. PaddleOCR memakai empat thread dan batch pengenalan 12 crop. Pekerjaan OCR memberi waktu hingga 240 detik per percobaan, dengan lease 30 detik lebih panjang daripada batas request.
+
+## Beranda tim dalam mode terhubung
+
+- Baseline frontend `c610d74` menyediakan Beranda, Kloter, Laporan, Pengaturan, Rekap PDF, dan Bantuan. Build terhubung memakai navigasi itu setelah login Supabase. Pekerjaan dan pengelolaan operator menggunakan sesi dan pabrik aktif yang sama.
+- Flutter membaca ringkasan kloter melalui `includeSummary=true`. Profil dan penggantian pabrik berasal dari akses aktif NestJS. Beranda, detail kloter, dan Rekap memakai penerimaan serta penggilingan yang disahkan. Detail memakai endpoint nira terpisah untuk stok fisik, reservasi, dan nira tersedia. Status penutupan tetap berasal dari NestJS.
+- Rekap dan PDF memakai pabrik serta filter periode yang sama. Data batch resmi, gula final, grade, margin, harga, dan biaya menunggu API tim. PR Backend B dikerjakan terpisah. Register keputusan internal masih mencatat sumber harga, komponen biaya resmi dan visibilitas untuk admin sebagai keputusan terbuka.
+- Smoke lokal menjalankan adapter OpenClaw dengan transport WhatsApp sintetis, NestJS, PostgreSQL, PaddleOCR CPU dan Flutter web. Nota truk, nota produksi revisi kedua, dan draf manual disahkan dari Pekerjaan. PostgreSQL menegaskan dua penerimaan masing-masing 1.250 kg dan penggilingan menghasilkan 90 L serta 85 L. Beranda menampilkan 2.500 kg, Rekap menampilkan kedua kloter, dan browser berhasil mengunduh PDF. Smoke juga memeriksa kiriman duplikat, operator nonaktif, konfirmasi revisi lama, akses lintas pabrik, klarifikasi, dan foto ulang.
+- Suite NestJS dengan PostgreSQL lulus 57 tes. Tes HTTP master data mencakup ringkasan kloter dan kompatibilitas daftar lama. FastAPI lulus 13 tes. Suite NestJS mencakup kegagalan layanan upstream. Verifikasi ini menggunakan data sintetis. Pengiriman WhatsApp live sesudah perubahan Flutter mengikuti prosedur smoke di panduan setup.
+- Flutter analyze bersih dan 64 tes Flutter lulus. Satu tes yang memerlukan fixture API khusus dilewati pada suite standar. Build terhubung berhasil login melalui Supabase di browser dan membuka Beranda serta Pekerjaan melalui API NestJS.

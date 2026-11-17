@@ -8,11 +8,17 @@ class FactoryPicker extends StatefulWidget {
   const FactoryPicker({
     required this.value,
     required this.onChanged,
+    this.options = const {
+      'Pabrik A': 'Pabrik A',
+      'Pabrik B': 'Pabrik B',
+      'Pabrik C': 'Pabrik C',
+    },
     super.key,
   });
 
   final String value;
   final ValueChanged<String> onChanged;
+  final Map<String, String> options;
 
   @override
   State<FactoryPicker> createState() => _FactoryPickerState();
@@ -29,7 +35,7 @@ class _FactoryPickerState extends State<FactoryPicker> {
     final button = _anchor.currentContext!.findRenderObject()! as RenderBox;
     final origin = overlay.globalToLocal(button.localToGlobal(Offset.zero));
     final anchor = origin & button.size;
-    const factories = ['Pabrik A', 'Pabrik B', 'Pabrik C'];
+    final factories = widget.options.keys;
     final choices = [
       if (factories.contains(widget.value)) widget.value,
       for (final factory in factories)
@@ -153,7 +159,7 @@ class _FactoryPickerState extends State<FactoryPicker> {
                 children: [
                   Expanded(
                     child: Text(
-                      factory,
+                      widget.options[factory]!,
                       style: niraText(
                         NiraType.caption,
                         color: selected ? Colors.white : niraGreen,

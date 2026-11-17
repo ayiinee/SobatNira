@@ -394,6 +394,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(home: ConnectedKloterPage(signIn: (_, _) async => api)),
       );
+      await press(tester, 'Masuk');
       await tester.enterText(
         find.byType(TextField).first,
         'fixture@example.invalid',

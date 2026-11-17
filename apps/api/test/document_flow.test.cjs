@@ -201,12 +201,15 @@ test('OpenClaw reply dispatch uses the WhatsApp context and owns only the config
   }));
   Object.assign(process.env, { SOBATNIRA_API_URL: 'http://127.0.0.1', WHATSAPP_ADAPTER_INTERNAL_TOKEN: 'x'.repeat(32), SOBATNIRA_MODE: 'local' });
   let dispatch;
+  const hooks = new Map();
   const adapter = { config: {}, pluginConfig: { accountId: 'work', mediaDir: tmpdir() }, logger: { warn() {} },
     registerService(service) { assert.equal(service.id, 'sobatnira-notices'); },
     on(name, callback, opts) {
-      assert.equal(name, 'reply_dispatch');
-      assert.deepEqual(opts.eligibleDispatchKinds, ['agent']);
-      dispatch = callback;
+      hooks.set(name, callback);
+      if (name === 'reply_dispatch') {
+        assert.deepEqual(opts.eligibleDispatchKinds, ['agent', 'acp']);
+        dispatch = callback;
+      }
     },
     runtime: { channel: { outbound: { loadAdapter() {} } } },
   };
@@ -227,6 +230,42 @@ test('OpenClaw reply dispatch uses the WhatsApp context and owns only the config
   assert.equal((await dispatch({ ...target, originatingAccountId: 'work' }, context)).queuedFinal, true);
   assert.match(sent[0], /masuk antrean/);
   assert.equal(fetch.mock.callCount(), 1);
+  assert.equal(hooks.get('before_agent_run')({ channelId: 'whatsapp', accountId: 'work' }, {}).outcome, 'block');
+  assert.equal(hooks.get('before_agent_run')({ channelId: 'whatsapp', accountId: 'other' }, {}), undefined);
+  const failure = { payload: { text: "Couldn't sign in to the AI service." }, channel: 'whatsapp' };
+  assert.match(hooks.get('reply_payload_sending')(failure, { accountId: 'work' }).payload.text, /STATUS/);
+  assert.equal(hooks.get('reply_payload_sending')(failure, { accountId: 'other' }), undefined);
+});
+
+test('short WhatsApp commands keep status readable and bind writes to a quoted revision', async () => {
+  const { createBridge } = await import('../integrations/openclaw/index.mjs');
+  const [document_id, revision_id, question_id] = Array.from({ length: 3 }, () => randomUUID());
+  const calls = [];
+  const bridge = createBridge({ apiUrl: 'http://127.0.0.1', token: 'fixture', mediaDir: tmpdir(),
+    request(url, options) {
+      calls.push([url, options]);
+      if (url.pathname.endsWith('latest-context') || url.pathname.endsWith('quoted-context')) {
+        return Response.json({ document_id, revision_id });
+      }
+      if (url.pathname.endsWith('text-events')) return Response.json({ revision_id });
+      return Response.json({ id: revision_id, version: 2, processing_status: 'NEEDS_CLARIFICATION', operator_status: 'PENDING',
+        pending_question: { id: question_id, field_path: 'header.net_weight_kg', candidates: [1250, 1280] },
+        extraction: { document_type: 'TRUCK_ARRIVAL_NOTE', header: { net_weight_kg: { normalized_value: 5050, status: 'READ', unit: 'kg' } } } });
+    } });
+  const event = { senderId: phone(101), conversationId: 'SYNTHETIC', messageId: 'synthetic-short', timestamp: Date.now() };
+  const draft = await bridge.handle({ ...event, body: 'STATUS' }, {});
+  assert.match(draft.text, /Berat bersih — 5\.050 kg/);
+  assert.doesNotMatch(draft.text, new RegExp(document_id));
+  assert.equal(calls[0][1].headers['X-Chat-Id'], 'SYNTHETIC');
+  assert.match((await bridge.handle({ ...event, body: 'KONFIRMASI' }, {})).text, /Balas ringkasan/);
+  assert.equal(calls.length, 2);
+  assert.match((await bridge.handle({ ...event, body: 'KONFIRMASI', replyToId: 'receipt' }, {})).text, /antrean admin/);
+  assert.equal(calls[2][0].searchParams.get('action'), 'true');
+  assert.deepEqual(JSON.parse(calls[3][1].body).action, { action: 'CONFIRM', document_id, revision_id });
+  assert.match((await bridge.handle({ ...event, body: 'JAWAB 5050', replyToId: 'receipt' }, {})).text, /Jawaban tersimpan/);
+  assert.deepEqual(JSON.parse(calls.at(-1)[1].body).action, { action: 'ANSWER', document_id, revision_id, question_id, value: 5050 });
+  assert.match((await bridge.handle({ ...event, body: 'COBA LAGI', replyToId: 'receipt' }, {})).text, /pembacaan ulang/);
+  assert.deepEqual(JSON.parse(calls.at(-1)[1].body).action, { action: 'RETRY_OCR', document_id, revision_id });
 });
 
 test('OpenRouter gives read-only guidance on verified quotes and uses bounded fallback', async () => {
@@ -268,7 +307,8 @@ test('OpenRouter gives read-only guidance on verified quotes and uses bounded fa
   await bridge.handle({ ...metadata, body: 'Cara konfirmasi?' }, {});
   assert.equal(reads, 0);
   const answer = await bridge.handle({ ...metadata, replyToId: 'provider-photo', body: `Cara konfirmasi ${document} synthetic@example.invalid?` }, {});
-  assert.match(answer.text, new RegExp(`STATUS ${document} ${revision}`));
+  assert.match(answer.text, /balas ringkasan otomatis dengan KONFIRMASI/);
+  assert.doesNotMatch(answer.text, new RegExp(document));
   assert.equal(reads, 2);
   assert.deepEqual(requests.map((item) => item.model), ['demo/primary-v1:free', 'demo/fallback-v1:free']);
   assert.throws(() => createOperatorAgent({ key: 'synthetic', model: 'demo/auto:free', providers: 'test-provider' }),
@@ -459,6 +499,12 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
       { acknowledged: false });
     assert.deepEqual(await notice(`${delivery.id}/result`, { claim_token: reclaimed.claim_token, outcome: 'SENT', provider_message_id: 'gateway-receipt' }),
       { acknowledged: true });
+    const quotedWrite = (sender, chat) => fetch(`${base}/internal/v1/whatsapp/quoted-context?action=true`, {
+      headers: { ...tokenHeaders, 'X-Operator-Phone': sender, 'X-Chat-Id': chat, 'X-Quoted-Message-Id': 'gateway-receipt' },
+    });
+    assert.equal((await quotedWrite(phone(101), 'OTHER-CHAT')).status, 404);
+    assert.equal((await quotedWrite(phone(102), 'SYNTHETIC-CHAT')).status, 404);
+    assert.equal((await quotedWrite(phone(101), 'SYNTHETIC-CHAT').then((response) => response.json())).revision_id, a.revision_id);
     assert.equal((await mobile('review-tasks').then((response) => response.json())).items.length, 0);
     const answer = { question_id: question.id, value: 1251 };
     assert.equal((await action({ ...event('bad-chat', 'TEXT'), chat_id: 'OTHER-CHAT' }, a, 'ANSWER', answer)).status, 404);
@@ -468,6 +514,12 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     assert.equal(correction.status, 200, await correction.clone().text());
     const corrected = await correction.json();
     assert.notEqual(corrected.revision_id, a.revision_id);
+    assert.equal((await quotedWrite(phone(101), 'SYNTHETIC-CHAT')).status, 404);
+    const latestInChat = (chat) => fetch(`${base}/internal/v1/whatsapp/latest-context`, {
+      headers: { ...tokenHeaders, 'X-Operator-Phone': phone(101), 'X-Chat-Id': chat },
+    });
+    assert.equal((await latestInChat('OTHER-CHAT')).status, 404);
+    assert.equal((await latestInChat('SYNTHETIC-CHAT').then((response) => response.json())).revision_id, corrected.revision_id);
     assert.equal((await action(message, a, 'ANSWER', answer).then((response) => response.json())).duplicate, true);
     assert.equal((await action(event('late-answer', 'TEXT'), a, 'ANSWER', answer)).status, 409);
     assert.equal((await db.query('SELECT status FROM clarification_requests WHERE id=$1', [question.id])).rows[0].status, 'ANSWERED');
@@ -718,4 +770,21 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     });
     assert.equal(manualApproval.status, 200, await manualApproval.clone().text());
     assert.equal((await manualApproval.json()).intake.lot_id, manualLot);
+
+    const retryPhoto = await photo(event('retry-photo')).then((response) => response.json());
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await db.query('UPDATE document_jobs SET available_at=now() WHERE revision_id=$1', [retryPhoto.revision_id]);
+      await processor.processOne();
+    }
+    const retryEvent = event('retry-command', 'TEXT');
+    assert.equal((await action({ ...retryEvent, chat_id: 'OTHER-CHAT' }, retryPhoto, 'RETRY_OCR')).status, 404);
+    const retryResponse = await action(retryEvent, retryPhoto, 'RETRY_OCR');
+    assert.equal(retryResponse.status, 200, await retryResponse.clone().text());
+    const replay = await retryResponse.json();
+    const { rows: [retried] } = await db.query(
+      'SELECT submission_id,parent_revision_id,processing_status FROM document_revisions WHERE id=$1', [replay.revision_id],
+    );
+    assert.deepEqual(retried, { submission_id: retryPhoto.submission_id, parent_revision_id: retryPhoto.revision_id, processing_status: 'QUEUED' });
+    assert.equal((await action(retryEvent, retryPhoto, 'RETRY_OCR').then((response) => response.json())).duplicate, true);
+    assert.equal((await action(event('retry-stale', 'TEXT'), retryPhoto, 'RETRY_OCR')).status, 409);
   });

@@ -17,8 +17,8 @@ enum KloterPeriod {
 class KloterDateFilter {
   const KloterDateFilter(this.period, this.range);
 
-  factory KloterDateFilter.preset(KloterPeriod period) {
-    final day = DemoProduction.today;
+  factory KloterDateFilter.preset(KloterPeriod period, {DateTime? today}) {
+    final day = DateUtils.dateOnly(today ?? DemoProduction.today);
     final weekStart = day.subtract(Duration(days: day.weekday - 1));
     final DateTimeRange range = switch (period) {
       KloterPeriod.today => DateTimeRange(start: day, end: day),
@@ -51,8 +51,9 @@ typedef KloterFilterResult = ({KloterDateFilter? selection});
 
 Future<KloterFilterResult?> showKloterDateFilter(
   BuildContext context,
-  KloterDateFilter? current,
-) => showGeneralDialog(
+  KloterDateFilter? current, {
+  DateTime? today,
+}) => showGeneralDialog(
   context: context,
   barrierDismissible: true,
   barrierLabel: 'Tutup filter tanggal',
@@ -75,7 +76,7 @@ Future<KloterFilterResult?> showKloterDateFilter(
             elevation: 7,
             borderRadius: BorderRadius.circular(20),
             clipBehavior: Clip.antiAlias,
-            child: SingleChildScrollView(child: _FilterPanel(current)),
+            child: SingleChildScrollView(child: _FilterPanel(current, today)),
           ),
         ),
       ),
@@ -97,7 +98,9 @@ Future<KloterFilterResult?> showKloterDateFilter(
 );
 
 class _FilterPanel extends StatefulWidget {
-  const _FilterPanel(this.current);
+  const _FilterPanel(this.current, this.today);
+
+  final DateTime? today;
 
   final KloterDateFilter? current;
 
@@ -119,8 +122,10 @@ class _FilterPanelState extends State<_FilterPanel> {
         initialRange: current?.period == KloterPeriod.custom
             ? current!.range
             : DateTimeRange(
-                start: DateTime(2026, 10, 20),
-                end: DemoProduction.today,
+                start:
+                    widget.today?.subtract(const Duration(days: 9)) ??
+                    DateTime(2026, 10, 20),
+                end: widget.today ?? DemoProduction.today,
               ),
         onBack: () => setState(() => _showRange = false),
         onApply: (range) =>
@@ -191,7 +196,9 @@ class _FilterPanelState extends State<_FilterPanel> {
   Widget _periodRow(KloterPeriod period) {
     final custom = period == KloterPeriod.custom;
     final selected = period == widget.current?.period;
-    final filter = custom ? null : KloterDateFilter.preset(period);
+    final filter = custom
+        ? null
+        : KloterDateFilter.preset(period, today: widget.today);
     final caption = custom
         ? selected
               ? _describeRange(widget.current!.range)

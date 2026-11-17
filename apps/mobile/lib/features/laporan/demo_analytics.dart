@@ -62,9 +62,11 @@ class DemoAnalytics extends ChangeNotifier {
     notifyListeners();
   }
 
-  List<AnalyticsRow> get visibleRows {
+  List<AnalyticsRow> get visibleRows => rowsFor(tab);
+
+  List<AnalyticsRow> rowsFor(ReportTab reportTab) {
     final normalized = query.trim().toLowerCase();
-    final rows = tab == ReportTab.margin ? marginRows : rendemenRows;
+    final rows = reportTab == ReportTab.margin ? marginRows : rendemenRows;
     return rows.where((row) {
       return (dateFilter?.contains(DateTime(2026, 10, row.day)) ?? true) &&
           (normalized.isEmpty ||

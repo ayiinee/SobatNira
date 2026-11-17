@@ -11,11 +11,27 @@ class BerandaPage extends StatefulWidget {
   const BerandaPage({
     required this.kloter,
     required this.onOpenKloter,
+    this.onQuickAction,
+    this.onOpenPekerjaan,
+    this.factoryId,
+    this.factories = const {},
+    this.onFactoryChanged,
+    this.profile,
+    this.summary,
+    this.statusMessage,
     super.key,
   });
 
   final List<DemoKloter> kloter;
   final ValueChanged<DemoKloter> onOpenKloter;
+  final ValueChanged<QuickActionKind>? onQuickAction;
+  final VoidCallback? onOpenPekerjaan;
+  final String? factoryId;
+  final Map<String, String> factories;
+  final ValueChanged<String>? onFactoryChanged;
+  final String? profile;
+  final ({String cane, String lots})? summary;
+  final Widget? statusMessage;
 
   @override
   State<BerandaPage> createState() => _BerandaPageState();
@@ -80,8 +96,8 @@ class _BerandaPageState extends State<BerandaPage> {
                 child: CustomPaint(
                   key: _headerKey,
                   painter: const _BerandaGeometryPainter(),
-                  child: const Padding(
-                    padding: EdgeInsets.fromLTRB(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
                       niraInset,
                       0,
                       niraInset,
@@ -90,11 +106,24 @@ class _BerandaPageState extends State<BerandaPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _Profile(),
-                        SizedBox(height: NiraSpace.lg),
-                        _ProductionSummary(),
-                        SizedBox(height: NiraSpace.lg),
-                        _QuickActions(),
+                        _Profile(
+                          factoryId: widget.factoryId,
+                          factories: widget.factories,
+                          onFactoryChanged: widget.onFactoryChanged,
+                          profile: widget.profile,
+                        ),
+                        const SizedBox(height: NiraSpace.lg),
+                        _ProductionSummary(summary: widget.summary),
+                        const SizedBox(height: NiraSpace.lg),
+                        _QuickActions(onSelected: widget.onQuickAction),
+                        if (widget.onOpenPekerjaan case final open?) ...[
+                          const SizedBox(height: NiraSpace.md),
+                          OutlinedButton.icon(
+                            onPressed: open,
+                            icon: const Icon(Icons.assignment_outlined),
+                            label: const Text('Pekerjaan'),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -171,6 +200,13 @@ class _BerandaPageState extends State<BerandaPage> {
                         setState(() => _selected = value);
                       },
                     ),
+                    if (widget.statusMessage case final status?)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: niraInset,
+                        ),
+                        child: status,
+                      ),
                     Expanded(
                       child: ListView.builder(
                         key: const ValueKey('beranda-kloter-list'),
@@ -203,7 +239,17 @@ class _BerandaPageState extends State<BerandaPage> {
 }
 
 class _Profile extends StatefulWidget {
-  const _Profile();
+  const _Profile({
+    this.factoryId,
+    required this.factories,
+    this.onFactoryChanged,
+    this.profile,
+  });
+
+  final String? factoryId;
+  final Map<String, String> factories;
+  final ValueChanged<String>? onFactoryChanged;
+  final String? profile;
 
   @override
   State<_Profile> createState() => _ProfileState();
@@ -247,12 +293,12 @@ class _ProfileState extends State<_Profile> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                _factory,
+                widget.factories[widget.factoryId] ?? _factory,
                 style: niraText(NiraType.caption, color: Colors.white),
               ),
               const SizedBox(height: 1),
               Text(
-                'Admin Demo',
+                widget.profile ?? 'Admin Demo',
                 style: niraText(
                   NiraType.section,
                   color: Colors.white,
@@ -262,17 +308,25 @@ class _ProfileState extends State<_Profile> {
             ],
           ),
         ),
-        FactoryPicker(
-          value: _factory,
-          onChanged: (value) => setState(() => _factory = value),
-        ),
+        if (widget.factoryId == null)
+          FactoryPicker(
+            value: _factory,
+            onChanged: (value) => setState(() => _factory = value),
+          )
+        else if (widget.factories.length > 1)
+          FactoryPicker(
+            value: widget.factoryId!,
+            options: widget.factories,
+            onChanged: widget.onFactoryChanged!,
+          ),
       ],
     ),
   );
 }
 
 class _ProductionSummary extends StatefulWidget {
-  const _ProductionSummary();
+  const _ProductionSummary({this.summary});
+  final ({String cane, String lots})? summary;
 
   @override
   State<_ProductionSummary> createState() => _ProductionSummaryState();
@@ -346,7 +400,11 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                             fit: BoxFit.scaleDown,
                             alignment: Alignment.centerLeft,
                             child: Text(
-                              _showProfit ? 'Rp15.745.000' : 'Rp ••••••',
+                              widget.summary != null
+                                  ? 'Belum tersedia'
+                                  : (_showProfit
+                                        ? 'Rp15.745.000'
+                                        : 'Rp ••••••'),
                               style: niraText(
                                 NiraType.hero,
                                 color: niraYellow,
@@ -356,48 +414,50 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                           ),
                         ),
                         const SizedBox(width: NiraSpace.xs),
-                        IconButton(
-                          constraints: const BoxConstraints(
-                            minWidth: 44,
-                            minHeight: 44,
-                          ),
-                          padding: EdgeInsets.zero,
-                          onPressed: () =>
-                              setState(() => _showProfit = !_showProfit),
-                          tooltip: _showProfit
-                              ? 'Sembunyikan keuntungan'
-                              : 'Tampilkan keuntungan',
-                          isSelected: !_showProfit,
-                          icon: Icon(
-                            _showProfit
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined,
-                            size: 21,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: NiraSpace.sm),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.calendar_today_outlined,
-                          size: 12,
-                          color: Colors.white,
-                        ),
-                        const SizedBox(width: NiraSpace.sm),
-                        Flexible(
-                          child: Text(
-                            '20 Oktober 2026',
-                            style: niraText(
-                              NiraType.caption,
+                        if (widget.summary == null)
+                          IconButton(
+                            constraints: const BoxConstraints(
+                              minWidth: 44,
+                              minHeight: 44,
+                            ),
+                            padding: EdgeInsets.zero,
+                            onPressed: () =>
+                                setState(() => _showProfit = !_showProfit),
+                            tooltip: _showProfit
+                                ? 'Sembunyikan keuntungan'
+                                : 'Tampilkan keuntungan',
+                            isSelected: !_showProfit,
+                            icon: Icon(
+                              _showProfit
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                              size: 21,
                               color: Colors.white,
                             ),
                           ),
-                        ),
                       ],
                     ),
+                    const SizedBox(height: NiraSpace.sm),
+                    if (widget.summary == null)
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.calendar_today_outlined,
+                            size: 12,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: NiraSpace.sm),
+                          Flexible(
+                            child: Text(
+                              '20 Oktober 2026',
+                              style: niraText(
+                                NiraType.caption,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                   ],
                 ),
               ),
@@ -405,9 +465,13 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
           ),
         ),
         const SizedBox(height: NiraSpace.md),
-        const NiraSummaryPair(
-          first: NiraSummaryCard('Tebu diterima', '8.200Kg', boxes: true),
-          second: NiraSummaryCard('Jumlah kloter', '3'),
+        NiraSummaryPair(
+          first: NiraSummaryCard(
+            'Tebu diterima',
+            widget.summary?.cane ?? '8.200Kg',
+            boxes: true,
+          ),
+          second: NiraSummaryCard('Jumlah kloter', widget.summary?.lots ?? '3'),
         ),
       ],
     ),
@@ -516,12 +580,13 @@ class _BerandaGeometryPainter extends CustomPainter {
 }
 
 class _QuickActions extends StatelessWidget {
-  const _QuickActions();
+  const _QuickActions({this.onSelected});
+  final ValueChanged<QuickActionKind>? onSelected;
 
   static const _actions = [
     ('Laba', QuickActionKind.profit),
-    ('Biaya Ops', QuickActionKind.expenses),
     ('Rekap', QuickActionKind.recap),
+    ('Biaya Ops', QuickActionKind.expenses),
     ('Bantuan', QuickActionKind.help),
   ];
 
@@ -542,7 +607,13 @@ class _QuickActions extends StatelessWidget {
           for (final (label, icon) in _actions)
             SizedBox(
               width: width,
-              child: _QuickActionTile(label: label, icon: icon),
+              child: _QuickActionTile(
+                label: label,
+                icon: icon,
+                onTap: () => onSelected == null
+                    ? showUnavailable(context)
+                    : onSelected!(icon),
+              ),
             ),
         ],
       );
@@ -551,10 +622,15 @@ class _QuickActions extends StatelessWidget {
 }
 
 class _QuickActionTile extends StatefulWidget {
-  const _QuickActionTile({required this.label, required this.icon});
+  const _QuickActionTile({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
 
   final String label;
   final QuickActionKind icon;
+  final VoidCallback onTap;
 
   @override
   State<_QuickActionTile> createState() => _QuickActionTileState();
@@ -581,7 +657,7 @@ class _QuickActionTileState extends State<_QuickActionTile> {
     return Semantics(
       button: true,
       child: InkWell(
-        onTap: () => showUnavailable(context),
+        onTap: widget.onTap,
         onHover: (value) => setState(() => _hovered = value),
         onFocusChange: (value) => setState(() => _focused = value),
         onHighlightChanged: (value) => setState(() => _pressed = value),

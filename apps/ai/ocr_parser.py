@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from bisect import bisect_right
 from datetime import date
 from itertools import takewhile
 from math import isfinite
@@ -185,9 +186,98 @@ def table(lines, columns, asset):
     return blocks, unknown
 
 
-def extract(tokens, asset, schema_version, template_version):
+def grid_rules(image, x, band_start):
+    gray = image.convert("L")
+    gray.thumbnail((1800, 2600))
+    pixels = gray.load()
+    width, height = gray.size
+    samples = range(max(0, int((x - .12) * width)), min(width, int((x + .12) * width)), max(1, width // 260))
+    if len(samples) < 20:
+        return []
+    groups = []
+    radius = max(2, round(height * .0025))
+    for y in range(max(radius, int(band_start * height)), height - radius):
+        dark = sum(any(pixels[col, offset] < 105 for offset in range(y - radius, y + radius + 1)) for col in samples)
+        if dark < .72 * len(samples):
+            continue
+        if not groups or y > groups[-1][-1] + 1:
+            groups.append([])
+        groups[-1].append(y)
+    return [median(group) / height for group in groups]
+
+
+def production_grid(tokens, asset, shared, image):
+    if image is None or not any(label(t.text).startswith("DATA PRODUKSI") and t.bbox[1] < .25 for t in tokens):
+        return None
+    tebu = next((t for t in tokens if label(t.text) == "TEBU" and t.bbox[1] < .27), None)
+    if tebu is None:
+        return None
+    x, y = tebu.center
+    band = [t for t in tokens if abs(t.center[1] - y) <= max(.017, tebu.bbox[3] * .85) and t.center[0] > x]
+    aliases = {"WAIAN": "pan_number", "151": "isi_kg", "1SI": "isi_kg", "IS1": "isi_kg", "CAMPING": "gamping"}
+    jam = next((t for t in band if label(t.text) == "JAM"), None)
+    turun = next((t for t in band if label(t.text) == "TURUN" and jam and abs(t.center[0] - jam.center[0]) < .02), None)
+    columns = [Column(COLUMNS.get(label(t.text), aliases.get(label(t.text))), t, t.center[0])
+               for t in sorted(band, key=lambda item: item.center[0]) if t != turun]
+    if jam and turun:
+        columns = [Column("jam_turun", column.token, column.center_x) if column.token == jam else column for column in columns]
+    keys = [c.key for c in columns if c.key]
+    if not COOKING_HEADERS | {"brix", "hasil_kg"} <= set(keys) or len(keys) != len(set(keys)):
+        return None
+    pan = next(c for c in columns if c.key == "pan_number")
+    left = pan.center_x - min(.025, pan.token.bbox[2] / 2)
+    columns = [c for c in columns if c.center_x >= left]
+    cuts = grid_rules(image, x, y)
+    if len(cuts) < 2:
+        return None
+
+    borders = [(a.center_x + b.center_x) / 2 for a, b in zip(columns, columns[1:])]
+    body = [t for t in tokens if t.center[0] >= left and cuts[0] + .005 < t.center[1] < cuts[-1]]
+    grouped = {}
+    for row in rows(body):
+        cells = [[] for _ in columns]
+        for t in row:
+            cells[bisect_right(borders, t.center[0])].append(t)
+        named = {c.key: cell for c, cell in zip(columns, cells) if c.key}
+        populated = sum(bool(named.get(key)) for key in ("brix", "isi_kg", "gamping", "hasil_kg", "jam_turun"))
+        if populated < (1 if named.get("pan_number") else 2):
+            continue
+        row_y = median(t.center[1] for t in row)
+        index = bisect_right(cuts, row_y) - 1
+        batches = grouped.setdefault(index, [])
+        values = {key: field(key, named.get(key, []), asset, "ILLEGIBLE" if key in keys else "NOT_PRESENT")
+                  for key in COLUMNS.values() if key != "cane_label"}
+        unmapped = [{"header_raw": c.token.text, "cell_raw": " ".join(t.text for t in cell), "status": "UNMAPPED",
+                     "evidence": [t.evidence(asset) for t in cell]}
+                    for c, cell in zip(columns, cells) if not c.key and cell]
+        batches.append({"row_reference": f"ROW-{len(batches)+1}", "pan_number": values["pan_number"],
+                        "brix": values["brix"], "brix_measurement_stage": "UNKNOWN",
+                        "cooking": {key: values[key] for key in ("isi_kg", "gamping", "jam_turun")},
+                        "output": {key: values[key] for key in ("grade", "hasil_kg")}, "unmapped_cells": unmapped})
+
+    blocks = []
+    for i, batches in grouped.items():
+        sticker = [t for row in rows([t for t in tokens if abs(t.center[0] - x) <= left - x
+                   and cuts[i] < t.center[1] < cuts[i+1]]) for t in row if t.center[0] < left]
+        cane = field("cane_label", sticker, asset)
+        if sticker:
+            cane.update(status="AMBIGUOUS", normalized_value=None)
+        blocks.append({"block_reference": f"BLOCK-{len(blocks)+1}", "cane_label": cane,
+                       "kloter_match": {"status": "NOT_ATTEMPTED", "candidate_kloter_id": None, "match_method": "NONE"},
+                       "batches": batches})
+    if not blocks:
+        return None
+    unknown = [{"header_raw": c.token.text, "column_reference": f"COLUMN-{i+2}", "status": "UNMAPPED",
+                "evidence": [c.token.evidence(asset)]} for i, c in enumerate(columns) if not c.key]
+    return {**shared, "document_type": "PRODUCTION_NOTE", "header": key_values(rows([t for t in tokens if t.center[1] < y - .025]), PRODUCTION, asset),
+            "cane_blocks": blocks, "unmapped_columns": unknown}
+
+
+def extract(tokens, asset, schema_version, template_version, image=None):
     lines = rows(tokens)
     shared = {"schema_version": schema_version, "template_version": template_version, "issues": []}
+    if grid := production_grid(tokens, asset, shared, image):
+        return grid
     for index, row in enumerate(lines):
         columns = table_columns(row)
         keys = [column.key for column in columns if column.key is not None]

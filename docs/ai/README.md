@@ -29,7 +29,7 @@ Panggilan pertama PaddleOCR mengunduh model. Gunakan `PADDLE_PDX_CACHE_HOME` unt
    flutter run -d web-server --web-hostname 127.0.0.1 --web-port 8080 --dart-define=API_BASE_URL=http://127.0.0.1:3000 --dart-define=SUPABASE_URL=http://127.0.0.1:8077 --dart-define=SUPABASE_PUBLISHABLE_KEY=local-synthetic-publishable
    ```
 
-4. Masuk dengan `admin@example.invalid` / `sobatnira-demo`, pilih **Pabrik Demo**, lalu buka **Pekerjaan**. Gunakan ID tugas dan kode kloter yang dicetak terminal.
+4. Masuk dengan `admin@example.invalid` / `sobatnira-demo`, buka **Pekerjaan** dari Beranda **Pabrik Demo**. Gunakan ID tugas dan kode kloter yang dicetak terminal.
 
    - Buka **Nota Kedatangan Truk**, periksa foto dan riwayat, pilih **Validasi revisi ini**, pilih kloter `OCR-A-…`, lalu pilih **Sahkan dan catat stok**.
    - Buka tugas dari **Perlu tinjauan manual**. Lengkapi tanggal `2026-11-16`, pemasok `PEMASOK DEMO`, jenis tebu `BL`, berat `1250` dan catatan pemeriksaan. Simpan draf dan sahkan ke kloter `OCR-B-…`.
@@ -89,6 +89,18 @@ Jalankan gateway, NestJS dan FastAPI pada host yang sama untuk memakai alamat lo
    Terapkan bagian relevan dari [contoh konfigurasi OpenClaw](openclaw.example.json) ke `<state-dir>/openclaw.json`. State directory bawaan berada di `~/.openclaw`. Ganti nomor contoh dengan nomor operator terdaftar, isi `mediaDir` dengan path absolut `<state-dir>/media`, dan pertahankan entri lain yang dipakai gateway di `plugins.allow`. Gunakan `openclaw channels login --channel whatsapp --account sobatnira` dan pindai QR dari **Perangkat tertaut** pada nomor WhatsApp SobatNira.
 
    Berikan `SOBATNIRA_MODE`, `SOBATNIRA_API_URL`, `SOBATNIRA_WHATSAPP_ACCOUNT_ID`, `WHATSAPP_ADAPTER_INTERNAL_TOKEN`, serta pengaturan `OPENROUTER_*` dari langkah 1 melalui lingkungan proses gateway atau file privat `<state-dir>/.env`. Jika gateway memakai autentikasi token, isi `OPENCLAW_GATEWAY_TOKEN` dengan nilai acak terpisah. Jalankan `openclaw config validate` untuk memeriksa contoh konfigurasi. Pada `openclaw plugins inspect sobatnira-intake --runtime`, pastikan status `loaded` dengan hook `reply_dispatch` dan layanan `sobatnira-notices`. Jalankan `openclaw gateway` dan periksa `openclaw channels status --probe`. Akun `sobatnira` harus terhubung dan plugin harus aktif. [Pairing WhatsApp](https://docs.openclaw.ai/channels/whatsapp), [hook pesan](https://docs.openclaw.ai/plugins/hooks/messages), [lingkungan gateway](https://docs.openclaw.ai/help/environment).
+
+   Bila Windows sudah memiliki layanan OpenClaw, siapkan instance SobatNira dengan profil, file konfigurasi, direktori state, workspace, dan port tersendiri. Jalankan pemasangan plugin dan validasi dengan profil yang sama. Set `gateway.port` pada konfigurasi profil agar perintah pairing dan status menargetkan gateway SobatNira. Tunggu gateway siap di terminal pertama, lalu jalankan pairing di terminal kedua dengan lingkungan profil yang sama.
+
+   ```powershell
+   # Terminal gateway
+   openclaw --profile sobatnira-demo gateway --port 19089
+   # Terminal pairing
+   openclaw --profile sobatnira-demo channels login --channel whatsapp --account sobatnira --verbose
+   openclaw --profile sobatnira-demo channels status --probe
+   ```
+
+   Jika CLI melaporkan direktori state yang berbeda, periksa profil, port, `OPENCLAW_STATE_DIR`, dan `OPENCLAW_CONFIG_PATH` pada kedua terminal. Mode `--verbose` menampilkan alasan kegagalan login. [Beberapa gateway pada satu host](https://docs.openclaw.ai/gateway/multiple-gateways).
 5. Dari `apps/api`, jalankan `node --env-file=../../.env.connected dist/documents/setup.js check`. Perintah memeriksa migration OCR dan produksi, token internal, worker, mode NestJS dan FastAPI, operator aktif dan kedua lapisan membership reviewer untuk pabrik yang sama, PostgreSQL, Supabase Auth, R2, PaddleOCR serta akses API/model Gemini dan OpenRouter. Kesalahan menampilkan komponen dan nama variabel untuk diperiksa. Untuk pemeriksaan terpisah gunakan `check-scope` atau `check-media-privacy`.
 
    Dari `apps/mobile`, buat build web dengan mode terhubung dan konfigurasi publik proyek. Ganti ketiga nilai contoh berikut sebelum build.
@@ -97,20 +109,24 @@ Jalankan gateway, NestJS dan FastAPI pada host yang sama untuk memakai alamat lo
    flutter build web --dart-define=SOBATNIRA_MODE=connected --dart-define=API_BASE_URL=https://api.example.invalid --dart-define=SUPABASE_URL=https://project.supabase.co --dart-define=SUPABASE_PUBLISHABLE_KEY=sb_publishable_EXAMPLE
    ```
 
-   Sajikan `build/web` dari origin yang terdaftar di `CORS_ORIGINS`. Masuk dengan akun Supabase, pilih pabrik yang terdaftar di akun, lalu buka **Kloter** atau **Pekerjaan**.
+   Sajikan `build/web` dari origin yang terdaftar di `CORS_ORIGINS`. Masuk dengan akun Supabase. Beranda membuka pabrik pertama yang dapat diakses. Jika akun mempunyai akses ke beberapa pabrik, gunakan pemilih di profil Beranda. Buka **Pekerjaan** untuk meninjau nota, **Kloter** untuk detail dan saldo nira, atau **Laporan** dan aksi **Rekap** untuk melihat data yang sudah disahkan.
 
    Jika probe privasi R2 gagal karena koneksi ke hostname lama terputus, cocokkan hostname dengan daftar domain publik bucket di dashboard R2 dan ulangi `check-media-privacy` dari host deployment. Bila hostname lama sudah dihapus dan dashboard menunjukkan seluruh akses publik dinonaktifkan, `R2_PUBLIC_BASE_URL` boleh dikosongkan. Verifikasi ini terpisah dari pemeriksaan akses S3.
 
 ### Smoke test setelah pairing
 
-1. Dari `apps/ai`, jalankan `uv run --locked --extra paddle python synthetic_notes.py ../../.tmp/live-fixtures`. Kirim `truck.png` dari nomor operator terdaftar dan periksa tanda terima, ringkasan otomatis, berat 1250 kg, serta perintah `STATUS`. Kirim `KONFIRMASI <dokumen> <revisi>`. Di Pekerjaan buka badge laporan baru, periksa foto dan evidence, lalu sahkan ke kloter uji A. Status harus `VALIDATED` setelah halaman dimuat ulang.
+1. Dari `apps/ai`, jalankan `uv run --locked --extra paddle python synthetic_notes.py ../../.tmp/live-fixtures`. Kirim `truck.png` dari nomor operator terdaftar. Periksa tanda terima, ringkasan otomatis, dan berat 1250 kg. Ketik `STATUS` di chat yang sama untuk melihat nota terakhir. Balas ringkasan otomatis dengan `KONFIRMASI`. Di Pekerjaan buka badge laporan baru, periksa foto dan evidence, lalu sahkan ke kloter uji A. Status harus `VALIDATED` setelah halaman dimuat ulang.
 2. Kirim `manual.png` dan buka tugasnya dari **Perlu tinjauan manual**. Isi tanggal `2026-11-16`, pemasok `PEMASOK DEMO`, jenis tebu `BL`, berat `1250` dan catatan pemeriksaan. Simpan draf, lalu sahkan ke kloter uji B. Periksa kredit 1250 kg pada masing-masing kloter.
 3. Kirim `production.png` dengan caption `BARU`. Balas pesan ringkasannya dengan `update.png`. Pastikan ID dokumen sama, revisi bertambah, dan hasil baris pertama menjadi 26 kg. Balas ke foto terkini dengan pertanyaan pendek untuk menjalankan OpenRouter. Cocokkan tool call dengan aktivitas di dashboard provider karena template dapat dipakai bila provider gagal. Konfirmasi revisi terbaru, lalu validasi kedua blok dengan memilih kloter uji dan memasukkan liter serta waktu penggilingan seperti smoke lokal. Periksa debit tebu dan kredit nira.
-4. Kirim `ambiguous.png` untuk memicu Gemini dengan crop angka berat. Pastikan aktivitas generate muncul dan hasil atau kegagalannya tercatat pada envelope OCR. Gunakan `JAWAB <dokumen> <revisi> <pertanyaan> <nilai JSON>` untuk memilih nilai dalam simulasi. Coba lagi dengan ID lama untuk memastikan jawaban ditolak. Kirim `unreadable.png` dan uji `FOTO ULANG <dokumen> <revisi>`. Foto ulang harus menyimpan revisi baru dengan riwayat asli.
+4. Kirim `ambiguous.png` untuk memicu Gemini dengan crop angka berat. Pastikan aktivitas generate muncul dan hasil atau kegagalannya tercatat pada envelope OCR. Balas ringkasan otomatis dengan `JAWAB 1250`. Ulangi pada kutipan lama dan pastikan perintah ditolak. Kirim `unreadable.png`, lalu balas ringkasannya dengan foto baru dan caption `FOTO ULANG`. Foto ulang harus menyimpan revisi baru dengan riwayat asli.
 
 Gateway hanya menangani DM pada akun yang dikonfigurasi. NestJS mengotorisasi setiap perubahan dan membatasi rujukan kutipan ke percakapan serta pabrik yang sama. Pakai `REVISI <dokumen>` jika kutipan belum bisa dipetakan. Foto dengan byte yang sama pada operator dan chat yang sama memakai kembali pengiriman terdahulu. `BARU` menyatakan nota baru, dan `FOTO ULANG` menyatakan penggantian revisi secara eksplisit. Pesan ringkasan dapat terkirim ulang jika gateway berhenti setelah WhatsApp menerima pesan dan sebelum PostgreSQL mencatat receipt. Penerimaan foto, revisi dan konfirmasi tetap memakai idempotensi backend.
 
+Ketik `BANTUAN` untuk petunjuk atau `STATUS 2` untuk halaman berikutnya di nota produksi. Untuk membaca ulang foto asli setelah layanan OCR gagal, balas ringkasan otomatisnya dengan `COBA LAGI`. Backend membuat revisi pembacaan baru dari foto yang sama serta mempertahankan riwayat. Perintah yang mengubah dokumen terikat ke ringkasan revisi aktif yang dikutip. Sintaks ber-ID tetap bisa dipakai untuk pelacakan teknis.
+
 ## Pengelolaan operator WhatsApp
+
+Di Flutter mode terhubung, masuk sebagai admin atau owner, pilih pabrik di **Kloter**, lalu buka **Operator WhatsApp**. Daftar mendukung pencarian nama dan nomor serta filter status. Gunakan **Tambah operator WhatsApp** untuk mendaftarkan nomor, ikon edit untuk mengubah nama dan status, atau ikon riwayat untuk melihat perubahan.
 
 Admin dan owner dengan membership aktif dapat mengelola operator pada pabrik yang dipilih. Kirim token akses Supabase sebagai `Authorization: Bearer <access_token>`. Route dasar memakai `/tenants/:tenantId/factories/:factoryId/operators`.
 
