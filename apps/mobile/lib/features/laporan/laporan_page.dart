@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/summary_card.dart';
 import '../kloter/kloter_date_filter.dart';
 import 'demo_analytics.dart';
 import 'report_detail_page.dart';
@@ -132,12 +133,9 @@ class _LaporanPageState extends State<LaporanPage> {
   Widget _production() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      Row(
-        spacing: 8,
-        children: [
-          Expanded(child: _metric('Gula final', '360Kg')),
-          Expanded(child: _metric('Tebu diterima', '5.567Kg')),
-        ],
+      const NiraSummaryPair(
+        first: NiraSummaryCard('Gula final', '360Kg'),
+        second: NiraSummaryCard('Tebu diterima', '5.567Kg', boxes: true),
       ),
       const SizedBox(height: NiraSpace.md),
       _chartCard(),
@@ -152,51 +150,17 @@ class _LaporanPageState extends State<LaporanPage> {
   Widget _margin() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      _metric('Margin Produksi', 'Rp1.580.000', wide: true),
+      const NiraSummaryCard('Margin Produksi', 'Rp1.580.000', cane: true),
       const SizedBox(height: NiraSpace.sm),
-      Row(
-        spacing: 8,
-        children: [
-          Expanded(child: _metric('Nilai produksi', '360Kg')),
-          Expanded(child: _metric('Total biaya', '5.567Kg')),
-        ],
+      const NiraSummaryPair(
+        first: NiraSummaryCard('Nilai produksi', '360Kg'),
+        second: NiraSummaryCard('Total biaya', '5.567Kg', boxes: true),
       ),
       const SizedBox(height: NiraSpace.md),
       _chartCard(margin: true),
       const SizedBox(height: NiraSpace.md),
       _marginTable(),
     ],
-  );
-
-  Widget _metric(String label, String value, {bool wide = false}) => Container(
-    constraints: const BoxConstraints(minHeight: 62),
-    padding: const EdgeInsets.fromLTRB(
-      NiraSpace.md,
-      NiraSpace.sm,
-      NiraSpace.md,
-      NiraSpace.sm,
-    ),
-    decoration: BoxDecoration(
-      color: niraGreen,
-      borderRadius: BorderRadius.circular(niraRadius),
-      boxShadow: const [niraShadow],
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(label, style: niraText(NiraType.caption, color: Colors.white)),
-        const SizedBox(height: NiraSpace.xs),
-        Text(
-          value,
-          style: niraText(
-            NiraType.metric,
-            color: niraYellow,
-            weight: FontWeight.w700,
-          ),
-        ),
-      ],
-    ),
   );
 
   Widget _chartCard({bool margin = false}) => NiraOutline(

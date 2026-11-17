@@ -36,6 +36,19 @@ def generate(folder):
             for x, value in enumerate(row):
                 draw.text((20 + x * 215, 170 + y * 65), value, fill="black", font=font(32))
         note.save(folder / f"{name}.png")
+    cooking = Image.new("RGB", (1280, 430), "white")
+    draw = ImageDraw.Draw(cooking)
+    header_font, data_font = font(54), font(39)
+    header = "WAJAN ISI GAMPING"
+    draw.text((28, 25), "TGL: 26-09-2026", font=data_font, fill="black")
+    draw.text((28, 140), "TEBU", font=header_font, fill="black")
+    draw.text((350, 140), header, font=header_font, fill="black")
+    for heading, value in (("WAJAN", "2"), ("ISI", "115"), ("GAMPING", "1 1/2")):
+        start = header.index(heading)
+        center = 350 + header_font.getlength(header[:start]) + header_font.getlength(heading) / 2
+        draw.text((center, 300), value, anchor="mm", font=data_font, fill="black")
+    draw.text((35, 275), "DEMO-A", font=data_font, fill="black")
+    cooking.save(folder / "cooking.png")
     Image.new("RGB", (640, 420), "white").save(folder / "unreadable.png")
     manual = Image.new("RGB", (640, 420), "white")
     ImageDraw.Draw(manual).text((45, 60), "CATATAN TIMBANG\n16-11-2026\nPEMASOK DEMO\nBL\n1250 KG", fill="black", font=font(39))

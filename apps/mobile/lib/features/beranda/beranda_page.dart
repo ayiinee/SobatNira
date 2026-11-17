@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/summary_card.dart';
 import '../kloter/demo_production.dart';
 import '../kloter/kloter_card.dart';
 import 'quick_action_icon.dart';
@@ -10,13 +11,11 @@ class BerandaPage extends StatefulWidget {
   const BerandaPage({
     required this.kloter,
     required this.onOpenKloter,
-    required this.onOpenPekerjaan,
     super.key,
   });
 
   final List<DemoKloter> kloter;
   final ValueChanged<DemoKloter> onOpenKloter;
-  final VoidCallback onOpenPekerjaan;
 
   @override
   State<BerandaPage> createState() => _BerandaPageState();
@@ -50,12 +49,6 @@ class _BerandaPageState extends State<BerandaPage> {
                   const _ProductionSummary(),
                   const SizedBox(height: NiraSpace.lg),
                   const _QuickActions(),
-                  const SizedBox(height: NiraSpace.md),
-                  OutlinedButton.icon(
-                    onPressed: widget.onOpenPekerjaan,
-                    icon: const Icon(Icons.assignment_outlined),
-                    label: const Text('Pekerjaan'),
-                  ),
                 ],
               ),
             ),
@@ -333,151 +326,13 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
           ),
         ),
         const SizedBox(height: NiraSpace.md),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final stacked =
-                constraints.maxWidth <
-                MediaQuery.textScalerOf(context).scale(NiraType.metric) * 9 +
-                    56;
-            const tiles = [
-              _SummaryTile('Tebu diterima', '8.200Kg', boxes: true),
-              _SummaryTile('Jumlah kloter', '3'),
-            ];
-            return stacked
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      tiles[0],
-                      const SizedBox(height: NiraSpace.sm),
-                      tiles[1],
-                    ],
-                  )
-                : Row(
-                    children: [
-                      Expanded(child: tiles[0]),
-                      const SizedBox(width: NiraSpace.sm),
-                      Expanded(child: tiles[1]),
-                    ],
-                  );
-          },
+        const NiraSummaryPair(
+          first: NiraSummaryCard('Tebu diterima', '8.200Kg', boxes: true),
+          second: NiraSummaryCard('Jumlah kloter', '3'),
         ),
       ],
     ),
   );
-}
-
-class _SummaryTile extends StatelessWidget {
-  const _SummaryTile(this.label, this.value, {this.boxes = false});
-
-  final String label;
-  final String value;
-  final bool boxes;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    clipBehavior: Clip.antiAlias,
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(niraRadius),
-      gradient: const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xFF0B231A), Color(0xFF205D42), niraGreen],
-        stops: [0, .6, 1],
-      ),
-    ),
-    child: Stack(
-      children: [
-        Positioned(
-          bottom: -12,
-          right: -19,
-          child: IgnorePointer(
-            child: boxes
-                ? const SizedBox.square(
-                    dimension: 80,
-                    child: CustomPaint(painter: _BoxOverlayPainter()),
-                  )
-                : const Icon(
-                    Icons.layers_outlined,
-                    color: Color(0x20FFFFFF),
-                    size: 80,
-                  ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: NiraSpace.md,
-            vertical: NiraSpace.lg,
-          ),
-          child: SizedBox(
-            width: double.infinity,
-            child: Column(
-              children: [
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: niraText(
-                    NiraType.caption,
-                    color: Colors.white,
-                    weight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: NiraSpace.xs),
-                Text(
-                  value,
-                  textAlign: TextAlign.center,
-                  style: niraText(
-                    NiraType.metric,
-                    color: niraYellow,
-                    weight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class _BoxOverlayPainter extends CustomPainter {
-  const _BoxOverlayPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.save();
-    canvas.scale(size.width / 388, size.height / 388);
-    final paint = Paint()..color = const Color(0x20FFFFFF);
-    // Trace the reference's cube faces without its editor grid or handles.
-    for (final face in const [
-      [Offset(204, 0), Offset(320, 8), Offset(384, 111), Offset(268, 104)],
-      [
-        Offset(193, 18),
-        Offset(254, 113),
-        Offset(216, 180),
-        Offset(165, 152),
-        Offset(140, 115),
-      ],
-      [
-        Offset(268, 123),
-        Offset(375, 128),
-        Offset(322, 225),
-        Offset(235, 223),
-        Offset(234, 191),
-      ],
-      [Offset(7, 204), Offset(112, 148), Offset(216, 204), Offset(112, 260)],
-      [Offset(7, 224), Offset(102, 277), Offset(102, 386), Offset(7, 335)],
-      [Offset(122, 277), Offset(216, 224), Offset(216, 335), Offset(123, 386)],
-      [Offset(311, 283), Offset(349, 322), Offset(311, 362), Offset(273, 322)],
-      [Offset(248, 344), Offset(266, 362), Offset(248, 381), Offset(230, 362)],
-    ]) {
-      canvas.drawPath(Path()..addPolygon(face, true), paint);
-    }
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant _BoxOverlayPainter oldDelegate) => false;
 }
 
 // Decorative sugarcane motif; independent of data and layout measurements.
@@ -651,6 +506,8 @@ class _QuickActionTileState extends State<_QuickActionTile> {
         onHover: (value) => setState(() => _hovered = value),
         onFocusChange: (value) => setState(() => _focused = value),
         onHighlightChanged: (value) => setState(() => _pressed = value),
+        hoverColor: Colors.transparent,
+        focusColor: Colors.transparent,
         borderRadius: BorderRadius.circular(niraRadius),
         child: Column(
           children: [
@@ -670,15 +527,6 @@ class _QuickActionTileState extends State<_QuickActionTile> {
                   color: active ? const Color(0xFFF4F8F1) : Colors.white,
                   borderRadius: BorderRadius.circular(niraRadius),
                   border: Border.all(color: niraGreen, width: 1.3),
-                  boxShadow: [
-                    BoxShadow(
-                      color: active
-                          ? const Color(0x28174B35)
-                          : Colors.transparent,
-                      blurRadius: active ? 10 : 0,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
                 ),
                 child: AnimatedScale(
                   scale: reduceMotion
