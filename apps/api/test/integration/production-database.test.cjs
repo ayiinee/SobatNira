@@ -134,6 +134,16 @@ test('production master data and lot HTTP flows enforce scope, filters and atomi
     const lots = await request(root + '/lots?supplierId=' + supplier.id + '&receivedFrom=2026-11-16T00:00:00Z&receivedBefore=2026-11-17T00:00:00Z&q=MANUAL&limit=1');
     assert.equal(lots.body.total, 2, JSON.stringify(lots.body));
     assert.equal(lots.body.items.length, 1);
+    assert.equal(Object.hasOwn(lots.body.items[0], 'status'), false);
+    const summary = await request(root + '/lots?includeSummary=true&limit=1');
+    assert.equal(summary.status, 200);
+    assert.equal(summary.body.total, 2);
+    assert.equal(summary.body.items[0].status, 'open');
+    assert.equal(summary.body.items[0].netWeightGrams, null);
+    assert.equal(summary.body.items[0].juiceProducedLiters, null);
+    assert.equal(summary.body.items[0].intake, null);
+    assert.equal((await request(root + '/lots?includeSummary=invalid')).status, 400);
+    assert.equal((await request(scope(tenantA, factoryB) + '/lots?includeSummary=true')).body.total, 0);
     const emptyPage = await request(root + '/lots?offset=99');
     assert.deepEqual(emptyPage.body, { items: [], total: 2, limit: 20, offset: 99 });
     assert.equal((await request(root + '/lots?receivedBefore=2026-11-16T00:00:00Z')).body.total, 0);

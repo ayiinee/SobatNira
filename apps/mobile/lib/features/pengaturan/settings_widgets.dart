@@ -10,6 +10,7 @@ class SettingsPageFrame extends StatelessWidget {
     required this.children,
     this.subtitle,
     this.bottomAction,
+    this.tab = NiraTab.pengaturan,
     super.key,
   });
 
@@ -18,11 +19,12 @@ class SettingsPageFrame extends StatelessWidget {
   final ValueChanged<NiraTab> onNavigate;
   final List<Widget> children;
   final Widget? bottomAction;
+  final NiraTab tab;
 
   @override
   Widget build(BuildContext context) {
     return NiraScaffold(
-      tab: NiraTab.pengaturan,
+      tab: tab,
       onNavigate: onNavigate,
       bottomAction: bottomAction,
       body: ListView(

@@ -24,6 +24,20 @@ String formatDate(DateTime date, {bool short = false}) {
 
 String formatMonth(DateTime date) => '${monthName(date)} ${date.year}';
 
+String formatQuantity(num? number, String unit) {
+  if (number == null) return 'Belum tersedia';
+  final parts = number
+      .toStringAsFixed(5)
+      .replaceFirst(RegExp(r'0+$'), '')
+      .split('.');
+  final integer = parts.first.replaceAllMapped(
+    RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+    (match) => '${match[1]}.',
+  );
+  final fraction = parts.last;
+  return fraction.isEmpty ? '$integer $unit' : '$integer,$fraction $unit';
+}
+
 enum KloterStatus { review, done }
 
 class DemoProduction extends ChangeNotifier {
@@ -81,6 +95,8 @@ class DemoProduction extends ChangeNotifier {
         DemoKloter('MJT-170926-1A', 11, KloterStatus.done, 'Pemasok Contoh F'),
       ];
 
+  DemoProduction.empty() : kloter = [];
+
   static final today = DateTime(2026, 10, 29);
   final List<DemoKloter> kloter;
 
@@ -120,7 +136,8 @@ class DemoProduction extends ChangeNotifier {
 
 class DemoKloter {
   DemoKloter(this.code, int day, KloterStatus status, String supplier)
-    : date = DateTime(2026, 10, day),
+    : record = null,
+      date = DateTime(2026, 10, day),
       intake = DemoReview([
         DemoField('Tanggal masuk', formatDate(DateTime(2026, 10, day))),
         DemoField('Jenis tebu', 'Bululawang (BL)'),
@@ -141,18 +158,42 @@ class DemoKloter {
           ),
       ];
 
+  DemoKloter.connected({
+    required this.record,
+    required this.code,
+    required this.date,
+    required this.intake,
+    required this.milling,
+  }) : batches = const [];
+
+  final Map<String, Object?>? record;
   final String code;
   final DateTime date;
-  KloterStatus get status =>
-      intake.verified && milling.verified && batchesToReview == 0
+  String? get id => record?['id'] as String?;
+  num? get netWeightKg => _number('netWeightGrams', divisor: 1000);
+  num? get brix => _number('brix');
+  num? get juiceLiters => _number('juiceProducedLiters');
+
+  num? _number(String field, {int divisor = 1}) {
+    final value = num.tryParse(record?[field]?.toString() ?? '');
+    return value == null ? null : value / divisor;
+  }
+
+  KloterStatus get status => record != null
+      ? (record!['status'] == 'closed'
+            ? KloterStatus.done
+            : KloterStatus.review)
+      : intake.verified && milling.verified && batchesToReview == 0
       ? KloterStatus.done
       : KloterStatus.review;
   final DemoReview intake;
   final DemoReview milling;
   final List<DemoBatch> batches;
 
-  String get supplier => intake.fields[2].value;
-  String get weight => '8.200Kg';
+  String get supplier =>
+      (record?['supplierName'] as String?) ?? intake.fields[2].value;
+  String get weight =>
+      record == null ? '8.200Kg' : formatQuantity(netWeightKg, 'kg');
   int get batchesToReview =>
       batches.where((batch) => !batch.review.verified).length;
 }

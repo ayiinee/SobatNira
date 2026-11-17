@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../pekerjaan/review_api.dart';
+import '../pengaturan/operator_history_page.dart';
 
 class ProductionCatalogPage extends StatefulWidget {
   const ProductionCatalogPage({
@@ -40,6 +41,22 @@ class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
     super.dispose();
   }
 
+  bool get _isOperator => widget.kind == ProductionCatalog.operators;
+
+  void _openHistory(Json item) {
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => OperatorHistoryPage(
+          api: widget.api,
+          scope: widget.scope,
+          operatorId: item['id'] as String,
+          phone: item['phoneE164'] as String,
+        ),
+      ),
+    );
+  }
+
   void _reload({bool reset = false}) => setState(() {
     if (reset) _offset = 0;
     _page = _fetch();
@@ -75,7 +92,7 @@ class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
             controller: _search,
             maxLength: 100,
             decoration: InputDecoration(
-              labelText: 'Cari ${widget.kind.label.toLowerCase()}',
+              labelText: 'Cari ${widget.kind.itemLabel}',
               suffixIcon: IconButton(
                 tooltip: 'Cari',
                 icon: const Icon(Icons.search),
@@ -112,7 +129,7 @@ class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
             FilledButton.icon(
               onPressed: () => _edit(),
               icon: const Icon(Icons.add),
-              label: Text('Tambah ${widget.kind.label.toLowerCase()}'),
+              label: Text('Tambah ${widget.kind.itemLabel}'),
             ),
           FutureBuilder<Json>(
             future: _page,
@@ -144,18 +161,37 @@ class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
                     const ListTile(title: Text('Data tidak ditemukan.')),
                   for (final item in items)
                     ListTile(
-                      title: Text(item['name'] as String),
+                      title: Text(
+                        item[_isOperator ? 'displayName' : 'name'] as String,
+                      ),
                       subtitle: Text(
                         [
+                          if (_isOperator) item['phoneE164'] as String,
                           if (item['code'] != null) '${item['code']}',
                           item['isActive'] == true ? 'Aktif' : 'Nonaktif',
                         ].join(' · '),
                       ),
-                      trailing: Icon(
-                        widget.selectSupplier
-                            ? Icons.chevron_right
-                            : Icons.edit_outlined,
-                      ),
+                      trailing: _isOperator
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  tooltip: 'Edit operator',
+                                  onPressed: () => _edit(item),
+                                  icon: const Icon(Icons.edit_outlined),
+                                ),
+                                IconButton(
+                                  tooltip: 'Riwayat operator',
+                                  onPressed: () => _openHistory(item),
+                                  icon: const Icon(Icons.history),
+                                ),
+                              ],
+                            )
+                          : Icon(
+                              widget.selectSupplier
+                                  ? Icons.chevron_right
+                                  : Icons.edit_outlined,
+                            ),
                       onTap: () {
                         if (widget.selectSupplier) {
                           Navigator.pop(context, item);
@@ -220,10 +256,14 @@ class _CatalogEditor extends StatefulWidget {
 
 class _CatalogEditorState extends State<_CatalogEditor> {
   final _form = GlobalKey<FormState>();
+  bool get _isOperator => widget.kind == ProductionCatalog.operators;
+  String get _nameField => _isOperator ? 'displayName' : 'name';
+
   late final _name = TextEditingController(
-    text: widget.item?['name'] as String?,
+    text: widget.item?[_nameField] as String?,
   );
   final _code = TextEditingController();
+  final _phone = TextEditingController();
   late bool _active = widget.item?['isActive'] as bool? ?? true;
   bool _saving = false;
   String? _error;
@@ -232,32 +272,53 @@ class _CatalogEditorState extends State<_CatalogEditor> {
   void dispose() {
     _name.dispose();
     _code.dispose();
+    _phone.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
     if (_saving || !_form.currentState!.validate()) return;
+    final item = widget.item;
+    final name = _name.text.trim();
+    final values = <String, dynamic>{
+      if (!_isOperator || item == null || name != item[_nameField])
+        _nameField: name,
+      if (item != null && (!_isOperator || _active != item['isActive']))
+        'isActive': _active,
+      if (item == null && _isOperator) 'phoneE164': _phone.text.trim(),
+      if (item == null && widget.kind == ProductionCatalog.caneTypes)
+        'code': _code.text.trim(),
+    };
+    if (values.isEmpty) {
+      Navigator.pop(context);
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;
     });
     try {
-      await widget.api.saveCatalog(widget.scope, widget.kind, {
-        'name': _name.text.trim(),
-        if (widget.item != null) 'isActive': _active,
-        if (widget.kind == ProductionCatalog.caneTypes && widget.item == null)
-          'code': _code.text.trim(),
-      }, id: widget.item?['id'] as String?);
+      await widget.api.saveCatalog(
+        widget.scope,
+        widget.kind,
+        values,
+        id: item?['id'] as String?,
+      );
       if (mounted) Navigator.pop(context, true);
     } catch (error) {
       if (mounted) {
-        setState(
-          () => _error = error is ReviewApiError
-              ? error.status == 409
-                    ? 'Kode jenis tebu sudah terdaftar. Gunakan kode lain.'
-                    : error.message
-              : 'Penyimpanan belum terkonfirmasi. Tutup form dan muat ulang daftar sebelum mencoba lagi.',
-        );
+        setState(() {
+          _error = switch (error) {
+            ReviewApiError(status: 409) when _isOperator =>
+              'Nomor WhatsApp sudah terdaftar.',
+            ReviewApiError(status: 409)
+                when widget.kind == ProductionCatalog.caneTypes =>
+              'Kode jenis tebu sudah terdaftar. Gunakan kode lain.',
+            ReviewApiError() => error.message,
+            _ =>
+              'Penyimpanan belum terkonfirmasi. Tutup form dan muat ulang daftar sebelum mencoba lagi.',
+          };
+        });
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -270,7 +331,7 @@ class _CatalogEditorState extends State<_CatalogEditor> {
     child: AlertDialog(
       scrollable: true,
       title: Text(
-        '${widget.item == null ? 'Tambah' : 'Edit'} ${widget.kind.label.toLowerCase()}',
+        '${widget.item == null ? 'Tambah' : 'Edit'} ${widget.kind.itemLabel}',
       ),
       content: Form(
         key: _form,
@@ -293,16 +354,37 @@ class _CatalogEditorState extends State<_CatalogEditor> {
                 )
               else
                 Text('Kode ${widget.item!['code']}'),
+            if (_isOperator && widget.item == null)
+              TextFormField(
+                controller: _phone,
+                enabled: !_saving,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Nomor WhatsApp',
+                  hintText: '+6281234567890',
+                ),
+                validator: (value) =>
+                    RegExp(r'^\+[1-9][0-9]{7,14}$').hasMatch(value!.trim())
+                    ? null
+                    : 'Masukkan nomor dengan kode negara, misalnya +6281234567890.',
+              ),
+            if (_isOperator && widget.item != null)
+              Text(widget.item!['phoneE164'] as String),
             TextFormField(
               controller: _name,
               enabled: !_saving,
-              maxLength: 200,
+              maxLength: _isOperator ? 100 : 200,
               decoration: const InputDecoration(labelText: 'Nama'),
               validator: (value) => value!.trim().isEmpty ? 'Isi nama.' : null,
             ),
             if (widget.item != null)
               SwitchListTile(
                 title: const Text('Aktif'),
+                subtitle: _isOperator
+                    ? const Text(
+                        'Nomor nonaktif ditolak saat mengirim nota baru.',
+                      )
+                    : null,
                 value: _active,
                 onChanged: _saving
                     ? null

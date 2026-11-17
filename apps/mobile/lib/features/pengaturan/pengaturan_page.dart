@@ -11,11 +11,19 @@ class PengaturanPage extends StatelessWidget {
   const PengaturanPage({
     required this.settings,
     required this.onNavigate,
+    this.connectedProfile,
+    this.onConnectedEntry,
+    this.onSignOut,
+    this.catalogLinks = const {},
     super.key,
   });
 
   final SettingsDemo settings;
   final ValueChanged<NiraTab> onNavigate;
+  final String? connectedProfile;
+  final Map<SettingSection, VoidCallback>? onConnectedEntry;
+  final VoidCallback? onSignOut;
+  final Map<String, VoidCallback> catalogLinks;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -34,6 +42,15 @@ class PengaturanPage extends StatelessWidget {
         _section('PABRIK & TIM', factoryEntries, context),
         const SizedBox(height: NiraSpace.xl),
         _section('PRODUKSI & PERHITUNGAN', productionEntries, context),
+        for (final entry in catalogLinks.entries)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(entry.key),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: entry.value,
+          ),
+        if (onSignOut != null)
+          TextButton(onPressed: onSignOut, child: const Text('Keluar')),
       ],
     ),
   );
@@ -50,7 +67,7 @@ class PengaturanPage extends StatelessWidget {
       ),
       const SizedBox(height: NiraSpace.xs),
       Text(
-        settings.accounts.first.value.name,
+        connectedProfile ?? settings.accounts.first.value.name,
         style: niraText(NiraType.section, weight: FontWeight.w700),
       ),
     ],
@@ -76,41 +93,48 @@ class PengaturanPage extends StatelessWidget {
     ],
   );
 
-  Widget _row(SettingEntry entry, BuildContext context) => Semantics(
-    label: entry.title,
-    button: true,
-    onTap: () => _open(context, entry),
-    excludeSemantics: true,
-    child: InkWell(
-      onTap: () => _open(context, entry),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: NiraSpace.md),
-        child: Row(
-          children: [
-            _SettingIcon(entry.icon),
-            const SizedBox(width: NiraSpace.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    entry.title,
-                    style: niraText(NiraType.body, weight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: NiraSpace.xs),
-                  Text(
-                    entry.subtitle,
-                    style: niraText(NiraType.caption, color: niraLeaf),
-                  ),
-                ],
+  Widget _row(SettingEntry entry, BuildContext context) {
+    final callbacks = onConnectedEntry;
+    final VoidCallback? open = callbacks == null
+        ? () => _open(context, entry)
+        : callbacks[entry.section];
+    return Semantics(
+      label: entry.title,
+      button: open != null,
+      enabled: open != null,
+      onTap: open,
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: open,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: NiraSpace.md),
+          child: Row(
+            children: [
+              _SettingIcon(entry.icon),
+              const SizedBox(width: NiraSpace.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.title,
+                      style: niraText(NiraType.body, weight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: NiraSpace.xs),
+                    Text(
+                      open == null ? 'Belum tersedia' : entry.subtitle,
+                      style: niraText(NiraType.caption, color: niraLeaf),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const Icon(Icons.chevron_right, color: niraGreen, size: 20),
-          ],
+              const Icon(Icons.chevron_right, color: niraGreen, size: 20),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 
   void _open(BuildContext context, SettingEntry entry) {
     final page = switch (entry.section) {

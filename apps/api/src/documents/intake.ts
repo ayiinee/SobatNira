@@ -6,11 +6,12 @@ import { Database } from './database';
 import { MediaStorage } from './media';
 import { correctField } from './revisions';
 import { closeClarifications, describeQuestion, openClarifications, Question } from './clarifications';
+import { enqueueNotice } from './notices';
 
 type Operator = { id: string; factory_id: string };
 export type Revision = { id: string; document_id: string; submission_id: string; version: number;
   processing_status: string; operator_status: string; extraction: Note | null; issues: Issue[] };
-type Action = { action: 'CONFIRM' | 'CORRECT' | 'ANSWER'; document_id: string; revision_id: string;
+type Action = { action: 'CONFIRM' | 'CORRECT' | 'ANSWER' | 'RETRY_OCR'; document_id: string; revision_id: string;
   question_id?: string; field_path?: string; value?: unknown };
 const digest = (value: Buffer | string) => createHash('sha256').update(value).digest('hex');
 const json = (value: unknown) => JSON.stringify(value);
@@ -195,8 +196,31 @@ export class Intake {
     return reference;
   }
 
+  async quotedActionContext(phone: string, chat: string, quotedMessageId: string) {
+    const { rows: [reference] } = await this.db.query<{ document_id: string; revision_id: string }>(`SELECT d.id AS document_id,r.id AS revision_id
+      FROM whatsapp_notices n JOIN document_revisions r ON r.id=n.revision_id
+      JOIN source_documents d ON d.id=r.document_id AND d.current_revision_id=r.id
+      JOIN document_submissions s ON s.id=r.submission_id JOIN whatsapp_inbound_messages m ON m.id=s.inbound_message_id
+      JOIN operator_contacts o ON o.id=m.operator_id AND o.active AND o.factory_id=d.factory_id
+      WHERE n.provider_message_id=$1 AND n.status='SENT' AND m.event->>'chat_id'=$2 AND o.phone_e164=$3`,
+    [quotedMessageId, chat, phone]);
+    if (!reference) throw new NotFoundException('Ringkasan aktif tidak ditemukan pada percakapan ini');
+    return reference;
+  }
+
+  async latestContext(phone: string, chat: string) {
+    const { rows: [reference] } = await this.db.query<{ document_id: string; revision_id: string }>(`SELECT d.id AS document_id,r.id AS revision_id
+      FROM operator_contacts o JOIN whatsapp_inbound_messages m ON m.operator_id=o.id
+      JOIN document_submissions s ON s.inbound_message_id=m.id JOIN source_documents d ON d.id=s.document_id AND d.factory_id=o.factory_id
+      JOIN document_revisions r ON r.id=d.current_revision_id AND r.submission_id=s.id
+      WHERE o.phone_e164=$1 AND o.active AND m.event->>'chat_id'=$2
+      ORDER BY m.received_at DESC,m.id LIMIT 1`, [phone, chat]);
+    if (!reference) throw new NotFoundException('Belum ada nota pada percakapan ini');
+    return reference;
+  }
+
   async reply(event: Inbound, action: Action) {
-    if (!action || !['CONFIRM', 'CORRECT', 'ANSWER'].includes(action.action) || !UUID.test(action.document_id) || !UUID.test(action.revision_id) ||
+    if (!action || !['CONFIRM', 'CORRECT', 'ANSWER', 'RETRY_OCR'].includes(action.action) || !UUID.test(action.document_id) || !UUID.test(action.revision_id) ||
         (action.action === 'CORRECT' && typeof action.field_path !== 'string') ||
         (action.action === 'ANSWER' && (!action.question_id || !UUID.test(action.question_id)))) throw new BadRequestException('Aksi operator tidak valid');
     return this.db.transaction(async (db) => {
@@ -214,6 +238,19 @@ export class Intake {
         JOIN document_submissions s ON s.id=r.submission_id JOIN whatsapp_inbound_messages m ON m.id=s.inbound_message_id
         WHERE r.id=$1 AND m.operator_id=$2 AND m.event->>'chat_id'=$3`, [action.revision_id, operator.id, event.chat_id]);
       if (!base) throw new NotFoundException('Revisi operator tidak ditemukan');
+      if (action.action === 'RETRY_OCR') {
+        if (base.processing_status !== 'FAILED_FINAL' || base.extraction) throw new ConflictException('OCR_RETRY_UNAVAILABLE');
+        const { rows: [revision] } = await db.query<Revision>(`INSERT INTO document_revisions
+          (document_id,submission_id,parent_revision_id,version) VALUES ($1,$2,$3,$4) RETURNING *`,
+        [base.document_id, base.submission_id, base.id, base.version + 1]);
+        await db.query('UPDATE source_documents SET current_revision_id=$2 WHERE id=$1', [doc.id, revision.id]);
+        await db.query("UPDATE admin_review_tasks SET status='SUPERSEDED' WHERE revision_id=$1 AND status='MANUAL_REVIEW_REQUIRED'", [base.id]);
+        await db.query('INSERT INTO document_jobs (revision_id) VALUES ($1)', [revision.id]);
+        await audit(db, revision, 'OCR_RETRY_QUEUED', operator.id, { inbound_message_id: inbound.id });
+        const outcome = { document_id: doc.id, revision_id: revision.id, processing_status: 'QUEUED' };
+        await db.query('UPDATE whatsapp_inbound_messages SET outcome=$2 WHERE id=$1', [inbound.id, json(outcome)]);
+        return { ...outcome, duplicate: false };
+      }
       if (!base.extraction || base.issues.some(({ severity, field_path }) => severity === 'BLOCKER' && !field_path)) {
         throw new ConflictException('Revisi memerlukan tinjauan dokumen');
       }
@@ -233,6 +270,7 @@ export class Intake {
           resolved_by=$3,result_revision_id=$4 WHERE id=$1`, [question.id, inbound.id, operator.id, revision.id]);
         await audit(db, revision, question ? 'CLARIFICATION_ANSWERED' : 'OPERATOR_CORRECTED', operator.id,
           { field_path: path, inbound_message_id: inbound.id, question_id: question?.id });
+        await enqueueNotice(db, revision.id, 'OCR_RESULT');
         outcome = { document_id: doc.id, revision_id: revision.id, operator_status: revision.operator_status };
       } else {
         if (base.operator_status !== 'PENDING') throw new ConflictException('Revisi operator sudah ditutup');
