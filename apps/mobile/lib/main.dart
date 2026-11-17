@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
 import 'features/beranda/beranda_page.dart';
+import 'features/kloter/connected_kloter_page.dart';
 import 'features/kloter/demo_production.dart';
 import 'features/kloter/kloter_detail_page.dart';
 import 'features/kloter/kloter_list_page.dart';
 import 'features/laporan/demo_analytics.dart';
 import 'features/laporan/laporan_page.dart';
 import 'features/laporan/report_detail_page.dart';
+import 'features/pekerjaan/review_api.dart';
 import 'features/pengaturan/pengaturan_page.dart';
 import 'features/pengaturan/settings_demo.dart';
 import 'sobatnira_ui.dart';
@@ -103,7 +105,11 @@ class _SobatNiraAppState extends State<SobatNiraApp> {
         ),
       ),
     ),
-    home: _buildHome(),
+    home: connectedMobile
+        ? ConnectedKloterPage(
+            invalidConfiguration: ReviewApi.invalidConfiguration,
+          )
+        : _buildHome(),
   );
 
   Widget _buildHome() => ValueListenableBuilder<NiraTab>(

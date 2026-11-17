@@ -117,8 +117,8 @@ class MobileReviewController {
 
   @Get('review-notifications')
   @Header('Cache-Control', 'private, no-store')
-  async notifications(@Headers('authorization') token: string) {
-    return this.review.unreadNotifications(await this.review.user(token));
+  async notifications(@Headers('authorization') token: string, @Query('factory_id') factory?: string) {
+    return this.review.unreadNotifications(await this.review.user(token), factory);
   }
 
   @Patch('review-notifications/:id/read')
@@ -129,8 +129,8 @@ class MobileReviewController {
   @Get('review-tasks')
   @Header('Cache-Control', 'private, no-store')
   async list(@Headers('authorization') token: string, @Query('status') status = 'PENDING_VALIDATION',
-    @Query('page') page = '1', @Query('page_size') limit = '20') {
-    return this.review.list(await this.review.user(token), status, Number(page), Number(limit));
+    @Query('page') page = '1', @Query('page_size') limit = '20', @Query('factory_id') factory?: string) {
+    return this.review.list(await this.review.user(token), status, Number(page), Number(limit), factory);
   }
 
   @Get('review-tasks/:id')
