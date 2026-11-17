@@ -50,7 +50,7 @@ class BatchSummary {
 }
 
 class BatchDetail {
-  const BatchDetail({required this.id, required this.status, required this.contributions, this.cooking, this.weighing, this.grading, this.reworks = const []});
+  const BatchDetail({required this.id, required this.status, required this.contributions, this.cooking, this.weighing, this.grading, this.reworks = const [], this.traceability});
   final String id;
   final String status;
   final List<ContributionView> contributions;
