@@ -227,7 +227,7 @@ def ready(x_internal_service_token: str = Header(default="")):
             paddle_engine()
     except Exception:
         raise HTTPException(503, "PaddleOCR: jalankan instalasi extra paddle dan periksa cache model") from None
-    return {"status": "ok", "engine": "PADDLEOCR"}
+    return {"status": "ok", "engine": "PADDLEOCR", "mode": os.getenv("SOBATNIRA_MODE", "legacy")}
 
 
 @router.post("/internal/v1/ocr/extract")

@@ -3,6 +3,9 @@ import { Database } from './database';
 import { assertR2Privacy, MediaStorage } from './media';
 import { UUID } from './contracts';
 import { ConfigurationError } from '../config/backend.config';
+import { assertBusinessMigrationsApplied } from '../database/migrations';
+import { DatabaseSession } from '../database/database.service';
+import { requireProductionAccess } from './production-access';
 
 async function check(name: string, action: () => Promise<unknown>) {
   try { await action(); console.log(`${name}: OK`); }
@@ -31,18 +34,23 @@ async function readiness(db: Database, infrastructureOnly: boolean) {
   if (infrastructureOnly) return;
   await Promise.all([
     check('Migration OCR [jalankan db:migrate:ocr]', () => db.assertMigrationsApplied()),
-    check('NestJS intake [SOBATNIRA_API_URL, WHATSAPP_ADAPTER_INTERNAL_TOKEN, DOCUMENT_WORKER_ENABLED]', async () => {
+    check('Migration produksi [jalankan db:migrate]', () => assertBusinessMigrationsApplied(db)),
+    check('NestJS intake [SOBATNIRA_API_URL, WHATSAPP_ADAPTER_INTERNAL_TOKEN, DOCUMENT_WORKER_ENABLED, SOBATNIRA_MODE]', async () => {
       if (!isServiceOrigin(process.env.SOBATNIRA_API_URL)) throw new Error('Invalid intake origin');
       const response = await ok(new URL('/internal/v1/whatsapp/ready', process.env.SOBATNIRA_API_URL),
         { 'X-Internal-Service-Token': process.env.WHATSAPP_ADAPTER_INTERNAL_TOKEN! });
       const body = await response.json();
-      if (body?.status !== 'ok' || body.component !== 'sobatnira-whatsapp-intake') throw new Error('Unexpected intake service');
+      if (body?.status !== 'ok' || body.component !== 'sobatnira-whatsapp-intake' || body.mode !== process.env.SOBATNIRA_MODE) {
+        throw new Error('Unexpected intake service or mode');
+      }
     }),
-    check('PaddleOCR [AI_BASE_URL, AI_SERVICE_INTERNAL_TOKEN, extra paddle]', async () => {
+    check('PaddleOCR [AI_BASE_URL, AI_SERVICE_INTERNAL_TOKEN, SOBATNIRA_MODE, extra paddle]', async () => {
       const response = await ok(new URL('/internal/v1/ocr/ready', process.env.AI_SERVICE_BASE_URL || process.env.AI_BASE_URL),
         { 'X-Internal-Service-Token': process.env.AI_SERVICE_INTERNAL_TOKEN! }, 120_000);
       const body = await response.json();
-      if (body?.status !== 'ok' || body.engine !== 'PADDLEOCR') throw new Error('Unexpected OCR service');
+      if (body?.status !== 'ok' || body.engine !== 'PADDLEOCR' || body.mode !== process.env.SOBATNIRA_MODE) {
+        throw new Error('Unexpected OCR service or mode');
+      }
     }),
     ...(connected ? [
       ...(process.env.R2_PUBLIC_BASE_URL ? [check('Privasi R2 [R2_PUBLIC_BASE_URL, akses publik bucket]', assertR2Privacy)] : []),
@@ -79,6 +87,15 @@ function setupScope() {
   return { factory, operator, reviewers };
 }
 
+async function checkProductionReviewer(db: DatabaseSession, factory: string, reviewer: { id: string; role: string }, lock: boolean) {
+  try {
+    const access = await requireProductionAccess(db, reviewer.id, factory, lock);
+    if (access.role !== reviewer.role.toLowerCase()) throw new Error('Roles differ');
+  } catch {
+    throw new Error('Provisioning: periksa membership produksi dan role pada SETUP_FACTORY_ID, SETUP_ADMIN_USER_ID, SETUP_OWNER_USER_ID');
+  }
+}
+
 async function checkScope(db: Database) {
   const { factory, operator, reviewers } = setupScope();
   await db.transaction(async (client) => {
@@ -86,7 +103,9 @@ async function checkScope(db: Database) {
     const { rowCount } = await client.query('SELECT 1 FROM operator_contacts WHERE factory_id=$1 AND phone_e164=$2 AND active',
       [factory, operator]);
     if (!rowCount) throw new Error('Active operator missing');
-    for (const { id, role } of reviewers) {
+    for (const reviewer of reviewers) {
+      const { id, role } = reviewer;
+      await checkProductionReviewer(client, factory, reviewer, false);
       const { rowCount } = await client.query('SELECT 1 FROM review_memberships WHERE factory_id=$1 AND user_id=$2 AND role=$3 AND active',
         [factory, id, role]);
       if (!rowCount) throw new Error('Active reviewer missing');
@@ -98,7 +117,10 @@ async function provision(db: Database) {
   const { factory, operator, reviewers } = setupScope();
   const name = process.env.SETUP_OPERATOR_NAME?.trim();
   if (!name) throw new Error('Provisioning: periksa SETUP_OPERATOR_NAME');
+  try { await assertBusinessMigrationsApplied(db); }
+  catch { throw new Error('Provisioning: periksa DATABASE_URL dan jalankan db:migrate'); }
   await db.transaction(async (client) => {
+    for (const reviewer of reviewers) await checkProductionReviewer(client, factory, reviewer, true);
     const row = await client.query(`INSERT INTO operator_contacts (factory_id,phone_e164,display_name) VALUES ($1,$2,$3)
       ON CONFLICT (phone_e164) DO NOTHING`, [factory, operator, name]);
     if (!row.rowCount) {

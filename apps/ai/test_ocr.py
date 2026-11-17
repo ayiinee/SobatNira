@@ -119,6 +119,16 @@ class OcrTest(TestCase):
         with patch.dict("os.environ", {"AI_SERVICE_INTERNAL_TOKEN": "test-token"}):
             self.assertEqual(self.post().status_code, 401)
 
+    def test_readiness_reports_its_mode_after_authentication(self):
+        env = {"AI_SERVICE_INTERNAL_TOKEN": self.headers["X-Internal-Service-Token"], "SOBATNIRA_MODE": "local"}
+        path = "/internal/v1/ocr/ready"
+        with patch.dict("os.environ", env), patch("ocr_service.paddle_engine") as engine:
+            self.assertEqual(self.client.get(path).status_code, 401)
+            engine.assert_not_called()
+            response = self.client.get(path, headers=self.headers)
+            self.assertEqual(response.json(), {"status": "ok", "engine": "PADDLEOCR", "mode": "local"})
+            engine.assert_called_once()
+
     def test_ocr_auth_requires_a_secure_media_origin(self):
         env = {"SOBATNIRA_MODE": "local", "AI_SERVICE_INTERNAL_TOKEN": "x" * 32}
         for url in ("http://api.example.invalid", "https://user:synthetic@api.example.invalid", "http://127.0.0.1?query=synthetic"):

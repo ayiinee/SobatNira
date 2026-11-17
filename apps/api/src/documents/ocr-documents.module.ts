@@ -3,6 +3,7 @@ import { BadRequestException, Body, CanActivate, Controller, ExecutionContext, G
   UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Public } from '../auth/auth.decorators';
+import { assertBusinessMigrationsApplied } from '../database/migrations';
 import { MAX_IMAGE_BYTES, readInbound, requireServiceToken, requireUuid } from './contracts';
 import { Database } from './database';
 import { Intake } from './intake';
@@ -35,7 +36,9 @@ class WhatsAppController {
     if (process.env.DOCUMENT_WORKER_ENABLED !== 'true') throw new ServiceUnavailableException('Periksa DOCUMENT_WORKER_ENABLED');
     try { await this.db.assertMigrationsApplied(); }
     catch { throw new ServiceUnavailableException('Periksa DATABASE_URL dan jalankan db:migrate:ocr'); }
-    return { status: 'ok', component: 'sobatnira-whatsapp-intake' };
+    try { await assertBusinessMigrationsApplied(this.db); }
+    catch { throw new ServiceUnavailableException('Periksa DATABASE_URL dan jalankan db:migrate'); }
+    return { status: 'ok', component: 'sobatnira-whatsapp-intake', mode: process.env.SOBATNIRA_MODE ?? 'legacy' };
   }
 
   @Post('notices/claim')

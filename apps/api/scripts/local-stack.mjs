@@ -26,7 +26,10 @@ const outsider = '10000000-0000-4000-8000-000000000003';
 const outsideFactory = '10000000-0000-4000-8000-000000000004';
 const tenant = '10000000-0000-4000-8000-000000000005';
 const supplier = '10000000-0000-4000-8000-000000000006';
-const intakeLot = randomUUID();
+const lotFixtures = ['A','B'].map((label) => {
+  const id = randomUUID();
+  return { id, label: `DEMO-${label}`, code: `OCR-${label}-${id.slice(0, 8)}` };
+});
 const phone = (suffix) => '+' + [1, 202, 555, String(suffix).padStart(4, '0')].join('');
 const authKey = 'local-synthetic-publishable';
 const passwords = { 'admin@example.invalid': 'sobatnira-demo', 'other@example.invalid': 'sobatnira-demo' };
@@ -91,8 +94,10 @@ async function boot() {
       VALUES ($1,$2,$3,'admin') ON CONFLICT DO NOTHING`, [tenant, factory, admin]);
     await client.query("INSERT INTO sobatnira.suppliers (id,tenant_id,name) VALUES ($1,$2,'PEMASOK DEMO') ON CONFLICT DO NOTHING",
       [supplier, tenant]);
-    await client.query(`INSERT INTO sobatnira.lots (id,tenant_id,factory_id,supplier_id,received_at,display_code)
-      VALUES ($1,$2,$3,$4,'2026-11-16T01:00:00Z',$5)`, [intakeLot, tenant, factory, supplier, `TRUK-DEMO-${intakeLot.slice(0,8)}`]);
+    for (const lot of lotFixtures) {
+      await client.query(`INSERT INTO sobatnira.lots (id,tenant_id,factory_id,supplier_id,received_at,display_code)
+        VALUES ($1,$2,$3,$4,'2026-11-16T01:00:00Z',$5)`, [lot.id, tenant, factory, supplier, lot.code]);
+    }
   });
   await db.query(`INSERT INTO operator_contacts (factory_id,phone_e164,display_name,active)
     VALUES ($1,$2,'Operator Demo',true),($1,$3,'Operator Demo nonaktif',false) ON CONFLICT DO NOTHING`, [factory, phone(101), phone(102)]);
@@ -115,8 +120,8 @@ async function boot() {
       } catch { return response.writeHead(400).end('{}'); }
     }
     if (request.url === '/auth/v1/user') {
-      if (request.headers.authorization === `Bearer ${userTokens['admin@example.invalid']}`) return response.end(JSON.stringify({ id: admin }));
-      if (request.headers.authorization === `Bearer ${userTokens['other@example.invalid']}`) return response.end(JSON.stringify({ id: outsider }));
+      if (request.headers.authorization === `Bearer ${userTokens['admin@example.invalid']}`) return response.end(JSON.stringify({ id: admin, aud: 'authenticated' }));
+      if (request.headers.authorization === `Bearer ${userTokens['other@example.invalid']}`) return response.end(JSON.stringify({ id: outsider, aud: 'authenticated' }));
     }
     response.writeHead(401).end('{}');
   });
@@ -201,6 +206,7 @@ async function smoke() {
   assert.notEqual(updated.revision,initial.revision);
   assert.equal((await ready(updated)).extraction.cane_blocks[0].batches[0].output.hasil_kg.normalized_value,26);
   assert.doesNotMatch(await receive(body(randomUUID(),`KONFIRMASI ${initial.document} ${initial.revision}`)),/masuk antrean/);
+  assert.match(await receive(body(randomUUID(),`KONFIRMASI ${updated.document} ${updated.revision}`)),/masuk antrean/);
   const ambiguous = parse(await receive(photo('ambiguous.png', 'BARU')));
   const question = (await ready(ambiguous)).pending_question;
   assert.equal(question.field_path,'header.net_weight_kg');
@@ -215,20 +221,58 @@ async function smoke() {
   assert.equal((await ready(retake)).extraction.document_type,'TRUCK_ARRIVAL_NOTE');
   const manual = parse(await receive(photo('manual.png', 'BARU')));
   assert.equal((await ready(manual)).processing_status,'MANUAL_REVIEW_REQUIRED');
-  const task = await db.query('SELECT id FROM admin_review_tasks WHERE revision_id=$1', [first.revision]);
-  assert.equal(task.rowCount,1);
-  const forbidden = await fetch(`${url(ports.api)}/api/v1/mobile/review-tasks/${task.rows[0].id}`, { headers: {
+  const taskFor = async ({ revision }) => {
+    const { rows } = await db.query('SELECT id FROM admin_review_tasks WHERE revision_id=$1', [revision]);
+    assert.equal(rows.length, 1);
+    return rows[0].id;
+  };
+  const [truckTask, manualTask, productionTask] = await Promise.all([first, manual, updated].map(taskFor));
+  const forbidden = await fetch(`${url(ports.api)}/api/v1/mobile/review-tasks/${truckTask}`, { headers: {
     Authorization: `Bearer ${userTokens['other@example.invalid']}`,
   } });
   assert.equal(forbidden.status,404);
-  console.log(`Smoke adapter + OCR lulus. Validasi Nota Kedatangan Truk di Flutter (task ${task.rows[0].id}).`);
-  await waitFor(async () => (await db.query('SELECT status FROM admin_review_tasks WHERE id=$1',[task.rows[0].id])).rows[0]?.status === 'VALIDATED',
-    'Smoke menunggu validasi dari Flutter', 300_000);
-  const { rows: [receipt] } = await db.query(`SELECT s.quantity_delta_kg::text AS weight
+  const [lotA, lotB] = lotFixtures;
+  console.log('Smoke adapter + OCR lulus. Selesaikan tiga tugas di Flutter.');
+  console.log(`1. Nota Kedatangan Truk ${truckTask} → ${lotA.code}`);
+  console.log(`2. Draf manual ${manualTask} → ${lotB.code}`);
+  console.log(`3. Nota Produksi ${productionTask} → ${lotA.label} : ${lotA.code} : 90 L, ${lotB.label} : ${lotB.code} : 85 L`);
+  const approved = async (tasks, timeout) => waitFor(async () =>
+    (await db.query("SELECT count(*)::int AS count FROM admin_review_tasks WHERE id=ANY($1::uuid[]) AND status='VALIDATED'",
+      [tasks])).rows[0].count === tasks.length, 'Smoke menunggu validasi dari Flutter', timeout);
+  await approved([truckTask, manualTask], 300_000);
+  const { rows: intake } = await db.query(`SELECT i.lot_id,i.ocr_revision_id,s.quantity_delta_kg::text AS weight
     FROM sobatnira.intake_records i JOIN sobatnira.sugarcane_stock_movements s ON s.intake_record_id=i.id
-    WHERE i.ocr_document_id=$1 AND i.ocr_revision_id=$2`, [first.document, first.revision]);
-  assert.equal(receipt?.weight, '1250');
-  console.log('Smoke Flutter + PostgreSQL lulus. Nota sah dan 1250 kg tebu tercatat.');
+    WHERE i.ocr_document_id=ANY($1::uuid[]) ORDER BY i.ocr_document_id`, [[first.document, manual.document]]);
+  assert.equal(intake.length, 2);
+  assert.deepEqual(intake.find((row) => row.ocr_revision_id === first.revision), { lot_id: lotA.id, ocr_revision_id: first.revision, weight: '1250' });
+  assert.equal(intake.find((row) => row.lot_id === lotB.id)?.weight, '1250');
+  console.log('Kedua penerimaan sah dan masing-masing mencatat 1250 kg tebu.');
+  await approved([productionTask], 300_000);
+  const { rows: milling } = await db.query(`SELECT m.ocr_cane_label AS label,m.lot_id,m.ocr_revision_id,
+      s.quantity_delta_kg::text AS cane,j.quantity_delta_liters::text AS juice
+    FROM sobatnira.milling_records m
+    JOIN sobatnira.sugarcane_stock_movements s ON s.milling_record_id=m.id
+    JOIN sobatnira.juice_stock_movements j ON j.milling_record_id=m.id
+    WHERE m.ocr_document_id=$1 ORDER BY m.ocr_cane_label`, [updated.document]);
+  assert.deepEqual(milling, [lotA, lotB].map((lot, index) => ({
+    label: lot.label, lot_id: lot.id, ocr_revision_id: updated.revision, cane: '-1250', juice: index === 0 ? '90' : '85',
+  })));
+  for (const [lot, source] of [[lotA, first], [lotB, manual]]) {
+    const response = await fetch(`${url(ports.api)}/tenants/${tenant}/factories/${factory}/lots/${lot.id}`, {
+      headers: { Authorization: `Bearer ${userTokens['admin@example.invalid']}` }, signal: AbortSignal.timeout(5_000),
+    });
+    assert.equal(response.status, 200);
+    const detail = await response.json();
+    const receipt = intake.find((row) => row.lot_id === lot.id);
+    assert.equal(detail.netWeightGrams, '1250000');
+    assert.deepEqual(detail.intake.document, {
+      source: 'ocr', documentId: source.document, revisionId: receipt.ocr_revision_id, revisionNumber: null,
+    });
+    assert.deepEqual(detail.milling.document, {
+      source: 'ocr', documentId: updated.document, revisionId: updated.revision, revisionNumber: null,
+    });
+  }
+  console.log('Smoke Flutter + PostgreSQL lulus. Kedua kloter mendebit 1250 kg dan mengkredit 90 L serta 85 L nira.');
 }
 
 async function stop() {
