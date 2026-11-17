@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/io_client.dart';
 import 'package:sobatnira/features/kloter/production_catalog_page.dart';
 import 'package:sobatnira/features/kloter/lot_closure_page.dart';
+import 'package:sobatnira/features/kloter/juice_transfer_page.dart';
 import 'package:sobatnira/features/kloter/production_lot_editor.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
 
@@ -13,6 +14,9 @@ const _base = String.fromEnvironment('PRODUCTION_TEST_API');
 const _tenant = String.fromEnvironment('PRODUCTION_TEST_TENANT');
 const _factory = String.fromEnvironment('PRODUCTION_TEST_FACTORY');
 const _closureLot = String.fromEnvironment('PRODUCTION_TEST_CLOSURE_LOT');
+const _transferLot = String.fromEnvironment('PRODUCTION_TEST_TRANSFER_LOT');
+const _transferTo = String.fromEnvironment('PRODUCTION_TEST_TRANSFER_TO');
+const _transferThird = String.fromEnvironment('PRODUCTION_TEST_TRANSFER_THIRD');
 
 class _LocalHttpOverrides extends HttpOverrides {}
 
@@ -213,6 +217,78 @@ void main() {
     );
     expect(history.statusCode, 200);
     expect((jsonDecode(history.body) as Json)['total'], 2);
+
+    if (_transferLot.isNotEmpty) {
+      Future<String> transfer(
+        String from,
+        String toLabel,
+        String volume,
+      ) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            key: UniqueKey(),
+            home: JuiceTransferPage(api: api, scope: scope, lotId: from),
+          ),
+        );
+        await waitFor(find.text('Kirim transfer'));
+        await press('Kloter tujuan');
+        await waitFor(find.text(toLabel));
+        await press(toLabel);
+        await tester.enterText(find.byType(TextFormField), volume);
+        await press('Kirim transfer');
+        await waitFor(find.text('Transfer tercatat'));
+        return tester
+            .widget<SelectableText>(
+              find.descendant(
+                of: find.widgetWithText(ListTile, 'ID permintaan'),
+                matching: find.byType(SelectableText),
+              ),
+            )
+            .data!;
+      }
+
+      final requestId = await transfer(
+        _transferLot,
+        'TRANSFER-B',
+        '20,000000000000000001',
+      );
+      var sourceStock = await backend(() => api.juice(scope, _transferLot));
+      var destinationStock = await backend(() => api.juice(scope, _transferTo));
+      expect(sourceStock['onHandMl'], '229999.999999999999999');
+      expect(destinationStock['onHandMl'], '20000.000000000000001');
+      final retry = await backend(
+        () => client.post(
+          Uri.parse(
+            '$_base/tenants/$_tenant/factories/$_factory/lots/$_transferLot/juice/transfers',
+          ),
+          headers: {
+            'Authorization': 'Bearer fixture-admin',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'requestId': requestId,
+            'toLotId': _transferTo,
+            'originLotId': _transferLot,
+            'quantityMl': '20000.000000000000001',
+          }),
+        ),
+      );
+      expect(retry.statusCode, 201);
+      sourceStock = await backend(() => api.juice(scope, _transferLot));
+      expect(sourceStock['onHandMl'], '229999.999999999999999');
+      await transfer(_transferTo, 'TRANSFER-C', '5.000000000000000001');
+      destinationStock = await backend(() => api.juice(scope, _transferTo));
+      final thirdStock = await backend(() => api.juice(scope, _transferThird));
+      expect(destinationStock['onHandMl'], '15000');
+      expect(thirdStock['origins'], [
+        {
+          'originLotId': _transferLot,
+          'onHandMl': '5000.000000000000001',
+          'reservedMl': '0',
+          'availableMl': '5000.000000000000001',
+        },
+      ]);
+    }
 
     if (_closureLot.isNotEmpty) {
       Future<void> showClosure(String lotId) async {

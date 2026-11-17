@@ -11,7 +11,8 @@ async function main() {
   process.env.DATABASE_SSL_CA_FILE = '';
   process.env.NODE_ENV = 'test';
   process.env.SOBATNIRA_MODE = 'legacy';
-  const fixture = process.argv.includes('--closure') ? await mobileClosureFixture() : await intakeFixture(false);
+  const fixture = process.argv.includes('--transfer') ? await mobileClosureFixture({ consume: false })
+    : process.argv.includes('--closure') ? await mobileClosureFixture() : await intakeFixture(false);
   let stopping = false;
   const stop = async () => {
     if (stopping) return;
@@ -28,6 +29,11 @@ async function main() {
     PRODUCTION_TEST_TENANT: fixture.ids.tenant,
     PRODUCTION_TEST_FACTORY: fixture.ids.factory,
     ...(fixture.closureLotId ? { PRODUCTION_TEST_CLOSURE_LOT: fixture.closureLotId } : {}),
+    ...(fixture.transferLotId ? {
+      PRODUCTION_TEST_TRANSFER_LOT: fixture.transferLotId,
+      PRODUCTION_TEST_TRANSFER_TO: fixture.ids.secondLot,
+      PRODUCTION_TEST_TRANSFER_THIRD: fixture.ids.thirdLot,
+    } : {}),
   }));
 }
 

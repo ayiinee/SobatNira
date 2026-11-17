@@ -41,6 +41,16 @@ A mengunci kloter di PostgreSQL sebelum memeriksa saldo dan menulis transaksi. R
 
 Contoh alur sintetis dengan satuan ml. Kloter A menghasilkan 250000. Setelah dua batch mengonsumsi masing-masing 115000, transfer 20000 ke kloter B. Bila batch penerima memakai 80000 nira B dan 20000 nira titipan A, buat dua reservasi di kloter B dengan `originLotId` masing-masing. Aturan izin transfer lintas pabrik perlu keputusan tim.
 
+### Transfer dari Flutter
+
+Pada mode terhubung, pilih pabrik lalu buka detail kloter dan **Transfer nira**. Pilih asal nira yang memiliki saldo tersedia, pilih kloter tujuan dalam pabrik yang sama, lalu isi volume dalam liter. Pemilih tujuan mendukung pencarian dan halaman berikutnya serta mengecualikan kloter pemegang stok. API memeriksa kembali saldo dan status kedua kloter saat mencatat transfer.
+
+Form menerima koma atau titik desimal. Konversi liter ke string mililiter menjaga angka desimal secara eksak. Saldo sumber yang dipakai untuk validasi adalah nira tersedia per asal, yang sudah memperhitungkan reservasi. Setelah berhasil, halaman menampilkan bukti transfer dan ID permintaan. Kembali ke detail untuk memuat saldo terbaru.
+
+Jika respons terputus, gunakan **Coba lagi transfer yang sama**. UUID dan payload dipertahankan selama sesi login, termasuk saat halaman ditutup dan dibuka lagi. Kiriman yang belum mendapat hasil pasti menampilkan ringkasan dengan input terkunci. Simpan ID permintaan bila perlu keluar dari sesi untuk pemeriksaan transaksi. Penolakan format atau konflik (`400`/`409`) memungkinkan pengguna memperbaiki input dan membuat permintaan baru setelah saldo dimuat ulang.
+
+Uji form sampai PostgreSQL melalui `node scripts/mobile-production-fixture.cjs --transfer` dari `apps/api` dengan database lokal khusus pengujian. Tambahkan `--dart-define=PRODUCTION_TEST_TRANSFER_LOT=UUID_ASAL`, `--dart-define=PRODUCTION_TEST_TRANSFER_TO=UUID_TUJUAN`, dan `--dart-define=PRODUCTION_TEST_TRANSFER_THIRD=UUID_KETIGA` dari keluaran server ke [perintah tes mobile](backend-production-basics.md#pengelolaan-melalui-flutter). Skenario memakai fixture rollback, menguji saldo eksak, replay UUID, dan transfer lanjutan dengan asal nira yang dipertahankan.
+
 ## Penutupan kloter
 
 - `GET /closure?synthetic=true` memberi `status: "open" | "closed"`, `closureId`, `closedAt`, dan `closedBy`.
