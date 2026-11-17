@@ -58,4 +58,12 @@ Contoh alur sintetis dengan satuan ml. Kloter A menghasilkan 250000. Setelah dua
 - `GET /closure/history?synthetic=true&limit=20&offset=0` memberi `items`, `total`, `limit`, dan `offset`. Setiap item memuat `id` penutupan, `closedBy`, `closedAt`, `reopenedBy`, `reopenedAt`, dan `reason`. Data buka kembali bernilai `null` selama penutupan masih aktif. Riwayat mengikuti kategori riil atau sintetis yang dipilih.
 - Buka kembali mengubah status kloter dan mencatat audit dalam satu transaksi. Saldo, reservasi, transfer, dan revisi dokumen tetap mengikuti catatan semula. Penutupan ulang memakai `closureId` baru serta menjalankan lagi pengecekan saldo dan Backend B.
 
+### Penggunaan dari Flutter
+
+Pada mode terhubung, pilih pabrik, buka detail kloter, lalu pilih **Penutupan dan riwayat**. Halaman memuat status aktif serta riwayat dari API dalam kategori riil. **Tutup kloter** meminta konfirmasi dan menjalankan pemeriksaan backend. **Buka kembali kloter** meminta alasan sebelum mengirim UUID penutupan yang sedang ditampilkan. Setelah tindakan, halaman mengambil ulang status dan riwayat. Ketika kembali ke detail, detail kloter juga dimuat ulang.
+
+Riwayat menampilkan waktu dan ID pelaku penutupan, serta waktu, pelaku, dan alasan buka kembali. Waktu mengikuti zona perangkat. Gunakan **Sebelumnya** dan **Berikutnya** untuk membaca halaman riwayat lain. Penolakan pemeriksaan batch atau stok ditampilkan di halaman. Permintaan dengan respons terputus diikuti pembacaan ulang status dan riwayat sebelum tindakan berikutnya.
+
+Untuk menguji form sampai PostgreSQL, gunakan [server fixture mobile](backend-production-basics.md#pengelolaan-melalui-flutter) dengan `node scripts/mobile-production-fixture.cjs --closure` dari `apps/api`. Selain URL dan cakupan, server mencetak `PRODUCTION_TEST_CLOSURE_LOT`. Tambahkan `--dart-define=PRODUCTION_TEST_CLOSURE_LOT=UUID_KLOTER` ke perintah tes Flutter yang sama. Fixture memakai identitas sintetis dalam transaksi rollback, posting stok melalui repository produksi, dan server pemeriksaan batch lokal tiruan. Skenario memeriksa penolakan kloter tanpa penggilingan, penutupan kloter dengan saldo habis, buka kembali dengan alasan, riwayat, serta penutupan ulang.
+
 Konfigurasikan `BATCH_API_BASE_URL` dengan origin Backend B, tanpa path. Gunakan HTTPS untuk origin nonlokal. `BATCH_CLOSURE_TIMEOUT_MS` bawaan 3000. Jalur API penyimpanan tetap dibatasi role dan cakupan pabrik, termasuk untuk data sintetis.
