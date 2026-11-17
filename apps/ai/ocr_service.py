@@ -133,6 +133,7 @@ def paddle_engine():
     return PaddleOCR(
         lang="en", device="cpu", use_doc_orientation_classify=False,
         use_doc_unwarping=False, use_textline_orientation=False, enable_mkldnn=False,
+        cpu_threads=4, text_recognition_batch_size=12,
     )
 
 
