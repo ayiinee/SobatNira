@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
-import '../../widgets/chart_growth.dart';
 import '../../widgets/summary_card.dart';
 import '../kloter/kloter_date_filter.dart';
 import 'demo_analytics.dart';
 import 'report_detail_page.dart';
 import 'production_chart.dart';
+import 'margin_chart.dart';
 
 class LaporanPage extends StatefulWidget {
   const LaporanPage({
@@ -23,14 +23,6 @@ class LaporanPage extends StatefulWidget {
 }
 
 class _LaporanPageState extends State<LaporanPage> {
-  final _search = TextEditingController();
-
-  @override
-  void dispose() {
-    _search.dispose();
-    super.dispose();
-  }
-
   Future<void> _dateFilter() async {
     FocusScope.of(context).unfocus();
     final result = await showKloterDateFilter(
@@ -46,15 +38,6 @@ class _LaporanPageState extends State<LaporanPage> {
     listenable: widget.analytics,
     builder: (context, _) => Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            niraInset,
-            NiraSpace.lg,
-            niraInset,
-            NiraSpace.sm,
-          ),
-          child: _searchRow(),
-        ),
         NiraTabs(
           labels: const ['Produksi', 'Margin'],
           selected: widget.analytics.tab.index,
@@ -82,58 +65,6 @@ class _LaporanPageState extends State<LaporanPage> {
         ),
       ],
     ),
-  );
-
-  Widget _searchRow() => Row(
-    spacing: 8,
-    children: [
-      Expanded(
-        child: TextField(
-          controller: _search,
-          onChanged: widget.analytics.setQuery,
-          style: niraText(NiraType.body),
-          decoration: InputDecoration(
-            hintText: 'Telusuri Kloter berdasarkan ID',
-            hintStyle: niraText(NiraType.body, color: niraLeaf),
-            prefixIcon: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: NiraSpace.md),
-              child: NiraIcon('search', 21, color: niraGreen),
-            ),
-            prefixIconConstraints: const BoxConstraints(minWidth: 42),
-            contentPadding: const EdgeInsets.symmetric(vertical: NiraSpace.lg),
-            filled: true,
-            fillColor: Colors.white,
-            isDense: true,
-            enabledBorder: _border(),
-            focusedBorder: _border(width: 2),
-          ),
-        ),
-      ),
-      Semantics(
-        label: 'Filter tanggal laporan',
-        button: true,
-        child: Material(
-          color: niraGreen,
-          borderRadius: BorderRadius.circular(niraRadius),
-          child: InkWell(
-            onTap: _dateFilter,
-            overlayColor: niraGreenOverlay,
-            borderRadius: BorderRadius.circular(niraRadius),
-            child: const SizedBox.square(
-              dimension: 48,
-              child: Center(
-                child: NiraIcon('calendar', 26, color: Colors.white),
-              ),
-            ),
-          ),
-        ),
-      ),
-    ],
-  );
-
-  OutlineInputBorder _border({double width = 1.3}) => OutlineInputBorder(
-    borderRadius: BorderRadius.circular(niraRadius),
-    borderSide: BorderSide(color: niraGreen, width: width),
   );
 
   Widget _production() => Column(
@@ -169,44 +100,9 @@ class _LaporanPageState extends State<LaporanPage> {
     ],
   );
 
-  Widget _chartCard({bool margin = false}) => !margin
-      ? ProductionChart(analytics: widget.analytics)
-      : NiraOutline(
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              NiraSpace.sm,
-              NiraSpace.sm,
-              NiraSpace.sm,
-              NiraSpace.sm,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  margin
-                      ? 'Margin per kloter (1000)'
-                      : 'Gula final per hari (Kg)',
-                  style: niraText(NiraType.body, weight: FontWeight.w600),
-                ),
-                const SizedBox(height: NiraSpace.sm),
-                SizedBox(
-                  height: 134,
-                  child: ChartGrowth(
-                    builder: (context, progress) => CustomPaint(
-                      painter: _ReportChartPainter(
-                        margin: margin,
-                        bars:
-                            margin ||
-                            widget.analytics.variant == ProductionVariant.grade,
-                        progress: progress,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
+  Widget _chartCard({bool margin = false}) => margin
+      ? MarginChart(rows: widget.analytics.visibleRows, onFilter: _dateFilter)
+      : ProductionChart(analytics: widget.analytics, onFilter: _dateFilter);
 
   Widget _rendemenTable() => _tableSection(
     title: 'Rendemen',
@@ -218,6 +114,7 @@ class _LaporanPageState extends State<LaporanPage> {
 
   Widget _gradeTable() => _tableSection(
     title: 'Komposisi Grade',
+    plain: true,
     columns: const ['Grade', 'Berat', 'Porsi'],
     rows: const [
       AnalyticsRow('Grade A', '', '90Kg', '50,0%'),
@@ -229,6 +126,7 @@ class _LaporanPageState extends State<LaporanPage> {
 
   Widget _marginTable() => _tableSection(
     title: 'Detail margin kloter',
+    plain: true,
     columns: const ['Pemasok', 'Margin'],
     rows: widget.analytics.visibleRows,
     onTap: () => widget.onOpenDetail(ReportDetailKind.margin),
@@ -295,14 +193,15 @@ class _LaporanPageState extends State<LaporanPage> {
                         style: niraText(NiraType.body),
                       ),
                     ),
-                    Expanded(
-                      flex: 3,
-                      child: Text(
-                        row.secondary,
-                        textAlign: TextAlign.center,
-                        style: niraText(NiraType.body),
+                    if (columns.length > 2)
+                      Expanded(
+                        flex: 3,
+                        child: Text(
+                          row.secondary,
+                          textAlign: TextAlign.center,
+                          style: niraText(NiraType.body),
+                        ),
                       ),
-                    ),
                     const Icon(Icons.chevron_right, color: niraGreen, size: 20),
                   ],
                 ),
@@ -413,62 +312,3 @@ class _LaporanPageState extends State<LaporanPage> {
         );
 }
 
-class _ReportChartPainter extends CustomPainter {
-  const _ReportChartPainter({
-    required this.margin,
-    required this.bars,
-    required this.progress,
-  });
-
-  final bool margin;
-  final bool bars;
-  final double progress;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final grid = Paint()
-      ..color = niraMuted.withValues(alpha: .45)
-      ..strokeWidth = 1;
-    final plot = Rect.fromLTWH(8, 8, size.width - 16, size.height - 24);
-    for (var i = 0; i < 4; i++) {
-      final y = plot.top + plot.height * i / 3;
-      canvas.drawLine(Offset(plot.left, y), Offset(plot.right, y), grid);
-    }
-    if (bars) {
-      final bar = Paint()..color = niraGreen;
-      final gold = Paint()..color = niraGold;
-      for (var i = 0; i < 7; i++) {
-        final x = plot.left + 15 + i * 31;
-        final h1 = (28.0 + (i % 3) * 15.0) * progress;
-        final h2 = (20.0 + ((i + 1) % 3) * 18.0) * progress;
-        canvas.drawRect(Rect.fromLTWH(x, plot.bottom - h1, 10.0, h1), bar);
-        canvas.drawRect(
-          Rect.fromLTWH(x + 11.0, plot.bottom - h2, 10.0, h2),
-          gold,
-        );
-      }
-      return;
-    }
-    final line = Paint()
-      ..color = niraLeaf
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    final points = <Offset>[];
-    for (var i = 0; i < 7; i++) {
-      points.add(
-        Offset(plot.left + 10 + i * 32, plot.bottom - 25 - (i % 4) * 22),
-      );
-    }
-    canvas.drawPath(Path()..addPolygon(points, false), line);
-    final dot = Paint()..color = niraGreen;
-    for (final point in points) {
-      canvas.drawCircle(point, 3, dot);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _ReportChartPainter oldDelegate) =>
-      oldDelegate.margin != margin ||
-      oldDelegate.bars != bars ||
-      oldDelegate.progress != progress;
-}

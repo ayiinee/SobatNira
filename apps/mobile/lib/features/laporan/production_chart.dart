@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../sobatnira_ui.dart';
 import '../../widgets/chart_growth.dart';
 import 'demo_analytics.dart';
+import 'report_date_button.dart';
 
 // Synthetic presentation fixture; no production calculation is performed here.
 const _demoDays = [
@@ -32,8 +33,9 @@ class _ChartDay {
 }
 
 class ProductionChart extends StatefulWidget {
-  const ProductionChart({required this.analytics, super.key});
+  const ProductionChart({required this.analytics, this.onFilter, super.key});
   final DemoAnalytics analytics;
+  final VoidCallback? onFilter;
 
   @override
   State<ProductionChart> createState() => _ProductionChartState();
@@ -169,6 +171,10 @@ class _ProductionChartState extends State<ProductionChart> {
                     ),
                   ),
                 ),
+                if (widget.onFilter != null) ...[
+                  const SizedBox(width: NiraSpace.sm),
+                  ReportDateButton(onPressed: widget.onFilter!),
+                ],
               ],
             ),
             const SizedBox(height: NiraSpace.md),

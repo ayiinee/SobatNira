@@ -55,7 +55,6 @@ class ReportDetailPage extends StatelessWidget {
     decoration: BoxDecoration(
       color: niraGreen,
       borderRadius: BorderRadius.circular(niraRadius),
-      boxShadow: const [niraShadow],
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -77,7 +76,7 @@ class ReportDetailPage extends StatelessWidget {
             weight: FontWeight.w700,
           ),
         ),
-        Text(caption, style: niraText(NiraType.caption, color: Colors.white)),
+        if (caption.isNotEmpty) Text(caption, style: niraText(NiraType.caption, color: Colors.white)),
       ],
     ),
   );
@@ -130,12 +129,15 @@ class ReportDetailPage extends StatelessWidget {
   Widget _grade() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      _greenCard('Grade A', '360Kg', '50,0% dari total 360 Kg'),
-      const SizedBox(height: NiraSpace.md),
-      _greenCard('Kloter asal', '4', ''),
-      const SizedBox(height: NiraSpace.md),
       _greenCard('Nilai produksi', 'Rp3.600.000', ''),
+      const SizedBox(height: NiraSpace.md),
+      const DetailMetrics([
+        ('Grade A', '360Kg'),
+        ('Kloter asal', '4'),
+      ]),
       const SizedBox(height: NiraSpace.lg),
+      Text('50,0% dari total 360 Kg', style: niraText(NiraType.caption, color: niraLeaf)),
+      const SizedBox(height: NiraSpace.sm),
       const DetailSectionTitle('Kontribusi per kloter'),
       const SizedBox(height: NiraSpace.xs),
       _contributionTable(),

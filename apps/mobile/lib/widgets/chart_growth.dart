@@ -13,8 +13,8 @@ class ChartGrowth extends StatelessWidget {
     tween: Tween(begin: 0, end: 1),
     duration: MediaQuery.disableAnimationsOf(context)
         ? Duration.zero
-        : const Duration(milliseconds: 650),
-    curve: Curves.easeOutCubic,
+        : const Duration(milliseconds: 1100),
+    curve: Curves.easeInOutCubic,
     builder: (context, progress, _) => builder(context, progress),
   );
 }

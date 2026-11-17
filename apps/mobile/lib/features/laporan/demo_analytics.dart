@@ -20,6 +20,11 @@ class DemoAnalytics extends ChangeNotifier {
     AnalyticsRow('Masud', 'MJT-250926-2A', '90Kg', '6,0%', day: 19),
     AnalyticsRow('Salim', 'MJT-240926-1A', '90Kg', '6,0%', day: 18),
     AnalyticsRow('Mawarji', 'MJT-240926-2A', '90Kg', '6,0%', day: 18),
+    AnalyticsRow('Hadi', 'MJT-230926-1A', '85Kg', '5,8%', day: 17),
+    AnalyticsRow('Joko', 'MJT-230926-2A', '95Kg', '6,3%', day: 17),
+    AnalyticsRow('Wahyu', 'MJT-220926-1A', '80Kg', '5,5%', day: 16),
+    AnalyticsRow('Budi', 'MJT-220926-2A', '100Kg', '6,7%', day: 16),
+    AnalyticsRow('Rini', 'MJT-210926-1A', '88Kg', '5,9%', day: 15),
   ];
 
   final marginRows = const [
@@ -28,6 +33,11 @@ class DemoAnalytics extends ChangeNotifier {
     AnalyticsRow('Darto', 'MJT-260926-3A', 'Rp1.140.000', '', day: 20),
     AnalyticsRow('Mulyanto', 'MJT-250926-1A', 'Rp430.000', '', day: 19),
     AnalyticsRow('Masud', 'MJT-250926-2A', 'Rp800.000', '', day: 19),
+    AnalyticsRow('Hadi', 'MJT-230926-1A', 'Rp670.000', '', day: 17),
+    AnalyticsRow('Joko', 'MJT-230926-2A', 'Rp350.000', '', day: 17),
+    AnalyticsRow('Wahyu', 'MJT-220926-1A', 'Rp900.000', '', day: 16),
+    AnalyticsRow('Budi', 'MJT-220926-2A', 'Rp420.000', '', day: 16),
+    AnalyticsRow('Rini', 'MJT-210926-1A', 'Rp780.000', '', day: 15),
   ];
 
   void setTab(ReportTab value) {
