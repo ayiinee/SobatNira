@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
 import 'harga_biaya_page.dart';
+import 'settings_catalog_page.dart';
 import 'settings_demo.dart';
-import 'settings_placeholder_page.dart';
+import 'settings_forms_page.dart';
+import 'settings_general_page.dart';
 
 class PengaturanPage extends StatelessWidget {
   const PengaturanPage({
@@ -20,7 +22,7 @@ class PengaturanPage extends StatelessWidget {
     listenable: settings,
     builder: (context, _) => ListView(
       key: const PageStorageKey('pengaturan-scroll'),
-      padding: EdgeInsets.fromLTRB(
+      padding: const EdgeInsets.fromLTRB(
         niraInset,
         NiraSpace.lg,
         niraInset,
@@ -48,7 +50,7 @@ class PengaturanPage extends StatelessWidget {
       ),
       const SizedBox(height: NiraSpace.xs),
       Text(
-        'Pak Putu Alvin',
+        settings.accounts.first.value.name,
         style: niraText(NiraType.section, weight: FontWeight.w700),
       ),
     ],
@@ -111,9 +113,26 @@ class PengaturanPage extends StatelessWidget {
   );
 
   void _open(BuildContext context, SettingEntry entry) {
-    final page = entry.title == 'Harga & Biaya'
-        ? HargaBiayaPage(settings: settings, onNavigate: onNavigate)
-        : SettingsPlaceholderPage(entry: entry, onNavigate: onNavigate);
+    final page = switch (entry.section) {
+      SettingSection.prices => HargaBiayaPage(
+        settings: settings,
+        onNavigate: onNavigate,
+      ),
+      SettingSection.identity || SettingSection.rules => SettingsGeneralPage(
+        entry: entry,
+        settings: settings,
+        onNavigate: onNavigate,
+      ),
+      SettingSection.forms => SettingsFormsPage(
+        settings: settings,
+        onNavigate: onNavigate,
+      ),
+      _ => SettingsCatalogPage(
+        entry: entry,
+        settings: settings,
+        onNavigate: onNavigate,
+      ),
+    };
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
   }
 }
