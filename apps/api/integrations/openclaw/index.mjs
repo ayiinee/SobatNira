@@ -230,11 +230,14 @@ export default {
       throw new Error('OpenClaw: periksa SOBATNIRA_API_URL, WHATSAPP_ADAPTER_INTERNAL_TOKEN, SOBATNIRA_WHATSAPP_ACCOUNT_ID dan konfigurasi accountId/mediaDir');
     }
     let classifyIntent;
+    const disableReasoning = process.env.OPENROUTER_AGENT_DISABLE_REASONING;
     try {
+      if (disableReasoning && !['true', 'false'].includes(disableReasoning)) throw new Error('Invalid reasoning configuration');
       classifyIntent = createOperatorAgent({ key: process.env.OPENROUTER_API_KEY, model: process.env.OPENROUTER_AGENT_MODEL,
-        fallbackModel: process.env.OPENROUTER_AGENT_FALLBACK_MODEL, providers: process.env.OPENROUTER_ALLOWED_PROVIDERS });
+        fallbackModel: process.env.OPENROUTER_AGENT_FALLBACK_MODEL, providers: process.env.OPENROUTER_ALLOWED_PROVIDERS,
+        disableReasoning: disableReasoning === 'true' });
     } catch {
-      if (connected) throw new Error('OpenRouter: periksa OPENROUTER_AGENT_MODEL, OPENROUTER_AGENT_FALLBACK_MODEL, OPENROUTER_ALLOWED_PROVIDERS');
+      if (connected) throw new Error('OpenRouter: periksa OPENROUTER_AGENT_MODEL, OPENROUTER_AGENT_FALLBACK_MODEL, OPENROUTER_ALLOWED_PROVIDERS, OPENROUTER_AGENT_DISABLE_REASONING');
       api.logger.warn('Konfigurasi OpenRouter tidak lengkap. Panduan operator memakai template.');
     }
     if (connected && !classifyIntent) throw new Error('OpenRouter: OPENROUTER_API_KEY wajib');

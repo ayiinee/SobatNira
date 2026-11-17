@@ -234,17 +234,19 @@ test('OpenRouter gives read-only guidance on verified quotes and uses bounded fa
   const { createBridge } = await import('../integrations/openclaw/index.mjs');
   const [document, revision] = [randomUUID(), randomUUID()];
   const requests = [];
-  const agent = createOperatorAgent({ key: 'synthetic', model: 'demo/primary-v1', fallbackModel: 'demo/fallback-v1', providers: 'test-provider',
+  const agent = createOperatorAgent({ key: 'synthetic', model: 'demo/primary-v1:free', fallbackModel: 'demo/fallback-v1:free',
+    providers: 'test-provider', disableReasoning: true,
     async request(url, options) {
       assert.equal(url, 'https://openrouter.ai/api/v1/chat/completions');
       const body = JSON.parse(options.body);
       requests.push(body);
       assert.deepEqual(body.provider.only, ['test-provider']);
       assert.equal(body.provider.zdr, true);
+      assert.deepEqual(body.reasoning, { effort: 'none' });
       assert.equal(body.messages[1].content.includes(document), false);
       assert.equal(body.messages[1].content.includes('synthetic@example.invalid'), false);
       assert.equal(body.messages[1].content.includes('PII-DARI-NOTA'), false);
-      if (body.model === 'demo/primary-v1') return new Response('', { status: 503 });
+      if (body.model === 'demo/primary-v1:free') return new Response('', { status: 503 });
       return Response.json({ choices: [{ message: { tool_calls: [{ type: 'function', function: {
         name: 'select_help_intent', arguments: '{"intent":"GUIDE_CONFIRMATION"}',
       } }] } }] });
@@ -268,7 +270,9 @@ test('OpenRouter gives read-only guidance on verified quotes and uses bounded fa
   const answer = await bridge.handle({ ...metadata, replyToId: 'provider-photo', body: `Cara konfirmasi ${document} synthetic@example.invalid?` }, {});
   assert.match(answer.text, new RegExp(`STATUS ${document} ${revision}`));
   assert.equal(reads, 2);
-  assert.deepEqual(requests.map((item) => item.model), ['demo/primary-v1', 'demo/fallback-v1']);
+  assert.deepEqual(requests.map((item) => item.model), ['demo/primary-v1:free', 'demo/fallback-v1:free']);
+  assert.throws(() => createOperatorAgent({ key: 'synthetic', model: 'demo/auto:free', providers: 'test-provider' }),
+    /explicit model IDs/);
   let invalidCalls = 0;
   const invalid = createOperatorAgent({ key: 'synthetic', model: 'demo/primary-v1', fallbackModel: 'demo/fallback-v1', providers: 'test-provider',
     request() {
