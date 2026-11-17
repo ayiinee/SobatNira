@@ -9,6 +9,7 @@ const test = require('node:test');
 const { Pool } = require('pg');
 const { createApplication } = require('../dist/application.js');
 const { Database } = require('../dist/documents/database.js');
+const { assertBusinessMigrationsApplied } = require('../dist/database/migrations.js');
 const { DocumentProcessor } = require('../dist/documents/processing.js');
 const { mergeProduction } = require('../dist/documents/revisions.js');
 
@@ -214,6 +215,12 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     const db = app.get(Database);
     await db.migrate();
     await db.migrate();
+    const applied = await db.query('SELECT name, checksum FROM sobatnira._migrations ORDER BY name');
+    await assert.rejects(assertBusinessMigrationsApplied({ query: async () => ({ rows: applied.rows.slice(0, -1) }) }), /migrations are missing/);
+    const [firstMigration, ...otherMigrations] = applied.rows;
+    await assert.rejects(assertBusinessMigrationsApplied({ query: async () => ({
+      rows: [{ ...firstMigration, checksum: 'synthetic-mismatch' }, ...otherMigrations],
+    }) }), /migrations are missing/);
     const [factory, otherFactory, reviewer, otherUser, owner, colleague, tenant, supplier, lot, otherLot] =
       Array.from({ length: 10 }, () => randomUUID());
     const hooks = await admin.query("SELECT 1 FROM pg_trigger WHERE tgrelid='auth.users'::regclass AND NOT tgisinternal");
@@ -315,7 +322,7 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     // Switch readiness on after app init. This test still advances the worker explicitly.
     process.env.DOCUMENT_WORKER_ENABLED = 'true';
     assert.deepEqual(await fetch(readyUrl, { headers: tokenHeaders }).then((response) => response.json()),
-      { status: 'ok', component: 'sobatnira-whatsapp-intake' });
+      { status: 'ok', component: 'sobatnira-whatsapp-intake', mode: 'legacy' });
     const latest = '005_duplicate_photo_lookup.sql';
     await db.query('DELETE FROM sobatnira_migrations WHERE name=$1', [latest]);
     assert.equal((await fetch(readyUrl, { headers: tokenHeaders })).status, 503);
