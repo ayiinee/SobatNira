@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { BatchesController } from './batches.controller';
 import { BatchesService } from './batches.service';
 import { JuiceModule } from '../juice/juice.module';
+import { DatabaseModule } from '../database/database.module';
 
-@Module({ imports: [JuiceModule], controllers: [BatchesController], providers: [BatchesService], exports: [BatchesService] })
+@Module({ imports: [JuiceModule, DatabaseModule], controllers: [BatchesController], providers: [BatchesService], exports: [BatchesService] })
 export class BatchesModule {}

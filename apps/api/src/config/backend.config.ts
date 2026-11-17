@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { parseEnv } from 'node:util';
 
 export const BACKEND_CONFIG = Symbol('BACKEND_CONFIG');
-export const DEFAULT_ENV_FILE = resolve(__dirname, '../../../../.env');
+export const DEFAULT_ENV_FILE = resolve(__dirname, '../../.env');
 
 export interface BackendConfig {
   appName: string;
