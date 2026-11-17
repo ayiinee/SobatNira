@@ -100,6 +100,7 @@ class ReviewApi {
   final http.Client _client;
   final String baseUrl;
   final _pendingTransfers = <String, JuiceTransferRequest>{};
+  void Function()? onSessionExpired;
 
   String _transferKey(FactoryScope scope, String lotId) =>
       '${scope.tenantId}/${scope.factoryId}/$lotId';
@@ -188,8 +189,9 @@ class ReviewApi {
         )
         .timeout(const Duration(seconds: 10));
     if (response.statusCode != 200) throw ReviewApiError(response.statusCode);
-    final token = (jsonDecode(response.body) as Json)['access_token'];
-    if (token is! String || token.isEmpty) throw const ReviewApiError(401);
+    final payload = jsonDecode(response.body);
+    final token = payload is Json ? payload['access_token'] : null;
+    if (token is! String || token.isEmpty) throw const ReviewApiError(503);
     return ReviewApi(token);
   }
 
@@ -217,10 +219,15 @@ class ReviewApi {
     int expectedStatus = 200,
   }) async {
     final response = await request.timeout(const Duration(seconds: 10));
-    if (response.statusCode != expectedStatus) {
-      throw ReviewApiError(response.statusCode);
-    }
+    _requireStatus(response, expectedStatus);
     return jsonDecode(response.body) as Json;
+  }
+
+  void _requireStatus(http.Response response, int expectedStatus) {
+    final status = response.statusCode;
+    if (status == expectedStatus) return;
+    if (status == 401) onSessionExpired?.call();
+    throw ReviewApiError(status);
   }
 
   Future<Json> _productionGet(
@@ -403,7 +410,7 @@ class ReviewApi {
     final response = await _client
         .get(_url('review-tasks/$id/assets/$asset'), headers: _headers)
         .timeout(const Duration(seconds: 12));
-    if (response.statusCode != 200) throw ReviewApiError(response.statusCode);
+    _requireStatus(response, 200);
     return response.bodyBytes;
   }
 
@@ -435,5 +442,8 @@ class ReviewApi {
     return base64UrlEncode(List<int>.generate(24, (_) => random.nextInt(256)));
   }
 
-  void close() => _client.close();
+  void close() {
+    onSessionExpired = null;
+    _client.close();
+  }
 }
