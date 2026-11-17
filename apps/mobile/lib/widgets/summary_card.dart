@@ -41,7 +41,7 @@ class NiraSummaryCard extends StatelessWidget {
                 'assets/sobatnira/art/hero-cane.png',
                 fit: BoxFit.contain,
                 alignment: Alignment.bottomRight,
-                opacity: const AlwaysStoppedAnimation(.9),
+                opacity: const AlwaysStoppedAnimation(.125),
                 excludeFromSemantics: true,
               ),
             ),
