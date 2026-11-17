@@ -401,6 +401,15 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     assert.deepEqual(await unread('colleague'), { unread_count: 1 });
     assert.deepEqual(await unread('owner'), { unread_count: 0 });
     assert.deepEqual(await unread('other-user'), { unread_count: 0 });
+    const scoped = (path, scope, user = 'reviewer') =>
+      mobile(`${path}?factory_id=${scope}`, user).then((response) => response.json());
+    assert.deepEqual(await scoped('review-notifications', factory), { unread_count: 1 });
+    assert.deepEqual(await scoped('review-notifications', otherFactory), { unread_count: 0 });
+    assert.deepEqual(await scoped('review-notifications', factory, 'other-user'), { unread_count: 0 });
+    assert.deepEqual((await scoped('review-tasks', factory)).items.map((task) => task.id), [taskId]);
+    assert.deepEqual((await scoped('review-tasks', otherFactory)).items, []);
+    assert.deepEqual((await scoped('review-tasks', factory, 'other-user')).items, []);
+    assert.equal((await mobile('review-tasks?factory_id=bogus')).status, 400);
     assert.equal((await mobile(`review-tasks/${taskId}`, 'owner')).status, 200);
     for (let attempt = 0; attempt < 2; attempt++) {
       assert.equal((await mobile(`review-notifications/${taskId}/read`, 'reviewer', { method: 'PATCH' })).status, 200);

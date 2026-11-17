@@ -38,7 +38,7 @@ export class Review {
     return id;
   }
 
-  async list(user: string, status: string, page: number, limit: number) {
+  async list(user: string, status: string, page: number, limit: number, factory?: string) {
     if (!['PENDING_VALIDATION', 'VALIDATED', 'RETURNED_FOR_CORRECTION', 'MANUAL_REVIEW_REQUIRED'].includes(status) ||
         !Number.isSafeInteger(page) || page < 1 || page > 10000 || !Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
       throw new BadRequestException('Filter antrean tidak valid');
@@ -49,7 +49,9 @@ export class Review {
       JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1 AND a.active
       JOIN document_revisions r ON r.id=t.revision_id JOIN document_submissions s ON s.id=r.submission_id
       JOIN whatsapp_inbound_messages m ON m.id=s.inbound_message_id JOIN operator_contacts o ON o.id=m.operator_id
-      WHERE t.status=$2 ORDER BY t.created_at DESC,t.id LIMIT $3 OFFSET $4`, [user, status, limit, (page - 1) * limit]);
+      WHERE t.status=$2 AND ($5::uuid IS NULL OR d.factory_id=$5)
+      ORDER BY t.created_at DESC,t.id LIMIT $3 OFFSET $4`,
+      [user, status, limit, (page - 1) * limit, factory === undefined ? null : requireUuid(factory)]);
     return { items: rows, page, page_size: limit };
   }
 
@@ -113,12 +115,13 @@ export class Review {
     });
   }
 
-  async unreadNotifications(user: string) {
+  async unreadNotifications(user: string, factory?: string) {
     const { rows: [result] } = await this.db.query<{ unread_count: number }>(`SELECT count(*)::int AS unread_count
       FROM admin_review_notifications n JOIN admin_review_tasks t ON t.id=n.task_id AND t.status='PENDING_VALIDATION'
       JOIN source_documents d ON d.id=t.document_id
       JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=n.user_id AND a.active AND a.role='ADMIN'
-      WHERE n.user_id=$1 AND n.read_at IS NULL`, [user]);
+      WHERE n.user_id=$1 AND n.read_at IS NULL AND ($2::uuid IS NULL OR d.factory_id=$2)`,
+      [user, factory === undefined ? null : requireUuid(factory)]);
     return result;
   }
 
