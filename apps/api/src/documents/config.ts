@@ -1,4 +1,4 @@
-import { loadConfiguration } from '../config/backend.config';
+import { isLoopback, loadConfiguration } from '../config/backend.config';
 
 export function r2Settings() {
   const r2 = loadConfiguration({ envFile: false }).r2;
@@ -17,6 +17,13 @@ function validUrl(value: string | undefined, protocols: string[]) {
   catch { return false; }
 }
 
+export function isServiceOrigin(value: string | undefined) {
+  if (!validUrl(value, ['http:', 'https:'])) return false;
+  const url = new URL(value!);
+  return Boolean(url.hostname && !url.username && !url.password && !url.search && !url.hash && url.pathname === '/' &&
+    (url.protocol === 'https:' || isLoopback(url.hostname)));
+}
+
 export function validateRuntime() {
   const mode = process.env.SOBATNIRA_MODE;
   if (!mode) return;
@@ -27,8 +34,9 @@ export function validateRuntime() {
     if ((process.env[name]?.length ?? 0) < 32) missing.push(`NestJS: ${name}`);
   }
   if (process.env.DOCUMENT_WORKER_ENABLED !== 'true') missing.push('NestJS: DOCUMENT_WORKER_ENABLED');
-  if (!validUrl(process.env.AI_SERVICE_BASE_URL || process.env.AI_BASE_URL, ['https:','http:'])) missing.push('FastAPI: AI_BASE_URL');
-  if (!supabaseKey() || !validUrl(process.env.SUPABASE_URL, mode === 'local' ? ['http:'] : ['https:'])) {
+  if (!isServiceOrigin(process.env.AI_SERVICE_BASE_URL || process.env.AI_BASE_URL)) missing.push('FastAPI: AI_BASE_URL, AI_SERVICE_BASE_URL');
+  if (!supabaseKey() || !isServiceOrigin(process.env.SUPABASE_URL) ||
+      !validUrl(process.env.SUPABASE_URL, mode === 'local' ? ['http:'] : ['https:'])) {
     missing.push('Supabase: SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY');
   }
   if (mode === 'connected') {

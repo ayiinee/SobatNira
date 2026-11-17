@@ -112,7 +112,7 @@ test('OpenClaw reply dispatch uses the WhatsApp context and owns only the config
   }));
   Object.assign(process.env, { SOBATNIRA_API_URL: 'http://127.0.0.1', WHATSAPP_ADAPTER_INTERNAL_TOKEN: 'x'.repeat(32), SOBATNIRA_MODE: 'local' });
   let dispatch;
-  plugin.register({ config: {}, pluginConfig: { accountId: 'work', mediaDir: tmpdir() }, logger: { warn() {} },
+  const adapter = { config: {}, pluginConfig: { accountId: 'work', mediaDir: tmpdir() }, logger: { warn() {} },
     registerService(service) { assert.equal(service.id, 'sobatnira-notices'); },
     on(name, callback, opts) {
       assert.equal(name, 'reply_dispatch');
@@ -120,7 +120,11 @@ test('OpenClaw reply dispatch uses the WhatsApp context and owns only the config
       dispatch = callback;
     },
     runtime: { channel: { outbound: { loadAdapter() {} } } },
-  });
+  };
+  process.env.SOBATNIRA_API_URL = 'http://gateway.example.invalid';
+  assert.throws(() => plugin.register(adapter), /SOBATNIRA_API_URL/);
+  process.env.SOBATNIRA_API_URL = 'http://127.0.0.1';
+  plugin.register(adapter);
   const target = { ctx: { MessageSid: 'provider-message', Timestamp: Date.now(), SenderE164: phone(101),
     SenderId: '123@lid', ReplyToId: 'provider-quote', BodyForCommands: `KONFIRMASI ${randomUUID()} ${randomUUID()}` },
     originatingChannel: 'whatsapp', originatingChatType: 'direct', sendPolicy: 'allow' };
@@ -276,6 +280,18 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     });
 
     assert.equal((await fetch(`${base}/internal/v1/whatsapp/inbound`, { method: 'POST' })).status, 401);
+    const readyUrl = `${base}/internal/v1/whatsapp/ready`;
+    assert.equal((await fetch(readyUrl)).status, 401);
+    assert.equal((await fetch(readyUrl, { headers: tokenHeaders })).status, 503);
+    // Switch readiness on after app init. This test still advances the worker explicitly.
+    process.env.DOCUMENT_WORKER_ENABLED = 'true';
+    assert.deepEqual(await fetch(readyUrl, { headers: tokenHeaders }).then((response) => response.json()),
+      { status: 'ok', component: 'sobatnira-whatsapp-intake' });
+    const latest = '005_duplicate_photo_lookup.sql';
+    await db.query('DELETE FROM sobatnira_migrations WHERE name=$1', [latest]);
+    assert.equal((await fetch(readyUrl, { headers: tokenHeaders })).status, 503);
+    await db.query('INSERT INTO sobatnira_migrations (name) VALUES ($1)', [latest]);
+    process.env.DOCUMENT_WORKER_ENABLED = 'false';
     assert.equal((await photo(event('inactive', 'IMAGE', phone(103)))).status, 403);
     assert.equal((await photo(event('bad-media'), Buffer.from('not an image'))).status, 400);
     assert.equal((await mobile('review-tasks', 'unauthorized')).status, 401);

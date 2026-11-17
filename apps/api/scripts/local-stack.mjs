@@ -98,7 +98,9 @@ async function boot() {
   await requireExit(child(uv, ['run','--locked','--extra','paddle','python','synthetic_notes.py',staging], ai), 'Pembuatan fixture gagal');
   child(process.execPath, ['dist/main.js'], api);
   child(uv, ['run','--locked','--extra','paddle','uvicorn','main:app','--host','127.0.0.1','--port',String(ports.ai)], ai);
-  await waitFor(async () => (await fetch(`${url(ports.api)}/health`,{ signal: AbortSignal.timeout(1_000) })).ok, 'NestJS belum aktif');
+  await waitFor(async () => (await fetch(`${url(ports.api)}/internal/v1/whatsapp/ready`, { signal: AbortSignal.timeout(1_000),
+    headers: { 'X-Internal-Service-Token': process.env.WHATSAPP_ADAPTER_INTERNAL_TOKEN },
+  })).ok, 'NestJS intake belum siap. Periksa worker, token adapter, dan migration OCR.');
   await waitFor(async () => (await fetch(`${url(ports.ai)}/health`,{ signal: AbortSignal.timeout(1_000) })).ok, 'FastAPI belum aktif');
   const readiness = await fetch(`${url(ports.ai)}/internal/v1/ocr/ready`, { signal: AbortSignal.timeout(120_000),
     headers: { 'X-Internal-Service-Token': process.env.AI_SERVICE_INTERNAL_TOKEN } });
