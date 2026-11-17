@@ -80,8 +80,29 @@ String documentType(Object? type) => switch (type) {
 };
 
 class ReviewApiError implements Exception {
-  const ReviewApiError(this.status);
+  const ReviewApiError(this.status, {this.authCode});
+
+  factory ReviewApiError.fromSignInResponse(http.Response response) {
+    String? authCode;
+    try {
+      final payload = jsonDecode(response.body);
+      final code = payload is Json ? payload['error_code'] : null;
+      if (code is String &&
+          const {
+            'invalid_credentials',
+            'email_not_confirmed',
+            'user_banned',
+          }.contains(code)) {
+        authCode = code;
+      }
+    } on FormatException {
+      // Gateways may return a non-JSON error body.
+    }
+    return ReviewApiError(response.statusCode, authCode: authCode);
+  }
+
   final int status;
+  final String? authCode;
 
   String get message => switch (status) {
     401 => 'Sesi masuk telah berakhir.',
@@ -100,6 +121,7 @@ class ReviewApi {
   final http.Client _client;
   final String baseUrl;
   final _pendingTransfers = <String, JuiceTransferRequest>{};
+  void Function()? onSessionExpired;
 
   String _transferKey(FactoryScope scope, String lotId) =>
       '${scope.tenantId}/${scope.factoryId}/$lotId';
@@ -166,8 +188,8 @@ class ReviewApi {
   static List<String> get invalidConfiguration => [
     if (!_validOrigin(supabaseProject)) 'SUPABASE_URL',
     if (supabasePublicKey.isEmpty) 'SUPABASE_PUBLISHABLE_KEY',
-    if (!_validOrigin(reviewApiBase) ||
-        (_explicitConnectedMode && !const bool.hasEnvironment('API_BASE_URL')))
+    if (!const bool.hasEnvironment('API_BASE_URL') ||
+        !_validOrigin(reviewApiBase))
       'API_BASE_URL',
   ];
 
@@ -187,9 +209,12 @@ class ReviewApi {
           body: jsonEncode({'email': email, 'password': password}),
         )
         .timeout(const Duration(seconds: 10));
-    if (response.statusCode != 200) throw ReviewApiError(response.statusCode);
-    final token = (jsonDecode(response.body) as Json)['access_token'];
-    if (token is! String || token.isEmpty) throw const ReviewApiError(401);
+    if (response.statusCode != 200) {
+      throw ReviewApiError.fromSignInResponse(response);
+    }
+    final payload = jsonDecode(response.body);
+    final token = payload is Json ? payload['access_token'] : null;
+    if (token is! String || token.isEmpty) throw const ReviewApiError(503);
     return ReviewApi(token);
   }
 
@@ -217,10 +242,15 @@ class ReviewApi {
     int expectedStatus = 200,
   }) async {
     final response = await request.timeout(const Duration(seconds: 10));
-    if (response.statusCode != expectedStatus) {
-      throw ReviewApiError(response.statusCode);
-    }
+    _requireStatus(response, expectedStatus);
     return jsonDecode(response.body) as Json;
+  }
+
+  void _requireStatus(http.Response response, int expectedStatus) {
+    final status = response.statusCode;
+    if (status == expectedStatus) return;
+    if (status == 401) onSessionExpired?.call();
+    throw ReviewApiError(status);
   }
 
   Future<Json> _productionGet(
@@ -403,7 +433,7 @@ class ReviewApi {
     final response = await _client
         .get(_url('review-tasks/$id/assets/$asset'), headers: _headers)
         .timeout(const Duration(seconds: 12));
-    if (response.statusCode != 200) throw ReviewApiError(response.statusCode);
+    _requireStatus(response, 200);
     return response.bodyBytes;
   }
 
@@ -435,5 +465,8 @@ class ReviewApi {
     return base64UrlEncode(List<int>.generate(24, (_) => random.nextInt(256)));
   }
 
-  void close() => _client.close();
+  void close() {
+    onSessionExpired = null;
+    _client.close();
+  }
 }

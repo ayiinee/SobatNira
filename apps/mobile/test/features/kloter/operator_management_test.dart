@@ -105,6 +105,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: ConnectedKloterPage(signIn: (_, _) async => api)),
     );
+    await tap(tester, find.text('Masuk'));
     await tester.enterText(
       find.byType(TextField).first,
       'admin@example.invalid',
