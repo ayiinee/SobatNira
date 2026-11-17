@@ -85,8 +85,9 @@ void main() {
       final tab = tester.getTopLeft(find.text(tabLabel));
       await tester.drag(find.byKey(PageStorageKey(key)), const Offset(0, -420));
       await tester.pumpAndSettle();
-      if (search != null)
+      if (search != null) {
         expect(tester.getTopLeft(find.byType(TextField)), search);
+      }
       expect(tester.getTopLeft(find.text(tabLabel)), tab);
       expect(tester.takeException(), isNull);
     }

@@ -6,6 +6,7 @@ import '../pekerjaan/review_api.dart';
 import 'production_catalog_page.dart';
 import 'production_lot_editor.dart';
 import 'lot_closure_page.dart';
+import 'juice_transfer_page.dart';
 
 class ConnectedKloterPage extends StatefulWidget {
   const ConnectedKloterPage({
@@ -358,6 +359,23 @@ class _ConnectedLotDetail extends StatefulWidget {
 class _ConnectedLotDetailState extends State<_ConnectedLotDetail> {
   late var _data = _load();
 
+  Future<void> _transfer() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => JuiceTransferPage(
+          api: widget.api,
+          scope: widget.scope,
+          lotId: widget.lot['id'] as String,
+        ),
+      ),
+    );
+    if (mounted) {
+      setState(() {
+        _data = _load();
+      });
+    }
+  }
+
   Future<void> _closure() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
@@ -486,6 +504,11 @@ class _ConnectedLotDetailState extends State<_ConnectedLotDetail> {
               ListTile(
                 title: const Text('Nira tersedia'),
                 subtitle: Text('${stock['availableMl']} mL'),
+              ),
+              OutlinedButton.icon(
+                onPressed: _transfer,
+                icon: const Icon(Icons.swap_horiz),
+                label: const Text('Transfer nira'),
               ),
               const Divider(),
               _ApprovedNote(
