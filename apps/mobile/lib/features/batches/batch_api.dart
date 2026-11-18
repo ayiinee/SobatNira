@@ -51,6 +51,12 @@ class BatchApi {
   Future<Map<String, dynamic>> weighing(String id, {required double sugarWeightKg, double? caneWeightKg, String? occurredAt, String? requestId}) => _write('/batches/$id/weighing', {'sugarWeightKg': sugarWeightKg, if (caneWeightKg != null) 'caneWeightKg': caneWeightKg, if (occurredAt != null) 'occurredAt': occurredAt}, requestId: requestId);
   Future<Map<String, dynamic>> grading(String id, String gradeCode, {String? occurredAt, String? requestId}) => _write('/batches/$id/grading', {'gradeCode': gradeCode, if (occurredAt != null) 'occurredAt': occurredAt}, requestId: requestId);
   Future<Map<String, dynamic>> rework(String id, String receivingBatchId, double weightKg, {String? occurredAt, String? requestId}) => _write('/batches/$id/reworks', {'receivingBatchId': receivingBatchId, 'weightKg': weightKg, if (occurredAt != null) 'occurredAt': occurredAt}, requestId: requestId);
+  Future<Map<String, dynamic>> economics(String id) async {
+    if (_apiBaseUrl.isEmpty) return {'batchId': id, 'allocations': const [], 'totals': {'costRupiah': 0, 'revenueRupiah': 0, 'marginRupiah': 0}};
+    final response = await _client.get(Uri.parse('$_apiBaseUrl/economics/batches/$id/economics'), headers: _scope);
+    if (response.statusCode >= 400) throw Exception('Economics gagal (${response.statusCode})');
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
 
   Future<List<BatchSummary>> list() async {
     if (_apiBaseUrl.isEmpty) return _fixtureDetails.values.map((item) => BatchSummary(id: item.id, status: item.status, kloterId: item.contributions.first.kloterId, totalNiraMl: item.contributions.fold(0, (sum, item) => sum + item.volumeMl))).toList();

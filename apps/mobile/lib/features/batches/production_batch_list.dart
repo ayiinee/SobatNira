@@ -18,7 +18,7 @@ class _BatchListPageState extends State<BatchListPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Batch produksi'), backgroundColor: niraGreen, foregroundColor: Colors.white, actions: [IconButton(onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ProductionDashboardPage())), icon: const Icon(Icons.insights), tooltip: 'Dashboard')]),
+    appBar: AppBar(title: const Text('Batch produksi'), backgroundColor: niraGreen, foregroundColor: Colors.white, actions: [IconButton(onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ProductionDashboardPage())), icon: const Icon(Icons.insights), tooltip: 'Dashboard'), IconButton(onPressed: _create, icon: const Icon(Icons.add), tooltip: 'Buat batch')]),
     body: FutureBuilder<List<BatchSummary>>(
       future: _future,
       builder: (context, snapshot) {
@@ -55,6 +55,25 @@ class _BatchListPageState extends State<BatchListPage> {
       },
     ),
   );
+
+  Future<void> _create() async {
+    final values = await showDialog<Map<String, dynamic>>(context: context, builder: (_) => const _CreateBatchDialog());
+    if (!mounted || values == null) return;
+    try {
+      await widget.api.create(values, requestId: DateTime.now().microsecondsSinceEpoch.toString());
+      setState(() => _future = widget.api.list());
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+    }
+  }
+}
+
+class _CreateBatchDialog extends StatefulWidget { const _CreateBatchDialog(); @override State<_CreateBatchDialog> createState() => _CreateBatchDialogState(); }
+class _CreateBatchDialogState extends State<_CreateBatchDialog> {
+  final _form = GlobalKey<FormState>();
+  final _kloter = TextEditingController(), _pan = TextEditingController();
+  @override void dispose() { _kloter.dispose(); _pan.dispose(); super.dispose(); }
+  @override Widget build(BuildContext context) => AlertDialog(title: const Text('Buat batch'), content: Form(key: _form, child: Column(mainAxisSize: MainAxisSize.min, children: [TextFormField(controller: _kloter, decoration: const InputDecoration(labelText: 'Lot/kloter ID'), validator: (v) => v!.trim().isEmpty ? 'Wajib diisi' : null), TextFormField(controller: _pan, decoration: const InputDecoration(labelText: 'Wajan ID'), validator: (v) => v!.trim().isEmpty ? 'Wajib diisi' : null)])), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')), FilledButton(onPressed: () { if (_form.currentState!.validate()) Navigator.pop(context, {'factoryId': 'factory-demo', 'kloterId': _kloter.text.trim(), 'panId': _pan.text.trim(), 'occurredAt': DateTime.now().toUtc().toIso8601String()}); }, child: const Text('Buat'))]);
 }
 
 class _ErrorState extends StatelessWidget {
@@ -93,6 +112,11 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
     final result = await showDialog<String>(context: context, builder: (context) => AlertDialog(title: Text(title), content: TextField(controller: input), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')), FilledButton(onPressed: () => Navigator.pop(context, input.text.trim()), child: const Text('Simpan'))]));
     input.dispose(); return result;
   }
+  Future<List<String>?> _pair(String title, String first, String second) async {
+    final a = TextEditingController(), b = TextEditingController();
+    final result = await showDialog<List<String>>(context: context, builder: (context) => AlertDialog(title: Text(title), content: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: a, decoration: InputDecoration(labelText: first)), TextField(controller: b, decoration: InputDecoration(labelText: second))]), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')), FilledButton(onPressed: () => Navigator.pop(context, [a.text.trim(), b.text.trim()]), child: const Text('Simpan'))]));
+    a.dispose(); b.dispose(); return result;
+  }
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: Text(widget.id), backgroundColor: const Color(0xFF174B35), foregroundColor: Colors.white),
@@ -109,6 +133,9 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
           if (batch.status == 'DRAFT') FilledButton(onPressed: _working ? null : () => _submit(() => widget.api.cooking(widget.id, {'startedAt': DateTime.now().toUtc().toIso8601String()})), child: const Text('Catat pemasakan')),
           if (batch.status == 'COOKED') FilledButton(onPressed: _working ? null : () async { final value = await _number('Berat gula (kg)'); if (value != null) await _submit(() => widget.api.weighing(widget.id, sugarWeightKg: value)); }, child: const Text('Catat penimbangan')),
           if (batch.status == 'WEIGHED') FilledButton(onPressed: _working ? null : () async { final value = await _text('Kode grade', 'A'); if (value != null && value.isNotEmpty) await _submit(() => widget.api.grading(widget.id, value)); }, child: const Text('Catat grading')),
+          if (batch.status == 'DRAFT') FilledButton(onPressed: _working ? null : () async { final value = await _pair('Kontribusi nira', 'Lot ID', 'Volume (mL)'); final volume = value == null ? null : int.tryParse(value[1]); if (value != null && volume != null) await _submit(() => widget.api.contribution(widget.id, {'lotId': value[0], 'volumeMl': volume})); }, child: const Text('Tambah sumber nira')),
+          if (batch.status == 'GRADED') FilledButton(onPressed: _working ? null : () async { final value = await _pair('Catat rework', 'Batch penerima', 'Berat (kg)'); final weight = value == null ? null : double.tryParse(value[1]); if (value != null && weight != null) await _submit(() => widget.api.rework(widget.id, value[0], weight)); }, child: const Text('Catat rework')),
+          if (batch.status == 'GRADED' || batch.status == 'VALIDATED') FilledButton(onPressed: _working ? null : () async { try { final result = await widget.api.economics(widget.id); if (mounted) showDialog<void>(context: context, builder: (_) => AlertDialog(title: const Text('Economics batch'), content: Text('${result['totals']}'), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Tutup'))])); } catch (error) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error'))); } }, child: const Text('Lihat economics')),
           const SizedBox(height: 16),
           _Section(title: 'Sumber nira', child: Column(children: batch.contributions.map((item) => ListTile(contentPadding: EdgeInsets.zero, title: Text(item.kloterId), subtitle: Text('${item.volumeMl} ml â€¢ ${(item.volumeMl / total * 100).toStringAsFixed(1)}%'))).toList())),
           _Section(title: 'Pemasakan', child: Text(batch.cooking == null ? 'Belum dicatat' : 'Tercatat')),
