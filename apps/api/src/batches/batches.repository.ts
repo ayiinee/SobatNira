@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Batch, BatchInput, BatchStatus, Contribution, CookingRecord, Grading, Rework, Weighing } from './batches.types';
 
 export interface BatchesRepository {
+  resetFixture?(): void;
   list(scope: { tenantId: string; factoryId: string }, query?: { status?: BatchStatus; from?: string; to?: string }): Promise<Batch[]>;
   get(scope: { tenantId: string; factoryId: string }, id: string): Promise<Batch | undefined>;
   findAny(id: string): Promise<Batch | undefined>;
@@ -34,6 +35,7 @@ const clone = <T>(value: T): T => structuredClone(value);
 
 export class FixtureBatchesRepository implements BatchesRepository {
   private readonly batches = fixtureBatches.map(clone);
+  resetFixture() { this.batches.splice(0, this.batches.length, ...fixtureBatches.map(clone)); }
   async list(scope: { tenantId: string; factoryId: string }, query: { status?: BatchStatus; from?: string; to?: string } = {}) {
     return this.batches.filter((b) => b.tenantId === scope.tenantId && b.factoryId === scope.factoryId && (!query.status || b.status === query.status) && (!query.from || b.occurredAt >= query.from) && (!query.to || b.occurredAt <= query.to)).map(clone);
   }

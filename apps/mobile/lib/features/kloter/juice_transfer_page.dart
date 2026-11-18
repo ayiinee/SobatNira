@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../pekerjaan/review_api.dart';
+import '../pekerjaan/production_api.dart';
 import 'juice_volume.dart';
 
 class JuiceTransferPage extends StatefulWidget {
@@ -114,7 +115,7 @@ class _JuiceTransferPageState extends State<JuiceTransferPage> {
       _error = null;
     });
     try {
-      final receipt = await widget.api.transferJuice(
+      final receipt = await JuiceApi(widget.api).transfer(
         widget.scope,
         widget.lotId,
         request,

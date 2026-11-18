@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 const _apiBaseUrl = String.fromEnvironment('API_BASE_URL');
-const _useFixture = bool.fromEnvironment('USE_LOCAL_FIXTURE', defaultValue: false);
 
 class BatchApi {
   BatchApi({http.Client? client, String role = 'owner'})
@@ -21,7 +20,7 @@ class BatchApi {
   };
 
   Future<Map<String, dynamic>> _write(String path, Map<String, dynamic> body, {String? requestId}) async {
-    if (_apiBaseUrl.isEmpty || _useFixture) {
+    if (_apiBaseUrl.isEmpty) {
       final parts = path.split('/');
       final id = parts.length > 2 ? parts[2] : null;
       final current = id == null ? null : _fixtureDetails[id];
@@ -37,6 +36,16 @@ class BatchApi {
   }
 
   Future<Map<String, dynamic>> create(Map<String, dynamic> body, {String? requestId}) => _write('/batches', body, requestId: requestId);
+  Future<void> resetFixture() async {
+    if (_apiBaseUrl.isEmpty) {
+      _fixtureDetails
+        ..clear()
+        ..addEntries((BatchDetail.fixture).map((item) => MapEntry(item.id, item)));
+      return;
+    }
+    final response = await _client.post(Uri.parse('$_apiBaseUrl/batches/fixture/reset'));
+    if (response.statusCode >= 400) throw Exception('Reset fixture gagal (${response.statusCode})');
+  }
   Future<Map<String, dynamic>> contribution(String id, Map<String, dynamic> body, {String? requestId}) => _write('/batches/$id/contributions', body, requestId: requestId);
   Future<Map<String, dynamic>> cooking(String id, Map<String, dynamic> body, {String? requestId}) => _write('/batches/$id/cooking', body, requestId: requestId);
   Future<Map<String, dynamic>> weighing(String id, {required double sugarWeightKg, double? caneWeightKg, String? occurredAt, String? requestId}) => _write('/batches/$id/weighing', {'sugarWeightKg': sugarWeightKg, if (caneWeightKg != null) 'caneWeightKg': caneWeightKg, if (occurredAt != null) 'occurredAt': occurredAt}, requestId: requestId);
@@ -44,14 +53,14 @@ class BatchApi {
   Future<Map<String, dynamic>> rework(String id, String receivingBatchId, double weightKg, {String? occurredAt, String? requestId}) => _write('/batches/$id/reworks', {'receivingBatchId': receivingBatchId, 'weightKg': weightKg, if (occurredAt != null) 'occurredAt': occurredAt}, requestId: requestId);
 
   Future<List<BatchSummary>> list() async {
-    if (_useFixture || _apiBaseUrl.isEmpty) return _fixtureDetails.values.map((item) => BatchSummary(id: item.id, status: item.status, kloterId: item.contributions.first.kloterId, totalNiraMl: item.contributions.fold(0, (sum, item) => sum + item.volumeMl))).toList();
+    if (_apiBaseUrl.isEmpty) return _fixtureDetails.values.map((item) => BatchSummary(id: item.id, status: item.status, kloterId: item.contributions.first.kloterId, totalNiraMl: item.contributions.fold(0, (sum, item) => sum + item.volumeMl))).toList();
     final response = await _client.get(Uri.parse('$_apiBaseUrl/batches'), headers: _scope);
     if (response.statusCode >= 400) throw Exception('API batch gagal (${response.statusCode})');
     return (jsonDecode(response.body) as List).map((item) => BatchSummary.fromJson(item as Map<String, dynamic>)).toList();
   }
 
   Future<BatchDetail> detail(String id) async {
-    if (_useFixture || _apiBaseUrl.isEmpty) return _fixtureDetails[id]!;
+    if (_apiBaseUrl.isEmpty) return _fixtureDetails[id]!;
     final response = await _client.get(Uri.parse('$_apiBaseUrl/batches/$id'), headers: _scope);
     if (response.statusCode >= 400) throw Exception('Detail batch gagal (${response.statusCode})');
     final detail = BatchDetail.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
