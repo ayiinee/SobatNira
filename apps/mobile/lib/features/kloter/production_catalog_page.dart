@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../pekerjaan/review_api.dart';
+import '../pekerjaan/production_api.dart';
 import '../pengaturan/operator_history_page.dart';
 
 class ProductionCatalogPage extends StatefulWidget {
@@ -10,11 +11,13 @@ class ProductionCatalogPage extends StatefulWidget {
     required this.scope,
     required this.kind,
     this.selectSupplier = false,
+    this.masterKind,
   });
   final ReviewApi api;
   final FactoryScope scope;
   final ProductionCatalog kind;
   final bool selectSupplier;
+  final String? masterKind;
 
   @override
   State<ProductionCatalogPage> createState() => _ProductionCatalogPageState();
@@ -27,13 +30,15 @@ class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
   bool? _active;
   late Future<Json> _page = _fetch();
 
-  Future<Json> _fetch() => widget.api.catalog(
+  Future<Json> _fetch() => widget.masterKind != null
+      ? MasterDataApi(widget.api).list(widget.scope, widget.masterKind!)
+      : widget.api.catalog(
     widget.scope,
     widget.kind,
     offset: _offset,
     search: _query,
     active: widget.selectSupplier ? true : _active,
-  );
+        );
 
   @override
   void dispose() {
@@ -71,6 +76,7 @@ class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
         scope: widget.scope,
         kind: widget.kind,
         item: item,
+        masterKind: widget.masterKind,
       ),
     );
     if (mounted && saved == true) _reload(reset: true);
@@ -244,11 +250,13 @@ class _CatalogEditor extends StatefulWidget {
     required this.scope,
     required this.kind,
     this.item,
+    this.masterKind,
   });
   final ReviewApi api;
   final FactoryScope scope;
   final ProductionCatalog kind;
   final Json? item;
+  final String? masterKind;
 
   @override
   State<_CatalogEditor> createState() => _CatalogEditorState();
@@ -298,12 +306,11 @@ class _CatalogEditorState extends State<_CatalogEditor> {
       _error = null;
     });
     try {
-      await widget.api.saveCatalog(
-        widget.scope,
-        widget.kind,
-        values,
-        id: item?['id'] as String?,
-      );
+      if (widget.masterKind != null) {
+        await MasterDataApi(widget.api).create(widget.scope, widget.masterKind!, values);
+      } else {
+        await widget.api.saveCatalog(widget.scope, widget.kind, values, id: item?['id'] as String?);
+      }
       if (mounted) Navigator.pop(context, true);
     } catch (error) {
       if (mounted) {

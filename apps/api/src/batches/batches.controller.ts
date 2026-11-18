@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Headers, Param, Post, Query } from '@nestjs/common';
+import { Public } from '../auth/auth.decorators';
 import { CurrentFactory, FactoryRoles } from '../auth/auth.decorators';
 import { FactoryAccess } from '../auth/auth.types';
 import { BatchesService } from './batches.service';
@@ -10,6 +11,7 @@ export class BatchesController {
   constructor(private readonly service: BatchesService) {}
   private scope(headers: Record<string, string | undefined>) { return { tenantId: headers['x-dev-tenant-id'] ?? '', factoryId: headers['x-dev-factory-id'] ?? '', role: headers['x-dev-role'] ?? '' }; }
   private accessScope(access: FactoryAccess) { return { tenantId: access.tenantId, factoryId: access.factoryId, role: access.role, userId: access.userId }; }
+  @Post('fixture/reset') @Public() resetFixture() { return this.service.resetFixture(); }
   @Get() list(@CurrentFactory() access: FactoryAccess, @Query() query: { status?: string; from?: string; to?: string }) { return this.service.list(this.accessScope(access), query); }
   @Get('nira/:kloterId/availability') niraAvailability(@CurrentFactory() access: FactoryAccess, @Param('kloterId') kloterId: string) { return this.service.niraAvailability(this.accessScope(access), kloterId); }
   @Get('closure-check/:kloterId') closureCheck(@CurrentFactory() access: FactoryAccess, @Param('kloterId') kloterId: string) { return this.service.closureCheck(this.accessScope(access), kloterId); }
