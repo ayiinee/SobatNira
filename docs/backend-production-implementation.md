@@ -98,3 +98,7 @@ Tidak ada deployment API/aplikasi atau build APK baru pada perubahan ini. Jalank
 - Flutter: 66 lulus, 1 fixture eksternal dilewati. Tes khusus laporan terhubung juga memakai kode tampilan duplikat untuk membuktikan baris dipertahankan berdasarkan UUID kloter.
 - `flutter analyze --no-fatal-infos`: keluar 0, tanpa error/warning; 68 info deprecation SDK Material.
 - Seed dua kali: tetap 24 kloter, 62 batch, 48 batch sah; inspeksi baca-saja menemukan 16 kloter bersnapshot, 8 rugi, 8 variasi total gula.
+
+## Integrasi ringkasan dan laporan Flutter
+
+[Ringkasan dan laporan produksi terhubung](mobile-production-reports.md) melengkapi Beranda, Laporan Produksi/Margin, pintasan Laba/Rekap, serta detail grade/kloter/batch. Dokumen tersebut menjelaskan endpoint baca bersama, periode, status yang dihitung, nilai eksak dan batas margin batch. Bagian batasan di atas mencatat baseline sebelum integrasi ini.

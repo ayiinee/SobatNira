@@ -5,6 +5,8 @@ import '../pekerjaan/review_api.dart';
 import 'batch_detail_page.dart';
 import 'demo_production.dart';
 import 'kloter_detail_widgets.dart';
+import 'kloter_detail_page.dart';
+import '../laporan/connected_reports.dart';
 
 String _errorText(Object? error) => error is ReviewApiError
     ? error.detail ?? error.message
@@ -15,18 +17,22 @@ class OfficialLotBatches extends StatefulWidget {
     required this.api,
     required this.scope,
     required this.lotId,
+    required this.kloterCode,
     required this.canCreate,
     required this.onNavigate,
     required this.onChanged,
+    required this.reportLink,
     super.key,
   });
 
   final ReviewApi api;
   final FactoryScope scope;
   final String lotId;
+  final String kloterCode;
   final bool canCreate;
   final ValueChanged<NiraTab> onNavigate;
   final VoidCallback onChanged;
+  final Future<void> Function([String? batchId]) reportLink;
 
   @override
   State<OfficialLotBatches> createState() => _OfficialLotBatchesState();
@@ -86,7 +92,9 @@ class _OfficialLotBatchesState extends State<OfficialLotBatches> {
           api: api,
           scope: scope,
           initial: batch,
+          kloterCode: widget.kloterCode,
           onNavigate: widget.onNavigate,
+          reportLink: widget.reportLink,
         ),
       ),
     );
@@ -118,16 +126,21 @@ class _OfficialLotBatchesState extends State<OfficialLotBatches> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          TextButton(
+            onPressed: () => widget.reportLink(),
+            child: const Text('Produksi dan margin kloter'),
+          ),
           if (widget.canCreate) DocumentLink('Tambah batch', _create),
           if (batches.isEmpty) const Text('Belum ada batch pada halaman ini.'),
           for (final batch in batches)
-            NiraOutline(
-              ListTile(
-                title: Text(batch['code'] as String),
-                subtitle: Text(
-                  '${_status(batch)} · Wajan ${batch['wok_number']}',
-                ),
-                trailing: const Icon(Icons.chevron_right),
+            Padding(
+              padding: const EdgeInsets.only(bottom: NiraSpace.md),
+              child: KloterBatchCard(
+                title: batch['code'] as String,
+                pending: batch['status'] != 'approved',
+                cancelled: batch['status'] == 'cancelled',
+                juice: '${reportNumber(batch['quantity_ml'])} mL',
+                physical: '${reportNumber(batch['physical_weight_kg'])} kg',
                 onTap: () => _open(batch),
               ),
             ),
@@ -172,13 +185,17 @@ class _OfficialBatchDetail extends StatefulWidget {
     required this.api,
     required this.scope,
     required this.initial,
+    required this.kloterCode,
     required this.onNavigate,
+    required this.reportLink,
   });
 
   final ReviewApi api;
   final FactoryScope scope;
   final Json initial;
+  final String kloterCode;
   final ValueChanged<NiraTab> onNavigate;
+  final Future<void> Function([String? batchId]) reportLink;
 
   @override
   State<_OfficialBatchDetail> createState() => _OfficialBatchDetailState();
@@ -313,6 +330,11 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
         ),
         if (_error != null) Text(_error!),
         if (_busy) const LinearProgressIndicator(),
+        if (batch['status'] == 'approved')
+          DocumentLink(
+            'Nilai produksi dan margin kloter',
+            () => widget.reportLink(_id),
+          ),
         if (draft && !_busy && widget.scope.role == 'admin') ...[
           if (!costSaved) NiraButton('Isi biaya kloter', _costs),
           if (costSaved && !reserved)
@@ -325,14 +347,6 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
                   _id,
                   remaining,
                 ),
-              ),
-            ),
-          if (costSaved && reserved)
-            NiraButton(
-              'Sahkan batch',
-              () => _run(
-                () => widget.api.finishBatch(widget.scope, _id),
-                confirmation: 'Sahkan batch dan konsumsi reservasi nira?',
               ),
             ),
           TextButton(
@@ -350,11 +364,35 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
   @override
   Widget build(BuildContext context) => FutureBuilder<Json>(
     future: _detail,
-    builder: (_, snapshot) => BatchDetailPage.official(
-      officialTitle: widget.initial['code'] as String,
-      officialContent: (tab) => _content(tab, snapshot),
-      onNavigate: widget.onNavigate,
-    ),
+    builder: (_, snapshot) {
+      final current = snapshot.data;
+      final approved = current?['status'] == 'approved';
+      final canApprove =
+          current?['status'] == 'draft' &&
+          current?['costSaved'] == true &&
+          current?['remainingMl'] == '0' &&
+          widget.scope.role == 'admin' &&
+          !_busy &&
+          snapshot.connectionState == ConnectionState.done;
+      return BatchDetailPage.official(
+        officialTitle: widget.initial['code'] as String,
+        kloterCode: widget.kloterCode,
+        officialReviewed: approved,
+        officialCancelled: current?['status'] == 'cancelled',
+        officialContent: (tab) => _content(tab, snapshot),
+        officialAction: approved || canApprove
+            ? BatchReviewActions(
+                batchNumber: current!['wok_number'] as int,
+                batchCode: widget.initial['code'] as String,
+                label: approved ? 'Batch tervalidasi' : 'Validasi',
+                verified: approved,
+                onVerify: () =>
+                    _run(() => widget.api.finishBatch(widget.scope, _id)),
+              )
+            : null,
+        onNavigate: widget.onNavigate,
+      );
+    },
   );
 }
 

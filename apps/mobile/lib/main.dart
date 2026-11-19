@@ -1,23 +1,24 @@
 import 'package:flutter/material.dart';
 
 import 'features/beranda/beranda_page.dart';
-import 'features/kloter/official_batch_workflow.dart';
-import 'features/laporan/connected_profit_page.dart';
 import 'features/bantuan/bantuan_page.dart';
 import 'features/beranda/quick_action_icon.dart';
 import 'features/kloter/connected_kloter_page.dart';
 import 'features/kloter/connected_production.dart';
+import 'features/kloter/official_batch_workflow.dart';
 import 'features/kloter/juice_transfer_page.dart';
 import 'features/kloter/lot_closure_page.dart';
 import 'features/kloter/production_catalog_page.dart';
 import 'features/kloter/production_lot_editor.dart';
 import 'features/pekerjaan/pekerjaan_page.dart';
 import 'features/kloter/demo_production.dart';
+import 'features/kloter/demo_lot_fixture.dart';
 import 'features/kloter/kloter_detail_page.dart';
 import 'features/kloter/kloter_detail_widgets.dart';
 import 'features/kloter/kloter_list_page.dart';
 import 'features/laporan/demo_analytics.dart';
 import 'features/laporan/laporan_page.dart';
+import 'features/laporan/connected_report_view.dart';
 import 'features/laporan/report_detail_page.dart';
 import 'features/laporan/report_export_page.dart';
 import 'features/laporan/printable_report.dart';
@@ -143,7 +144,9 @@ class _HomeState extends State<_Home> {
   Widget _pageFor(NiraTab tab) => _pages.putIfAbsent(
     tab,
     () => ListenableBuilder(
-      listenable: _live ?? _demo,
+      listenable: _live == null
+          ? Listenable.merge([_demo, _analytics])
+          : Listenable.merge([_live, _live.reports]),
       builder: (context, _) => switch (tab) {
         NiraTab.beranda => BerandaPage(
           kloter: _lots,
@@ -157,7 +160,19 @@ class _HomeState extends State<_Home> {
           },
           onFactoryChanged: _live == null ? null : _selectFactory,
           profile: _live == null ? null : _role,
-          summary: _live == null ? null : _summary(),
+          summary: _summary(),
+          profit:
+              _live?.reports.amount('productionMarginRupiah', money: true) ??
+              demoMoney(_analytics.marginTotal),
+          period: _live == null
+              ? '${_analytics.dateFilter == null ? 'Semua tanggal' : '${formatDate(_analytics.dateFilter!.range.start)} - ${formatDate(_analytics.dateFilter!.range.end)}'} · data sintetis'
+              : '${_live.reports.period} · ${_live.reports.synthetic ? 'Data sintetis' : 'Data disahkan'}',
+          onPeriod: _live == null
+              ? null
+              : () => filterConnectedReport(context, _live.reports),
+          reportStatus: _live == null
+              ? null
+              : ConnectedReportStatus(reports: _live.reports),
           statusMessage:
               _loadStatus() ??
               (_live != null && _lots.isEmpty
@@ -170,19 +185,18 @@ class _HomeState extends State<_Home> {
           onCreate: widget.scope?.role == 'admin' ? () => _editLot() : null,
           statusMessage: _loadStatus(),
         ),
-        NiraTab.laporan => LaporanPage(
-          analytics: _analytics,
-          onOpenDetail: _openReportDetail,
-          approvedLots: _live?.lots,
-          loadOfficial: _live == null
-              ? null
-              : (kind, filter) =>
-                    loadFactoryReport(widget.api!, widget.scope!, kind, filter),
-          openOfficial: _live == null
-              ? null
-              : (report) => _openOfficialReport(report.kind, initial: report),
-          statusMessage: _loadStatus(),
-        ),
+        NiraTab.laporan =>
+          _live != null
+              ? ConnectedReportView(
+                  reports: _live.reports,
+                  onNavigate: _navigate,
+                )
+              : LaporanPage(
+                  analytics: _analytics,
+                  onOpenDetail: _openReportDetail,
+                  approvedLots: _live?.lots,
+                  statusMessage: _loadStatus(),
+                ),
         NiraTab.pengaturan => PengaturanPage(
           settings: _settings,
           onNavigate: _navigate,
@@ -210,12 +224,18 @@ class _HomeState extends State<_Home> {
   );
 
   ({String cane, String lots}) _summary() {
-    final weights = _lots.map((lot) => lot.netWeightKg).nonNulls;
+    final live = _live;
+    if (live != null) {
+      return (
+        cane: live.reports.amount('caneNetKg', unit: ' kg'),
+        lots: live.reports.data == null
+            ? '—'
+            : '${live.reports.totals['lotCount']}',
+      );
+    }
     return (
-      cane: formatQuantity(
-        weights.isEmpty ? null : weights.reduce((a, b) => a + b),
-      ),
-      lots: _live!.loading || _live.error != null ? '-' : '${_lots.length}',
+      cane: '${demoNumber(_analytics.caneTotal)} kg',
+      lots: '${_analytics.visibleLots.length}',
     );
   }
 
@@ -295,24 +315,6 @@ class _HomeState extends State<_Home> {
     );
   }
 
-  void _openOfficialReport(
-    PrintableReportKind kind, {
-    PrintableReport? initial,
-  }) {
-    _navigator.push<void>(
-      MaterialPageRoute(
-        builder: (_) => ConnectedProfitPage(
-          api: widget.api!,
-          scope: widget.scope!,
-          kind: kind,
-          onNavigate: _navigate,
-          initialFilter: _analytics.dateFilter,
-          initialReport: initial,
-        ),
-      ),
-    );
-  }
-
   void _openQuickAction(QuickActionKind action) {
     final kind = switch (action) {
       QuickActionKind.profit => PrintableReportKind.profit,
@@ -335,13 +337,23 @@ class _HomeState extends State<_Home> {
       return;
     }
     if (_live != null) {
-      _openOfficialReport(kind);
+      _navigator.push(
+        MaterialPageRoute<void>(
+          builder: (_) => ConnectedReportExport(
+            reports: _live.reports,
+            kind: kind,
+            onNavigate: _navigate,
+          ),
+        ),
+      );
       return;
     }
     _navigator.push(
       MaterialPageRoute<void>(
         builder: (_) => ListenableBuilder(
-          listenable: _live ?? _demo,
+          listenable: _live == null
+              ? _demo
+              : Listenable.merge([_live, _live.reports]),
           builder: (_, _) => ReportExportPage(
             kind: kind,
             analytics: _analytics,
@@ -465,17 +477,6 @@ class _LotDetailState extends State<_LotDetail> {
         demo: widget.demo,
         onNavigate: widget.onNavigate,
         onOpenPekerjaan: widget.onOpenPekerjaan,
-        batchSection: OfficialLotBatches(
-          api: _api,
-          scope: _scope,
-          lotId: _id,
-          canCreate:
-              _scope.role == 'admin' &&
-              _lot.milling.verified &&
-              _lot.record?['status'] != 'closed',
-          onNavigate: widget.onNavigate,
-          onChanged: _reload,
-        ),
         onEdit: snapshot.hasError || _scope.role != 'admin'
             ? null
             : () async {
@@ -489,6 +490,22 @@ class _LotDetailState extends State<_LotDetail> {
         onClosure: snapshot.hasError
             ? null
             : () => _open(LotClosurePage(api: _api, scope: _scope, lotId: _id)),
+        production: OfficialLotBatches(
+          api: _api,
+          scope: _scope,
+          lotId: _id,
+          kloterCode: _lot.code,
+          canCreate:
+              _scope.role == 'admin' &&
+              _lot.milling.verified &&
+              _lot.record?['status'] != 'closed',
+          onNavigate: widget.onNavigate,
+          onChanged: () {
+            _reload();
+            widget.live.reports.refresh();
+          },
+          reportLink: _production,
+        ),
         stock: switch (snapshot) {
           AsyncSnapshot(connectionState: ConnectionState.waiting) =>
             const LinearProgressIndicator(),
@@ -511,6 +528,46 @@ class _LotDetailState extends State<_LotDetail> {
       );
     },
   );
+
+  Future<void> _production([String? batchId]) async {
+    final notice = ScaffoldMessenger.of(context);
+    try {
+      final report = await _api.productionReport(_scope);
+      if (!mounted) return;
+      final lot = (report['items'] as List)
+          .cast<Json>()
+          .where((item) => item['lotId'] == _id)
+          .firstOrNull;
+      if (lot == null) {
+        notice.showSnackBar(
+          const SnackBar(content: Text('Belum ada penerimaan sah.')),
+        );
+        return;
+      }
+      final batch = (lot['batches'] as List)
+          .cast<Json>()
+          .where((item) => item['id'] == batchId)
+          .firstOrNull;
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => ConnectedReportDetail(
+            data: report,
+            lot: lot,
+            batch: batch,
+            onNavigate: widget.onNavigate,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        notice.showSnackBar(
+          const SnackBar(
+            content: Text('Laporan belum dapat dimuat. Coba lagi.'),
+          ),
+        );
+      }
+    }
+  }
 
   num? _liters(Object? milliliters) {
     final value = num.tryParse(milliliters?.toString() ?? '');

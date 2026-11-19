@@ -10,9 +10,9 @@ import 'production_chart.dart';
 import 'report_detail_page.dart';
 import 'report_paginated_list.dart';
 import '../kloter/demo_production.dart';
+import 'production_recap.dart';
 import 'production_recap_section.dart';
 import 'report_date_button.dart';
-import 'printable_report.dart';
 
 class LaporanPage extends StatefulWidget {
   const LaporanPage({
@@ -20,8 +20,6 @@ class LaporanPage extends StatefulWidget {
     required this.onOpenDetail,
     this.approvedLots,
     this.statusMessage,
-    this.loadOfficial,
-    this.openOfficial,
     super.key,
   });
 
@@ -29,36 +27,12 @@ class LaporanPage extends StatefulWidget {
   final ValueChanged<ReportDetailKind> onOpenDetail;
   final List<DemoKloter>? approvedLots;
   final Widget? statusMessage;
-  final Future<PrintableReport> Function(
-    PrintableReportKind kind,
-    KloterDateFilter? filter,
-  )?
-  loadOfficial;
-  final ValueChanged<PrintableReport>? openOfficial;
 
   @override
   State<LaporanPage> createState() => _LaporanPageState();
 }
 
 class _LaporanPageState extends State<LaporanPage> {
-  late Future<PrintableReport>? _official = _loadOfficial();
-
-  Future<PrintableReport>? _loadOfficial() => widget.loadOfficial?.call(
-    widget.analytics.tab == ReportTab.margin
-        ? PrintableReportKind.profit
-        : PrintableReportKind.production,
-    widget.analytics.dateFilter,
-  );
-
-  @override
-  void didUpdateWidget(LaporanPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.statusMessage == null &&
-        !identical(oldWidget.approvedLots, widget.approvedLots)) {
-      _official = _loadOfficial();
-    }
-  }
-
   Future<void> _dateFilter() async {
     FocusScope.of(context).unfocus();
     final result = await showKloterDateFilter(
@@ -68,9 +42,6 @@ class _LaporanPageState extends State<LaporanPage> {
     );
     if (!mounted || result == null) return;
     widget.analytics.setDateFilter(result.selection);
-    if (widget.loadOfficial != null) {
-      setState(() => _official = _loadOfficial());
-    }
   }
 
   @override
@@ -83,13 +54,8 @@ class _LaporanPageState extends State<LaporanPage> {
           selected: widget.analytics.tab.index,
           height: 43,
           inset: 20,
-          onSelected: (index) {
-            if (widget.analytics.tab.index == index) return;
-            widget.analytics.setTab(ReportTab.values[index]);
-            if (widget.loadOfficial != null) {
-              setState(() => _official = _loadOfficial());
-            }
-          },
+          onSelected: (index) =>
+              widget.analytics.setTab(ReportTab.values[index]),
         ),
         Expanded(
           child: widget.approvedLots != null
@@ -111,21 +77,10 @@ class _LaporanPageState extends State<LaporanPage> {
     ),
   );
 
-  Widget _connectedReport() => FutureBuilder<PrintableReport>(
-    future: _official,
-    builder: (context, snapshot) {
-      final report = snapshot.connectionState == ConnectionState.done
-          ? snapshot.data
-          : null;
-      return _connectedSummary(report, snapshot);
-    },
-  );
-
-  Widget _connectedSummary(
-    PrintableReport? report,
-    AsyncSnapshot<PrintableReport> snapshot,
-  ) {
-    final margin = widget.analytics.tab == ReportTab.margin;
+  Widget _connectedReport() {
+    if (widget.analytics.tab == ReportTab.margin) {
+      return const NiraSummaryCard('Margin produksi', 'Belum tersedia');
+    }
     final lots = widget.approvedLots!
         .where((lot) => widget.analytics.dateFilter?.contains(lot.date) ?? true)
         .toList();
@@ -133,59 +88,27 @@ class _LaporanPageState extends State<LaporanPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (margin)
-          NiraSummaryCard('Margin produksi', report?.totalDisplay ?? '-')
-        else
-          NiraSummaryPair(
-            first: NiraSummaryCard('Gula final', report?.totalDisplay ?? '-'),
-            second: NiraSummaryCard(
-              'Tebu diterima',
-              formatQuantity(
-                weights.isEmpty ? null : weights.reduce((a, b) => a + b),
-                'kg',
-              ),
-              boxes: true,
+        NiraSummaryPair(
+          first: const NiraSummaryCard('Gula final', 'Belum tersedia'),
+          second: NiraSummaryCard(
+            'Tebu diterima',
+            formatQuantity(
+              weights.isEmpty ? null : weights.reduce((a, b) => a + b),
+              'kg',
             ),
+            boxes: true,
           ),
+        ),
         const SizedBox(height: NiraSpace.md),
-        if (report?.provisional == true)
-          const Text('Margin sementara untuk kloter yang masih terbuka.'),
-        if (report != null && widget.openOfficial != null)
-          NiraButton(
-            margin ? 'Buka laporan laba' : 'Buka rekap produksi',
-            () => widget.openOfficial!(report),
-          ),
         Align(
           alignment: Alignment.centerRight,
           child: ReportDateButton(onPressed: _dateFilter),
         ),
         const SizedBox(height: NiraSpace.md),
-        if (snapshot.connectionState == ConnectionState.waiting)
-          const LinearProgressIndicator()
-        else if (snapshot.hasError)
-          TextButton(
-            onPressed: () => setState(() => _official = _loadOfficial()),
-            child: const Text('Coba lagi memuat laporan'),
-          )
-        else if (report?.recap case final recap?)
-          ProductionRecapSection(recap: recap)
-        else if (margin && report != null)
-          ReportPaginatedList<AnalyticsRow>(
-            items: report.rows,
-            resetToken: report.period,
-            builder: (rows) => Column(
-              children: [
-                for (final row in rows)
-                  ListTile(
-                    title: Text(row.code),
-                    subtitle: Text(row.supplier),
-                    trailing: Text(row.value),
-                  ),
-              ],
+        widget.statusMessage ??
+            ProductionRecapSection(
+              recap: ProductionRecap.fromApprovedLots(lots),
             ),
-          )
-        else
-          ?widget.statusMessage,
       ],
     );
   }

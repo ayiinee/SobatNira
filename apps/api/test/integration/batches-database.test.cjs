@@ -40,6 +40,19 @@ test('batch approval freezes costs, consumes once, isolates scope and produces a
   assert.equal((await f.request(root+'/batches?lotId='+f.ids.lot+'&synthetic=false')).body.items[0].id,batch);
   assert.equal((await f.request(root+'/batches?lotId='+f.ids.secondLot)).body.items.length,0);
   assert.equal((await f.request(root+'/profit-report?from=2026-12-01T00:00:00Z')).body.total,0);
+  const production=await f.request(root+'/production-report');
+  assert.equal(production.status,200,JSON.stringify(production.body));
+  assert.equal(production.body.totals.lotCount,1);
+  assert.equal(production.body.totals.batchCount,1);
+  assert.equal(production.body.totals.finalSugarKg,'30');
+  assert.equal(production.body.totals.productionMarginRupiah,'475000');
+  assert.equal(production.body.items[0].batches[0].grades[0].code,'A');
+  assert.equal(production.body.grades[0].exactValueRupiah,'600000');
+  assert.equal((await f.request(root+'/production-report?synthetic=true')).body.totals.lotCount,0);
+  assert.equal((await f.request(root+'/production-report?before=2026-11-16T01:00:00Z')).body.totals.lotCount,0);
+  assert.equal((await f.request(root+'/production-report?from=2026-11-16T01:00:00Z')).body.totals.lotCount,1);
+  assert.equal((await f.request(f.siblingRoot+'/production/production-report')).body.totals.lotCount,0);
+
   assert.equal((await f.request(root+'/lots/'+f.ids.lot+'/costs','POST',{caneCostRupiah:'1',operationalCostRupiah:'0',ingredientCostRupiah:'0',otherCostRupiah:'0'})).status,409);
   const local=new ClosureCheckService({});
   const session=f.app.get(DatabaseService);
@@ -47,6 +60,7 @@ test('batch approval freezes costs, consumes once, isolates scope and produces a
   await local.requireClear(session,access,f.ids.lot,false,'Bearer fixture-admin');
   assert.equal((await f.request(root+'/batches','POST',{...body,id:randomUUID(),code:'DRAFT-BLOCKS-CLOSURE'})).status,201);
   await assert.rejects(()=>local.requireClear(session,access,f.ids.lot,false,'Bearer fixture-admin'),e=>e.getStatus()===409);
+  assert.equal((await f.request(root+'/production-report')).body.totals.batchCount,1);
   assert.equal((await f.request(f.siblingRoot+'/production/batches/'+batch+'/approve','POST')).status,404);
   assert.equal((await f.request(f.siblingRoot+'/production/recap')).body.total,0);
  }finally{await f.close();}

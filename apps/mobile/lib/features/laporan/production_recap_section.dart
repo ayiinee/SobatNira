@@ -15,9 +15,14 @@ class ProductionRecapSection extends StatefulWidget {
 }
 
 class _ProductionRecapSectionState extends State<ProductionRecapSection> {
-  late final _expanded = ValueNotifier<String?>(
-    widget.recap.kloter.firstOrNull?.identity,
-  );
+  late final ValueNotifier<String?> _expanded;
+
+  @override
+  void initState() {
+    super.initState();
+    final firstLot = recap.kloter.firstOrNull;
+    _expanded = ValueNotifier(firstLot?.id ?? firstLot?.code);
+  }
 
   @override
   void dispose() {
@@ -51,12 +56,12 @@ class _ProductionRecapSectionState extends State<ProductionRecapSection> {
         ),
       ReportPaginatedList<RecapKloter>(
         items: recap.kloter,
-        resetToken: recap.kloter.map((lot) => lot.identity).join('|'),
+        resetToken: recap.kloter.map((lot) => lot.id ?? lot.code).join('|'),
         builder: (lots) => Column(
           children: [
             for (final lot in lots)
               _KloterRecap(
-                key: ValueKey(lot.identity),
+                key: ValueKey(lot.id ?? lot.code),
                 lot: lot,
                 expanded: _expanded,
               ),
@@ -79,6 +84,7 @@ class _KloterRecap extends StatefulWidget {
 class _KloterRecapState extends State<_KloterRecap> {
   final _horizontal = ScrollController();
   final _tile = ExpansibleController();
+  String get _lotKey => widget.lot.id ?? widget.lot.code;
 
   @override
   void initState() {
@@ -87,7 +93,7 @@ class _KloterRecapState extends State<_KloterRecap> {
   }
 
   void _closeIfUnselected() {
-    if (widget.expanded.value != widget.lot.identity && _tile.isExpanded) {
+    if (widget.expanded.value != _lotKey && _tile.isExpanded) {
       _tile.collapse();
     }
   }
@@ -105,11 +111,11 @@ class _KloterRecapState extends State<_KloterRecap> {
     final lot = widget.lot;
     return ExpansionTile(
       controller: _tile,
-      initiallyExpanded: widget.expanded.value == lot.identity,
+      initiallyExpanded: widget.expanded.value == _lotKey,
       onExpansionChanged: (open) {
         if (open) {
-          widget.expanded.value = lot.identity;
-        } else if (widget.expanded.value == lot.identity) {
+          widget.expanded.value = _lotKey;
+        } else if (widget.expanded.value == _lotKey) {
           widget.expanded.value = null;
         }
       },
@@ -166,12 +172,12 @@ class _KloterRecapState extends State<_KloterRecap> {
         else ...[
           ReportPaginatedList<RecapBatch>(
             items: lot.batches,
-            resetToken: lot.identity,
+            resetToken: _lotKey,
             builder: (batches) => Scrollbar(
               controller: _horizontal,
               thumbVisibility: true,
               child: SingleChildScrollView(
-                key: PageStorageKey('batch-table-${lot.identity}'),
+                key: PageStorageKey('batch-table-$_lotKey'),
                 controller: _horizontal,
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.only(bottom: NiraSpace.md),

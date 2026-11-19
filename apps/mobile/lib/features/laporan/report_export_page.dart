@@ -197,7 +197,7 @@ class _ReportExportPageState extends State<ReportExportPage> {
                   NiraSummaryCard(report.totalLabel, report.totalDisplay),
                   if (report.provisional)
                     const Text(
-                      'Margin sementara untuk kloter yang belum ditutup.',
+                      'Margin sementara untuk kloter yang masih terbuka.',
                     ),
                   if (widget.statusMessage case final status?) ...[
                     const SizedBox(height: NiraSpace.md),
@@ -208,9 +208,7 @@ class _ReportExportPageState extends State<ReportExportPage> {
                     NiraSummaryCard('Margin tercatat', recap.marginTotal),
                     const SizedBox(height: NiraSpace.sm),
                     Text(
-                      report.connected && recap.batchCount == 0
-                          ? '${recap.kloter.length} kloter · Belum ada batch sah pada periode ini'
-                          : '${recap.kloter.length} kloter · ${recap.batchCount} batch\nGula final ${recap.sugarCount}/${recap.kloter.length} · Margin ${recap.marginCount}/${recap.kloter.length} kloter',
+                      '${recap.kloter.length} kloter · ${recap.batchCount} batch\nGula final ${recap.sugarCount}/${recap.kloter.length} · Margin ${recap.marginCount}/${recap.kloter.length} kloter',
                       style: niraText(NiraType.caption, color: niraLeaf),
                     ),
                     const SizedBox(height: NiraSpace.lg),
@@ -230,7 +228,7 @@ class _ReportExportPageState extends State<ReportExportPage> {
                     const SizedBox(height: NiraSpace.xs),
                     Text(
                       report.connected && report.rows.isEmpty
-                          ? 'Data margin belum tersedia.'
+                          ? 'Tidak ada hasil produksi sah pada periode ini.'
                           : '${report.synthetic ? 'Data demo' : 'Data disahkan'} · ${report.rows.length} kloter',
                       style: niraText(NiraType.caption, color: niraLeaf),
                     ),

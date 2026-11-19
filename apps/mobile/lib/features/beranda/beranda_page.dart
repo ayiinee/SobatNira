@@ -18,6 +18,10 @@ class BerandaPage extends StatefulWidget {
     this.onFactoryChanged,
     this.profile,
     this.summary,
+    this.profit,
+    this.period,
+    this.onPeriod,
+    this.reportStatus,
     this.statusMessage,
     super.key,
   });
@@ -32,6 +36,9 @@ class BerandaPage extends StatefulWidget {
   final String? profile;
   final ({String cane, String lots})? summary;
   final Widget? statusMessage;
+  final Widget? reportStatus;
+  final String? profit, period;
+  final VoidCallback? onPeriod;
 
   @override
   State<BerandaPage> createState() => _BerandaPageState();
@@ -113,8 +120,14 @@ class _BerandaPageState extends State<BerandaPage> {
                           profile: widget.profile,
                         ),
                         const SizedBox(height: NiraSpace.lg),
-                        _ProductionSummary(summary: widget.summary),
-                        const SizedBox(height: NiraSpace.lg),
+                        _ProductionSummary(
+                          summary: widget.summary,
+                          profit: widget.profit,
+                          period: widget.period,
+                          onPeriod: widget.onPeriod,
+                        ),
+                        if (widget.reportStatus != null) widget.reportStatus!,
+                        const SizedBox(height: NiraSpace.md),
                         _QuickActions(onSelected: widget.onQuickAction),
                         if (widget.onOpenPekerjaan case final open?) ...[
                           const SizedBox(height: NiraSpace.md),
@@ -330,7 +343,14 @@ class _ProfileState extends State<_Profile> {
 }
 
 class _ProductionSummary extends StatefulWidget {
-  const _ProductionSummary({this.summary});
+  const _ProductionSummary({
+    this.summary,
+    this.profit,
+    this.period,
+    this.onPeriod,
+  });
+  final String? profit, period;
+  final VoidCallback? onPeriod;
   final ({String cane, String lots})? summary;
 
   @override
@@ -405,11 +425,9 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                             fit: BoxFit.scaleDown,
                             alignment: Alignment.centerLeft,
                             child: Text(
-                              widget.summary != null
-                                  ? 'Belum tersedia'
-                                  : (_showProfit
-                                        ? 'Rp15.745.000'
-                                        : 'Rp ••••••'),
+                              _showProfit
+                                  ? (widget.profit ?? '—')
+                                  : 'Rp ••••••',
                               style: niraText(
                                 NiraType.hero,
                                 color: niraYellow,
@@ -419,50 +437,63 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                           ),
                         ),
                         const SizedBox(width: NiraSpace.xs),
-                        if (widget.summary == null)
-                          IconButton(
-                            constraints: const BoxConstraints(
-                              minWidth: 44,
-                              minHeight: 44,
-                            ),
-                            padding: EdgeInsets.zero,
-                            onPressed: () =>
-                                setState(() => _showProfit = !_showProfit),
-                            tooltip: _showProfit
-                                ? 'Sembunyikan keuntungan'
-                                : 'Tampilkan keuntungan',
-                            isSelected: !_showProfit,
-                            icon: Icon(
-                              _showProfit
-                                  ? Icons.visibility_outlined
-                                  : Icons.visibility_off_outlined,
-                              size: 21,
-                              color: Colors.white,
-                            ),
+                        IconButton(
+                          constraints: const BoxConstraints(
+                            minWidth: 44,
+                            minHeight: 44,
                           ),
+                          padding: EdgeInsets.zero,
+                          onPressed: () =>
+                              setState(() => _showProfit = !_showProfit),
+                          tooltip: _showProfit
+                              ? 'Sembunyikan keuntungan'
+                              : 'Tampilkan keuntungan',
+                          isSelected: !_showProfit,
+                          icon: Icon(
+                            _showProfit
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                            size: 21,
+                            color: Colors.white,
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: NiraSpace.sm),
-                    if (widget.summary == null)
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.calendar_today_outlined,
-                            size: 12,
-                            color: Colors.white,
-                          ),
-                          const SizedBox(width: NiraSpace.sm),
-                          Flexible(
-                            child: Text(
-                              '20 Oktober 2026',
-                              style: niraText(
-                                NiraType.caption,
-                                color: Colors.white,
+                    InkWell(
+                      onTap: widget.onPeriod,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.calendar_today_outlined,
+                              size: 12,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: NiraSpace.sm),
+                            Expanded(
+                              child: Text(
+                                widget.period ??
+                                    'Semua tanggal · data sintetis',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: niraText(
+                                  NiraType.caption,
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                            if (widget.onPeriod != null)
+                              const Icon(
+                                Icons.expand_more,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                          ],
+                        ),
                       ),
+                    ),
                   ],
                 ),
               ),
@@ -472,11 +503,11 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
         const SizedBox(height: NiraSpace.md),
         NiraSummaryPair(
           first: NiraSummaryCard(
-            'Tebu diterima (Kg)',
-            widget.summary?.cane ?? '8.200',
+            'Tebu diterima',
+            widget.summary?.cane ?? '—',
             boxes: true,
           ),
-          second: NiraSummaryCard('Jumlah kloter', widget.summary?.lots ?? '3'),
+          second: NiraSummaryCard('Jumlah kloter', widget.summary?.lots ?? '—'),
         ),
       ],
     ),

@@ -22,10 +22,10 @@ Gunakan [panduan kontribusi](contributing.md) untuk membuat branch dan membuka P
 Untuk menjalankan Chrome dari Command Prompt di akar repo dengan hot reload otomatis saat file Dart berubah:
 
 ```bat
-dev-mobile.cmd
+dev-mobile.cmd --demo
 ```
 
-Perintah ini menggunakan Python yang tersedia di PATH, menjalankan Flutter pada port 8085, dan memantau `apps/mobile/lib`. Perubahan dari editor atau alat lain memicu hot reload setelah jeda 0,7 detik. Hentikan proses dengan Ctrl+C. Jika port sudah dipakai, hentikan sesi lama atau jalankan `dev-mobile.cmd --port 8086`. Perubahan yang membutuhkan hot restart tetap memerlukan menjalankan ulang sesi ini.
+Perintah ini menjalankan fixture desain offline melalui `lib/main.dart` pada port 8085 dan memantau `apps/mobile/lib`. Perubahan dari editor atau alat lain memicu hot reload setelah jeda 0,7 detik. Hentikan proses dengan Ctrl+C. Perubahan yang membutuhkan hot restart memerlukan menjalankan ulang sesi ini.
 
 Jalankan dari akar repo untuk langsung membuka Beranda, Kloter, Laporan, dan Pengaturan. Onboarding dan login demo dinonaktifkan sementara. Perubahan data lokal kembali ke kondisi awal ketika aplikasi dimulai ulang.
 
@@ -53,11 +53,11 @@ Dari akar repo jalankan:
 .\dev-mobile.cmd --connected
 ```
 
-Perintah ini membuka Chrome di `http://127.0.0.1:8080` dengan layar login Supabase. Setelah masuk, Beranda, Pekerjaan, Kloter, dan laporan resmi memakai akses pabrik aktif pada NestJS. [Panduan akses backend](backend-authentication.md) menjelaskan migrasi dan pemberian akses pabrik.
+Perintah ini membuka Chrome di `http://127.0.0.1:8080` dengan layar login Supabase. Setelah masuk memakai akun Supabase yang memiliki membership pabrik, Kloter dan Pekerjaan mengambil data dari NestJS. [Panduan akses backend](backend-authentication.md) menjelaskan migrasi dan pemberian akses pabrik. Beranda, Laporan, Laba dan Rekap pada mode connected memakai [laporan produksi terhubung](mobile-production-reports.md); mode demo tetap memakai fixture sintetis lokal.
 
 Launcher membaca `.env` menggunakan Node.js 24 dan membuat `.tmp/mobile/public-defines.json` yang diabaikan Git. Hanya `SOBATNIRA_MODE`, `API_BASE_URL`, `SUPABASE_URL`, dan publishable/anon key yang disertakan. Jangan memberikan `.env` backend langsung ke `--dart-define-from-file` karena semua nilainya dapat masuk ke aplikasi klien.
 
-Alamat API mengikuti `API_BASE_URL` bila diisi, atau `API_HOST` dan `API_PORT` (bawaan `http://127.0.0.1:3000`). Port tampilan dapat diganti dengan `--port 8086`; tambahkan origin `http://127.0.0.1:8086` ke `CORS_ORIGINS` dan mulai ulang NestJS. Perubahan `.env` memerlukan menjalankan ulang launcher. Tanpa `--connected`, launcher tetap membuka demo lokal pada port 8085.
+Alamat API mengikuti `API_BASE_URL` bila diisi, atau `API_HOST` dan `API_PORT` (bawaan `http://127.0.0.1:3000`). Untuk mengganti port Flutter, daftarkan origin yang sesuai di `CORS_ORIGINS` dan mulai ulang NestJS. Launcher memakai mode terhubung secara default dan meminta konfigurasi yang lengkap. Gunakan `--demo` secara eksplisit untuk fixture offline.
 
 Untuk mengisi database development dengan data sintetis, jalankan dari `apps/api`:
 

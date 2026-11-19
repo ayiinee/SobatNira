@@ -2,9 +2,13 @@ import 'package:flutter/foundation.dart';
 
 import '../pekerjaan/review_api.dart';
 import 'demo_production.dart';
+import '../laporan/connected_reports.dart';
 
 class ConnectedProduction extends ChangeNotifier {
-  ConnectedProduction(this.api, this.scope);
+  ConnectedProduction(this.api, this.scope)
+    : reports = ConnectedReports(api, scope);
+
+  final ConnectedReports reports;
 
   final ReviewApi api;
   final FactoryScope scope;
@@ -14,6 +18,7 @@ class ConnectedProduction extends ChangeNotifier {
   int _generation = 0;
 
   Future<void> refresh() async {
+    final reportRequest = reports.refresh();
     final generation = ++_generation;
     loading = true;
     error = null;
@@ -43,6 +48,8 @@ class ConnectedProduction extends ChangeNotifier {
       if (generation != _generation) return;
       error = failure;
     }
+    await reportRequest;
+    if (generation != _generation) return;
     loading = false;
     notifyListeners();
   }
@@ -50,6 +57,7 @@ class ConnectedProduction extends ChangeNotifier {
   @override
   void dispose() {
     _generation++;
+    reports.dispose();
     super.dispose();
   }
 }

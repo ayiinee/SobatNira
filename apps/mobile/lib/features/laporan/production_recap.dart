@@ -3,7 +3,7 @@ import 'demo_analytics.dart';
 
 // A read-only join of existing demo records. No production values are inferred.
 class ProductionRecap {
-  ProductionRecap(Iterable<RecapKloter> kloter, {this.officialMargin})
+  ProductionRecap(Iterable<RecapKloter> kloter, {this.marginTotalOverride})
     : kloter = List.unmodifiable(kloter);
 
   factory ProductionRecap.fromRows(
@@ -69,14 +69,14 @@ class ProductionRecap {
             ),
       );
 
+  final String? marginTotalOverride;
   final List<RecapKloter> kloter;
   int get batchCount => kloter.fold(0, (sum, lot) => sum + lot.batches.length);
-  final String? officialMargin;
   int get marginCount => kloter.where((lot) => lot.margin != null).length;
   int get sugarCount =>
       kloter.where((lot) => readRecapNumber(lot.sugar) != null).length;
   String get marginTotal =>
-      officialMargin ??
+      marginTotalOverride ??
       (marginCount == 0
           ? '-'
           : 'Rp${formatRecapNumber(kloter.fold<num>(0, (sum, lot) => sum + (readRecapNumber(lot.margin) ?? 0)))}');
@@ -84,8 +84,8 @@ class ProductionRecap {
 
 class RecapKloter {
   RecapKloter({
-    required this.code,
     this.id,
+    required this.code,
     required this.supplier,
     required this.date,
     required this.sugar,
@@ -115,9 +115,8 @@ class RecapKloter {
     batches: lot?.batches.map(RecapBatch.fromDemo) ?? const [],
   );
 
-  final String code, supplier, sugar, rendemen;
   final String? id;
-  String get identity => id ?? code;
+  final String code, supplier, sugar, rendemen;
   final DateTime date;
   final String? cane, caneType, vehicle, margin, juice;
   final List<RecapBatch> batches;
@@ -125,6 +124,7 @@ class RecapKloter {
 
 class RecapBatch {
   const RecapBatch({
+    this.code,
     required this.number,
     required this.shift,
     required this.brix,
@@ -134,8 +134,6 @@ class RecapBatch {
     required this.grade,
     required this.time,
     required this.verified,
-    this.code,
-    this.wokNumber,
   });
 
   factory RecapBatch.fromDemo(DemoBatch batch) => RecapBatch(
@@ -150,9 +148,8 @@ class RecapBatch {
     verified: batch.review.verified,
   );
 
-  final int number;
-  final int? wokNumber;
   final String? code;
+  final int number;
   final String? shift, brix, juice, lime, physical, time;
   final String grade;
   final bool verified;
@@ -169,9 +166,7 @@ class RecapBatch {
     'Status',
   ];
   List<String> get cells => [
-    wokNumber == null
-        ? code ?? '$number'
-        : '${code ?? number} · Wajan $wokNumber',
+    code ?? '$number',
     shift ?? '-',
     brix ?? '-',
     juice ?? '-',

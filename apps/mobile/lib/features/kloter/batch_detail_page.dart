@@ -1,147 +1,226 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
 import 'demo_production.dart';
+import 'demo_lot_fixture.dart';
 import 'kloter_detail_widgets.dart';
 
 class BatchDetailPage extends StatefulWidget {
   const BatchDetailPage({
     required this.batch,
+    required this.kloterCode,
     required this.demo,
     required this.onNavigate,
     super.key,
   }) : officialTitle = null,
+       officialReviewed = false,
+       officialCancelled = false,
+       officialAction = null,
        officialContent = null;
 
   const BatchDetailPage.official({
     required this.officialTitle,
+    required this.officialReviewed,
+    required this.officialCancelled,
     required this.officialContent,
+    this.officialAction,
+    required this.kloterCode,
     required this.onNavigate,
     super.key,
   }) : batch = null,
        demo = null;
 
   final DemoBatch? batch;
+  final String kloterCode;
   final DemoProduction? demo;
-  final String? officialTitle;
-  final List<Widget> Function(int tab)? officialContent;
   final ValueChanged<NiraTab> onNavigate;
+  final String? officialTitle;
+  final bool officialReviewed;
+  final bool officialCancelled;
+  final List<Widget> Function(int tab)? officialContent;
+  final Widget? officialAction;
 
   @override
   State<BatchDetailPage> createState() => _BatchDetailPageState();
 }
 
-class _BatchDetailPageState extends State<BatchDetailPage> {
+class _BatchDetailPageState extends State<BatchDetailPage>
+    with SingleTickerProviderStateMixin {
   int _tab = 0;
   DemoBatch get _batch => widget.batch!;
   DemoProduction get _demo => widget.demo!;
 
+  bool? _validationNotice;
+  Timer? _noticeTimer;
+  late final _noticeAnimation = AnimationController(vsync: this)
+    ..addStatusListener(_onNoticeStatus);
+  late final _noticeSlide = _noticeAnimation.drive(
+    Tween(
+      begin: const Offset(0, -1),
+      end: Offset.zero,
+    ).chain(CurveTween(curve: Curves.easeOutCubic)),
+  );
+
   @override
-  Widget build(BuildContext context) {
-    final official = widget.officialContent;
-    return official == null
-        ? ListenableBuilder(
-            listenable: _demo,
-            builder: (context, _) {
-              final reviewed = _batch.review.verified;
-              return NiraScaffold(
-                tab: NiraTab.kloter,
-                onNavigate: widget.onNavigate,
-                bottomAction: BatchReviewActions(
-                  batchNumber: _batch.number,
-                  label: reviewed ? 'Batch tervalidasi' : 'Validasi',
-                  verified: reviewed,
-                  onVerify: () =>
-                      verifyDemoReview(context, _demo, _batch.review),
-                  onReopen: () => _demo.reopenBatch(_batch),
-                ),
-                body: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const DetailTitle('Detail batch'),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        niraInset,
-                        NiraSpace.xs,
-                        niraInset,
-                        0,
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Batch ${_batch.number}',
-                              style: niraText(
-                                NiraType.title,
-                                weight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: NiraSpace.sm),
-                          _ReviewBadge(reviewed: reviewed),
-                        ],
-                      ),
-                    ),
-                    NiraTabs(
-                      labels: const ['Ringkasan', 'Masak', 'Grade'],
-                      selected: _tab,
-                      onSelected: (index) => setState(() => _tab = index),
-                      height: 44,
-                      inset: 12,
-                    ),
-                    Expanded(
-                      child: ListView(
-                        key: ValueKey(_tab),
-                        padding: const EdgeInsets.fromLTRB(
-                          niraInset,
-                          NiraSpace.sm,
-                          niraInset,
-                          NiraSpace.xs,
-                        ),
-                        children: switch (_tab) {
-                          0 => _summary(),
-                          1 => _cooking(),
-                          _ => _grade(),
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          )
-        : NiraScaffold(
-            tab: NiraTab.kloter,
-            onNavigate: widget.onNavigate,
-            body: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const DetailTitle('Detail batch'),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: niraInset),
-                  child: Text(
-                    widget.officialTitle!,
-                    style: niraText(NiraType.title, weight: FontWeight.w700),
-                  ),
-                ),
-                NiraTabs(
-                  labels: const ['Ringkasan', 'Masak', 'Grade'],
-                  selected: _tab,
-                  onSelected: (index) => setState(() => _tab = index),
-                  height: 44,
-                  inset: 12,
-                ),
-                Expanded(
-                  child: ListView(
-                    key: ValueKey(_tab),
-                    padding: const EdgeInsets.all(niraInset),
-                    children: official(_tab),
-                  ),
-                ),
-              ],
-            ),
-          );
+  void dispose() {
+    _noticeTimer?.cancel();
+    _noticeAnimation.dispose();
+    super.dispose();
   }
+
+  void _onNoticeStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed) {
+      _noticeTimer = Timer(
+        const Duration(seconds: 7),
+        _noticeAnimation.reverse,
+      );
+    } else if (status == AnimationStatus.dismissed) {
+      setState(() => _validationNotice = null);
+    }
+  }
+
+  void _updateValidation(bool validated) {
+    if (validated) {
+      _demo.verify(_batch.review);
+    } else {
+      _demo.reopenBatch(_batch);
+    }
+
+    _noticeTimer?.cancel();
+    setState(() => _validationNotice = validated);
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    _noticeAnimation
+      ..duration = reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 280)
+      ..reverseDuration = reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 240);
+    if (_noticeAnimation.isCompleted) {
+      _onNoticeStatus(AnimationStatus.completed);
+    } else {
+      _noticeAnimation.forward();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
+    children: [
+      _buildScaffold(),
+      if (_validationNotice case final validated?)
+        Positioned(
+          top: MediaQuery.viewPaddingOf(context).top,
+          left: 0,
+          right: 0,
+          child: IgnorePointer(
+            child: ClipRect(
+              child: SlideTransition(
+                position: _noticeSlide,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    niraInset,
+                    NiraSpace.sm,
+                    niraInset,
+                    NiraSpace.md,
+                  ),
+                  child: _BatchValidationNotice(
+                    batchNumber: _batch.number,
+                    kloterCode: widget.kloterCode,
+                    validated: validated,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+    ],
+  );
+
+  Widget _buildScaffold() => widget.officialContent == null
+      ? ListenableBuilder(
+          listenable: _demo,
+          builder: (context, _) => _layout(
+            'Batch ${_batch.number}',
+            _batch.review.verified,
+            switch (_tab) {
+              0 => _summary(),
+              1 => _cooking(),
+              _ => _grade(),
+            },
+            bottomAction: BatchReviewActions(
+              batchNumber: _batch.number,
+              label: _batch.review.verified ? 'Batch tervalidasi' : 'Validasi',
+              verified: _batch.review.verified,
+              onVerify: () => _updateValidation(true),
+              onReopen: () => _updateValidation(false),
+            ),
+          ),
+        )
+      : _layout(
+          widget.officialTitle!,
+          widget.officialReviewed,
+          widget.officialContent!(_tab),
+          bottomAction: widget.officialAction,
+        );
+
+  Widget _layout(
+    String title,
+    bool reviewed,
+    List<Widget> content, {
+    Widget? bottomAction,
+  }) => NiraScaffold(
+    tab: NiraTab.kloter,
+    onNavigate: widget.onNavigate,
+    bottomAction: bottomAction,
+    body: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const DetailTitle('Detail batch'),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            niraInset,
+            NiraSpace.xs,
+            niraInset,
+            0,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: niraText(NiraType.title, weight: FontWeight.w700),
+                ),
+              ),
+              const SizedBox(width: NiraSpace.sm),
+              if (!widget.officialCancelled) _ReviewBadge(reviewed: reviewed),
+            ],
+          ),
+        ),
+        NiraTabs(
+          labels: const ['Ringkasan', 'Masak', 'Grade'],
+          selected: _tab,
+          onSelected: (index) => setState(() => _tab = index),
+          height: 44,
+          inset: 12,
+        ),
+        Expanded(
+          child: ListView(
+            key: ValueKey(_tab),
+            padding: const EdgeInsets.fromLTRB(
+              niraInset,
+              NiraSpace.sm,
+              niraInset,
+              NiraSpace.xs,
+            ),
+            children: content,
+          ),
+        ),
+      ],
+    ),
+  );
 
   List<Widget> _summary() => [
     const DocumentPreview(batch: true),
@@ -167,17 +246,21 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
       ),
     _PriceRow(
       grade: Text(
-        'Margin Produksi',
+        'Nilai produksi batch',
         style: niraText(NiraType.caption, weight: FontWeight.w700),
       ),
       weight: Text('${_batch.gradeWeight}Kg', style: niraText(NiraType.body)),
       price: Text(
-        'Rp670.000',
+        demoMoney(_batch.productionValue),
         style: niraText(NiraType.section, weight: FontWeight.w700),
       ),
       height: 32,
       line: niraGold,
     ),
+    if (_batch.lot != null)
+      DetailMetrics([
+        ('Margin kumulatif kloter (demo)', demoMoney(_batch.lot!.marginRupiah)),
+      ]),
   ];
 
   List<Widget> _cooking() => [
@@ -199,13 +282,13 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
     const SizedBox(height: NiraSpace.xs),
     Text('Hasil timbang', style: niraText(NiraType.caption, color: niraMuted)),
     const SizedBox(height: NiraSpace.md),
-    const DetailMetrics([
-      ('Tebu bersih', '1.500Kg'),
-      ('Nira tercatat', '360L'),
+    DetailMetrics([
+      ('Tebu bersih kloter', '${demoNumber(_batch.lot?.caneKg ?? 0)} kg'),
+      ('Nilai produksi batch', demoMoney(_batch.productionValue)),
     ], separate: true),
     const SizedBox(height: NiraSpace.sm),
     _priceHeader(),
-    for (final grade in const ['A', 'B'])
+    for (final grade in DemoBatch.gradePrices.keys)
       _PriceRow(
         grade: Text(grade, style: niraText(NiraType.body)),
         weight: _GradeWeight(
@@ -291,6 +374,69 @@ class _PriceRow extends StatelessWidget {
   );
 }
 
+class _BatchValidationNotice extends StatelessWidget {
+  const _BatchValidationNotice({
+    required this.batchNumber,
+    required this.kloterCode,
+    required this.validated,
+  });
+
+  final int batchNumber;
+  final String kloterCode;
+  final bool validated;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = validated
+        ? 'Batch $batchNumber berhasil divalidasi'
+        : 'Validasi Batch $batchNumber dibatalkan';
+    final detail = 'Kloter $kloterCode';
+    final accent = validated ? niraGreen : niraOchre;
+    return Semantics(
+      liveRegion: true,
+      label: '$title. $detail',
+      excludeSemantics: true,
+      child: Material(
+        color: niraPaper,
+        elevation: 4,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(niraRadius),
+          side: BorderSide(color: accent.withValues(alpha: .3)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(NiraSpace.md),
+          child: Row(
+            children: [
+              Icon(
+                validated ? Icons.check_circle : Icons.info_outline,
+                color: accent,
+              ),
+              const SizedBox(width: NiraSpace.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: niraText(NiraType.body, weight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: NiraSpace.xs),
+                    Text(
+                      detail,
+                      style: niraText(NiraType.caption, color: niraLeaf),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ReviewBadge extends StatelessWidget {
   const _ReviewBadge({required this.reviewed});
 
@@ -298,7 +444,7 @@ class _ReviewBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const textColor = niraGreen;
+    final foregroundColor = reviewed ? niraGreen : Colors.white;
     return Container(
       padding: const EdgeInsets.fromLTRB(
         NiraSpace.sm,
@@ -320,7 +466,7 @@ class _ReviewBadge extends StatelessWidget {
           Icon(
             reviewed ? Icons.check_circle : Icons.error,
             size: 14,
-            color: textColor,
+            color: foregroundColor,
           ),
           const SizedBox(width: NiraSpace.xs),
           Flexible(
@@ -328,7 +474,7 @@ class _ReviewBadge extends StatelessWidget {
               reviewed ? 'Tervalidasi' : 'Perlu ditinjau',
               style: niraText(
                 NiraType.body,
-                color: textColor,
+                color: foregroundColor,
                 weight: FontWeight.w700,
               ),
             ),

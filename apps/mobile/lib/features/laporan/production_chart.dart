@@ -76,9 +76,13 @@ class _ProductionChartState extends State<ProductionChart> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
-                  child: Text(
-                    'Gula final per hari (Kg)',
-                    style: niraText(NiraType.body, weight: FontWeight.w700),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Text(
+                      'Gula final per hari (Kg)',
+                      style: niraText(NiraType.body, weight: FontWeight.w700),
+                    ),
                   ),
                 ),
                 const SizedBox(width: NiraSpace.sm),

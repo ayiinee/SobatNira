@@ -14,11 +14,11 @@ class KloterDetailPage extends StatelessWidget {
     required this.demo,
     required this.onNavigate,
     this.stock,
+    this.production,
     this.onEdit,
     this.onTransfer,
     this.onClosure,
     this.onOpenPekerjaan,
-    this.batchSection,
     super.key,
   });
 
@@ -26,7 +26,7 @@ class KloterDetailPage extends StatelessWidget {
   final DemoProduction demo;
   final ValueChanged<NiraTab> onNavigate;
   final Widget? stock;
-  final Widget? batchSection;
+  final Widget? production;
   final VoidCallback? onEdit;
   final VoidCallback? onTransfer;
   final VoidCallback? onClosure;
@@ -119,9 +119,9 @@ class KloterDetailPage extends StatelessWidget {
                   children: [
                     const DetailSectionTitle('Batch kloter'),
                     const SizedBox(height: NiraSpace.xs),
-                    if (batchSection != null)
-                      batchSection!
-                    else ...[
+                    if (production != null)
+                      production!
+                    else
                       Text(
                         kloter.id != null
                             ? 'Rincian batch resmi belum tersedia.'
@@ -135,24 +135,27 @@ class KloterDetailPage extends StatelessWidget {
                               : niraOchre,
                         ),
                       ),
-                      const SizedBox(height: NiraSpace.md),
-                      for (final batch in kloter.batches)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: NiraSpace.md),
-                          child: _BatchTile(
-                            batch,
-                            () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => BatchDetailPage(
-                                  batch: batch,
-                                  demo: demo,
-                                  onNavigate: onNavigate,
-                                ),
+                    const SizedBox(height: NiraSpace.md),
+                    for (final batch in kloter.batches)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: NiraSpace.md),
+                        child: KloterBatchCard(
+                          title: 'Batch ${batch.number}',
+                          pending: !batch.review.verified,
+                          juice: '180L',
+                          physical: '90Kg',
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => BatchDetailPage(
+                                batch: batch,
+                                kloterCode: kloter.code,
+                                demo: demo,
+                                onNavigate: onNavigate,
                               ),
                             ),
                           ),
                         ),
-                    ],
+                      ),
                   ],
                 ),
               ),
@@ -164,15 +167,25 @@ class KloterDetailPage extends StatelessWidget {
   );
 }
 
-class _BatchTile extends StatelessWidget {
-  const _BatchTile(this.batch, this.onTap);
+class KloterBatchCard extends StatelessWidget {
+  const KloterBatchCard({
+    required this.title,
+    required this.pending,
+    required this.juice,
+    required this.physical,
+    required this.onTap,
+    this.cancelled = false,
+    super.key,
+  });
 
-  final DemoBatch batch;
+  final String title;
+  final bool pending;
+  final String juice, physical;
   final VoidCallback onTap;
+  final bool cancelled;
 
   @override
   Widget build(BuildContext context) {
-    final pending = !batch.review.verified;
     const foreground = Colors.white;
     return Material(
       color: pending ? niraGold : niraGreen,
@@ -204,20 +217,29 @@ class _BatchTile extends StatelessWidget {
                       runSpacing: NiraSpace.xs,
                       children: [
                         Text(
-                          'Batch ${batch.number}',
+                          title,
                           style: niraText(
                             NiraType.section,
                             color: pending ? foreground : niraYellow,
                             weight: FontWeight.w700,
                           ),
                         ),
-                        ReviewStatusLabel(pending: pending),
+                        if (cancelled)
+                          Text(
+                            'Dibatalkan',
+                            style: niraText(
+                              NiraType.caption,
+                              color: foreground,
+                            ),
+                          )
+                        else
+                          ReviewStatusLabel(pending: pending),
                       ],
                     ),
                     const SizedBox(height: 2),
-                    _info(context, 'Nira batch', '180L', foreground),
+                    _info(context, 'Nira batch', juice, foreground),
                     const SizedBox(height: 2),
-                    _info(context, 'Hasil fisik', '90Kg', foreground),
+                    _info(context, 'Hasil fisik', physical, foreground),
                   ],
                 ),
               ),

@@ -13,10 +13,10 @@ const supabasePublicKey = String.fromEnvironment(
   'SUPABASE_PUBLISHABLE_KEY',
   defaultValue: String.fromEnvironment('SUPABASE_ANON_KEY'),
 );
-const _explicitConnectedMode =
-    String.fromEnvironment('SOBATNIRA_MODE') == 'connected';
+const _mobileMode = String.fromEnvironment('SOBATNIRA_MODE');
 const connectedMobile =
-    _explicitConnectedMode || supabaseProject != '' || supabasePublicKey != '';
+    _mobileMode != 'demo' &&
+    (_mobileMode != '' || supabaseProject != '' || supabasePublicKey != '');
 
 typedef Json = Map<String, dynamic>;
 
@@ -290,6 +290,20 @@ class ReviewApi {
         .map(FactoryScope.fromJson)
         .toList();
   }
+
+  Future<Json> productionReport(
+    FactoryScope scope, {
+    DateTime? from,
+    DateTime? before,
+    bool synthetic = false,
+  }) => _productionGet(
+    [...scope._base, 'production', 'production-report'],
+    query: {
+      'synthetic': '$synthetic',
+      if (from != null) 'from': from.toUtc().toIso8601String(),
+      if (before != null) 'before': before.toUtc().toIso8601String(),
+    },
+  );
 
   Future<Json> profitReport(
     FactoryScope scope, {

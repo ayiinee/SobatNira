@@ -3,6 +3,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sobatnira/features/kloter/kloter_date_filter.dart';
 
 void main() {
+  test('rentang lintas tahun mencakup kedua hari batas secara utuh', () {
+    final filter = KloterDateFilter(
+      KloterPeriod.custom,
+      DateTimeRange(start: DateTime(2025, 12, 20), end: DateTime(2026, 2, 5)),
+    );
+
+    expect(filter.contains(DateTime(2025, 12, 19, 23, 59)), isFalse);
+    expect(filter.contains(DateTime(2025, 12, 20)), isTrue);
+    expect(filter.contains(DateTime(2026, 1, 1)), isTrue);
+    expect(filter.contains(DateTime(2026, 2, 5, 23, 59)), isTrue);
+    expect(filter.contains(DateTime(2026, 2, 6)), isFalse);
+  });
+
   testWidgets('dialog tanggal di tengah, bisa dipilih dan dibatalkan', (
     tester,
   ) async {

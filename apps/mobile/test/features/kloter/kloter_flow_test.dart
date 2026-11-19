@@ -92,11 +92,69 @@ void main() {
     },
   );
 
+  testWidgets('pagination menampilkan maksimal 10 grup tanggal per halaman', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(393, 1100));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: KloterListPage(
+            kloter: [
+              for (var day = 10; day <= 20; day++)
+                DemoKloter(
+                  'KLOTER-$day',
+                  day,
+                  KloterStatus.review,
+                  'Pemasok A',
+                ),
+              DemoKloter('TAMBAHAN-11', 11, KloterStatus.review, 'Pemasok B'),
+            ],
+            onOpenKloter: (_) {},
+          ),
+        ),
+      ),
+    );
+    final dateHeaders = find.byWidgetPredicate(
+      (widget) => widget is Semantics && widget.properties.expanded != null,
+    );
+    expect(dateHeaders, findsNWidgets(10));
+    expect(find.text('1 dari 2'), findsOneWidget);
+    expect(find.text('10 Oktober 2026'), findsNothing);
+    await tap(tester, find.text('11 Oktober 2026'));
+    expect(find.text('KLOTER-11'), findsOneWidget);
+    expect(find.text('TAMBAHAN-11'), findsOneWidget);
+
+    await tap(tester, find.byTooltip('Berikutnya'));
+    expect(find.text('2 dari 2'), findsOneWidget);
+    expect(dateHeaders, findsOneWidget);
+    expect(find.text('KLOTER-10'), findsOneWidget);
+    expect(find.text('11 Oktober 2026'), findsNothing);
+    await tap(tester, find.byTooltip('Sebelumnya'));
+    expect(dateHeaders, findsNWidgets(10));
+
+    await tap(tester, find.byTooltip('Berikutnya'));
+    await tap(tester, find.byTooltip('Filter tanggal'));
+    await tap(tester, find.text('Minggu ini'));
+    expect(find.byType(NiraPagination), findsNothing);
+    expect(find.text('KLOTER-20'), findsOneWidget);
+    expect(find.text('10 Oktober 2026'), findsNothing);
+
+    await tester.enterText(find.byType(TextField), 'KLOTER-20');
+    await tester.pumpAndSettle();
+    expect(find.byType(KloterCard), findsOneWidget);
+    expect(find.byType(NiraPagination), findsNothing);
+    await tap(tester, find.text('Tuntas'));
+    expect(find.text('Kloter tidak ditemukan'), findsOneWidget);
+    expect(find.byType(NiraPagination), findsNothing);
+  });
+
   testWidgets('pencarian, tab dan rentang bisa digabung dan dipulihkan', (
     tester,
   ) async {
     await openDemo(tester);
-    expect(find.text('Tebu diterima (Kg)'), findsOneWidget);
+    expect(find.text('Tebu diterima'), findsOneWidget);
     // Status labels change how many cards fit in the initial viewport.
     expect(find.byType(KloterCard).evaluate().length, greaterThanOrEqualTo(1));
 
@@ -153,10 +211,19 @@ void main() {
   testWidgets('edit, verifikasi dan validasi batch tersimpan selama sesi', (
     tester,
   ) async {
+    Rect reviewButtonRect(String label) => tester.getRect(
+      find.descendant(
+        of: find.widgetWithText(NiraButton, label),
+        matching: find.byType(Material),
+      ),
+    );
+
     await openDemo(tester);
     await tap(tester, find.text('MJT-260926-2A'));
     await tap(tester, find.text('Data tebu dan penggilingan'));
+    final intakeButton = reviewButtonRect('Verifikasi tebu masuk');
     await tap(tester, find.text('Penggilingan'));
+    expect(reviewButtonRect('Verifikasi penggilingan'), intakeButton);
     await tap(tester, find.text('Operator'));
     await tester.enterText(find.byType(TextFormField), 'Operator Coba');
     await tap(tester, find.text('Batal'));
@@ -168,6 +235,9 @@ void main() {
     expect(find.text('Operator Baru'), findsOneWidget);
     await tap(tester, find.text('Verifikasi penggilingan'));
     expect(find.text('Penggilingan terverifikasi'), findsOneWidget);
+    final reviewedMillingButton = reviewButtonRect(
+      'Penggilingan terverifikasi',
+    );
     await tester.pump(const Duration(seconds: 5));
     await tap(tester, find.byTooltip('Kembali'));
     expect(find.text('1 Batch perlu ditinjau'), findsOneWidget);
@@ -188,10 +258,22 @@ void main() {
     expect(find.text('24,5'), findsOneWidget);
 
     await tap(tester, find.text('Ringkasan'));
+    expect(reviewButtonRect('Validasi'), intakeButton);
     await tap(tester, find.text('Validasi'));
     expect(find.text('Validasi Batch 3?'), findsOneWidget);
+    final cancelAction = find.widgetWithText(OutlinedButton, 'Batal');
+    final confirmAction = find.widgetWithText(FilledButton, 'Konfirmasi');
+    expect(
+      tester.getSize(cancelAction).width,
+      tester.getSize(confirmAction).width,
+    );
+    final cancelStyle = tester.widget<OutlinedButton>(cancelAction).style!;
+    expect(cancelStyle.foregroundColor!.resolve({}), niraGreen);
+    expect(cancelStyle.side!.resolve({})!.color, niraGreen);
+    final validatedNotice = find.text('Batch 3 berhasil divalidasi');
     await tap(tester, find.text('Batal'));
     expect(find.text('Batch tervalidasi'), findsNothing);
+    expect(validatedNotice, findsNothing);
     expect(
       tester.widget<EditableFields>(find.byType(EditableFields)).onEdit,
       isNotNull,
@@ -199,17 +281,17 @@ void main() {
     await tap(tester, find.text('Validasi'));
     await tap(tester, find.text('Konfirmasi'));
     expect(find.text('Batch tervalidasi'), findsOneWidget);
-    final validationButton = tester.getRect(
-      find.descendant(
-        of: find.byType(NiraButton),
-        matching: find.byType(Material),
-      ),
-    );
+    expect(validatedNotice, findsOneWidget);
+    expect(find.text('Kloter MJT-260926-2A'), findsOneWidget);
+    final validationButton = reviewButtonRect('Batch tervalidasi');
+    expect(validationButton.top, reviewedMillingButton.top);
+    expect(validationButton.bottom, reviewedMillingButton.bottom);
     final cancelButton = tester.getRect(
       find.descendant(
         of: find.byWidgetPredicate(
           (widget) =>
-              widget is IconButton && widget.tooltip == 'Batalkan validasi batch',
+              widget is IconButton &&
+              widget.tooltip == 'Batalkan validasi batch',
         ),
         matching: find.byType(Material),
       ),
@@ -220,6 +302,14 @@ void main() {
       tester.widget<EditableFields>(find.byType(EditableFields)).onEdit,
       isNull,
     );
+    final noticeTop = tester.getTopLeft(validatedNotice).dy;
+    await tester.pump(const Duration(seconds: 6));
+    expect(tester.getTopLeft(validatedNotice).dy, noticeTop);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(milliseconds: 160));
+    expect(tester.getTopLeft(validatedNotice).dy, lessThan(noticeTop));
+    await tester.pumpAndSettle();
+    expect(validatedNotice, findsNothing);
     await tap(
       tester,
       find.descendant(of: find.byType(NiraTabs), matching: find.text('Grade')),
@@ -227,14 +317,23 @@ void main() {
     expect(find.bySemanticsLabel(RegExp('Edit berat grade')), findsNothing);
     await tap(tester, find.byTooltip('Batalkan validasi batch'));
     expect(find.text('Batalkan validasi Batch 3?'), findsOneWidget);
+    expect(
+      tester.getSize(cancelAction).width,
+      tester.getSize(confirmAction).width,
+    );
     await tap(tester, find.text('Batal'));
     expect(find.text('Batch tervalidasi'), findsOneWidget);
     expect(find.bySemanticsLabel(RegExp('Edit berat grade')), findsNothing);
     await tap(tester, find.byTooltip('Batalkan validasi batch'));
     await tap(tester, find.text('Konfirmasi'));
     expect(find.bySemanticsLabel(RegExp('Edit berat grade B')), findsOneWidget);
+    final reopenedNotice = find.text('Validasi Batch 3 dibatalkan');
+    expect(reopenedNotice, findsOneWidget);
+    expect(find.text('Kloter MJT-260926-2A'), findsOneWidget);
     await tap(tester, find.text('Validasi'));
     await tap(tester, find.text('Konfirmasi'));
+    expect(validatedNotice, findsOneWidget);
+    expect(reopenedNotice, findsNothing);
     await tap(tester, find.text('Ringkasan'));
     await tester.pump(const Duration(seconds: 5));
     await tap(tester, find.byTooltip('Kembali'));

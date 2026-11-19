@@ -9,6 +9,7 @@ import 'package:sobatnira/features/beranda/beranda_page.dart';
 import 'package:sobatnira/features/kloter/connected_production.dart';
 import 'package:sobatnira/features/kloter/kloter_date_filter.dart';
 import 'package:sobatnira/features/laporan/printable_report.dart';
+import 'package:sobatnira/features/laporan/connected_report_view.dart';
 import 'package:sobatnira/features/laporan/report_pdf.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
 import 'package:sobatnira/main.dart';
@@ -70,17 +71,27 @@ void main() {
           if (request.url.path.endsWith('/factories/B/lots')) {
             return nextFactory.future;
           }
-          if (request.url.path.endsWith('/factories/B/production/recap')) {
+          if (request.url.path.endsWith(
+            '/factories/B/production/production-report',
+          )) {
             expect(request.headers['authorization'], 'Bearer local-token');
             return _json({
-              'totalSugarKg': '25',
-              'totalMarginRupiah': '375000',
+              'totals': {
+                'lotCount': 1,
+                'producedLotCount': 1,
+                'batchCount': 1,
+                'caneNetKg': '1250',
+                'finalSugarKg': '25',
+                'productionMarginRupiah': '375000',
+              },
+              'grades': [],
               'items': [
                 {
                   'lotId': 'B',
                   'code': 'OCR-B',
                   'supplier': 'Pemasok B',
                   'receivedAt': '2026-11-10T04:00:00Z',
+                  'caneNetKg': '1250',
                   'closed': false,
                   'calculation': {
                     'finalSugarKg': '25',
@@ -93,7 +104,8 @@ void main() {
                       'id': 'batch-b',
                       'code': 'BATCH-UJI',
                       'wokNumber': 1,
-                      'volumeMl': '40000',
+                      'quantityMl': '40000',
+                      'occurredAt': '2026-11-10T06:00:00Z',
                       'physicalWeightKg': '26',
                       'grades': [
                         {'code': 'A', 'weightKg': '25'},
@@ -149,17 +161,22 @@ void main() {
       expect(find.text('OCR-B'), findsOneWidget);
       await tester.tap(find.bySemanticsLabel('Laporan'));
       await tester.pumpAndSettle();
+      expect(find.byType(ConnectedReportView), findsOneWidget);
       expect(find.text('25 kg'), findsWidgets);
+      await tester.tap(find.text('Margin').first);
+      await tester.pumpAndSettle();
       expect(
         find.text('Margin sementara untuk kloter yang masih terbuka.'),
         findsOneWidget,
       );
-      final recap = find.text('Buka rekap produksi');
+      await tester.tap(find.bySemanticsLabel('Beranda'));
+      await tester.pumpAndSettle();
+      final recap = find.text('Rekap');
       await tester.ensureVisible(recap);
       await tester.tap(recap);
       await tester.pumpAndSettle();
       expect(find.text('Simpan PDF'), findsOneWidget);
-      await tester.tap(find.text('Beranda'));
+      await tester.tap(find.bySemanticsLabel('Beranda'));
       await tester.pumpAndSettle();
       final pekerjaan = find.text('Pekerjaan');
       await tester.ensureVisible(pekerjaan);

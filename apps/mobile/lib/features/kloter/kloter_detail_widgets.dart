@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../../sobatnira_ui.dart';
 import 'demo_production.dart';
 
+const reviewActionHeight = 52.0;
+const reviewedActionHeight = 44.0;
+
 class DetailTitle extends StatelessWidget {
   const DetailTitle(this.title, {this.inset = niraInset, super.key});
 
@@ -256,9 +259,7 @@ class DocumentPreview extends StatelessWidget {
                 child: IconButton(
                   tooltip: 'Perbesar foto',
                   onPressed: () => open(context, batch: batch),
-                  style: IconButton.styleFrom(
-                    foregroundColor: Colors.white,
-                  ),
+                  style: IconButton.styleFrom(foregroundColor: Colors.white),
                   icon: const Icon(Icons.open_in_full, size: 20),
                 ),
               ),
@@ -361,34 +362,34 @@ class _DocumentViewerState extends State<_DocumentViewer> {
 class BatchReviewActions extends StatelessWidget {
   const BatchReviewActions({
     required this.batchNumber,
+    this.batchCode,
     required this.label,
     required this.verified,
     required this.onVerify,
-    required this.onReopen,
+    this.onReopen,
     super.key,
   });
   final int batchNumber;
+  final String? batchCode;
   final String label;
   final bool verified;
   final VoidCallback onVerify;
-  final VoidCallback onReopen;
+  final VoidCallback? onReopen;
 
   Future<void> _confirm(BuildContext context) async {
     final colors = Theme.of(context).colorScheme;
+    final batchTitle = batchCode ?? 'Batch $batchNumber';
+    final cancelColor = verified ? colors.error : colors.primary;
+    const buttonPadding = EdgeInsets.symmetric(horizontal: NiraSpace.sm);
     final confirmed = await showDialog<bool>(
       context: context,
       barrierColor: const Color(0x66000000),
       builder: (dialogContext) => AlertDialog(
         scrollable: true,
         backgroundColor: niraPaper,
-        icon: Icon(
-          Icons.warning_amber_rounded,
-          color: verified ? colors.error : niraOchre,
-        ),
         title: Text(
-          verified
-              ? 'Batalkan validasi Batch $batchNumber?'
-              : 'Validasi Batch $batchNumber?',
+          verified ? 'Batalkan validasi $batchTitle?' : 'Validasi $batchTitle?',
+          textAlign: TextAlign.center,
         ),
         content: Text(
           verified
@@ -396,26 +397,44 @@ class BatchReviewActions extends StatelessWidget {
               : 'Pastikan data batch sudah benar. Data akan terkunci setelah divalidasi.',
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            style: verified
-                ? FilledButton.styleFrom(
-                    backgroundColor: colors.error,
-                    foregroundColor: Colors.white,
-                  )
-                : null,
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Konfirmasi'),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: cancelColor,
+                    side: BorderSide(color: cancelColor),
+                    minimumSize: const Size(0, 48),
+                    padding: buttonPadding,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(niraRadius),
+                    ),
+                  ),
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Batal', textAlign: TextAlign.center),
+                ),
+              ),
+              const SizedBox(width: NiraSpace.sm),
+              Expanded(
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: verified ? colors.error : null,
+                    foregroundColor: verified ? Colors.white : null,
+                    padding: buttonPadding,
+                  ),
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('Konfirmasi', textAlign: TextAlign.center),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
     if (confirmed != true || !context.mounted) return;
     if (verified) {
-      onReopen();
+      onReopen?.call();
     } else {
       onVerify();
     }
@@ -429,10 +448,10 @@ class BatchReviewActions extends StatelessWidget {
           label,
           verified ? null : () => _confirm(context),
           visualDensity: VisualDensity.standard,
-          minimumHeight: verified ? 44 : 52,
+          minimumHeight: verified ? reviewedActionHeight : reviewActionHeight,
         ),
       ),
-      if (verified) ...[
+      if (verified && onReopen != null) ...[
         const SizedBox(width: NiraSpace.sm),
         IconButton.filled(
           tooltip: 'Batalkan validasi batch',
@@ -440,7 +459,7 @@ class BatchReviewActions extends StatelessWidget {
           style: IconButton.styleFrom(
             backgroundColor: Theme.of(context).colorScheme.error,
             foregroundColor: Colors.white,
-            minimumSize: const Size.square(44),
+            minimumSize: const Size.square(reviewedActionHeight),
             iconSize: 20,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(niraRadius),
