@@ -22,7 +22,7 @@ Form sesi menggunakan widget Pengaturan tim dan kembali ke fixture ketika aplika
 | Jenis tebu | API katalog pabrik. | — |
 | Keluar | Mengakhiri sesi pada aplikasi. | — |
 
-Endpoint awal master produksi menyimpan kode dan nama atau versi draf. Kontrak per menu harus mencakup seluruh field yang ditampilkan dan menetapkan cara penggunaan datanya dalam produksi sebelum form tersebut memakai API. Lihat [pemeriksaan akses dan konfigurasi backend](backend-authentication.md) serta [implementasi produksi](backend-production-implementation.md).
+Endpoint awal master produksi menyimpan kode dan nama atau versi draf. Implementasi lama memakai memori atau adapter Supabase. Untuk menghubungkannya ke form tim, diperlukan penyimpanan PostgreSQL yang dipakai pemasakan resmi dan kontrak untuk field yang ditampilkan. Lihat [pemeriksaan akses dan konfigurasi backend](backend-authentication.md) serta [implementasi produksi](backend-production-implementation.md).
 
 Pasang Git dan alat sesuai area yang kamu kerjakan. Untuk menjalankan integrasi, siapkan alat dari ketiga baris.
 

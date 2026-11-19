@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { execFile, spawn } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
-import { mkdir, readFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import assert from 'node:assert/strict';
@@ -161,7 +161,12 @@ async function boot() {
   const uv = process.env.UV_BIN ?? 'uv';
   const ai = resolve(root, 'apps/ai');
   const api = resolve(root, 'apps/api');
-  await requireExit(child(uv, ['run','--locked','--extra','paddle','python','synthetic_notes.py',staging], ai), 'Pembuatan fixture gagal');
+  if (acceptance) {
+    const files = ['truck.png', 'production.png', 'update.png', 'manual.png'];
+    await Promise.all(files.map((file) => copyFile(resolve(ai, 'fixtures/acceptance', file), resolve(staging, file))));
+  } else {
+    await requireExit(child(uv, ['run','--locked','--extra','paddle','python','synthetic_notes.py',staging], ai), 'Pembuatan fixture gagal');
+  }
   child(process.execPath, ['dist/main.js'], api);
   child(uv, ['run','--locked','--extra','paddle','uvicorn','main:app','--host','127.0.0.1','--port',String(ports.ai)], ai);
   await waitFor(async () => (await fetch(`${url(ports.api)}/internal/v1/whatsapp/ready`, { signal: AbortSignal.timeout(1_000),

@@ -39,7 +39,7 @@ Panggilan pertama PaddleOCR mengunduh model. Gunakan `PADDLE_PDX_CACHE_HOME` unt
    npm.cmd run local:stack -- --web --acceptance
    ```
 
-   Buka `http://127.0.0.1:8000/` di profil browser bersih. Alamat ini menyajikan Flutter, NestJS, dan login sintetis. Bootstrap menerapkan migrasi dengan urutan produksi kemudian OCR (`sobatnira_local`), menyiapkan akun serta dua kloter uji, dan menjalankan worker NestJS serta FastAPI OCR internal (port loopback 8001). Fixture bersumber dari `apps/ai/synthetic_notes.py`, foto privat disimpan di `.tmp/local-ai/media`, dan adapter simulasi memanggil PaddleOCR CPU. Tunggu terminal menampilkan tiga tugas siap diproses.
+   Buka `http://127.0.0.1:8000/` di profil browser bersih. Alamat ini menyajikan Flutter, NestJS, dan login sintetis. Bootstrap menerapkan migrasi dengan urutan produksi kemudian OCR (`sobatnira_local`), menyiapkan akun serta dua kloter uji, dan menjalankan worker NestJS serta FastAPI OCR internal (port loopback 8001). `--acceptance` memakai empat PNG sintetis dari [`apps/ai/fixtures/acceptance`](../../apps/ai/fixtures/acceptance) sehingga input OCR identik walaupun font sistem berbeda. Foto dibuat dengan `apps/ai/synthetic_notes.py`. Adapter simulasi memanggil PaddleOCR CPU dan menyimpan salinan privat di `.tmp/local-ai/media`. Tunggu terminal menampilkan tiga tugas siap diproses.
 
 4. Masuk dengan `admin@example.invalid` / `sobatnira-demo`, buka **Pekerjaan** dari Beranda **Pabrik Demo**. Gunakan ID tugas dan kode kloter yang dicetak terminal.
 
