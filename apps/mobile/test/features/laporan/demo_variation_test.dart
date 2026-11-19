@@ -58,7 +58,7 @@ void main() {
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(393, 1000));
       addTearDown(() => tester.binding.setSurfaceSize(null));
-      await tester.pumpWidget(const SobatNiraApp());
+      await tester.pumpWidget(const SobatNiraApp(connected: false));
       await tester.pumpAndSettle();
       Future<void> tap(Finder finder) async {
         await tester.ensureVisible(finder);

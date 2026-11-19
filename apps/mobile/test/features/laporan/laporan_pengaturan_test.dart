@@ -19,7 +19,7 @@ void main() {
   Future<void> openDemo(WidgetTester tester) async {
     await tester.binding.setSurfaceSize(const Size(393, 853));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(const SobatNiraApp());
+    await tester.pumpWidget(const SobatNiraApp(connected: false));
     await tester.pumpAndSettle();
   }
 
@@ -83,7 +83,7 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(370, 760));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(const SobatNiraApp());
+    await tester.pumpWidget(const SobatNiraApp(connected: false));
     await tester.pumpAndSettle();
     await tap(tester, find.bySemanticsLabel('Laporan'));
 

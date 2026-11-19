@@ -4,7 +4,7 @@ Pasang Git dan alat sesuai area yang kamu kerjakan. Untuk menjalankan integrasi,
 
 | Area | Alat | Titik awal |
 | --- | --- | --- |
-| Flutter | Flutter stable 3.44.6 (Dart 3.12.2) dan Chrome | `apps/mobile/lib/main.dart`. Mulai langsung dari Beranda dengan data sintetis. |
+| Flutter | Flutter stable 3.44.6 (Dart 3.12.2) dan Chrome | `apps/mobile/lib/main.dart`. Siapkan konfigurasi API dan login atau pilih demo offline. |
 | API bisnis | Node.js 24 dengan npm | `apps/api/src/app.module.ts`. Mulai dari kontrak dan validasi dokumen atau data kloter dan batch. |
 | AI | Python 3.13 dengan uv | `apps/ai/main.py`. Mulai dari pemetaan field dan fixture draf ekstraksi. |
 
@@ -38,7 +38,7 @@ Rekap menggabungkan catatan berdasarkan kode kloter: identitas tebu, kendaraan d
 ```sh
 cd apps/mobile
 flutter pub get --enforce-lockfile
-flutter run -d chrome --web-hostname 127.0.0.1 --web-port 8080
+flutter run -d chrome -t lib/main.dart --web-hostname 127.0.0.1 --web-port 8085 --dart-define=SOBATNIRA_MODE=demo
 ```
 
 Untuk menguji nota sintetis melalui Pekerjaan dan pembukuan resmi, ikuti [smoke test lokal](ai/README.md#mode-lokal-sintetis).
@@ -141,7 +141,7 @@ Gunakan file konfigurasi publik dari launcher terhubung. Untuk stub login dan no
 Tinjau lisensi yang dilaporkan oleh `flutter doctor --android-licenses`. Buka emulator atau hubungkan HP dengan USB debugging. Jalankan `flutter devices`, lalu gunakan ID yang tampil. Untuk mengerjakan UI dengan draf lokal, jalankan dari `apps/mobile`.
 
 ```sh
-flutter run -d <device-id>
+flutter run -d <device-id> -t lib/main.dart --dart-define=SOBATNIRA_MODE=demo
 ```
 
 Untuk menguji integrasi dari emulator atau HP, jalankan kedua backend. Dengan satu perangkat Android terhubung, teruskan port API memakai ADB dan jalankan Flutter dengan URL bawaan.

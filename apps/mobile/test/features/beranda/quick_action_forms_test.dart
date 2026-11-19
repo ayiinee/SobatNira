@@ -8,7 +8,7 @@ void main() {
   Future<void> open(WidgetTester tester) async {
     await tester.binding.setSurfaceSize(const Size(393, 853));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(const SobatNiraApp());
+    await tester.pumpWidget(const SobatNiraApp(connected: false));
     await tester.pumpAndSettle();
   }
 

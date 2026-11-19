@@ -28,12 +28,14 @@ import 'features/pengaturan/settings_demo.dart';
 import 'features/pengaturan/harga_biaya_page.dart';
 import 'sobatnira_ui.dart';
 
+const _demoMode = String.fromEnvironment('SOBATNIRA_MODE') == 'demo';
+
 void main() => runApp(const SobatNiraApp());
 
 class SobatNiraApp extends StatelessWidget {
   const SobatNiraApp({
     super.key,
-    this.connected = connectedMobile,
+    this.connected = !_demoMode,
     this.signIn = ReviewApi.signIn,
     this.configurationErrors,
   });

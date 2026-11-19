@@ -13,10 +13,6 @@ const supabasePublicKey = String.fromEnvironment(
   'SUPABASE_PUBLISHABLE_KEY',
   defaultValue: String.fromEnvironment('SUPABASE_ANON_KEY'),
 );
-const _mobileMode = String.fromEnvironment('SOBATNIRA_MODE');
-const connectedMobile =
-    _mobileMode != 'demo' &&
-    (_mobileMode != '' || supabaseProject != '' || supabasePublicKey != '');
 
 typedef Json = Map<String, dynamic>;
 
