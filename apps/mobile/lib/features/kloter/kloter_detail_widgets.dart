@@ -381,22 +381,30 @@ class BatchReviewActions extends StatelessWidget {
       builder: (dialogContext) => AlertDialog(
         scrollable: true,
         backgroundColor: niraPaper,
-        icon: Icon(
-          Icons.warning_amber_rounded,
-          color: verified ? colors.error : niraOchre,
-        ),
         title: Text(
           verified
               ? 'Batalkan validasi Batch $batchNumber?'
               : 'Validasi Batch $batchNumber?',
+          textAlign: TextAlign.center,
         ),
         content: Text(
           verified
               ? 'Batch kembali ke status Perlu ditinjau dan datanya bisa diedit lagi.'
               : 'Pastikan data batch sudah benar. Data akan terkunci setelah divalidasi.',
         ),
+        actionsAlignment: MainAxisAlignment.spaceBetween,
+        actionsOverflowButtonSpacing: NiraSpace.sm,
         actions: [
-          TextButton(
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: colors.error,
+              side: BorderSide(color: colors.error),
+              minimumSize: const Size(80, 48),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(niraRadius),
+              ),
+            ),
             onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text('Batal'),
           ),
