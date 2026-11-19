@@ -25,7 +25,7 @@ String formatDate(DateTime date, {bool short = false}) {
 
 String formatMonth(DateTime date) => '${monthName(date)} ${date.year}';
 
-String formatQuantity(num? number, String unit) {
+String formatQuantity(num? number, [String unit = '']) {
   if (number == null) return 'Belum tersedia';
   final parts = number
       .toStringAsFixed(5)
@@ -36,7 +36,8 @@ String formatQuantity(num? number, String unit) {
     (match) => '${match[1]}.',
   );
   final fraction = parts.last;
-  return fraction.isEmpty ? '$integer $unit' : '$integer,$fraction $unit';
+  final value = fraction.isEmpty ? integer : '$integer,$fraction';
+  return unit.isEmpty ? value : '$value $unit';
 }
 
 enum KloterStatus { review, done }

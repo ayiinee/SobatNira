@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../sobatnira_ui.dart';
 import 'review_api.dart';
 
 class IntakeLotDialog extends StatefulWidget {
@@ -153,19 +154,12 @@ class _IntakeLotDialogState extends State<IntakeLotDialog> {
                   ),
                 ],
                 if (_offsets.length > 1 || next != null)
-                  Wrap(
-                    children: [
-                      if (_offsets.length > 1)
-                        TextButton(
-                          onPressed: () => _loadPage(previous: true),
-                          child: const Text('Sebelumnya'),
-                        ),
-                      if (next != null)
-                        TextButton(
-                          onPressed: () => _loadPage(next: next),
-                          child: const Text('Berikutnya'),
-                        ),
-                    ],
+                  NiraPagination(
+                    page: _offsets.length,
+                    onPrevious: _offsets.length > 1
+                        ? () => _loadPage(previous: true)
+                        : null,
+                    onNext: next == null ? null : () => _loadPage(next: next),
                   ),
               ],
             ),

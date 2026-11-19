@@ -401,28 +401,21 @@ class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
             ),
           ),
         if (_offset > 0 || _offset + limit < total)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton(
-                onPressed: _offset > 0
-                    ? () => setState(() {
-                        _offset -= limit;
-                        _load();
-                      })
-                    : null,
-                child: const Text('Sebelumnya'),
-              ),
-              TextButton(
-                onPressed: _offset + limit < total
-                    ? () => setState(() {
-                        _offset += limit;
-                        _load();
-                      })
-                    : null,
-                child: const Text('Berikutnya'),
-              ),
-            ],
+          NiraPagination(
+            page: _offset ~/ limit + 1,
+            pageCount: (total / limit).ceil(),
+            onPrevious: _offset > 0
+                ? () => setState(() {
+                    _offset -= limit;
+                    _load();
+                  })
+                : null,
+            onNext: _offset + limit < total
+                ? () => setState(() {
+                    _offset += limit;
+                    _load();
+                  })
+                : null,
           ),
         TextButton.icon(
           onPressed: () => setState(_load),

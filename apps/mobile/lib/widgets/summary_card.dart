@@ -15,6 +15,7 @@ class NiraSummaryCard extends StatelessWidget {
     this.value, {
     this.boxes = false,
     this.cane = false,
+    this.compactValue = false,
     super.key,
   });
 
@@ -22,6 +23,7 @@ class NiraSummaryCard extends StatelessWidget {
   final String value;
   final bool boxes;
   final bool cane;
+  final bool compactValue;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -87,21 +89,26 @@ class NiraSummaryCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: NiraSpace.xs),
-                Text(
-                  value,
-                  textAlign: TextAlign.left,
-                  style: niraText(
-                    NiraType.metric,
-                    color: niraYellow,
-                    weight: FontWeight.w700,
-                  ),
-                ),
+                if (compactValue)
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: _valueText(NiraType.title),
+                  )
+                else
+                  _valueText(NiraType.metric),
               ],
             ),
           ),
         ),
       ],
     ),
+  );
+
+  Widget _valueText(double fontSize) => Text(
+    value,
+    textAlign: TextAlign.left,
+    style: niraText(fontSize, color: niraYellow, weight: FontWeight.w700),
   );
 }
 

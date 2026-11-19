@@ -49,29 +49,13 @@ class _ReportPaginatedListState<T> extends State<ReportPaginatedList<T>> {
             textAlign: TextAlign.center,
             style: niraText(NiraType.caption, color: niraLeaf),
           ),
-          Wrap(
-            alignment: WrapAlignment.center,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: NiraSpace.xs,
-            children: [
-              TextButton(
-                onPressed: _page > 0 ? () => setState(() => _page--) : null,
-                child: const Text('Sebelumnya'),
-              ),
-              Semantics(
-                liveRegion: true,
-                child: Text(
-                  'Halaman ${_page + 1}/$_pageCount',
-                  style: niraText(NiraType.caption),
-                ),
-              ),
-              TextButton(
-                onPressed: _page + 1 < _pageCount
-                    ? () => setState(() => _page++)
-                    : null,
-                child: const Text('Berikutnya'),
-              ),
-            ],
+          NiraPagination(
+            page: _page + 1,
+            pageCount: _pageCount,
+            onPrevious: _page > 0 ? () => setState(() => _page--) : null,
+            onNext: _page + 1 < _pageCount
+                ? () => setState(() => _page++)
+                : null,
           ),
         ],
       ],

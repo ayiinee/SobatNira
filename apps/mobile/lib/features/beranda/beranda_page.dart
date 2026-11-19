@@ -145,60 +145,65 @@ class _BerandaPageState extends State<BerandaPage> {
                 ),
                 child: Column(
                   children: [
-                    Semantics(
-                      label: 'Tarik daftar kloter ke atas',
-                      button: true,
-                      child: GestureDetector(
-                        key: const ValueKey('beranda-kloter-handle'),
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () {
-                          if (!_sheet.isAttached) return;
-                          _sheet.animateTo(
-                            _sheet.size < expanded - .01 ? expanded : collapsed,
-                            duration: const Duration(milliseconds: 220),
-                            curve: Curves.easeOutCubic,
-                          );
-                        },
-                        onVerticalDragUpdate: (event) {
-                          if (_sheet.isAttached) {
-                            _sheet.jumpTo(
-                              (_sheet.size - event.delta.dy / height).clamp(
-                                collapsed,
-                                expanded,
-                              ),
-                            );
-                          }
-                        },
-                        onVerticalDragEnd: (_) => settle(),
-                        child: SizedBox(
-                          height: 24,
-                          width: double.infinity,
-                          child: Center(
-                            child: Container(
-                              width: 36,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: niraMuted,
-                                borderRadius: BorderRadius.circular(2),
+                    Stack(
+                      alignment: Alignment.topCenter,
+                      children: [
+                        NiraTabs(
+                          labels: const ['Tinjau', 'Tuntas'],
+                          selected: _selected,
+                          inset: 27,
+                          wideIndicator: true,
+                          onSelected: (value) {
+                            if (scrollController.hasClients) {
+                              scrollController.jumpTo(0);
+                            }
+                            setState(() => _selected = value);
+                          },
+                        ),
+                        Semantics(
+                          label: 'Tarik daftar kloter ke atas',
+                          button: true,
+                          child: GestureDetector(
+                            key: const ValueKey('beranda-kloter-handle'),
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () {
+                              if (!_sheet.isAttached) return;
+                              _sheet.animateTo(
+                                _sheet.size < expanded - .01
+                                    ? expanded
+                                    : collapsed,
+                                duration: const Duration(milliseconds: 220),
+                                curve: Curves.easeOutCubic,
+                              );
+                            },
+                            onVerticalDragUpdate: (event) {
+                              if (_sheet.isAttached) {
+                                _sheet.jumpTo(
+                                  (_sheet.size - event.delta.dy / height).clamp(
+                                    collapsed,
+                                    expanded,
+                                  ),
+                                );
+                              }
+                            },
+                            onVerticalDragEnd: (_) => settle(),
+                            child: SizedBox(
+                              height: 12,
+                              width: 48,
+                              child: Center(
+                                child: Container(
+                                  width: 36,
+                                  height: 4,
+                                  decoration: BoxDecoration(
+                                    color: niraMuted,
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                    NiraTabs(
-                      labels: const ['Tinjau', 'Tuntas'],
-                      selected: _selected,
-                      height: 48,
-                      fontSize: NiraType.body,
-                      inset: 27,
-                      wideIndicator: true,
-                      onSelected: (value) {
-                        if (scrollController.hasClients) {
-                          scrollController.jumpTo(0);
-                        }
-                        setState(() => _selected = value);
-                      },
+                      ],
                     ),
                     if (widget.statusMessage case final status?)
                       Padding(
@@ -467,8 +472,8 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
         const SizedBox(height: NiraSpace.md),
         NiraSummaryPair(
           first: NiraSummaryCard(
-            'Tebu diterima',
-            widget.summary?.cane ?? '8.200Kg',
+            'Tebu diterima (Kg)',
+            widget.summary?.cane ?? '8.200',
             boxes: true,
           ),
           second: NiraSummaryCard('Jumlah kloter', widget.summary?.lots ?? '3'),

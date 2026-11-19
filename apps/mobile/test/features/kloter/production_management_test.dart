@@ -16,8 +16,12 @@ final scope = FactoryScope.fromJson({
   'factoryName': 'Pabrik Uji',
 });
 
-Future<void> press(WidgetTester tester, String label) async {
-  final button = find.text(label).last;
+Future<void> press(
+  WidgetTester tester,
+  String label, {
+  bool tooltip = false,
+}) async {
+  final button = (tooltip ? find.byTooltip(label) : find.text(label)).last;
   await tester.ensureVisible(button);
   await tester.tap(button);
   await tester.pumpAndSettle();
@@ -119,7 +123,7 @@ void main() {
         endsWith('/cane-types/type'),
       );
       expect(find.text('DEMO · Nonaktif'), findsOneWidget);
-      await press(tester, 'Berikutnya');
+      await press(tester, 'Berikutnya', tooltip: true);
       expect(requests.last.url.queryParameters['offset'], '20');
       await tester.enterText(find.byType(TextField), 'DEMO & B');
       await tester.tap(find.byTooltip('Cari'));
@@ -193,7 +197,7 @@ void main() {
       expect(find.text('Pilih pemasok aktif.'), findsWidgets);
       await tester.enterText(find.byType(TextField), 'UJI-LOT');
       await press(tester, 'Pemasok');
-      await press(tester, 'Berikutnya');
+      await press(tester, 'Berikutnya', tooltip: true);
       await press(tester, 'Pemasok Aktif');
       await press(tester, 'Simpan kloter');
       final created = jsonDecode(writes.single.body) as Json;

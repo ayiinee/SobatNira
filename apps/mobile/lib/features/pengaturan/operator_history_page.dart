@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../sobatnira_ui.dart';
 import '../pekerjaan/review_api.dart';
 
 class OperatorHistoryPage extends StatefulWidget {
@@ -79,7 +80,8 @@ class _OperatorHistoryPageState extends State<OperatorHistoryPage> {
           final page = snapshot.requireData;
           final entries = (page['items'] as List).cast<Json>();
           final limit = page['limit'] as int;
-          final hasNext = _offset + limit < (page['total'] as int);
+          final total = page['total'] as int;
+          final hasNext = _offset + limit < total;
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -89,20 +91,11 @@ class _OperatorHistoryPageState extends State<OperatorHistoryPage> {
                 const ListTile(title: Text('Belum ada riwayat operator.')),
               for (final entry in entries) _event(context, entry),
               if (_offset > 0 || hasNext)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    TextButton(
-                      onPressed: _offset > 0
-                          ? () => _load(_offset - limit)
-                          : null,
-                      child: const Text('Sebelumnya'),
-                    ),
-                    TextButton(
-                      onPressed: hasNext ? () => _load(_offset + limit) : null,
-                      child: const Text('Berikutnya'),
-                    ),
-                  ],
+                NiraPagination(
+                  page: _offset ~/ limit + 1,
+                  pageCount: (total / limit).ceil(),
+                  onPrevious: _offset > 0 ? () => _load(_offset - limit) : null,
+                  onNext: hasNext ? () => _load(_offset + limit) : null,
                 ),
             ],
           );

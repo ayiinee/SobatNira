@@ -205,7 +205,6 @@ class _HomeState extends State<_Home> {
     return (
       cane: formatQuantity(
         weights.isEmpty ? null : weights.reduce((a, b) => a + b),
-        'kg',
       ),
       lots: _live!.loading || _live.error != null ? '-' : '${_lots.length}',
     );

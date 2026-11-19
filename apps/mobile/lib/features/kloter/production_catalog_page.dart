@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../sobatnira_ui.dart';
 import '../pekerjaan/review_api.dart';
 import '../pekerjaan/production_api.dart';
 import '../pengaturan/operator_history_page.dart';
@@ -161,6 +162,7 @@ class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
               final page = snapshot.requireData;
               final items = (page['items'] as List).cast<Json>();
               final limit = page['limit'] as int;
+              final total = page['total'] as int;
               return Column(
                 children: [
                   if (items.isEmpty)
@@ -206,29 +208,23 @@ class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
                         }
                       },
                     ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      TextButton(
-                        onPressed: _offset > 0
-                            ? () {
-                                _offset -= limit;
-                                _reload();
-                              }
-                            : null,
-                        child: const Text('Sebelumnya'),
-                      ),
-                      TextButton(
-                        onPressed: _offset + limit < (page['total'] as int)
-                            ? () {
-                                _offset += limit;
-                                _reload();
-                              }
-                            : null,
-                        child: const Text('Berikutnya'),
-                      ),
-                    ],
-                  ),
+                  if (_offset > 0 || total > limit)
+                    NiraPagination(
+                      page: _offset ~/ limit + 1,
+                      pageCount: (total / limit).ceil(),
+                      onPrevious: _offset > 0
+                          ? () {
+                              _offset -= limit;
+                              _reload();
+                            }
+                          : null,
+                      onNext: _offset + limit < total
+                          ? () {
+                              _offset += limit;
+                              _reload();
+                            }
+                          : null,
+                    ),
                 ],
               );
             },

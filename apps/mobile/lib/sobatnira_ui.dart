@@ -564,12 +564,86 @@ class NiraTabs extends StatelessWidget {
                         ),
                         child: Text(
                           '$badgeCount',
-                          style: niraText(NiraType.caption),
+                          style: niraText(
+                            NiraType.caption,
+                            weight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],
                   ],
                 ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class NiraPagination extends StatelessWidget {
+  const NiraPagination({
+    required this.page,
+    this.pageCount,
+    this.onPrevious,
+    this.onNext,
+    super.key,
+  });
+
+  final int page;
+  final int? pageCount;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = pageCount == null ? 'Halaman $page' : '$page dari $pageCount';
+    return Align(
+      alignment: Alignment.center,
+      child: Padding(
+        padding: const EdgeInsets.only(top: NiraSpace.sm),
+        child: Material(
+          color: niraPaper,
+          shape: const StadiumBorder(side: BorderSide(color: niraLine)),
+          clipBehavior: Clip.antiAlias,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                tooltip: 'Sebelumnya',
+                onPressed: onPrevious,
+                color: niraGreen,
+                icon: const Icon(Icons.chevron_left),
+              ),
+              const SizedBox(
+                height: 24,
+                child: VerticalDivider(width: 1, color: niraLine),
+              ),
+              Flexible(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: NiraSpace.lg),
+                  child: Semantics(
+                    liveRegion: true,
+                    label: pageCount == null ? label : 'Halaman $label',
+                    excludeSemantics: true,
+                    child: Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: niraText(NiraType.body, weight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(
+                height: 24,
+                child: VerticalDivider(width: 1, color: niraLine),
+              ),
+              IconButton(
+                tooltip: 'Berikutnya',
+                onPressed: onNext,
+                color: niraGreen,
+                icon: const Icon(Icons.chevron_right),
               ),
             ],
           ),

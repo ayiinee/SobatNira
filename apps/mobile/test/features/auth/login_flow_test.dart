@@ -27,16 +27,17 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(const SobatNiraApp());
     await tester.pumpAndSettle();
-    expect(find.text('Tebu diterima'), findsOneWidget);
+    expect(find.text('Tebu diterima (Kg)'), findsOneWidget);
+    expect(find.text('8.200'), findsOneWidget);
     expect(find.byType(LoginWelcomePage), findsNothing);
     expect(find.byType(LoginFormPage), findsNothing);
     expect(
-      Navigator.of(tester.element(find.text('Tebu diterima'))).canPop(),
+      Navigator.of(tester.element(find.text('Tebu diterima (Kg)'))).canPop(),
       isFalse,
     );
     await tester.pumpWidget(const SobatNiraApp(key: ValueKey('restart')));
     await tester.pumpAndSettle();
-    expect(find.text('Tebu diterima'), findsOneWidget);
+    expect(find.text('Tebu diterima (Kg)'), findsOneWidget);
     expect(find.byType(LoginWelcomePage), findsNothing);
     expect(find.byType(LoginFormPage), findsNothing);
     expect(tester.takeException(), isNull);

@@ -261,29 +261,20 @@ class _PekerjaanPageState extends State<PekerjaanPage>
                     ),
                   ),
                 if (_page > 1 || tasks.length == 20)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      TextButton(
-                        onPressed: _page > 1
-                            ? () => setState(() {
-                                _page--;
-                                _load();
-                              })
-                            : null,
-                        child: const Text('Sebelumnya'),
-                      ),
-                      Text('$_page'),
-                      TextButton(
-                        onPressed: tasks.length == 20
-                            ? () => setState(() {
-                                _page++;
-                                _load();
-                              })
-                            : null,
-                        child: const Text('Berikutnya'),
-                      ),
-                    ],
+                  NiraPagination(
+                    page: _page,
+                    onPrevious: _page > 1
+                        ? () => setState(() {
+                            _page--;
+                            _load();
+                          })
+                        : null,
+                    onNext: tasks.length == 20
+                        ? () => setState(() {
+                            _page++;
+                            _load();
+                          })
+                        : null,
                   ),
               ],
             );

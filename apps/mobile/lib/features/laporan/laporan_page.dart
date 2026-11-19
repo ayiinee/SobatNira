@@ -147,17 +147,20 @@ class _LaporanPageState extends State<LaporanPage> {
         'Margin Produksi',
         demoMoney(widget.analytics.marginTotal),
         cane: true,
+        compactValue: true,
       ),
       const SizedBox(height: NiraSpace.sm),
       NiraSummaryPair(
         first: NiraSummaryCard(
           'Nilai produksi',
           demoMoney(widget.analytics.valueTotal),
+          compactValue: true,
         ),
         second: NiraSummaryCard(
           'Total biaya',
           demoMoney(widget.analytics.costTotal),
           boxes: true,
+          compactValue: true,
         ),
       ),
       const SizedBox(height: NiraSpace.md),

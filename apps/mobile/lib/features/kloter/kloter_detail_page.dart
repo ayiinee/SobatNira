@@ -205,37 +205,24 @@ class _BatchTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: NiraSpace.sm,
+                      runSpacing: NiraSpace.xs,
                       children: [
-                        Expanded(
-                          child: Wrap(
-                            alignment: WrapAlignment.spaceBetween,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            spacing: NiraSpace.sm,
-                            runSpacing: NiraSpace.xs,
-                            children: [
-                              Text(
-                                'Batch ${batch.number}',
-                                style: niraText(
-                                  NiraType.section,
-                                  color: pending ? foreground : niraYellow,
-                                  weight: FontWeight.w700,
-                                ),
-                              ),
-                              ReviewStatusLabel(pending: pending),
-                            ],
+                        Text(
+                          'Batch ${batch.number}',
+                          style: niraText(
+                            NiraType.section,
+                            color: pending ? foreground : niraYellow,
+                            weight: FontWeight.w700,
                           ),
                         ),
-                        const SizedBox(width: NiraSpace.xs),
-                        const Icon(
-                          Icons.chevron_right,
-                          size: 20,
-                          color: foreground,
-                        ),
+                        ReviewStatusLabel(pending: pending),
                       ],
                     ),
-                    const SizedBox(height: NiraSpace.xs),
+                    const SizedBox(height: 2),
                     _info(context, 'Nira batch', '180L', foreground),
                     const SizedBox(height: 2),
                     _info(context, 'Hasil fisik', '90Kg', foreground),

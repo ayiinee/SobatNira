@@ -17,8 +17,12 @@ final scope = FactoryScope.fromJson({
 const root = '/tenants/tenant/factories/factory/lots/lot/closure';
 const time = '2026-11-17T01:00:00Z';
 
-Future<void> press(WidgetTester tester, String text) async {
-  final target = find.text(text).last;
+Future<void> press(
+  WidgetTester tester,
+  String text, {
+  bool tooltip = false,
+}) async {
+  final target = (tooltip ? find.byTooltip(text) : find.text(text)).last;
   await tester.ensureVisible(target);
   await tester.pumpAndSettle();
   await tester.tap(target);
@@ -306,13 +310,13 @@ void main() {
         }),
       );
       await mount(tester, api);
-      await press(tester, 'Berikutnya');
+      await press(tester, 'Berikutnya', tooltip: true);
       expect(offsets.last, '20');
       await press(tester, 'Sudah dibuka kembali');
       await tester.ensureVisible(find.text('Alasan halaman 20'));
       expect(find.text('Alasan halaman 20'), findsOneWidget);
       expect(find.text('owner-20'), findsOneWidget);
-      await press(tester, 'Sebelumnya');
+      await press(tester, 'Sebelumnya', tooltip: true);
       expect(offsets.last, '0');
       denied = true;
       await tester.tap(find.byTooltip('Muat ulang penutupan'));

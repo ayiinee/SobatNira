@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../sobatnira_ui.dart';
 import '../pekerjaan/review_api.dart';
 import '../pekerjaan/production_api.dart';
 
@@ -185,6 +186,7 @@ class _LotClosurePageState extends State<LotClosurePage> {
                 final closed = status['status'] == 'closed';
                 final rows = (page['items'] as List).cast<Json>();
                 final limit = page['limit'] as int;
+                final total = page['total'] as int;
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -249,31 +251,23 @@ class _LotClosurePageState extends State<LotClosurePage> {
                           ],
                         ],
                       ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        TextButton(
-                          onPressed: !_working && _offset > 0
-                              ? () {
-                                  _offset -= limit;
-                                  _reload();
-                                }
-                              : null,
-                          child: const Text('Sebelumnya'),
-                        ),
-                        TextButton(
-                          onPressed:
-                              !_working &&
-                                  _offset + limit < (page['total'] as int)
-                              ? () {
-                                  _offset += limit;
-                                  _reload();
-                                }
-                              : null,
-                          child: const Text('Berikutnya'),
-                        ),
-                      ],
-                    ),
+                    if (_offset > 0 || total > limit)
+                      NiraPagination(
+                        page: _offset ~/ limit + 1,
+                        pageCount: (total / limit).ceil(),
+                        onPrevious: !_working && _offset > 0
+                            ? () {
+                                _offset -= limit;
+                                _reload();
+                              }
+                            : null,
+                        onNext: !_working && _offset + limit < total
+                            ? () {
+                                _offset += limit;
+                                _reload();
+                              }
+                            : null,
+                      ),
                   ],
                 );
               },
