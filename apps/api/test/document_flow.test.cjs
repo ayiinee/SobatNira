@@ -366,19 +366,22 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
           await clean.query(`DELETE FROM sobatnira.${table} WHERE tenant_id=$1`, [tenant]);
         }
         await clean.query('DELETE FROM sobatnira.tenants WHERE id=$1', [tenant]);
-        await clean.query('DELETE FROM auth.users WHERE id IN ($1,$2)', [reviewer, owner]);
+        await clean.query('DELETE FROM auth.users WHERE id IN ($1,$2,$3)', [reviewer, owner, colleague]);
       } finally { await clean.end(); }
     });
     await db.transaction(async (tx) => {
       await tx.query(`INSERT INTO auth.users(id,aud,role,email)
-        VALUES ($1,'authenticated','authenticated',$2),($3,'authenticated','authenticated',$4)`,
-      [reviewer, `synthetic-${reviewer}@example.invalid`, owner, `synthetic-${owner}@example.invalid`]);
+        VALUES ($1,'authenticated','authenticated',$2),($3,'authenticated','authenticated',$4),
+               ($5,'authenticated','authenticated',$6)`,
+      [reviewer, `synthetic-${reviewer}@example.invalid`, owner, `synthetic-${owner}@example.invalid`,
+        colleague, `synthetic-${colleague}@example.invalid`]);
       await tx.query("INSERT INTO sobatnira.tenants(id,name) VALUES ($1,'Synthetic OCR tenant')", [tenant]);
       await tx.query("INSERT INTO sobatnira.factories(id,tenant_id,name) VALUES ($1,$3,'Synthetic factory'),($2,$3,'Other factory')",
         [factory, otherFactory, tenant]);
-      await tx.query('INSERT INTO sobatnira.tenant_memberships(tenant_id,user_id) VALUES ($1,$2),($1,$3)', [tenant, reviewer, owner]);
+      await tx.query('INSERT INTO sobatnira.tenant_memberships(tenant_id,user_id) VALUES ($1,$2),($1,$3),($1,$4)',
+        [tenant, reviewer, owner, colleague]);
       await tx.query(`INSERT INTO sobatnira.factory_memberships(tenant_id,factory_id,user_id,role)
-        VALUES ($1,$2,$3,'admin'),($1,$2,$4,'owner')`, [tenant, factory, reviewer, owner]);
+        VALUES ($1,$2,$3,'admin'),($1,$2,$4,'owner'),($1,$2,$5,'admin')`, [tenant, factory, reviewer, owner, colleague]);
       await tx.query("INSERT INTO sobatnira.suppliers(id,tenant_id,name) VALUES ($1,$2,'Synthetic supplier')", [supplier, tenant]);
       await tx.query(`INSERT INTO sobatnira.lots(id,tenant_id,factory_id,supplier_id,received_at,display_code)
         VALUES ($1,$3,$4,$6,'2026-11-16T01:00:00Z','SYNTHETIC-TRUCK-1'),($2,$3,$5,$6,'2026-11-16T01:00:00Z','OTHER')`,
@@ -577,7 +580,11 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     assert.equal(detail.revisions.length, 3);
     assert.equal(detail.operator_confirmation.version, 2);
     const choicePath = `review-tasks/${taskId}/intake-lots`;
-    assert.equal((await mobile(choicePath, 'colleague')).status, 403);
+    assert.equal((await mobile(choicePath, 'colleague')).status, 200);
+    await db.query('UPDATE sobatnira.factory_memberships SET is_active=false WHERE factory_id=$1 AND user_id=$2',
+      [factory, colleague]);
+    assert.equal((await mobile(choicePath, 'colleague')).status, 404);
+    assert.deepEqual(await unread('colleague'), { unread_count: 0 });
     assert.equal((await mobile(choicePath, 'other-user')).status, 404);
     const { items } = await mobile(choicePath).then((response) => response.json());
     assert.deepEqual(items.map(({ id, supplierId }) => ({ id, supplierId })), [{ id: lot, supplierId: supplier }]);
