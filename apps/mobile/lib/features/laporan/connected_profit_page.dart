@@ -99,11 +99,12 @@ class _ConnectedProfitPageState extends State<ConnectedProfitPage> {
         child: FutureBuilder<PrintableReport>(
           future: _report,
           builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done)
+            if (snapshot.connectionState != ConnectionState.done) {
               return const Scaffold(
                 body: Center(child: CircularProgressIndicator()),
               );
-            if (snapshot.hasError)
+            }
+            if (snapshot.hasError) {
               return Scaffold(
                 appBar: AppBar(title: const Text('Laporan laba')),
                 body: Center(
@@ -113,6 +114,7 @@ class _ConnectedProfitPageState extends State<ConnectedProfitPage> {
                   ),
                 ),
               );
+            }
             return ReportExportPage(
               kind: PrintableReportKind.profit,
               analytics: _analytics,

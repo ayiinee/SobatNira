@@ -135,7 +135,36 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
           if (batch.status == 'WEIGHED') FilledButton(onPressed: _working ? null : () async { final value = await _text('Kode grade', 'A'); if (value != null && value.isNotEmpty) await _submit(() => widget.api.grading(widget.id, value)); }, child: const Text('Catat grading')),
           if (batch.status == 'DRAFT') FilledButton(onPressed: _working ? null : () async { final value = await _pair('Kontribusi nira', 'Lot ID', 'Volume (mL)'); final volume = value == null ? null : int.tryParse(value[1]); if (value != null && volume != null) await _submit(() => widget.api.contribution(widget.id, {'lotId': value[0], 'volumeMl': volume})); }, child: const Text('Tambah sumber nira')),
           if (batch.status == 'GRADED') FilledButton(onPressed: _working ? null : () async { final value = await _pair('Catat rework', 'Batch penerima', 'Berat (kg)'); final weight = value == null ? null : double.tryParse(value[1]); if (value != null && weight != null) await _submit(() => widget.api.rework(widget.id, value[0], weight)); }, child: const Text('Catat rework')),
-          if (batch.status == 'GRADED' || batch.status == 'VALIDATED') FilledButton(onPressed: _working ? null : () async { try { final result = await widget.api.economics(widget.id); if (mounted) showDialog<void>(context: context, builder: (_) => AlertDialog(title: const Text('Economics batch'), content: Text('${result['totals']}'), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Tutup'))])); } catch (error) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error'))); } }, child: const Text('Lihat economics')),
+          if (batch.status == 'GRADED' || batch.status == 'VALIDATED')
+            FilledButton(
+              onPressed: _working
+                  ? null
+                  : () async {
+                      try {
+                        final result = await widget.api.economics(widget.id);
+                        if (!context.mounted) return;
+                        showDialog<void>(
+                          context: context,
+                          builder: (dialogContext) => AlertDialog(
+                            title: const Text('Economics batch'),
+                            content: Text('${result['totals']}'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(dialogContext),
+                                child: const Text('Tutup'),
+                              ),
+                            ],
+                          ),
+                        );
+                      } catch (error) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('$error')),
+                        );
+                      }
+                    },
+              child: const Text('Lihat economics'),
+            ),
           const SizedBox(height: 16),
           _Section(title: 'Sumber nira', child: Column(children: batch.contributions.map((item) => ListTile(contentPadding: EdgeInsets.zero, title: Text(item.kloterId), subtitle: Text('${item.volumeMl} ml â€¢ ${(item.volumeMl / total * 100).toStringAsFixed(1)}%'))).toList())),
           _Section(title: 'Pemasakan', child: Text(batch.cooking == null ? 'Belum dicatat' : 'Tercatat')),

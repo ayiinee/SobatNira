@@ -5,8 +5,8 @@ import 'package:http/http.dart' as http;
 const _apiBaseUrl = String.fromEnvironment('API_BASE_URL');
 
 class BatchApi {
-  BatchApi({http.Client? client, String role = 'owner'})
-    : _client = client ?? http.Client(), _role = role;
+  BatchApi({http.Client? client, this._role = 'owner'})
+    : _client = client ?? http.Client();
   final http.Client _client;
   final String _role;
   static final _fixtureDetails = <String, BatchDetail>{
@@ -30,7 +30,15 @@ class BatchApi {
       }
       return body;
     }
-    final response = await _client.post(Uri.parse('$_apiBaseUrl$path'), headers: {..._scope, 'Content-Type': 'application/json', if (requestId != null) 'idempotency-key': requestId}, body: jsonEncode(body));
+    final response = await _client.post(
+      Uri.parse('$_apiBaseUrl$path'),
+      headers: {
+        ..._scope,
+        'Content-Type': 'application/json',
+        'idempotency-key': ?requestId,
+      },
+      body: jsonEncode(body),
+    );
     if (response.statusCode >= 400) throw Exception('API produksi gagal (${response.statusCode})');
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
@@ -48,9 +56,39 @@ class BatchApi {
   }
   Future<Map<String, dynamic>> contribution(String id, Map<String, dynamic> body, {String? requestId}) => _write('/batches/$id/contributions', body, requestId: requestId);
   Future<Map<String, dynamic>> cooking(String id, Map<String, dynamic> body, {String? requestId}) => _write('/batches/$id/cooking', body, requestId: requestId);
-  Future<Map<String, dynamic>> weighing(String id, {required double sugarWeightKg, double? caneWeightKg, String? occurredAt, String? requestId}) => _write('/batches/$id/weighing', {'sugarWeightKg': sugarWeightKg, if (caneWeightKg != null) 'caneWeightKg': caneWeightKg, if (occurredAt != null) 'occurredAt': occurredAt}, requestId: requestId);
-  Future<Map<String, dynamic>> grading(String id, String gradeCode, {String? occurredAt, String? requestId}) => _write('/batches/$id/grading', {'gradeCode': gradeCode, if (occurredAt != null) 'occurredAt': occurredAt}, requestId: requestId);
-  Future<Map<String, dynamic>> rework(String id, String receivingBatchId, double weightKg, {String? occurredAt, String? requestId}) => _write('/batches/$id/reworks', {'receivingBatchId': receivingBatchId, 'weightKg': weightKg, if (occurredAt != null) 'occurredAt': occurredAt}, requestId: requestId);
+  Future<Map<String, dynamic>> weighing(
+    String id, {
+    required double sugarWeightKg,
+    double? caneWeightKg,
+    String? occurredAt,
+    String? requestId,
+  }) => _write('/batches/$id/weighing', {
+    'sugarWeightKg': sugarWeightKg,
+    'caneWeightKg': ?caneWeightKg,
+    'occurredAt': ?occurredAt,
+  }, requestId: requestId);
+
+  Future<Map<String, dynamic>> grading(
+    String id,
+    String gradeCode, {
+    String? occurredAt,
+    String? requestId,
+  }) => _write('/batches/$id/grading', {
+    'gradeCode': gradeCode,
+    'occurredAt': ?occurredAt,
+  }, requestId: requestId);
+
+  Future<Map<String, dynamic>> rework(
+    String id,
+    String receivingBatchId,
+    double weightKg, {
+    String? occurredAt,
+    String? requestId,
+  }) => _write('/batches/$id/reworks', {
+    'receivingBatchId': receivingBatchId,
+    'weightKg': weightKg,
+    'occurredAt': ?occurredAt,
+  }, requestId: requestId);
   Future<Map<String, dynamic>> economics(String id) async {
     if (_apiBaseUrl.isEmpty) return {'batchId': id, 'allocations': const [], 'totals': {'costRupiah': 0, 'revenueRupiah': 0, 'marginRupiah': 0}};
     final response = await _client.get(Uri.parse('$_apiBaseUrl/economics/batches/$id/economics'), headers: _scope);
