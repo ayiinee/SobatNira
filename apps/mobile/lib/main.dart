@@ -28,6 +28,7 @@ import 'features/pengaturan/harga_biaya_page.dart';
 import 'sobatnira_ui.dart';
 
 const _demoMode = String.fromEnvironment('SOBATNIRA_MODE') == 'demo';
+const _localMode = String.fromEnvironment('SOBATNIRA_MODE') == 'local';
 
 void main() => runApp(const SobatNiraApp());
 
@@ -117,6 +118,8 @@ class _HomeState extends State<_Home> {
   }
 
   List<DemoKloter> get _lots => _live?.lots ?? _demo.kloter;
+  bool get _allowSessionSettings =>
+      _live == null || (_localMode && widget.scope?.role == 'admin');
 
   String get _role => widget.scope?.role == 'owner' ? 'Pemilik' : 'Admin';
   String _factoryLabel(FactoryScope factory) {
@@ -194,6 +197,7 @@ class _HomeState extends State<_Home> {
         NiraTab.pengaturan => PengaturanPage(
           settings: _settings,
           onNavigate: _navigate,
+          allowSessionSettings: _allowSessionSettings,
           connectedProfile: _live == null
               ? null
               : '$_role · ${widget.scope!.factoryName}',
@@ -332,7 +336,7 @@ class _HomeState extends State<_Home> {
                   settings: _settings,
                   onNavigate: _navigate,
                   operationalFirst: true,
-                  unavailable: _live != null,
+                  unavailable: !_allowSessionSettings,
                 )
               : BantuanPage(onNavigate: _navigate),
         ),
@@ -435,7 +439,9 @@ class _LotDetailState extends State<_LotDetail> {
 
   void _reload() {
     final request = _load();
-    setState(() { _request = request; });
+    setState(() {
+      _request = request;
+    });
   }
 
   Future<void> _open(Widget page) async {

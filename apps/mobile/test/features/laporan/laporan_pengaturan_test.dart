@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sobatnira/features/pengaturan/pengaturan_page.dart';
+import 'package:sobatnira/features/pengaturan/settings_demo.dart';
 import 'package:sobatnira/main.dart';
 
 void main() {
@@ -41,6 +43,37 @@ void main() {
     await tap(tester, find.byKey(ValueKey(label)));
     await tap(tester, find.text(value).last);
   }
+
+  testWidgets(
+    'preview lokal membuka formulir tim dan mengutamakan aksi resmi',
+    (tester) async {
+      final data = SettingsDemo();
+      addTearDown(data.dispose);
+      var opensOperators = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PengaturanPage(
+              settings: data,
+              onNavigate: (_) {},
+              connectedProfile: 'Admin · Pabrik Demo',
+              allowSessionSettings: true,
+              onConnectedEntry: {
+                SettingSection.operators: () => opensOperators++,
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tap(tester, find.bySemanticsLabel('Identitas pabrik'));
+      expect(field('Nama pabrik'), findsOneWidget);
+      await tap(tester, find.byTooltip('Kembali'));
+      await tap(tester, find.bySemanticsLabel('Pegawai & WhatsApp'));
+      expect(opensOperators, 1);
+    },
+  );
 
   testWidgets('Laporan berpindah tab, filter, dan detail lokal', (
     tester,

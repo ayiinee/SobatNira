@@ -22,12 +22,13 @@ Panggilan pertama PaddleOCR mengunduh model. Gunakan `PADDLE_PDX_CACHE_HOME` unt
    docker run --name sobatnira-local-db -e POSTGRES_PASSWORD=sobatnira-local -p 127.0.0.1:55437:5432 -d postgres:17
    ```
 
-2. Jalankan `npm run local:stack -- --smoke` dari `apps/api`. Bootstrap membuat schema `sobatnira_local`, menjalankan migration berulang dengan aman, memasang operator/admin sintetis, membuat fixture foto ke `.tmp/local-ai`, dan menyalakan NestJS, worker, FastAPI dan stub Supabase Auth. Media asli sintetis tersimpan privat di `.tmp/local-ai/media`. Plugin OpenClaw yang sama menerima payload sintetis dan mengirim lewat batas WhatsApp simulasi. PaddleOCR menjalankan model CPU dengan foto hasil generasi fixture.
-3. Dari `apps/mobile` jalankan Flutter web dan buka `http://127.0.0.1:8080`. Untuk melihat aplikasi release, gunakan `flutter build web` dengan definisi lingkungan yang sama, lalu sajikan `build/web` pada port 8080.
+2. Dari `apps/mobile`, buat build dari entry point utama dengan satu origin lokal.
 
    ```sh
-   flutter run -d web-server --web-hostname 127.0.0.1 --web-port 8080 --dart-define=SOBATNIRA_MODE=local --dart-define=API_BASE_URL=http://127.0.0.1:3000 --dart-define=SUPABASE_URL=http://127.0.0.1:8077 --dart-define=SUPABASE_PUBLISHABLE_KEY=local-synthetic-publishable
+   flutter build web -t lib/main.dart --dart-define=SOBATNIRA_MODE=local --dart-define=API_BASE_URL=http://127.0.0.1:8000 --dart-define=SUPABASE_URL=http://127.0.0.1:8000 --dart-define=SUPABASE_PUBLISHABLE_KEY=local-synthetic-publishable
    ```
+
+3. Dari `apps/api`, jalankan `npm run local:stack -- --web --smoke` dan buka `http://127.0.0.1:8000`. Stack menyajikan build Flutter, API bisnis, dan login sintetis lewat alamat tersebut. Bootstrap membuat schema `sobatnira_local`, menerapkan migrasi, menyediakan operator dan admin sintetis, serta menjalankan worker NestJS dan FastAPI OCR. FastAPI memakai port loopback internal 8001 secara default. Foto sintetis disimpan privat di `.tmp/local-ai/media` dan diproses oleh PaddleOCR melalui adapter WhatsApp simulasi.
 
 4. Masuk dengan `admin@example.invalid` / `sobatnira-demo`, buka **Pekerjaan** dari Beranda **Pabrik Demo**. Gunakan ID tugas dan kode kloter yang dicetak terminal.
 
@@ -38,7 +39,7 @@ Panggilan pertama PaddleOCR mengunduh model. Gunakan `PADDLE_PDX_CACHE_HOME` unt
 5. Buka **Kloter** dan pilih kloter A. Periksa berat 1250000 g, nira tersedia 90000 mL, serta ID nota truk, nota produksi dan kedua revisinya. Pilih **Tambah batch**. Pakai kode yang dicetak terminal, wajan 1, waktu masak setelah penggilingan, 40000 mL nira, hasil fisik 26 kg, grade A 25 kg dan Rp20000/kg. Isi biaya tebu, operasional, bahan dan lainnya masing-masing Rp100000, Rp20000, Rp5000 dan Rp0. Pilih **Reservasi nira**, lalu **Validasi** di Detail Batch.
 6. Buka rekap di **Laporan** dan pilih 16 November 2026 atau semua tanggal. Untuk kloter A, cocokkan 25 kg gula final dan margin Rp375.000 yang masih sementara. Gunakan **Simpan PDF** untuk memeriksa periode dan rincian batch. Terminal memeriksa 50000 mL sisa nira, satu reservasi yang dikonsumsi, replay pengesahan, penolakan akses pabrik lain, dan kesamaan ID snapshot rekap dan laba. Gunakan database lokal khusus demo. Tekan Ctrl+C untuk menghentikan layanan setelah pemeriksaan.
 
-Jika port 8080 sedang dipakai, set `LOCAL_WEB_PORT` ke port alternatif sebelum memulai stack dan gunakan port yang sama untuk Flutter. Event `whatsapp_photo_accepted`, `ocr_attempt` dan `whatsapp_notice_delivery` dapat dicocokkan lewat `revisionId`. Catat waktu penerimaan, waktu sejak revisi dibuat sampai percobaan OCR (`queueMs`), durasi ekstraksi (`extractionMs`) dan durasi pengiriman per jenis nota. Ukur persentil dan hasil tinjauan manual di staging dengan sampel yang sudah dianonimkan.
+Jika port web diubah melalui `LOCAL_WEB_PORT`, buat ulang build dengan port yang sama pada kedua definisi URL. Di preview lokal, formulir Pengaturan tanpa kontrak API memakai data sesi sintetis. Pengelolaan operator WhatsApp, pemasok, dan jenis tebu memakai API pabrik. Event `whatsapp_photo_accepted`, `ocr_attempt` dan `whatsapp_notice_delivery` dapat dicocokkan lewat `revisionId`. Catat waktu penerimaan, waktu sejak revisi dibuat sampai percobaan OCR (`queueMs`), durasi ekstraksi (`extractionMs`) dan durasi pengiriman per jenis nota. Ukur persentil dan hasil tinjauan manual di staging dengan sampel yang sudah dianonimkan.
 
 Uji memeriksa dua tipe nota, kutipan pesan bot pada foto produksi lanjutan, kiriman duplikat, operator nonaktif, revisi lama, akses lintas pabrik dan foto ulang. Tes PostgreSQL komponen juga memeriksa lease kedaluwarsa akibat restart dan kegagalan provider yang menuju antrean **Perlu tinjauan manual**. Untuk menjalankan layanan tanpa memasukkan kiriman uji, hilangkan `--smoke`. Gunakan tugas baru dengan status menunggu validasi pada setiap percobaan.
 

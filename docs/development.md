@@ -1,5 +1,7 @@
 # Setup development lokal
 
+Untuk menjalankan Flutter, NestJS, dan OCR bersama di satu alamat `http://127.0.0.1:8000`, ikuti [mode lokal sintetis](ai/README.md#mode-lokal-sintetis).
+
 Pasang Git dan alat sesuai area yang kamu kerjakan. Untuk menjalankan integrasi, siapkan alat dari ketiga baris.
 
 | Area | Alat | Titik awal |

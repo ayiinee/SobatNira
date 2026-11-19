@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { execFile, spawn } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import assert from 'node:assert/strict';
@@ -9,6 +9,7 @@ import { Pool } from 'pg';
 import plugin, { createBridge } from '../integrations/openclaw/index.mjs';
 import database from '../dist/documents/database.js';
 import migrations from '../dist/database/migrations.js';
+import { startLocalWeb } from './local-web.mjs';
 
 const root = resolve(import.meta.dirname, '../../..');
 const scratch = resolve(root, '.tmp/local-ai');
@@ -26,7 +27,9 @@ const outsider = '10000000-0000-4000-8000-000000000003';
 const outsideFactory = '10000000-0000-4000-8000-000000000004';
 const tenant = '10000000-0000-4000-8000-000000000005';
 const supplier = '10000000-0000-4000-8000-000000000006';
-const lotFixtures = ['A','B'].map((label) => {
+const ocrOnly = process.argv.includes('--ocr-smoke');
+const runSmoke = ocrOnly || process.argv.includes('--smoke');
+const lotFixtures = (runSmoke ? ['A', 'B'] : []).map((label) => {
   const id = randomUUID();
   return { id, label: `DEMO-${label}`, code: `OCR-${label}-${id.slice(0, 8)}` };
 });
@@ -38,11 +41,14 @@ const clearProviders = ['GEMINI_API_KEY','GEMINI_VISION_MODEL','OPENROUTER_API_K
   'OPENROUTER_ALLOWED_PROVIDERS','OPENROUTER_AGENT_FALLBACK_MODEL','R2_ENDPOINT','R2_BUCKET_NAME','R2_BUCKET','R2_ACCOUNT_ID',
   'R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','DATABASE_SSL_CA_FILE','REDIS_URL','SUPABASE_SECRET_KEY','BATCH_API_BASE_URL'];
 for (const key of clearProviders) process.env[key] = '';
-const ports = { api: +(process.env.LOCAL_API_PORT ?? 3000), ai: +(process.env.LOCAL_AI_PORT ?? 8000), auth: +(process.env.LOCAL_AUTH_PORT ?? 8077) };
+const serveWeb = process.argv.includes('--web');
+const ports = { api: +(process.env.LOCAL_API_PORT ?? 3000), ai: +(process.env.LOCAL_AI_PORT ?? (serveWeb ? 8001 : 8000)), auth: +(process.env.LOCAL_AUTH_PORT ?? 8077) };
 const url = (port) => `http://127.0.0.1:${port}`;
-const webPort = +(process.env.LOCAL_WEB_PORT ?? 8080);
+const webPort = +(process.env.LOCAL_WEB_PORT ?? (serveWeb ? 8000 : 8080));
 if (!Number.isInteger(webPort) || webPort < 1 || webPort > 65535) throw new Error('LOCAL_WEB_PORT tidak valid');
+if (serveWeb && Object.values(ports).includes(webPort)) throw new Error('Port web harus berbeda dari port layanan internal');
 const webOrigin = url(webPort);
+const webDirectory = resolve(root, process.env.LOCAL_WEB_DIRECTORY ?? 'apps/mobile/build/web');
 Object.assign(process.env, { SOBATNIRA_MODE: 'local', NODE_ENV: 'development', DATABASE_URL: scoped.href,
   API_HOST: '127.0.0.1', API_PORT: String(ports.api), DOCUMENT_WORKER_ENABLED: 'true',
   LOG_LEVEL: process.env.LOCAL_LOG_LEVEL ?? 'info', CORS_ORIGINS: `${webOrigin},http://localhost:${webPort}`,
@@ -55,6 +61,7 @@ const children = [];
 let service;
 let handler;
 let authServer;
+let webServer;
 let stopping = false;
 const receipts = [];
 
@@ -71,6 +78,10 @@ function requireExit(proc, message) {
 }
 
 async function boot() {
+  if (serveWeb) {
+    const bundle = await readFile(resolve(webDirectory, 'main.dart.js'), 'utf8').catch(() => '');
+    if (!bundle.includes(webOrigin)) throw new Error(`Build Flutter untuk ${webOrigin} belum tersedia. Ikuti panduan mode lokal di docs/ai/README.md.`);
+  }
   await mkdir(staging, { recursive: true });
   const initial = new Pool({ connectionString: local.href, connectionTimeoutMillis: 5_000 });
   try {
@@ -155,7 +166,12 @@ async function boot() {
       } };
     } } } } });
   service.start();
-  console.log(`Mode local aktif. API ${url(ports.api)} | Auth sintetis ${url(ports.auth)}`);
+  if (serveWeb) {
+    webServer = await startLocalWeb({ directory: webDirectory, webPort, apiPort: ports.api, authPort: ports.auth });
+    console.log(`SobatNira aktif di ${webOrigin}`);
+  } else {
+    console.log(`Mode local aktif. API ${url(ports.api)} | Auth sintetis ${url(ports.auth)}`);
+  }
 }
 
 async function waitFor(check, message, timeout = 35_000) {
@@ -344,6 +360,8 @@ async function smoke(ocrOnly = false) {
 async function stop() {
   if (stopping) return;
   stopping = true;
+  webServer?.closeAllConnections();
+  await new Promise((resolve) => webServer ? webServer.close(resolve) : resolve());
   await service?.stop();
   await Promise.all(children.filter((p) => p.pid && p.exitCode === null).map((p) => {
     if (process.platform === 'win32') {
@@ -359,9 +377,8 @@ async function stop() {
 
 for (const signal of ['SIGINT','SIGTERM']) process.on(signal, () => { void stop().then(() => process.exit(0)); });
 try {
-  const ocrOnly = process.argv.includes('--ocr-smoke');
   await boot();
-  if (ocrOnly || process.argv.includes('--smoke')) await smoke(ocrOnly);
+  if (runSmoke) await smoke(ocrOnly);
   if (ocrOnly) await stop();
 }
 catch (error) { console.error(error.message); await stop(); process.exitCode = 1; }

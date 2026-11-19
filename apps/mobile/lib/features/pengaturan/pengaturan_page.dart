@@ -13,6 +13,7 @@ class PengaturanPage extends StatelessWidget {
     required this.onNavigate,
     this.connectedProfile,
     this.onConnectedEntry,
+    this.allowSessionSettings = false,
     this.onSignOut,
     this.catalogLinks = const {},
     super.key,
@@ -22,6 +23,7 @@ class PengaturanPage extends StatelessWidget {
   final ValueChanged<NiraTab> onNavigate;
   final String? connectedProfile;
   final Map<SettingSection, VoidCallback>? onConnectedEntry;
+  final bool allowSessionSettings;
   final VoidCallback? onSignOut;
   final Map<String, VoidCallback> catalogLinks;
 
@@ -95,9 +97,11 @@ class PengaturanPage extends StatelessWidget {
 
   Widget _row(SettingEntry entry, BuildContext context) {
     final callbacks = onConnectedEntry;
-    final VoidCallback? open = callbacks == null
-        ? () => _open(context, entry)
-        : callbacks[entry.section];
+    final open =
+        callbacks?[entry.section] ??
+        (callbacks == null || allowSessionSettings
+            ? () => _open(context, entry)
+            : null);
     return Semantics(
       label: entry.title,
       button: open != null,
