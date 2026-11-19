@@ -29,7 +29,7 @@ Panggilan pertama PaddleOCR mengunduh model. Gunakan `PADDLE_PDX_CACHE_HOME` unt
 2. Dari `apps/mobile`, buat build dari entry point utama dengan satu origin lokal.
 
    ```sh
-   flutter build web -t lib/main.dart --dart-define=SOBATNIRA_MODE=local --dart-define=API_BASE_URL=http://127.0.0.1:8000 --dart-define=SUPABASE_URL=http://127.0.0.1:8000 --dart-define=SUPABASE_PUBLISHABLE_KEY=local-synthetic-publishable
+   flutter build web --no-web-resources-cdn -t lib/main.dart --dart-define=SOBATNIRA_MODE=local --dart-define=API_BASE_URL=http://127.0.0.1:8000 --dart-define=SUPABASE_URL=http://127.0.0.1:8000 --dart-define=SUPABASE_PUBLISHABLE_KEY=local-synthetic-publishable
    ```
 
 3. Dari `apps/api`, jalankan perintah berikut dengan database A. Pada checkout B gunakan `sobatnira_accept_b` setelah proses checkout A dihentikan. Di Bash gunakan `export LOCAL_DATABASE_URL='…'` dan `npm`.
@@ -39,7 +39,7 @@ Panggilan pertama PaddleOCR mengunduh model. Gunakan `PADDLE_PDX_CACHE_HOME` unt
    npm.cmd run local:stack -- --web --acceptance
    ```
 
-   Buka `http://127.0.0.1:8000/` di profil browser bersih. Alamat ini menyajikan Flutter, NestJS, dan login sintetis. Bootstrap menerapkan migrasi dengan urutan produksi kemudian OCR (`sobatnira_local`), menyiapkan akun serta dua kloter uji, dan menjalankan worker NestJS serta FastAPI OCR internal (port loopback 8001). `--acceptance` memakai empat PNG sintetis dari [`apps/ai/fixtures/acceptance`](../../apps/ai/fixtures/acceptance) sehingga input OCR identik walaupun font sistem berbeda. Foto dibuat dengan `apps/ai/synthetic_notes.py`. Adapter simulasi memanggil PaddleOCR CPU dan menyimpan salinan privat di `.tmp/local-ai/media`. Tunggu terminal menampilkan tiga tugas siap diproses.
+   Buka `http://127.0.0.1:8000/` di profil browser bersih. Alamat ini menyajikan Flutter beserta CanvasKit lokal, NestJS, dan login sintetis. Bootstrap menerapkan migrasi dengan urutan produksi kemudian OCR (`sobatnira_local`), menyiapkan akun serta dua kloter uji, dan menjalankan worker NestJS serta FastAPI OCR internal (port loopback 8001). `--acceptance` memakai empat PNG sintetis dari [`apps/ai/fixtures/acceptance`](../../apps/ai/fixtures/acceptance) sehingga input OCR identik walaupun font sistem berbeda. Foto dibuat dengan `apps/ai/synthetic_notes.py`. Adapter simulasi memanggil PaddleOCR CPU dan menyimpan salinan privat di `.tmp/local-ai/media`. Tunggu terminal menampilkan tiga tugas siap diproses.
 
 4. Masuk dengan `admin@example.invalid` / `sobatnira-demo`, buka **Pekerjaan** dari Beranda **Pabrik Demo**. Gunakan ID tugas dan kode kloter yang dicetak terminal.
 
