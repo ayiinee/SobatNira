@@ -609,7 +609,8 @@ class NiraPageBody extends SingleChildRenderObjectWidget {
       _PageBodyBox(height, firstPage);
 
   @override
-  void updateRenderObject(BuildContext context, covariant _PageBodyBox box) {
+  void updateRenderObject(BuildContext context, RenderObject renderObject) {
+    final box = renderObject as _PageBodyBox;
     box.height = height;
     box.firstPage = firstPage;
     box.markNeedsLayout();

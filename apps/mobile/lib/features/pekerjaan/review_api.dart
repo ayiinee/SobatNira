@@ -359,7 +359,7 @@ class ReviewApi {
     request.headers.addAll({
       ..._headers,
       'Content-Type': 'application/json',
-      if (requestId != null) 'idempotency-key': requestId,
+      'idempotency-key': ?requestId,
     });
     request.body = jsonEncode(values);
     return _json(
