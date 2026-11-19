@@ -61,10 +61,10 @@ class _LaporanPageState extends State<LaporanPage> {
           child: widget.approvedLots != null
               ? ListView(
                   key: const PageStorageKey('laporan-connected-scroll'),
-                  padding: const EdgeInsets.fromLTRB(
-                    niraInset,
+                  padding: EdgeInsets.fromLTRB(
+                    niraPageInset(context),
                     NiraSpace.md,
-                    niraInset,
+                    niraPageInset(context),
                     NiraSpace.lg,
                   ),
                   children: [_connectedReport()],

@@ -29,9 +29,11 @@ class _KloterProcessPageState extends State<KloterProcessPage> {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: widget.demo,
     builder: (context, _) {
+      final kloter = widget.kloter;
       final intake = _selected == 0;
-      final connected = widget.kloter.id != null;
-      final review = intake ? widget.kloter.intake : widget.kloter.milling;
+      final connected = kloter.id != null;
+      final review = intake ? kloter.intake : kloter.milling;
+      final inset = niraPageInset(context);
       return NiraScaffold(
         tab: NiraTab.kloter,
         onNavigate: widget.onNavigate,
@@ -53,11 +55,17 @@ class _KloterProcessPageState extends State<KloterProcessPage> {
                     ? reviewedActionHeight
                     : reviewActionHeight,
               ),
-        body: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+        body: KloterDetailBody(
+          section: _selected,
+          padding: EdgeInsets.fromLTRB(
+            inset,
+            NiraSpace.lg,
+            inset,
+            NiraSpace.sm,
+          ),
+          header: [
             const DetailTitle('Detail kloter'),
-            KloterHeading(widget.kloter),
+            KloterHeading(kloter),
             const SizedBox(height: 12),
             NiraTabs(
               labels: const ['Tebu masuk', 'Penggilingan'],
@@ -68,70 +76,45 @@ class _KloterProcessPageState extends State<KloterProcessPage> {
               inset: 27,
               onSelected: (value) => setState(() => _selected = value),
             ),
-            Expanded(
-              child: ListView(
-                key: ValueKey(_selected),
-                padding: const EdgeInsets.fromLTRB(
-                  niraInset,
-                  NiraSpace.lg,
-                  niraInset,
-                  NiraSpace.sm,
+          ],
+          children: [
+            if (connected)
+              DocumentLink(
+                'Foto, bukti, dan revisi di Pekerjaan',
+                widget.onOpenPekerjaan!,
+              )
+            else
+              const DocumentPreview(batch: false),
+            const SizedBox(height: NiraSpace.xl),
+            const DetailSectionTitle('Ringkasan proses'),
+            const SizedBox(height: NiraSpace.sm),
+            DetailMetrics([
+              if (intake) ...[
+                ('Tebu bersih', kloter.weight),
+                ('Brix tebu', formatQuantity(kloter.brix, '°Bx')),
+              ] else if (connected)
+                ('Nira dihasilkan', formatQuantity(kloter.juiceLiters, 'L'))
+              else
+                (
+                  'Nira batch tercatat',
+                  formatQuantity(kloter.batchJuiceLiters, 'L'),
                 ),
-                children: [
-                  if (connected)
-                    DocumentLink(
-                      'Foto, bukti, dan revisi di Pekerjaan',
-                      widget.onOpenPekerjaan!,
-                    )
-                  else
-                    const DocumentPreview(batch: false),
-                  const SizedBox(height: NiraSpace.xl),
-                  const DetailSectionTitle('Ringkasan proses'),
-                  const SizedBox(height: NiraSpace.sm),
-                  DetailMetrics(
-                    connected
-                        ? (intake
-                              ? [
-                                  ('Tebu bersih', widget.kloter.weight),
-                                  (
-                                    'Brix tebu',
-                                    formatQuantity(widget.kloter.brix, '°Bx'),
-                                  ),
-                                ]
-                              : [
-                                  (
-                                    'Nira dihasilkan',
-                                    formatQuantity(
-                                      widget.kloter.juiceLiters,
-                                      'L',
-                                    ),
-                                  ),
-                                ])
-                        : intake
-                        ? const [
-                            ('Tebu bersih', '1.500Kg'),
-                            ('Brix tebu', '90Kg'),
-                          ]
-                        : const [('Nira dihasilkan', '360L')],
-                  ),
-                  const SizedBox(height: NiraSpace.lg),
-                  EditableFields(
-                    fields: review.fields,
-                    onEdit: connected
-                        ? null
-                        : (field) async {
-                            final value = await editDemoValue(
-                              context,
-                              label: field.label,
-                              initial: field.value,
-                            );
-                            if (mounted && value != null) {
-                              widget.demo.edit(review, field, value);
-                            }
-                          },
-                  ),
-                ],
-              ),
+            ]),
+            const SizedBox(height: NiraSpace.lg),
+            EditableFields(
+              fields: review.fields,
+              onEdit: connected
+                  ? null
+                  : (field) async {
+                      final value = await editDemoValue(
+                        context,
+                        label: field.label,
+                        initial: field.value,
+                      );
+                      if (mounted && value != null) {
+                        widget.demo.edit(review, field, value);
+                      }
+                    },
             ),
           ],
         ),

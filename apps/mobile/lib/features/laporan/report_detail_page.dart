@@ -73,10 +73,10 @@ class ReportDetailPage extends StatelessWidget {
     tab: NiraTab.laporan,
     onNavigate: onNavigate,
     body: ListView(
-      padding: const EdgeInsets.fromLTRB(
-        niraInset,
+      padding: EdgeInsets.fromLTRB(
+        niraPageInset(context),
         NiraSpace.sm,
-        niraInset,
+        niraPageInset(context),
         NiraSpace.lg,
       ),
       children: [

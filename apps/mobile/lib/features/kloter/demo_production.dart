@@ -95,6 +95,7 @@ class DemoProduction extends ChangeNotifier {
         DemoKloter('MJT-190926-1A', 13, KloterStatus.done, 'Pemasok Contoh D'),
         DemoKloter('MJT-180926-1A', 12, KloterStatus.done, 'Pemasok Contoh E'),
         DemoKloter('MJT-170926-1A', 11, KloterStatus.done, 'Pemasok Contoh F'),
+        DemoKloter('MJT-160926-1A', 10, KloterStatus.done, 'Pemasok Contoh G'),
       ];
 
   DemoProduction.empty() : kloter = [];
@@ -182,8 +183,19 @@ class DemoKloter {
   final DateTime date;
   String? get id => record?['id'] as String?;
   num? get netWeightKg => _number('netWeightGrams', divisor: 1000);
-  num? get brix => _number('brix');
+  num? get brix => record == null ? demoLotFor(code).brix : _number('brix');
   num? get juiceLiters => _number('juiceProducedLiters');
+
+  num? get batchJuiceLiters {
+    if (batches.isEmpty) return null;
+    num total = 0;
+    for (final batch in batches) {
+      final liters = num.tryParse(batch.juice.value.replaceAll(',', '.'));
+      if (liters == null || !liters.isFinite || liters < 0) return null;
+      total += liters;
+    }
+    return total;
+  }
 
   num? _number(String field, {int divisor = 1}) {
     final value = num.tryParse(record?[field]?.toString() ?? '');
@@ -218,25 +230,17 @@ class DemoReview {
 }
 
 class DemoBatch {
-  DemoBatch(this.number, {required bool verified, this.lot})
-    : review = DemoReview([
-        DemoField(
-          'Nira yang dimasak',
-          '${80 + ((lot?.caneKg ?? 1500) + number * 7) % 36}',
-          unit: 'L',
-        ),
-        DemoField('Brix tebu acuan', '${15 + number % 6}', unit: ' °Bx'),
-        DemoField(
-          'Jam turun',
-          '${8 + number + (lot?.day ?? 20) % 4}.${number.isEven ? '15' : '40'}',
-        ),
-        DemoField(
-          'Hasil timbang',
-          '${(lot?.batchWeights[number - 1] ?? 20) + 2 + number % 3}',
-          unit: 'Kg',
-        ),
-        DemoField('Bagian kloter', '100', unit: '%'),
-      ], verified: verified) {
+  DemoBatch(this.number, {required bool verified, this.lot}) {
+    review = DemoReview([
+      juice,
+      _referenceBrix,
+      DemoField(
+        'Jam turun',
+        '${8 + number + (lot?.day ?? 20) % 4}.${number.isEven ? '15' : '40'}',
+      ),
+      physicalWeight,
+      DemoField('Bagian kloter', '100', unit: '%'),
+    ], verified: verified);
     grade = ['A', 'B', 'C'][(number - 1) % 3];
     gradeWeight = '${lot?.batchWeights[number - 1] ?? 20}';
     cooking[0].value = formatDate(DateTime(2026, 10, lot?.day ?? 20));
@@ -257,8 +261,23 @@ class DemoBatch {
               {'A': 20000, 'B': 18000, 'C': 15000}[grade]!)
           .round();
   final int number;
-  final DemoReview review;
-  final cooking = [
+  late final DemoReview review;
+  late final juice = DemoField(
+    'Nira yang dimasak',
+    '${80 + ((lot?.caneKg ?? 1500) + number * 7) % 36}',
+    unit: 'L',
+  );
+  late final physicalWeight = DemoField(
+    'Hasil timbang',
+    '${(lot?.batchWeights[number - 1] ?? 20) + 2 + number % 3}',
+    unit: 'Kg',
+  );
+  late final _referenceBrix = DemoField(
+    'Brix tebu acuan',
+    formatQuantity(lot?.brix ?? 18.5),
+    unit: ' °Bx',
+  );
+  late final cooking = [
     DemoField('Tanggal masak', '20 Oktober 2026'),
     DemoField('Jenis tebu', 'Bululawang (BL)'),
     DemoField('Asal nira', 'Pemasok Contoh B'),
@@ -266,7 +285,7 @@ class DemoBatch {
     DemoField('Sesi', 'Siang'),
     DemoField('Takaran gamping', '1/2 wadah'),
     DemoField('BTP lainnya', 'Tidak digunakan'),
-    DemoField('Brix tebu acuan', '18,5', unit: ' °Bx'),
+    _referenceBrix,
   ];
 
   static const gradePrices = {

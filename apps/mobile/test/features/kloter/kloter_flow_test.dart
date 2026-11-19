@@ -92,7 +92,7 @@ void main() {
     },
   );
 
-  testWidgets('pagination menampilkan maksimal 10 grup tanggal per halaman', (
+  testWidgets('pagination menampilkan maksimal 10 tanggal per halaman', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(393, 1100));
@@ -121,6 +121,7 @@ void main() {
     );
     expect(dateHeaders, findsNWidgets(10));
     expect(find.text('1 dari 2'), findsOneWidget);
+    expect(find.byTooltip('Sebelumnya'), findsNothing);
     expect(find.text('10 Oktober 2026'), findsNothing);
     await tap(tester, find.text('11 Oktober 2026'));
     expect(find.text('KLOTER-11'), findsOneWidget);
@@ -128,9 +129,10 @@ void main() {
 
     await tap(tester, find.byTooltip('Berikutnya'));
     expect(find.text('2 dari 2'), findsOneWidget);
+    expect(find.byTooltip('Berikutnya'), findsNothing);
     expect(dateHeaders, findsOneWidget);
-    expect(find.text('KLOTER-10'), findsOneWidget);
     expect(find.text('11 Oktober 2026'), findsNothing);
+    expect(find.text('KLOTER-10'), findsOneWidget);
     await tap(tester, find.byTooltip('Sebelumnya'));
     expect(dateHeaders, findsNWidgets(10));
 
@@ -159,6 +161,24 @@ void main() {
     expect(find.byType(KloterCard).evaluate().length, greaterThanOrEqualTo(1));
 
     await tap(tester, find.bySemanticsLabel('Kloter'));
+    final next = find.byTooltip('Berikutnya');
+    expect(next.hitTestable(), findsNothing);
+    await tester.scrollUntilVisible(
+      next,
+      160,
+      scrollable: find.descendant(
+        of: find.byKey(const PageStorageKey('kloter-scroll')),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(next.hitTestable(), findsOneWidget);
+    expect(find.text('1 dari 2'), findsOneWidget);
+    await tap(tester, next);
+    expect(find.text('2 dari 2'), findsOneWidget);
+    expect(find.text('MJT-160926-1A'), findsOneWidget);
+    await tap(tester, find.byTooltip('Sebelumnya'));
+
     void expectSearchAligned() {
       final search = InputDecorator.containerOf(
         tester.element(find.byType(EditableText)),
@@ -208,9 +228,58 @@ void main() {
     expect(find.text('MJT-260926-2A'), findsOneWidget);
   });
 
+  testWidgets('angka detail mengikuti kloter dan perubahan batch demo', (
+    tester,
+  ) async {
+    await openDemo(tester, size: const Size(393, 1000));
+    await tap(tester, find.bySemanticsLabel('Kloter'));
+    await tester.enterText(find.byType(TextField), 'mjt-220926');
+    await tester.pumpAndSettle();
+
+    expect(find.text('1.435Kg'), findsOneWidget);
+    await tap(tester, find.text('MJT-220926-1A'));
+    expect(find.text('1.435Kg'), findsOneWidget);
+    expect(find.text('19,4 °Bx'), findsOneWidget);
+    expect(find.text('267 L'), findsOneWidget);
+    expect(find.text('82L'), findsOneWidget);
+    expect(find.text('28Kg'), findsOneWidget);
+    expect(find.text('96L'), findsOneWidget);
+    expect(find.text('31Kg'), findsOneWidget);
+
+    await tap(tester, find.text('Data tebu dan penggilingan'));
+    expect(find.text('1.435Kg'), findsOneWidget);
+    expect(find.text('19,4 °Bx'), findsOneWidget);
+    await tap(tester, find.text('Penggilingan'));
+    expect(find.text('267 L'), findsOneWidget);
+    await tap(tester, find.byTooltip('Kembali'));
+
+    await tap(tester, find.text('Batch 3'));
+    expect(find.text('96L'), findsOneWidget);
+    expect(find.text('31Kg'), findsOneWidget);
+    await tap(tester, find.text('Nira yang dimasak'));
+    await tester.enterText(find.byType(TextFormField), '101,5');
+    await tap(tester, find.text('Simpan'));
+    await tap(tester, find.byTooltip('Kembali'));
+    expect(find.text('101,5L'), findsOneWidget);
+    expect(find.text('272,5 L'), findsOneWidget);
+
+    await tap(tester, find.byTooltip('Kembali'));
+    await tap(tester, find.text('MJT-220926-2A'));
+    expect(find.text('1.580Kg'), findsOneWidget);
+    expect(find.text('567 L'), findsOneWidget);
+    expect(find.text('83L'), findsOneWidget);
+    expect(find.text('101,5L'), findsNothing);
+  });
+
   testWidgets('edit, verifikasi dan validasi batch tersimpan selama sesi', (
     tester,
   ) async {
+    const statusBarHeight = 44.0;
+    tester.view.viewPadding = FakeViewPadding(
+      top: statusBarHeight * tester.view.devicePixelRatio,
+    );
+    addTearDown(tester.view.resetViewPadding);
+
     Rect reviewButtonRect(String label) => tester.getRect(
       find.descendant(
         of: find.widgetWithText(NiraButton, label),
@@ -283,6 +352,15 @@ void main() {
     expect(find.text('Batch tervalidasi'), findsOneWidget);
     expect(validatedNotice, findsOneWidget);
     expect(find.text('Kloter MJT-260926-2A'), findsOneWidget);
+    final noticeSurface = find
+        .ancestor(of: validatedNotice, matching: find.byType(Material))
+        .first;
+    final noticeBounds = tester.getRect(noticeSurface);
+    final contentBounds = tester.getRect(find.byType(EditableFields));
+    expect(noticeBounds.left, contentBounds.left);
+    expect(noticeBounds.right, contentBounds.right);
+    expect(noticeBounds.top, statusBarHeight);
+    expect(tester.widget<Material>(noticeSurface).color, Colors.white);
     final validationButton = reviewButtonRect('Batch tervalidasi');
     expect(validationButton.top, reviewedMillingButton.top);
     expect(validationButton.bottom, reviewedMillingButton.bottom);
@@ -330,10 +408,33 @@ void main() {
     final reopenedNotice = find.text('Validasi Batch 3 dibatalkan');
     expect(reopenedNotice, findsOneWidget);
     expect(find.text('Kloter MJT-260926-2A'), findsOneWidget);
+    final reopenedBounds = tester.getRect(
+      find.ancestor(of: reopenedNotice, matching: find.byType(Material)).first,
+    );
+    expect(reopenedBounds.left, contentBounds.left);
+    expect(reopenedBounds.right, contentBounds.right);
     await tap(tester, find.text('Validasi'));
-    await tap(tester, find.text('Konfirmasi'));
+    await tester.tap(find.text('Konfirmasi'));
+    await tester.pump();
+    expect(validatedNotice, findsNothing);
+    for (
+      var frame = 0;
+      frame < 30 && validatedNotice.evaluate().isEmpty;
+      frame++
+    ) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(find.byType(AlertDialog), findsNothing);
     expect(validatedNotice, findsOneWidget);
     expect(reopenedNotice, findsNothing);
+    final enteringTop = tester.getTopLeft(noticeSurface).dy;
+    expect(enteringTop, lessThan(statusBarHeight));
+    await tester.pump(const Duration(milliseconds: 200));
+    final midwayTop = tester.getTopLeft(noticeSurface).dy;
+    expect(midwayTop, greaterThan(enteringTop));
+    expect(midwayTop, lessThan(statusBarHeight));
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(noticeSurface).dy, statusBarHeight);
     await tap(tester, find.text('Ringkasan'));
     await tester.pump(const Duration(seconds: 5));
     await tap(tester, find.byTooltip('Kembali'));
@@ -434,6 +535,6 @@ void main() {
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -440));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    expect(find.text('Kloter'), findsWidgets);
+    expect(find.bySemanticsLabel('Kloter').hitTestable(), findsOneWidget);
   });
 }

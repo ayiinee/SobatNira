@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../sobatnira_ui.dart';
 import 'demo_production.dart';
@@ -38,7 +39,7 @@ class _BatchDetailPageState extends State<BatchDetailPage>
     Tween(
       begin: const Offset(0, -1),
       end: Offset.zero,
-    ).chain(CurveTween(curve: Curves.easeOutCubic)),
+    ).chain(CurveTween(curve: Curves.easeInOutCubic)),
   );
 
   @override
@@ -67,60 +68,74 @@ class _BatchDetailPageState extends State<BatchDetailPage>
     }
 
     _noticeTimer?.cancel();
-    setState(() => _validationNotice = validated);
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     _noticeAnimation
       ..duration = reduceMotion
           ? Duration.zero
-          : const Duration(milliseconds: 280)
+          : const Duration(milliseconds: 400)
       ..reverseDuration = reduceMotion
           ? Duration.zero
-          : const Duration(milliseconds: 240);
-    if (_noticeAnimation.isCompleted) {
-      _onNoticeStatus(AnimationStatus.completed);
-    } else {
-      _noticeAnimation.forward();
-    }
+          : const Duration(milliseconds: 240)
+      ..forward(from: 0);
+    setState(() => _validationNotice = validated);
   }
 
   @override
-  Widget build(BuildContext context) => Stack(
-    fit: StackFit.expand,
-    children: [
-      _buildScaffold(),
-      if (_validationNotice case final validated?)
+  Widget build(BuildContext context) {
+    final safeInsets = MediaQuery.viewPaddingOf(context);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _buildScaffold(),
         Positioned(
-          top: MediaQuery.viewPaddingOf(context).top,
+          top: 0,
           left: 0,
           right: 0,
-          child: IgnorePointer(
-            child: ClipRect(
-              child: SlideTransition(
-                position: _noticeSlide,
+          height: safeInsets.top,
+          child: const AnnotatedRegion<SystemUiOverlayStyle>(
+            value: SystemUiOverlayStyle(
+              statusBarColor: Colors.transparent,
+              statusBarIconBrightness: Brightness.light,
+              statusBarBrightness: Brightness.dark,
+            ),
+            child: ColoredBox(color: niraGreen),
+          ),
+        ),
+        if (_validationNotice case final validated?)
+          Positioned(
+            top: safeInsets.top,
+            left: 0,
+            right: 0,
+            child: IgnorePointer(
+              child: ClipRect(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    niraInset,
+                  padding: EdgeInsets.fromLTRB(
+                    safeInsets.left + niraPageInset(context),
+                    0,
+                    safeInsets.right + niraPageInset(context),
                     NiraSpace.sm,
-                    niraInset,
-                    NiraSpace.md,
                   ),
-                  child: _BatchValidationNotice(
-                    batchNumber: _batch.number,
-                    kloterCode: widget.kloterCode,
-                    validated: validated,
+                  child: SlideTransition(
+                    position: _noticeSlide,
+                    child: _BatchValidationNotice(
+                      batchNumber: _batch.number,
+                      kloterCode: widget.kloterCode,
+                      validated: validated,
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-    ],
-  );
+      ],
+    );
+  }
 
   Widget _buildScaffold() => ListenableBuilder(
     listenable: widget.demo,
     builder: (context, _) {
       final reviewed = _batch.review.verified;
+      final inset = niraPageInset(context);
       return NiraScaffold(
         tab: NiraTab.kloter,
         onNavigate: widget.onNavigate,
@@ -131,17 +146,18 @@ class _BatchDetailPageState extends State<BatchDetailPage>
           onVerify: () => _updateValidation(true),
           onReopen: () => _updateValidation(false),
         ),
-        body: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+        body: KloterDetailBody(
+          section: _tab,
+          padding: EdgeInsets.fromLTRB(
+            inset,
+            NiraSpace.sm,
+            inset,
+            NiraSpace.xs,
+          ),
+          header: [
             const DetailTitle('Detail batch'),
             Padding(
-              padding: const EdgeInsets.fromLTRB(
-                niraInset,
-                NiraSpace.xs,
-                niraInset,
-                0,
-              ),
+              padding: EdgeInsets.fromLTRB(inset, NiraSpace.xs, inset, 0),
               child: Row(
                 children: [
                   Expanded(
@@ -162,23 +178,12 @@ class _BatchDetailPageState extends State<BatchDetailPage>
               height: 44,
               inset: 12,
             ),
-            Expanded(
-              child: ListView(
-                key: ValueKey(_tab),
-                padding: const EdgeInsets.fromLTRB(
-                  niraInset,
-                  NiraSpace.sm,
-                  niraInset,
-                  NiraSpace.xs,
-                ),
-                children: switch (_tab) {
-                  0 => _summary(),
-                  1 => _cooking(),
-                  _ => _grade(),
-                },
-              ),
-            ),
           ],
+          children: switch (_tab) {
+            0 => _summary(),
+            1 => _cooking(),
+            _ => _grade(),
+          },
         ),
       );
     },
@@ -359,11 +364,12 @@ class _BatchValidationNotice extends StatelessWidget {
       label: '$title. $detail',
       excludeSemantics: true,
       child: Material(
-        color: niraPaper,
+        color: Colors.white,
+        surfaceTintColor: Colors.transparent,
         elevation: 4,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(niraRadius),
-          side: BorderSide(color: accent.withValues(alpha: .3)),
+          side: const BorderSide(color: niraLine),
         ),
         child: Padding(
           padding: const EdgeInsets.all(NiraSpace.md),

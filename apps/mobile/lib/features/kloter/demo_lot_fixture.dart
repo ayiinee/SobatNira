@@ -11,6 +11,8 @@ class DemoLotFixture {
   );
   final String code, supplier;
   final int day, caneKg, sugarKg, marginRupiah, batchCount;
+  num get brix => (165 + caneKg % 37) / 10;
+
   List<int> get batchWeights {
     final weights = <int>[];
     var remaining = sugarKg;
@@ -52,6 +54,7 @@ const demoLotFixtures = [
   DemoLotFixture('MJT-190926-1A', 13, 'Warto', 2080, 145, 685000, 5),
   DemoLotFixture('MJT-180926-1A', 12, 'Sari', 1360, 87, 245000, 3),
   DemoLotFixture('MJT-170926-1A', 11, 'Tono', 1620, 108, 390000, 4),
+  DemoLotFixture('MJT-160926-1A', 10, 'Pemasok Contoh G', 1480, 91, 410000, 4),
 ];
 DemoLotFixture demoLotFor(String code) => demoLotFixtures.firstWhere(
   (lot) => lot.code == code,

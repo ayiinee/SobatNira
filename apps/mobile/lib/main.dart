@@ -16,6 +16,7 @@ import 'features/kloter/kloter_detail_page.dart';
 import 'features/kloter/kloter_detail_widgets.dart';
 import 'features/kloter/kloter_list_page.dart';
 import 'features/laporan/demo_analytics.dart';
+import 'features/laporan/connected_reports.dart';
 import 'features/laporan/laporan_page.dart';
 import 'features/laporan/connected_report_view.dart';
 import 'features/laporan/report_detail_page.dart';
@@ -543,11 +544,15 @@ class _LotDetailState extends State<_LotDetail> {
         ),
         if (batches.isEmpty) const Text('Belum ada batch sah.'),
         for (final batch in batches)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(batch['code'] as String),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => open(batch),
+          Padding(
+            padding: const EdgeInsets.only(bottom: NiraSpace.md),
+            child: KloterBatchTile(
+              title: batch['code'] as String,
+              juice: '${reportNumber(batch['quantityMl'])} ml',
+              physicalWeight: '${reportNumber(batch['physicalWeightKg'])} kg',
+              pending: false,
+              onTap: () => open(batch),
+            ),
           ),
       ],
     );

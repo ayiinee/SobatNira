@@ -117,10 +117,10 @@ class _ConnectedReportViewState extends State<ConnectedReportView> {
           ),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(
-                niraInset,
-                niraInset,
-                niraInset,
+              padding: EdgeInsets.fromLTRB(
+                niraPageInset(context),
+                niraPageInset(context),
+                niraPageInset(context),
                 112,
               ),
               children: [
@@ -246,7 +246,7 @@ class _ConnectedReportExportState extends State<ConnectedReportExport> {
           SafeArea(
             bottom: false,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: niraInset),
+              padding: EdgeInsets.symmetric(horizontal: niraPageInset(context)),
               child: ConnectedReportControls(reports: widget.reports),
             ),
           ),
@@ -306,10 +306,10 @@ class ConnectedReportDetail extends StatelessWidget {
       tab: NiraTab.laporan,
       onNavigate: onNavigate,
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(
-          niraInset,
-          niraInset,
-          niraInset,
+        padding: EdgeInsets.fromLTRB(
+          niraPageInset(context),
+          niraPageInset(context),
+          niraPageInset(context),
           112,
         ),
         children: [

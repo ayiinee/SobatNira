@@ -45,30 +45,28 @@ class KloterDetailPage extends StatelessWidget {
               const DetailTitle('Detail kloter'),
               KloterHeading(kloter),
               Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  niraInset,
+                padding: EdgeInsets.fromLTRB(
+                  niraPageInset(context),
                   NiraSpace.xl,
-                  niraInset,
+                  niraPageInset(context),
                   NiraSpace.lg,
                 ),
                 child: Column(
                   children: [
-                    DetailMetrics(
-                      kloter.record == null
-                          ? const [
-                              ('Tebu bersih', '1.500Kg'),
-                              ('Brix tebu', '90Kg'),
-                              ('Nira tercatat', '360L'),
-                            ]
-                          : [
-                              ('Tebu bersih', kloter.weight),
-                              ('Brix tebu', formatQuantity(kloter.brix, '°Bx')),
-                              (
-                                'Nira dihasilkan',
-                                formatQuantity(kloter.juiceLiters, 'L'),
-                              ),
-                            ],
-                    ),
+                    DetailMetrics([
+                      ('Tebu bersih', kloter.weight),
+                      ('Brix tebu', formatQuantity(kloter.brix, '°Bx')),
+                      if (kloter.record == null)
+                        (
+                          'Nira batch',
+                          formatQuantity(kloter.batchJuiceLiters, 'L'),
+                        )
+                      else
+                        (
+                          'Nira dihasilkan',
+                          formatQuantity(kloter.juiceLiters, 'L'),
+                        ),
+                    ]),
                     if (stock != null) ...[
                       const SizedBox(height: NiraSpace.md),
                       stock!,
@@ -108,10 +106,10 @@ class KloterDetailPage extends StatelessWidget {
                 ),
               ),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  niraInset,
+                padding: EdgeInsets.fromLTRB(
+                  niraPageInset(context),
                   NiraSpace.lg,
-                  niraInset,
+                  niraPageInset(context),
                   NiraSpace.md,
                 ),
                 child: Column(
@@ -139,9 +137,12 @@ class KloterDetailPage extends StatelessWidget {
                     for (final batch in kloter.batches)
                       Padding(
                         padding: const EdgeInsets.only(bottom: NiraSpace.md),
-                        child: _BatchTile(
-                          batch,
-                          () => Navigator.of(context).push(
+                        child: KloterBatchTile(
+                          title: 'Batch ${batch.number}',
+                          juice: batch.juice.display,
+                          physicalWeight: batch.physicalWeight.display,
+                          pending: !batch.review.verified,
+                          onTap: () => Navigator.of(context).push(
                             MaterialPageRoute<void>(
                               builder: (_) => BatchDetailPage(
                                 batch: batch,
@@ -164,15 +165,24 @@ class KloterDetailPage extends StatelessWidget {
   );
 }
 
-class _BatchTile extends StatelessWidget {
-  const _BatchTile(this.batch, this.onTap);
+class KloterBatchTile extends StatelessWidget {
+  const KloterBatchTile({
+    required this.title,
+    required this.juice,
+    required this.physicalWeight,
+    required this.pending,
+    required this.onTap,
+    super.key,
+  });
 
-  final DemoBatch batch;
+  final String title;
+  final String juice;
+  final String physicalWeight;
+  final bool pending;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final pending = !batch.review.verified;
     const foreground = Colors.white;
     return Material(
       color: pending ? niraGold : niraGreen,
@@ -204,7 +214,7 @@ class _BatchTile extends StatelessWidget {
                       runSpacing: NiraSpace.xs,
                       children: [
                         Text(
-                          'Batch ${batch.number}',
+                          title,
                           style: niraText(
                             NiraType.section,
                             color: pending ? foreground : niraYellow,
@@ -215,9 +225,9 @@ class _BatchTile extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 2),
-                    _info(context, 'Nira batch', '180L', foreground),
+                    _info(context, 'Nira batch', juice, foreground),
                     const SizedBox(height: 2),
-                    _info(context, 'Hasil fisik', '90Kg', foreground),
+                    _info(context, 'Hasil fisik', physicalWeight, foreground),
                   ],
                 ),
               ),

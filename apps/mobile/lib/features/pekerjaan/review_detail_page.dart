@@ -270,8 +270,8 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
         final confirmation = task['operator_confirmation'] as Json?;
         final intake = task['intake'] as Json?;
         return ListView(
-          padding: const EdgeInsets.symmetric(
-            horizontal: niraInset,
+          padding: EdgeInsets.symmetric(
+            horizontal: niraPageInset(context),
             vertical: NiraSpace.lg,
           ),
           children: [
