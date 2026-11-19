@@ -52,6 +52,9 @@ export async function startLocalWeb({ directory, webPort, apiPort, authPort }) {
         'Content-Length': info.size,
         'Cache-Control': 'no-store',
         'X-Content-Type-Options': 'nosniff',
+        ...(extname(canonical) === '.html' && {
+          'Content-Security-Policy': "connect-src 'self' blob: data:; font-src 'self' blob: data:",
+        }),
       });
       if (incoming.method === 'HEAD') return outgoing.end();
       pipeline(createReadStream(canonical), outgoing, () => {});
