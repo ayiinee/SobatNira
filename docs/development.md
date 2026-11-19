@@ -53,7 +53,7 @@ Dari akar repo jalankan:
 .\dev-mobile.cmd --connected
 ```
 
-Perintah ini membuka Chrome di `http://127.0.0.1:8080` dengan layar login Supabase. Setelah masuk memakai akun Supabase yang memiliki membership pabrik, Kloter dan Pekerjaan mengambil data dari NestJS. [Panduan akses backend](backend-authentication.md) menjelaskan migrasi dan pemberian akses pabrik. Beranda dan Laporan pada mode demo belum merupakan layar data backend.
+Perintah ini membuka Chrome di `http://127.0.0.1:8080` dengan layar login Supabase. Setelah masuk memakai akun Supabase yang memiliki membership pabrik, Kloter dan Pekerjaan mengambil data dari NestJS. [Panduan akses backend](backend-authentication.md) menjelaskan migrasi dan pemberian akses pabrik. Beranda, Laporan, Laba dan Rekap pada mode connected memakai [laporan produksi terhubung](mobile-production-reports.md); mode demo tetap memakai fixture sintetis lokal.
 
 Launcher membaca `.env` menggunakan Node.js 24 dan membuat `.tmp/mobile/public-defines.json` yang diabaikan Git. Hanya `SOBATNIRA_MODE`, `API_BASE_URL`, `SUPABASE_URL`, dan publishable/anon key yang disertakan. Jangan memberikan `.env` backend langsung ke `--dart-define-from-file` karena semua nilainya dapat masuk ke aplikasi klien.
 

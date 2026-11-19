@@ -218,7 +218,7 @@ class DemoReview {
 }
 
 class DemoBatch {
-  DemoBatch(this.number, {required bool verified, DemoLotFixture? lot})
+  DemoBatch(this.number, {required bool verified, this.lot})
     : review = DemoReview([
         DemoField(
           'Nira yang dimasak',
@@ -251,6 +251,11 @@ class DemoBatch {
     cooking[5].value = ['1/2 wadah', '1 wadah', '1 1/2 wadah'][number % 3];
   }
 
+  final DemoLotFixture? lot;
+  int get productionValue =>
+      ((num.tryParse(gradeWeight.replaceAll(',', '.')) ?? 0) *
+              {'A': 20000, 'B': 18000, 'C': 15000}[grade]!)
+          .round();
   final int number;
   final DemoReview review;
   final cooking = [

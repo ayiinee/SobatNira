@@ -3,7 +3,7 @@ import 'demo_analytics.dart';
 
 // A read-only join of existing demo records. No production values are inferred.
 class ProductionRecap {
-  ProductionRecap(Iterable<RecapKloter> kloter)
+  ProductionRecap(Iterable<RecapKloter> kloter, {this.marginTotalOverride})
     : kloter = List.unmodifiable(kloter);
 
   factory ProductionRecap.fromRows(
@@ -69,18 +69,22 @@ class ProductionRecap {
             ),
       );
 
+  final String? marginTotalOverride;
   final List<RecapKloter> kloter;
   int get batchCount => kloter.fold(0, (sum, lot) => sum + lot.batches.length);
   int get marginCount => kloter.where((lot) => lot.margin != null).length;
   int get sugarCount =>
       kloter.where((lot) => readRecapNumber(lot.sugar) != null).length;
-  String get marginTotal => marginCount == 0
-      ? '-'
-      : 'Rp${formatRecapNumber(kloter.fold<num>(0, (sum, lot) => sum + (readRecapNumber(lot.margin) ?? 0)))}';
+  String get marginTotal =>
+      marginTotalOverride ??
+      (marginCount == 0
+          ? '-'
+          : 'Rp${formatRecapNumber(kloter.fold<num>(0, (sum, lot) => sum + (readRecapNumber(lot.margin) ?? 0)))}');
 }
 
 class RecapKloter {
   RecapKloter({
+    this.id,
     required this.code,
     required this.supplier,
     required this.date,
@@ -111,6 +115,7 @@ class RecapKloter {
     batches: lot?.batches.map(RecapBatch.fromDemo) ?? const [],
   );
 
+  final String? id;
   final String code, supplier, sugar, rendemen;
   final DateTime date;
   final String? cane, caneType, vehicle, margin, juice;
@@ -119,6 +124,7 @@ class RecapKloter {
 
 class RecapBatch {
   const RecapBatch({
+    this.code,
     required this.number,
     required this.shift,
     required this.brix,
@@ -142,6 +148,7 @@ class RecapBatch {
     verified: batch.review.verified,
   );
 
+  final String? code;
   final int number;
   final String? shift, brix, juice, lime, physical, time;
   final String grade;
@@ -159,7 +166,7 @@ class RecapBatch {
     'Status',
   ];
   List<String> get cells => [
-    '$number',
+    code ?? '$number',
     shift ?? '-',
     brix ?? '-',
     juice ?? '-',

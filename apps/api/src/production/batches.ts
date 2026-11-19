@@ -8,6 +8,7 @@ import { JuiceRepository } from '../juice/juice.repository';
 import { object, uuid, text, timestamp, scopeValues, found, parsePage } from './production.dto';
 import { decimal, sumDecimals, compareDecimals } from './decimal';
 import { calculateProductionPreview } from './calculation';
+import { productionReport, ProductionReportLot } from './production-report';
 export function parseBatch(input: unknown) {
     const b = object(input, ['id', 'lotId', 'code', 'wokNumber', 'occurredAt', 'quantityMl', 'physicalWeightKg', 'grades', 'synthetic']);
     if (!Number.isSafeInteger(b.wokNumber) || Number(b.wokNumber) < 1 || Number(b.wokNumber) > 10000)
@@ -109,6 +110,41 @@ export class Batches {
         const rows = await this.db.query(`WITH ${FACTORY_SCOPE_CTE} SELECT b.* FROM sobatnira.production_batches b JOIN authorized_scope s ON s."tenantId"=b.tenant_id AND s."factoryId"=b.factory_id ORDER BY b.occurred_at DESC,b.id LIMIT $4 OFFSET $5`, [...scopeValues(access), page.limit, page.offset]);
         return { items: rows.rows, ...page };
     }
+    async productionReport(access: FactoryAccess, query: unknown) {
+        const q = object(query, ['from', 'before', 'synthetic']);
+        if (q.synthetic !== undefined && !['true', 'false'].includes(String(q.synthetic)))
+            throw new BadRequestException('synthetic tidak valid.');
+        const from = q.from === undefined ? null : timestamp(q.from, 'from');
+        const before = q.before === undefined ? null : timestamp(q.before, 'before');
+        if (from && before && from >= before) throw new BadRequestException('Periode tidak valid.');
+        // A single statement gives receipt, latest cumulative snapshot and approved
+        // batch details one consistent PostgreSQL read snapshot, scoped by membership.
+        const rows = await this.db.query<ProductionReportLot>(`WITH ${FACTORY_SCOPE_CTE}
+          SELECT l.id AS "lotId", COALESCE(l.display_code,l.id::text) AS code,
+            s.name AS supplier,l.received_at AS "receivedAt",i.net_weight_kg::text AS "caneNetKg",
+            i.cane_type_code AS "caneType",trim_scale(COALESCE(mc.quantity_after,m.juice_produced_liters))::text AS "juiceLiters",
+            p.output_snapshot AS calculation,COALESCE(b.items,'[]'::jsonb) AS batches
+          FROM sobatnira.lots l
+          JOIN authorized_scope a ON a."tenantId"=l.tenant_id AND a."factoryId"=l.factory_id
+          JOIN sobatnira.suppliers s ON s.id=l.supplier_id AND s.tenant_id=l.tenant_id
+          JOIN sobatnira.intake_records i ON i.lot_id=l.id AND i.tenant_id=l.tenant_id AND i.factory_id=l.factory_id AND i.is_synthetic=$4
+          LEFT JOIN sobatnira.milling_records m ON m.lot_id=l.id AND m.tenant_id=l.tenant_id AND m.factory_id=l.factory_id AND m.is_synthetic=$4
+          LEFT JOIN LATERAL (SELECT quantity_after FROM sobatnira.stock_reconciliations WHERE milling_record_id=m.id ORDER BY revision_version DESC LIMIT 1) mc ON true
+          LEFT JOIN LATERAL (SELECT output_snapshot FROM sobatnira.production_calculation_snapshots
+            WHERE lot_id=l.id AND tenant_id=l.tenant_id AND factory_id=l.factory_id AND is_synthetic=$4
+            ORDER BY approved_at DESC,id DESC LIMIT 1) p ON true
+          LEFT JOIN LATERAL (SELECT jsonb_agg(jsonb_build_object(
+            'id',pb.id,'code',pb.code,'wokNumber',pb.wok_number,'occurredAt',pb.occurred_at,
+            'quantityMl',pb.quantity_ml::text,'physicalWeightKg',pb.physical_weight_kg::text,
+            'grades',(SELECT jsonb_agg(jsonb_build_object('code',g.code,'weightKg',g.weight_kg::text,
+              'pricePerKgRupiah',g.price_per_kg_rupiah::text) ORDER BY g.code) FROM sobatnira.batch_grade_results g WHERE g.batch_id=pb.id)
+            ) ORDER BY pb.occurred_at,pb.id) AS items FROM sobatnira.production_batches pb
+            WHERE pb.lot_id=l.id AND pb.tenant_id=l.tenant_id AND pb.factory_id=l.factory_id AND pb.is_synthetic=$4 AND pb.status='approved') b ON true
+          WHERE ($5::timestamptz IS NULL OR l.received_at >= $5) AND ($6::timestamptz IS NULL OR l.received_at < $6)
+          ORDER BY l.received_at DESC,l.id`, [...scopeValues(access), q.synthetic === 'true', from, before]);
+        return { factory: access.factoryName, from, before, synthetic: q.synthetic === 'true',
+          periodBasis: 'lot_received_at', ...productionReport(rows.rows) };
+    }
     async report(access: FactoryAccess, query: unknown) {
         const q = object(query, ['from', 'before', 'synthetic']);
         if (q.synthetic !== undefined && !['true', 'false'].includes(String(q.synthetic)))
@@ -159,6 +195,10 @@ export class BatchesController {
     id: string, 
     @Body()
     b: unknown) { return this.batches.costs(a, uuid(id), b); }
+    @Get('production-report')
+    productionReport(@CurrentFactory() a: FactoryAccess, @Query() q: unknown) {
+        return this.batches.productionReport(a, q);
+    }
     @Get('profit-report')
     report(
     @CurrentFactory()

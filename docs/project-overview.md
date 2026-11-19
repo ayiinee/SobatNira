@@ -24,11 +24,11 @@ Kontrak dan kriteria penerimaan terperinci tersedia di paket PRD internal tim.
 
 | Layanan | Tanggung jawab | Yang tersedia di repo |
 | --- | --- | --- |
-| Flutter | Antarmuka admin dan owner untuk melihat serta meninjau data. | Build dengan autentikasi Supabase membuka Kloter dan Pekerjaan melalui API NestJS dengan satu sesi dan pilihan pabrik. Build tanpa konfigurasi Supabase membuka demo lokal. |
+| Flutter | Antarmuka admin dan owner untuk melihat serta meninjau data. | Build dengan autentikasi Supabase membuka Beranda, Kloter, Pekerjaan serta laporan produksi/margin melalui API NestJS dengan satu sesi dan pilihan pabrik. Laporan memakai penerimaan dan batch sah dengan periode penerimaan kloter. Build tanpa konfigurasi Supabase membuka demo lokal. |
 | NestJS | Otorisasi, validasi domain, dan kalkulasi resmi. | Intake foto privat, pekerjaan OCR, revisi, konfirmasi dan review berbasis PostgreSQL. Modul produksi mencatat penerimaan, penggilingan, saldo nira, dan koreksi stok dari nota sah. |
 | FastAPI | Pemrosesan AI internal dan keluaran draf ekstraksi. | Ekstraksi draf dua tipe nota dengan PaddleOCR, parser dan evidence. Gemini dapat dikonfigurasi untuk crop ambigu. |
 
-[Panduan intake AI](ai/README.md) menjelaskan setup bridge OpenClaw/Baileys, database, dan layar Pekerjaan. [Demo integrasi lokal](development.md#jalankan-integrasi-di-tiga-terminal) tetap tersedia dengan `lib/main_demo.dart` dan menampilkan fixture dari FastAPI melalui NestJS.
+[Laporan produksi terhubung](mobile-production-reports.md) menjelaskan ringkasan, rincian grade/batch dan ekspor PDF dari snapshot produksi. [Panduan intake AI](ai/README.md) menjelaskan setup bridge OpenClaw/Baileys, database, dan layar Pekerjaan. [Demo integrasi lokal](development.md#jalankan-integrasi-di-tiga-terminal) tetap tersedia dengan `lib/main_demo.dart` dan menampilkan fixture dari FastAPI melalui NestJS.
 
 Pengesahan nota truk di Pekerjaan mencatat penerimaan resmi dan stok tebu per kloter. Saat mengesahkan nota produksi, peninjau memilih kloter per blok tebu lalu mengisi volume nira dan waktu penggilingan. NestJS membukukan debit tebu dan kredit nira dari revisi yang disahkan. Lihat [penerimaan dari nota OCR](backend-intake-documents.md#penerimaan-dari-nota-ocr) dan [alur penggilingan](backend-milling-documents.md).
 

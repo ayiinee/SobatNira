@@ -154,7 +154,7 @@ void main() {
     tester,
   ) async {
     await openDemo(tester);
-    expect(find.text('Tebu diterima (Kg)'), findsOneWidget);
+    expect(find.text('Tebu diterima'), findsOneWidget);
     // Status labels change how many cards fit in the initial viewport.
     expect(find.byType(KloterCard).evaluate().length, greaterThanOrEqualTo(1));
 

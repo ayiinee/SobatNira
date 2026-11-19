@@ -204,9 +204,7 @@ class _ReportExportPageState extends State<ReportExportPage> {
                     NiraSummaryCard('Margin tercatat', recap.marginTotal),
                     const SizedBox(height: NiraSpace.sm),
                     Text(
-                      report.connected
-                          ? '${recap.kloter.length} kloter · Batch, gula final, dan margin belum tersedia'
-                          : '${recap.kloter.length} kloter · ${recap.batchCount} batch\nGula final ${recap.sugarCount}/${recap.kloter.length} · Margin ${recap.marginCount}/${recap.kloter.length} kloter',
+                      '${recap.kloter.length} kloter · ${recap.batchCount} batch\nGula final ${recap.sugarCount}/${recap.kloter.length} · Margin ${recap.marginCount}/${recap.kloter.length} kloter',
                       style: niraText(NiraType.caption, color: niraLeaf),
                     ),
                     const SizedBox(height: NiraSpace.lg),
@@ -226,7 +224,7 @@ class _ReportExportPageState extends State<ReportExportPage> {
                     const SizedBox(height: NiraSpace.xs),
                     Text(
                       report.connected && report.rows.isEmpty
-                          ? 'Data margin belum tersedia.'
+                          ? 'Tidak ada hasil produksi sah pada periode ini.'
                           : '${report.synthetic ? 'Data demo' : 'Data disahkan'} · ${report.rows.length} kloter',
                       style: niraText(NiraType.caption, color: niraLeaf),
                     ),

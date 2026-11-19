@@ -280,6 +280,20 @@ class ReviewApi {
         .toList();
   }
 
+  Future<Json> productionReport(
+    FactoryScope scope, {
+    DateTime? from,
+    DateTime? before,
+    bool synthetic = false,
+  }) => _productionGet(
+    [...scope._base, 'production', 'production-report'],
+    query: {
+      'synthetic': '$synthetic',
+      if (from != null) 'from': from.toUtc().toIso8601String(),
+      if (before != null) 'before': before.toUtc().toIso8601String(),
+    },
+  );
+
   Future<Json> profitReport(
     FactoryScope scope, {
     DateTime? from,

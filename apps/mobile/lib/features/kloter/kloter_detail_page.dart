@@ -14,6 +14,7 @@ class KloterDetailPage extends StatelessWidget {
     required this.demo,
     required this.onNavigate,
     this.stock,
+    this.production,
     this.onEdit,
     this.onTransfer,
     this.onClosure,
@@ -25,6 +26,7 @@ class KloterDetailPage extends StatelessWidget {
   final DemoProduction demo;
   final ValueChanged<NiraTab> onNavigate;
   final Widget? stock;
+  final Widget? production;
   final VoidCallback? onEdit;
   final VoidCallback? onTransfer;
   final VoidCallback? onClosure;
@@ -117,19 +119,22 @@ class KloterDetailPage extends StatelessWidget {
                   children: [
                     const DetailSectionTitle('Batch kloter'),
                     const SizedBox(height: NiraSpace.xs),
-                    Text(
-                      kloter.id != null
-                          ? 'Rincian batch resmi belum tersedia.'
-                          : kloter.batchesToReview == 0
-                          ? 'Semua batch telah ditinjau'
-                          : '${kloter.batchesToReview} Batch perlu ditinjau',
-                      style: niraText(
-                        NiraType.caption,
-                        color: kloter.batchesToReview == 0
-                            ? niraLeaf
-                            : niraOchre,
+                    if (production != null)
+                      production!
+                    else
+                      Text(
+                        kloter.id != null
+                            ? 'Rincian batch resmi belum tersedia.'
+                            : kloter.batchesToReview == 0
+                            ? 'Semua batch telah ditinjau'
+                            : '${kloter.batchesToReview} Batch perlu ditinjau',
+                        style: niraText(
+                          NiraType.caption,
+                          color: kloter.batchesToReview == 0
+                              ? niraLeaf
+                              : niraOchre,
+                        ),
                       ),
-                    ),
                     const SizedBox(height: NiraSpace.md),
                     for (final batch in kloter.batches)
                       Padding(
