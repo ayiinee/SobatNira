@@ -27,21 +27,26 @@ const outsider = '10000000-0000-4000-8000-000000000003';
 const outsideFactory = '10000000-0000-4000-8000-000000000004';
 const tenant = '10000000-0000-4000-8000-000000000005';
 const supplier = '10000000-0000-4000-8000-000000000006';
+const owner = '10000000-0000-4000-8000-000000000007';
 const ocrOnly = process.argv.includes('--ocr-smoke');
-const runSmoke = ocrOnly || process.argv.includes('--smoke');
-const lotFixtures = (runSmoke ? ['A', 'B'] : []).map((label) => {
-  const id = randomUUID();
-  return { id, label: `DEMO-${label}`, code: `OCR-${label}-${id.slice(0, 8)}` };
+const acceptance = process.argv.includes('--acceptance');
+const runSmoke = acceptance || ocrOnly || process.argv.includes('--smoke');
+const lotFixtures = (runSmoke ? ['A', 'B'] : []).map((label, index) => {
+  const id = acceptance ? `10000000-0000-4000-8000-00000000001${index}` : randomUUID();
+  return { id, label: `DEMO-${label}`, code: `OCR-${label}-${acceptance ? 'UJI' : id.slice(0, 8)}` };
 });
 const phone = (suffix) => '+' + [1, 202, 555, String(suffix).padStart(4, '0')].join('');
 const authKey = 'local-synthetic-publishable';
-const passwords = { 'admin@example.invalid': 'sobatnira-demo', 'other@example.invalid': 'sobatnira-demo' };
-const userTokens = Object.fromEntries(Object.keys(passwords).map((key) => [key, randomBytes(32).toString('hex')]));
+const users = { 'admin@example.invalid': admin, 'owner@example.invalid': owner, 'other@example.invalid': outsider };
+const userTokens = Object.fromEntries(Object.keys(users).map((key) => [key, randomBytes(32).toString('hex')]));
 const clearProviders = ['GEMINI_API_KEY','GEMINI_VISION_MODEL','OPENROUTER_API_KEY','OPENROUTER_AGENT_MODEL',
   'OPENROUTER_ALLOWED_PROVIDERS','OPENROUTER_AGENT_FALLBACK_MODEL','R2_ENDPOINT','R2_BUCKET_NAME','R2_BUCKET','R2_ACCOUNT_ID',
   'R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','DATABASE_SSL_CA_FILE','REDIS_URL','SUPABASE_SECRET_KEY','BATCH_API_BASE_URL'];
 for (const key of clearProviders) process.env[key] = '';
 const serveWeb = process.argv.includes('--web');
+if (acceptance && (!serveWeb || ocrOnly || !process.env.LOCAL_DATABASE_URL)) {
+  throw new Error('--acceptance membutuhkan --web dan LOCAL_DATABASE_URL untuk database uji baru');
+}
 const ports = { api: +(process.env.LOCAL_API_PORT ?? 3000), ai: +(process.env.LOCAL_AI_PORT ?? (serveWeb ? 8001 : 8000)), auth: +(process.env.LOCAL_AUTH_PORT ?? 8077) };
 const url = (port) => `http://127.0.0.1:${port}`;
 const webPort = +(process.env.LOCAL_WEB_PORT ?? (serveWeb ? 8000 : 8080));
@@ -85,6 +90,11 @@ async function boot() {
   await mkdir(staging, { recursive: true });
   const initial = new Pool({ connectionString: local.href, connectionTimeoutMillis: 5_000 });
   try {
+    if (acceptance) {
+      const { rows: [existing] } = await initial.query(`SELECT to_regnamespace('sobatnira') IS NOT NULL
+        OR to_regnamespace('sobatnira_local') IS NOT NULL AS initialized`);
+      if (existing.initialized) throw new Error('Gunakan database PostgreSQL kosong untuk --acceptance');
+    }
     await initial.query(`CREATE SCHEMA IF NOT EXISTS ${schema};
       DO $$ BEGIN
         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon') THEN CREATE ROLE anon NOLOGIN; END IF;
@@ -98,15 +108,20 @@ async function boot() {
   } finally { await initial.end(); }
   await db.migrate();
   await db.transaction(async (client) => {
-    await client.query(`INSERT INTO auth.users (id,aud,role,email)
-      VALUES ($1,'authenticated','authenticated','admin@example.invalid') ON CONFLICT (id) DO NOTHING`, [admin]);
+    for (const [email, id] of Object.entries(users)) {
+      await client.query(`INSERT INTO auth.users (id,aud,role,email)
+        VALUES ($1,'authenticated','authenticated',$2) ON CONFLICT (id) DO NOTHING`, [id, email]);
+    }
     await client.query("INSERT INTO sobatnira.tenants (id,name) VALUES ($1,'Tenant Demo') ON CONFLICT DO NOTHING", [tenant]);
     await client.query("INSERT INTO sobatnira.factories (id,tenant_id,name) VALUES ($1,$2,'Pabrik Demo') ON CONFLICT DO NOTHING",
       [factory, tenant]);
-    await client.query('INSERT INTO sobatnira.tenant_memberships (tenant_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
-      [tenant, admin]);
+    await client.query("INSERT INTO sobatnira.factories (id,tenant_id,name) VALUES ($1,$2,'Pabrik Pembanding') ON CONFLICT DO NOTHING",
+      [outsideFactory, tenant]);
+    await client.query('INSERT INTO sobatnira.tenant_memberships (tenant_id,user_id) VALUES ($1,$2),($1,$3),($1,$4) ON CONFLICT DO NOTHING',
+      [tenant, admin, owner, outsider]);
     await client.query(`INSERT INTO sobatnira.factory_memberships (tenant_id,factory_id,user_id,role)
-      VALUES ($1,$2,$3,'admin') ON CONFLICT DO NOTHING`, [tenant, factory, admin]);
+      VALUES ($1,$2,$3,'admin'),($1,$2,$4,'owner'),($1,$5,$6,'admin') ON CONFLICT DO NOTHING`,
+      [tenant, factory, admin, owner, outsideFactory, outsider]);
     await client.query("INSERT INTO sobatnira.suppliers (id,tenant_id,name) VALUES ($1,$2,'PEMASOK DEMO') ON CONFLICT DO NOTHING",
       [supplier, tenant]);
     for (const lot of lotFixtures) {
@@ -116,8 +131,9 @@ async function boot() {
   });
   await db.query(`INSERT INTO operator_contacts (factory_id,phone_e164,display_name,active)
     VALUES ($1,$2,'Operator Demo',true),($1,$3,'Operator Demo nonaktif',false) ON CONFLICT DO NOTHING`, [factory, phone(101), phone(102)]);
-  await db.query(`INSERT INTO review_memberships (user_id,factory_id,role) VALUES ($1,$2,'ADMIN'),($3,$4,'ADMIN') ON CONFLICT DO NOTHING`,
-    [admin, factory, outsider, outsideFactory]);
+  await db.query(`INSERT INTO review_memberships (user_id,factory_id,role)
+    VALUES ($1,$2,'ADMIN'),($3,$4,'ADMIN'),($5,$2,'OWNER') ON CONFLICT DO NOTHING`,
+    [admin, factory, outsider, outsideFactory, owner]);
   authServer = createServer(async (request, response) => {
     response.setHeader('Access-Control-Allow-Origin', webOrigin);
     response.setHeader('Access-Control-Allow-Headers', 'apikey,content-type');
@@ -131,12 +147,13 @@ async function boot() {
         const parts = [];
         for await (const chunk of request) parts.push(chunk);
         const { email, password } = JSON.parse(Buffer.concat(parts));
-        if (Object.hasOwn(passwords, email) && passwords[email] === password) return response.end(JSON.stringify({ access_token: userTokens[email] }));
+        if (Object.hasOwn(users, email) && password === 'sobatnira-demo') return response.end(JSON.stringify({ access_token: userTokens[email] }));
       } catch { return response.writeHead(400).end('{}'); }
     }
     if (request.url === '/auth/v1/user') {
-      if (request.headers.authorization === `Bearer ${userTokens['admin@example.invalid']}`) return response.end(JSON.stringify({ id: admin, aud: 'authenticated' }));
-      if (request.headers.authorization === `Bearer ${userTokens['other@example.invalid']}`) return response.end(JSON.stringify({ id: outsider, aud: 'authenticated' }));
+      for (const [email, id] of Object.entries(users)) {
+        if (request.headers.authorization === `Bearer ${userTokens[email]}`) return response.end(JSON.stringify({ id, aud: 'authenticated' }));
+      }
     }
     response.writeHead(401).end('{}');
   });
@@ -239,25 +256,27 @@ async function smoke(ocrOnly = false) {
   const repeatedTruck = photo('truck.png');
   assert.deepEqual(await submitPhoto(repeatedTruck), first);
   assert.match(await receive(body(randomUUID(),'STATUS', { ReplyToId: repeatedTruck.MessageSid })), /Nota Kedatangan Truk/);
-  const ambiguous = await submitPhoto(photo('ambiguous.png', 'BARU'));
-  const ambiguousDraft = await ready(ambiguous);
-  const question = ambiguousDraft.pending_question;
-  assert.ok(question, `Nota ambigu tidak menghasilkan pertanyaan (${ambiguousDraft.processing_status})`);
-  assert.equal(question.field_path,'header.net_weight_kg');
-  const ambiguousReceipt = await receiptFor(ambiguous);
-  assert.match(ambiguousReceipt.text, /Perlu dicek/);
-  assert.doesNotMatch(ambiguousReceipt.text, /KONFIRMASI/);
-  assert.match(await receive(body(randomUUID(),'KONFIRMASI', { ReplyToId: ambiguousReceipt.id })), /data yang perlu diperiksa/);
-  assert.match(await receive(body(randomUUID(),'JAWAB 1.250', { ReplyToId: ambiguousReceipt.id })), /tanpa pemisah ribuan/);
-  assert.match(await receive(body(randomUUID(),'JAWAB 1250', { ReplyToId: ambiguousReceipt.id })), /Jawaban tersimpan/);
-  assert.match(await receive(body(randomUUID(),'JAWAB 1250', { ReplyToId: ambiguousReceipt.id })), /ringkasan otomatis yang terbaru/);
-  const invalid = await submitPhoto(photo('unreadable.png', 'BARU'));
-  const failed = await ready(invalid);
-  assert.equal(failed.processing_status,'MANUAL_REVIEW_REQUIRED');
-  const invalidReceipt = await receiptFor(invalid);
-  const retake = await submitPhoto(photo('truck.png', 'FOTO ULANG', { ReplyToId: invalidReceipt.id }));
-  assert.equal(retake.document,invalid.document);
-  assert.equal((await ready(retake)).extraction.document_type,'TRUCK_ARRIVAL_NOTE');
+  if (!acceptance) {
+    const ambiguous = await submitPhoto(photo('ambiguous.png', 'BARU'));
+    const ambiguousDraft = await ready(ambiguous);
+    const question = ambiguousDraft.pending_question;
+    assert.ok(question, `Nota ambigu tidak menghasilkan pertanyaan (${ambiguousDraft.processing_status})`);
+    assert.equal(question.field_path,'header.net_weight_kg');
+    const ambiguousReceipt = await receiptFor(ambiguous);
+    assert.match(ambiguousReceipt.text, /Perlu dicek/);
+    assert.doesNotMatch(ambiguousReceipt.text, /KONFIRMASI/);
+    assert.match(await receive(body(randomUUID(),'KONFIRMASI', { ReplyToId: ambiguousReceipt.id })), /data yang perlu diperiksa/);
+    assert.match(await receive(body(randomUUID(),'JAWAB 1.250', { ReplyToId: ambiguousReceipt.id })), /tanpa pemisah ribuan/);
+    assert.match(await receive(body(randomUUID(),'JAWAB 1250', { ReplyToId: ambiguousReceipt.id })), /Jawaban tersimpan/);
+    assert.match(await receive(body(randomUUID(),'JAWAB 1250', { ReplyToId: ambiguousReceipt.id })), /ringkasan otomatis yang terbaru/);
+    const invalid = await submitPhoto(photo('unreadable.png', 'BARU'));
+    const failed = await ready(invalid);
+    assert.equal(failed.processing_status,'MANUAL_REVIEW_REQUIRED');
+    const invalidReceipt = await receiptFor(invalid);
+    const retake = await submitPhoto(photo('truck.png', 'FOTO ULANG', { ReplyToId: invalidReceipt.id }));
+    assert.equal(retake.document,invalid.document);
+    assert.equal((await ready(retake)).extraction.document_type,'TRUCK_ARRIVAL_NOTE');
+  }
   const manual = await submitPhoto(photo('manual.png', 'BARU'));
   assert.equal((await ready(manual)).processing_status,'MANUAL_REVIEW_REQUIRED');
   const taskFor = async ({ revision }) => {
@@ -266,10 +285,13 @@ async function smoke(ocrOnly = false) {
     return rows[0].id;
   };
   const [truckTask, manualTask, productionTask] = await Promise.all([first, manual, updated].map(taskFor));
-  const forbidden = await fetch(`${url(ports.api)}/api/v1/mobile/review-tasks/${truckTask}`, { headers: {
-    Authorization: `Bearer ${userTokens['other@example.invalid']}`,
+  const browserOrigin = serveWeb ? webOrigin : url(ports.api);
+  const reviewPath = `${browserOrigin}/api/v1/mobile/review-tasks/${truckTask}`;
+  const reviewFor = (email) => fetch(reviewPath, { signal: AbortSignal.timeout(5_000), headers: {
+    Authorization: `Bearer ${userTokens[email]}`,
   } });
-  assert.equal(forbidden.status,404);
+  assert.equal((await reviewFor('other@example.invalid')).status, 404);
+  assert.equal((await reviewFor('owner@example.invalid')).status, 200);
   if (ocrOnly) {
     console.log('Smoke adapter WhatsApp dan PaddleOCR lulus sampai antrean Pekerjaan.');
     return;
@@ -322,14 +344,13 @@ async function smoke(ocrOnly = false) {
   const summary = (await summaries.json()).items.find((item) => item.id === lotA.id);
   assert.equal(summary.netWeightGrams, '1250000');
   assert.equal(summary.juiceProducedLiters, '90');
-  const factoryRoot = `${url(ports.api)}/tenants/${tenant}/factories/${factory}`;
-  const scopedRequest = async (path, method = 'GET', body, token = userTokens['admin@example.invalid']) => {
-    const response = await fetch(factoryRoot + path, { method, headers: { Authorization: `Bearer ${token}`,
+  const scopedRequest = async (path, method = 'GET', body, token = userTokens['admin@example.invalid'], factoryId = factory) => {
+    const response = await fetch(`${browserOrigin}/tenants/${tenant}/factories/${factoryId}${path}`, { method, headers: { Authorization: `Bearer ${token}`,
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(5_000) });
     return { status: response.status, data: await response.json() };
   };
-  const code = `SMOKE-${lotA.id.slice(0, 8)}`;
+  const code = acceptance ? 'SMOKE-UJI' : `SMOKE-${lotA.id.slice(0, 8)}`;
   console.log(`Nota sah. Pada detail ${lotA.code}, buat batch ${code}, wajan 1, masak setelah penggilingan, 40000 mL, hasil fisik 26 kg, grade A 25 kg, Rp20000/kg.`);
   console.log('Isi biaya Rp100000, Rp20000, Rp5000, Rp0. Reservasi nira lalu sahkan batch.');
   const batch = await waitFor(async () => (await db.query(`SELECT id, quantity_ml::text AS volume
@@ -339,22 +360,45 @@ async function smoke(ocrOnly = false) {
   const reservation = (await db.query(`SELECT request_id, origin_lot_id, quantity_ml::text AS volume
       FROM sobatnira.juice_reservations WHERE batch_id=$1 AND state='consumed'`, [batch.id])).rows;
   assert.deepEqual(reservation, [{ request_id: batch.id, origin_lot_id: lotA.id, volume: '40000' }]);
-  const approvePath = `/production/batches/${batch.id}/approve`;
+  const batchPath = `/production/batches/${batch.id}`;
+  const approvePath = `${batchPath}/approve`;
   const snapshot = await scopedRequest(approvePath, 'POST');
   assert.equal(snapshot.status, 200);
-  assert.equal(snapshot.data.output_snapshot.productionMarginRupiah, '375000');
+  const { rows: [postedSnapshot] } = await db.query(`SELECT id, output_snapshot
+    FROM sobatnira.production_calculation_snapshots WHERE id=$1 AND batch_id=$2`, [snapshot.data.id, batch.id]);
+  assert.deepEqual(snapshot.data.output_snapshot, postedSnapshot.output_snapshot);
+  assert.equal(postedSnapshot.output_snapshot.productionValueRupiah, '500000');
+  assert.equal(postedSnapshot.output_snapshot.totalCostRupiah, '125000');
+  assert.equal(postedSnapshot.output_snapshot.productionMarginRupiah, '375000');
   assert.equal((await scopedRequest(approvePath, 'POST')).data.id, snapshot.data.id);
-  assert.equal((await scopedRequest(approvePath, 'POST', undefined, userTokens['other@example.invalid'])).status, 403);
+  const reservationReplay = await scopedRequest(`/lots/${lotA.id}/juice/reservations`, 'POST', {
+    requestId: batch.id, batchId: batch.id, originLotId: lotA.id, quantityMl: '40000',
+  });
+  assert.equal(reservationReplay.data.state, 'consumed');
   assert.equal((await scopedRequest(`/lots/${lotA.id}/juice/availability`)).data.onHandMl, '50000');
+  const ownerToken = userTokens['owner@example.invalid'];
+  const outsideToken = userTokens['other@example.invalid'];
+  assert.equal((await scopedRequest(batchPath, 'GET', undefined, ownerToken)).status, 200);
+  assert.equal((await scopedRequest(approvePath, 'POST', undefined, ownerToken)).status, 403);
+  const otherRecap = await scopedRequest('/production/recap', 'GET', undefined, outsideToken, outsideFactory);
+  assert.equal(otherRecap.status, 200);
+  assert.deepEqual(otherRecap.data.items, []);
+  assert.equal((await scopedRequest(batchPath, 'GET', undefined, outsideToken)).status, 403);
+  assert.equal((await scopedRequest(approvePath, 'POST', undefined, outsideToken)).status, 403);
   const recap = await scopedRequest('/production/recap');
-  const profit = await scopedRequest('/production/profit-report');
+  const profit = await scopedRequest('/production/profit-report', 'GET', undefined, ownerToken);
   assert.equal(recap.status, 200);
+  assert.equal(profit.status, 200);
   const lotReport = recap.data.items.find((item) => item.lotId === lotA.id);
   assert.equal(lotReport.snapshotId, snapshot.data.id);
   assert.equal(lotReport.batches[0].id, batch.id);
   assert.equal(lotReport.calculation.finalSugarKg, '25');
   assert.equal(profit.data.items.find((item) => item.lotId === lotA.id).snapshotId, snapshot.data.id);
-  console.log('Smoke Flutter dan PostgreSQL lulus. Batch, stok, pengiriman ulang, dan snapshot laporan cocok.');
+  if (acceptance) {
+    assert.equal(recap.data.totalSugarKg, '25');
+    assert.equal(profit.data.totalMarginRupiah, '375000');
+  }
+  console.log('Smoke Flutter dan PostgreSQL lulus. Batch, stok, pengiriman ulang, snapshot laporan, dan akses tiga akun cocok.');
 }
 
 async function stop() {

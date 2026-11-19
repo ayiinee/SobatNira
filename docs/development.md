@@ -1,6 +1,28 @@
 # Setup development lokal
 
-Untuk menjalankan Flutter, NestJS, dan OCR bersama di satu alamat `http://127.0.0.1:8000`, ikuti [mode lokal sintetis](ai/README.md#mode-lokal-sintetis).
+Gunakan [prosedur uji penerimaan lokal](ai/README.md#mode-lokal-sintetis) untuk menyamakan versi, fixture, migrasi dan hasil uji antaranggota tim. Prosedur ini membangun `apps/mobile/lib/main.dart` dan menyajikan Flutter, login sintetis, serta API NestJS di `http://127.0.0.1:8000/`. OCR berjalan sebagai layanan internal.
+
+### Penyimpanan menu Pengaturan
+
+Form sesi menggunakan widget Pengaturan tim dan kembali ke fixture ketika aplikasi dimulai ulang. Pada mode terhubung, menu yang memerlukan kontrak tambahan tampil dengan status **Belum tersedia**. Gunakan mode lokal untuk meninjau bentuk form tersebut.
+
+| Menu | Penyimpanan saat ini | Kontrak atau keputusan yang dibutuhkan |
+| --- | --- | --- |
+| Identitas pabrik | Nama pabrik dibaca dari sesi API. Form identitas tersimpan di sesi lokal. | Endpoint edit nama, kode, cabang dan zona waktu, serta hak edit. |
+| Fasilitas Produksi | Sesi lokal. API master memiliki daftar dan tambah wajan dengan kode dan nama. | Kontrak kapasitas, aktivasi, pembaruan dan pemakaian master saat memvalidasi pemasakan. |
+| Pegawai & WhatsApp | API pabrik untuk nama, nomor dan status aktif operator. | Penugasan per operator pada form tim memerlukan kontrak sendiri. |
+| Shift kerja | Sesi lokal. | Definisi shift, waktu lintas tengah malam dan pengaitnya ke batch. |
+| Hak akses & pengguna | Sesi lokal. Membership yang dipakai login dan otorisasi dibaca dari API. | Undangan, perubahan role, pencabutan akses dan siapa yang berwenang. |
+| Aturan produksi | Sesi lokal. API master memiliki versi konfigurasi awal. | Aturan campuran, masak ulang, batas volume serta aktivasi aturan yang berlaku. |
+| Grade produk | Sesi lokal. API master memiliki daftar dan tambah kode/nama. Grade resmi dicatat pada batch. | Pembaruan grade dan harga efektif, termasuk penerapannya pada snapshot dan batch lama. |
+| Bahan tambahan (BTP) | Sesi lokal. API master memiliki daftar dan tambah kode/nama. | Satuan, takaran, status aktif dan cara pencatatan pemakaian pada batch. |
+| Formulir produksi | Sesi lokal. OCR memakai skema yang ikut versi repositori. | Kontrak versi pemetaan field wajib dan alias yang boleh dikelola per pabrik. |
+| Harga & Biaya | Sesi lokal untuk menu ini dan pintasan Biaya Ops. Harga per batch dan biaya per kloter memakai API. | Harga sumber, komponen biaya, hak melihat harga/biaya, tanggal berlaku, serta riwayat koreksi. |
+| Pemasok | API katalog pabrik. | — |
+| Jenis tebu | API katalog pabrik. | — |
+| Keluar | Mengakhiri sesi pada aplikasi. | — |
+
+Endpoint awal master produksi menyimpan kode dan nama atau versi draf. Kontrak per menu harus mencakup seluruh field yang ditampilkan dan menetapkan cara penggunaan datanya dalam produksi sebelum form tersebut memakai API. Lihat [pemeriksaan akses dan konfigurasi backend](backend-authentication.md) serta [implementasi produksi](backend-production-implementation.md).
 
 Pasang Git dan alat sesuai area yang kamu kerjakan. Untuk menjalankan integrasi, siapkan alat dari ketiga baris.
 
