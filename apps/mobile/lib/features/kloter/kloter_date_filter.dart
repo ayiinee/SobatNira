@@ -181,7 +181,7 @@ class _FilterPanelState extends State<_FilterPanel> {
             _periodRow(period),
             if (period != KloterPeriod.values.last)
               const Divider(
-                height: NiraSpace.sm,
+                height: 1,
                 thickness: 1,
                 indent: NiraSpace.md,
                 endIndent: NiraSpace.md,
@@ -228,11 +228,11 @@ class _FilterPanelState extends State<_FilterPanel> {
                 children: [
                   Icon(
                     switch (period) {
-                      KloterPeriod.today => Icons.today_outlined,
-                      KloterPeriod.week => Icons.date_range_outlined,
-                      KloterPeriod.month => Icons.calendar_month_outlined,
-                      KloterPeriod.year => Icons.event_note_outlined,
-                      KloterPeriod.custom => Icons.tune,
+                      KloterPeriod.today => Icons.today,
+                      KloterPeriod.week => Icons.date_range,
+                      KloterPeriod.month => Icons.calendar_month,
+                      KloterPeriod.year => Icons.event_note,
+                      KloterPeriod.custom => Icons.filter_alt,
                     },
                     size: 23,
                     color: selected ? niraGreen : niraLeaf,

@@ -25,6 +25,7 @@ class ProductionCatalogPage extends StatefulWidget {
 }
 
 class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
+  final _pageHeight = NiraPageHeight();
   final _search = TextEditingController();
   int _offset = 0;
   String _query = '';
@@ -165,49 +166,58 @@ class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
               final total = page['total'] as int;
               return Column(
                 children: [
-                  if (items.isEmpty)
-                    const ListTile(title: Text('Data tidak ditemukan.')),
-                  for (final item in items)
-                    ListTile(
-                      title: Text(
-                        item[_isOperator ? 'displayName' : 'name'] as String,
-                      ),
-                      subtitle: Text(
-                        [
-                          if (_isOperator) item['phoneE164'] as String,
-                          if (item['code'] != null) '${item['code']}',
-                          item['isActive'] == true ? 'Aktif' : 'Nonaktif',
-                        ].join(' · '),
-                      ),
-                      trailing: _isOperator
-                          ? Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  tooltip: 'Edit operator',
-                                  onPressed: () => _edit(item),
-                                  icon: const Icon(Icons.edit_outlined),
-                                ),
-                                IconButton(
-                                  tooltip: 'Riwayat operator',
-                                  onPressed: () => _openHistory(item),
-                                  icon: const Icon(Icons.history),
-                                ),
-                              ],
-                            )
-                          : Icon(
-                              widget.selectSupplier
-                                  ? Icons.chevron_right
-                                  : Icons.edit_outlined,
+                  NiraPageBody(
+                    height: _pageHeight,
+                    firstPage: _offset == 0,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (items.isEmpty)
+                          const ListTile(title: Text('Data tidak ditemukan.')),
+                        for (final item in items)
+                          ListTile(
+                            title: Text(
+                              item[_isOperator ? 'displayName' : 'name'] as String,
                             ),
-                      onTap: () {
-                        if (widget.selectSupplier) {
-                          Navigator.pop(context, item);
-                        } else {
-                          _edit(item);
-                        }
-                      },
+                            subtitle: Text(
+                              [
+                                if (_isOperator) item['phoneE164'] as String,
+                                if (item['code'] != null) '${item['code']}',
+                                item['isActive'] == true ? 'Aktif' : 'Nonaktif',
+                              ].join(' · '),
+                            ),
+                            trailing: _isOperator
+                                ? Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        tooltip: 'Edit operator',
+                                        onPressed: () => _edit(item),
+                                        icon: const Icon(Icons.edit_outlined),
+                                      ),
+                                      IconButton(
+                                        tooltip: 'Riwayat operator',
+                                        onPressed: () => _openHistory(item),
+                                        icon: const Icon(Icons.history),
+                                      ),
+                                    ],
+                                  )
+                                : Icon(
+                                    widget.selectSupplier
+                                        ? Icons.chevron_right
+                                        : Icons.edit_outlined,
+                                  ),
+                            onTap: () {
+                              if (widget.selectSupplier) {
+                                Navigator.pop(context, item);
+                              } else {
+                                _edit(item);
+                              }
+                            },
+                          ),
+                      ],
                     ),
+                  ),
                   if (_offset > 0 || total > limit)
                     NiraPagination(
                       page: _offset ~/ limit + 1,

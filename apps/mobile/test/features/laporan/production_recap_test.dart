@@ -164,6 +164,13 @@ void main() {
       await tester.tap(first);
       await tester.pumpAndSettle();
       expect(find.text('250L'), findsOneWidget);
+      final second = find.byType(ExpansionTile).at(1);
+      await tester.ensureVisible(second);
+      await tester.pumpAndSettle();
+      await tester.tap(second);
+      await tester.pumpAndSettle();
+      expect(find.text('250L'), findsNothing);
+      expect(find.text('Rincian batch'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

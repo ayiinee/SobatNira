@@ -22,6 +22,7 @@ class ReportPaginatedList<T> extends StatefulWidget {
 }
 
 class _ReportPaginatedListState<T> extends State<ReportPaginatedList<T>> {
+  final _pageHeight = NiraPageHeight();
   static const _pageSize = 5;
   int _page = 0;
 
@@ -30,6 +31,10 @@ class _ReportPaginatedListState<T> extends State<ReportPaginatedList<T>> {
   @override
   void didUpdateWidget(covariant ReportPaginatedList<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.items.length <= _pageSize ||
+        oldWidget.resetToken != widget.resetToken) {
+      _pageHeight.reset();
+    }
     if (oldWidget.resetToken != widget.resetToken) _page = 0;
     _page = math.min(_page, _pageCount - 1);
   }
@@ -41,7 +46,11 @@ class _ReportPaginatedListState<T> extends State<ReportPaginatedList<T>> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        widget.builder(widget.items.sublist(start, end)),
+        NiraPageBody(
+          height: _pageHeight,
+          firstPage: _page == 0,
+          child: widget.builder(widget.items.sublist(start, end)),
+        ),
         if (widget.items.length > _pageSize) ...[
           const SizedBox(height: NiraSpace.sm),
           Text(

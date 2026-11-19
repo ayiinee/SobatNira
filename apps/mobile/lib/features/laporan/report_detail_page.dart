@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/kloter_cane_overlay.dart';
 import '../../widgets/summary_card.dart';
 import '../kloter/kloter_detail_widgets.dart';
 import 'report_paginated_list.dart';
@@ -92,28 +93,39 @@ class ReportDetailPage extends StatelessWidget {
   );
 
   Widget _entityCard() => Container(
-    padding: const EdgeInsets.all(NiraSpace.lg),
+    clipBehavior: Clip.antiAlias,
     decoration: BoxDecoration(
       gradient: niraSummaryGradient,
       borderRadius: BorderRadius.circular(niraRadius),
     ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    child: Stack(
       children: [
-        Text(
-          lot.code,
-          style: niraText(
-            NiraType.title,
-            color: niraYellow,
-            weight: FontWeight.w700,
+        const KloterCaneOverlay(),
+        Padding(
+          padding: const EdgeInsets.all(NiraSpace.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                lot.code,
+                style: niraText(
+                  NiraType.title,
+                  color: niraYellow,
+                  weight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: NiraSpace.xs),
+              Text(
+                lot.supplier,
+                style: niraText(NiraType.body, color: Colors.white),
+              ),
+              const SizedBox(height: NiraSpace.xs),
+              Text(
+                formatDate(DateTime(2026, 10, lot.day)),
+                style: niraText(NiraType.caption, color: Colors.white),
+              ),
+            ],
           ),
-        ),
-        const SizedBox(height: NiraSpace.xs),
-        Text(lot.supplier, style: niraText(NiraType.body, color: Colors.white)),
-        const SizedBox(height: NiraSpace.xs),
-        Text(
-          formatDate(DateTime(2026, 10, lot.day)),
-          style: niraText(NiraType.caption, color: Colors.white),
         ),
       ],
     ),

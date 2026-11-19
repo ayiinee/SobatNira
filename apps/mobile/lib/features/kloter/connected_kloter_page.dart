@@ -37,6 +37,7 @@ class ConnectedKloterPage extends StatefulWidget {
 }
 
 class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
+  final _pageHeight = NiraPageHeight();
   final _searchInput = TextEditingController();
   ReviewApi? _api;
   List<FactoryScope>? _factories;
@@ -389,17 +390,26 @@ class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
     final total = page['total'] as int;
     return Column(
       children: [
-        if (lots.isEmpty)
-          const ListTile(title: Text('Belum ada kloter yang ditemukan.')),
-        for (final lot in lots)
-          Card(
-            child: ListTile(
-              title: Text(_lotCode(lot)),
-              subtitle: Text('${lot['supplierName']} · ${_receivedAt(lot)}'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _openLot(scope, lot),
-            ),
+        NiraPageBody(
+          height: _pageHeight,
+          firstPage: _offset == 0,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (lots.isEmpty)
+                const ListTile(title: Text('Belum ada kloter yang ditemukan.')),
+              for (final lot in lots)
+                Card(
+                  child: ListTile(
+                    title: Text(_lotCode(lot)),
+                    subtitle: Text('${lot['supplierName']} · ${_receivedAt(lot)}'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _openLot(scope, lot),
+                  ),
+                ),
+            ],
           ),
+        ),
         if (_offset > 0 || _offset + limit < total)
           NiraPagination(
             page: _offset ~/ limit + 1,

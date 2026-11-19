@@ -261,7 +261,7 @@ class _Profile extends StatefulWidget {
 }
 
 class _ProfileState extends State<_Profile> {
-  String _factory = 'Pabrik Demo';
+  String _factory = 'Pabrik A';
   @override
   Widget build(BuildContext context) => Container(
     constraints: const BoxConstraints(minHeight: 57),

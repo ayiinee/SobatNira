@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 const niraGreen = Color(0xFF174B35);
@@ -579,6 +580,67 @@ class NiraTabs extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class NiraPageHeight {
+  double? _width;
+  double _height = 0;
+
+  void reset() {
+    _width = null;
+    _height = 0;
+  }
+}
+
+class NiraPageBody extends SingleChildRenderObjectWidget {
+  const NiraPageBody({
+    super.key,
+    required this.height,
+    required this.firstPage,
+    required Widget child,
+  }) : super(child: child);
+
+  final NiraPageHeight height;
+  final bool firstPage;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _PageBodyBox(height, firstPage);
+
+  @override
+  void updateRenderObject(BuildContext context, covariant _PageBodyBox box) {
+    box.height = height;
+    box.firstPage = firstPage;
+    box.markNeedsLayout();
+  }
+}
+
+class _PageBodyBox extends RenderProxyBox {
+  _PageBodyBox(this.height, this.firstPage);
+
+  NiraPageHeight height;
+  bool firstPage;
+
+  @override
+  Size computeDryLayout(BoxConstraints constraints) {
+    final content = child!.getDryLayout(constraints);
+    final reserved = !firstPage && height._width == constraints.maxWidth
+        ? height._height
+        : 0.0;
+    return constraints.constrain(
+      Size(content.width, math.max(content.height, reserved)),
+    );
+  }
+
+  @override
+  void performLayout() {
+    child!.layout(constraints, parentUsesSize: true);
+    final content = child!.size;
+    if (firstPage || height._width != constraints.maxWidth) height.reset();
+    height._width = constraints.maxWidth;
+    height._height = math.max(content.height, height._height);
+    size = constraints.constrain(Size(content.width, height._height));
   }
 }
 

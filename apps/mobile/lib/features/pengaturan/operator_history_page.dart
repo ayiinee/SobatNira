@@ -22,6 +22,7 @@ class OperatorHistoryPage extends StatefulWidget {
 }
 
 class _OperatorHistoryPageState extends State<OperatorHistoryPage> {
+  final _pageHeight = NiraPageHeight();
   int _offset = 0;
   late Future<Json> _page = _fetch();
 
@@ -87,9 +88,18 @@ class _OperatorHistoryPageState extends State<OperatorHistoryPage> {
             children: [
               Text(widget.scope.factoryName),
               Text(widget.phone),
-              if (entries.isEmpty)
-                const ListTile(title: Text('Belum ada riwayat operator.')),
-              for (final entry in entries) _event(context, entry),
+              NiraPageBody(
+                height: _pageHeight,
+                firstPage: _offset == 0,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (entries.isEmpty)
+                      const ListTile(title: Text('Belum ada riwayat operator.')),
+                    for (final entry in entries) _event(context, entry),
+                  ],
+                ),
+              ),
               if (_offset > 0 || hasNext)
                 NiraPagination(
                   page: _offset ~/ limit + 1,
