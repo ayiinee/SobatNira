@@ -67,8 +67,8 @@ Future<KloterFilterResult?> showKloterDateFilter(
   pageBuilder: (context, animation, secondaryAnimation) => SafeArea(
     child: Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: NiraSpace.xl,
+        padding: EdgeInsets.symmetric(
+          horizontal: niraPageInset(context).clamp(NiraSpace.lg, NiraSpace.xl),
           vertical: NiraSpace.xl,
         ),
         child: ConstrainedBox(
@@ -344,6 +344,9 @@ class _RangeEditorState extends State<_RangeEditor> {
     final days = DateUtils.getDaysInMonth(_month.year, _month.month);
     final leading = _month.weekday - 1;
     final rows = (days + leading + 6) ~/ 7;
+    final cellHeight =
+        (MediaQuery.textScalerOf(context).scale(NiraType.caption) * 1.4 + 8)
+            .clamp(34.0, double.infinity);
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         NiraSpace.lg,
@@ -419,12 +422,15 @@ class _RangeEditorState extends State<_RangeEditor> {
                       padding: const EdgeInsets.symmetric(
                         vertical: NiraSpace.sm,
                       ),
-                      child: Text(
-                        day,
-                        style: niraText(
-                          NiraType.caption,
-                          color: niraLeaf,
-                          weight: FontWeight.w600,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          day,
+                          style: niraText(
+                            NiraType.caption,
+                            color: niraLeaf,
+                            weight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
@@ -436,7 +442,13 @@ class _RangeEditorState extends State<_RangeEditor> {
             Row(
               children: [
                 for (var col = 0; col < 7; col++)
-                  Expanded(child: _dayCell(row * 7 + col - leading + 1, days)),
+                  Expanded(
+                    child: _dayCell(
+                      row * 7 + col - leading + 1,
+                      days,
+                      cellHeight,
+                    ),
+                  ),
               ],
             ),
           const SizedBox(height: NiraSpace.sm),
@@ -524,8 +536,9 @@ class _RangeEditorState extends State<_RangeEditor> {
     );
   }
 
-  Widget _dayCell(int day, int days) {
-    if (day < 1 || day > days) return const SizedBox(height: 34);
+  Widget _dayCell(int day, int days, double height) {
+    if (day < 1 || day > days) return SizedBox(height: height);
+    final markerSize = height - 3;
     final date = DateTime(_month.year, _month.month, day);
     final start = date == _start;
     final end = date == _end;
@@ -540,7 +553,7 @@ class _RangeEditorState extends State<_RangeEditor> {
       child: InkWell(
         onTap: () => _chooseDate(date),
         child: SizedBox(
-          height: 34,
+          height: height,
           child: Stack(
             alignment: Alignment.center,
             children: [
@@ -554,7 +567,7 @@ class _RangeEditorState extends State<_RangeEditor> {
                   child: FractionallySizedBox(
                     widthFactor: selected ? .5 : 1,
                     child: Container(
-                      height: 31,
+                      height: markerSize,
                       color: const Color(0xFFE5F0E5),
                     ),
                   ),
@@ -565,14 +578,17 @@ class _RangeEditorState extends State<_RangeEditor> {
                   shape: BoxShape.circle,
                 ),
                 child: SizedBox.square(
-                  dimension: 31,
+                  dimension: markerSize,
                   child: Center(
-                    child: Text(
-                      '$day',
-                      style: niraText(
-                        NiraType.caption,
-                        weight: inRange ? FontWeight.w700 : FontWeight.w400,
-                        color: selected ? Colors.white : niraGreen,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        '$day',
+                        style: niraText(
+                          NiraType.caption,
+                          weight: inRange ? FontWeight.w700 : FontWeight.w400,
+                          color: selected ? Colors.white : niraGreen,
+                        ),
                       ),
                     ),
                   ),

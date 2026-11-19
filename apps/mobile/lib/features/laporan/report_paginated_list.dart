@@ -45,11 +45,7 @@ class _ReportPaginatedListState<T> extends State<ReportPaginatedList<T>> {
   Widget build(BuildContext context) {
     final start = _page * _pageSize;
     final end = math.min(start + _pageSize, widget.items.length);
-    final body = NiraPageBody(
-      height: _pageHeight,
-      firstPage: _page == 0,
-      child: widget.builder(widget.items.sublist(start, end)),
-    );
+    final body = widget.builder(widget.items.sublist(start, end));
     final footer = widget.items.length <= _pageSize
         ? null
         : NiraPagination(
@@ -61,32 +57,31 @@ class _ReportPaginatedListState<T> extends State<ReportPaginatedList<T>> {
                 : null,
           );
     final scrollHeader = widget.scrollHeader;
+    if (scrollHeader != null) {
+      return ListView(
+        key: const PageStorageKey('laporan-scroll'),
+        padding: EdgeInsets.fromLTRB(
+          niraPageInset(context),
+          NiraSpace.md,
+          niraPageInset(context),
+          NiraSpace.lg,
+        ),
+        children: [
+          scrollHeader,
+          body,
+          if (footer != null)
+            Padding(
+              padding: const EdgeInsets.only(top: NiraSpace.sm),
+              child: footer,
+            ),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (scrollHeader == null)
-          body
-        else
-          Expanded(
-            child: ListView(
-              key: const PageStorageKey('laporan-scroll'),
-              padding: const EdgeInsets.fromLTRB(
-                niraInset,
-                NiraSpace.md,
-                niraInset,
-                NiraSpace.lg,
-              ),
-              children: [scrollHeader, body],
-            ),
-          ),
-        if (footer != null)
-          if (scrollHeader == null)
-            footer
-          else
-            Padding(
-              padding: const EdgeInsets.only(bottom: NiraSpace.md),
-              child: footer,
-            ),
+        NiraPageBody(height: _pageHeight, firstPage: _page == 0, child: body),
+        ?footer,
       ],
     );
   }

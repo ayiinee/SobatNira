@@ -36,7 +36,7 @@ class SettingsPageFrame extends StatelessWidget {
         children: [
           DetailTitle(title),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: niraInset),
+            padding: EdgeInsets.symmetric(horizontal: niraPageInset(context)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [

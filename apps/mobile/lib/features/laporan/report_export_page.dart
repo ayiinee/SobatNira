@@ -150,10 +150,10 @@ class _ReportExportPageState extends State<ReportExportPage> {
             DetailTitle(report.title),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(
-                  niraInset,
+                padding: EdgeInsets.fromLTRB(
+                  niraPageInset(context),
                   NiraSpace.xs,
-                  niraInset,
+                  niraPageInset(context),
                   NiraSpace.lg,
                 ),
                 children: [

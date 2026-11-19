@@ -159,9 +159,9 @@ class _PekerjaanPageState extends State<PekerjaanPage>
   @override
   Widget build(BuildContext context) => ListView(
     padding: EdgeInsets.fromLTRB(
-      niraInset,
+      niraPageInset(context),
       NiraSpace.lg,
-      niraInset,
+      niraPageInset(context),
       NiraSpace.lg,
     ),
     children: [

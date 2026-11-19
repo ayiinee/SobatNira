@@ -85,89 +85,106 @@ class _KloterListPageState extends State<KloterListPage> {
       groups.putIfAbsent(date, () => []).add(item);
     }
     final dates = groups.keys.toList()..sort((a, b) => b.compareTo(a));
-    final pageCount = (dates.length + _datesPerPage - 1) ~/ _datesPerPage;
+    final pageCount = (dates.length / _datesPerPage).ceil();
     // Keep the current page if a refresh temporarily replaces the list.
     if (widget.statusMessage == null) {
       _page = _page.clamp(0, pageCount > 0 ? pageCount - 1 : 0);
     }
     final pageDates = dates.skip(_page * _datesPerPage).take(_datesPerPage);
+    final inset = niraPageInset(context);
+    final tabs = NiraTabs(
+      labels: const ['Semua', 'Perlu Ditinjau', 'Tuntas'],
+      height: 42,
+      inset: 12,
+      selected: _activeTab,
+      badgeIndex: 1,
+      badgeCount: pending,
+      onSelected: (index) {
+        FocusScope.of(context).unfocus();
+        _scrollToTop();
+        setState(() {
+          _activeTab = index;
+          _page = 0;
+        });
+      },
+    );
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            niraInset,
-            NiraSpace.lg,
-            niraInset,
-            NiraSpace.sm,
-          ),
-          child: Row(
-            spacing: 8,
-            children: [
-              Expanded(child: _searchBox()),
-              _filterButton(context),
-              if (widget.onCreate case final create?)
-                IconButton(
-                  tooltip: 'Tambah kloter',
-                  onPressed: create,
-                  icon: const Icon(Icons.add, color: niraGreen),
-                ),
-            ],
-          ),
-        ),
-        NiraTabs(
-          labels: const ['Semua', 'Perlu Ditinjau', 'Tuntas'],
-          height: 42,
-          inset: 12,
-          selected: _activeTab,
-          badgeIndex: 1,
-          badgeCount: pending,
-          onSelected: (index) {
-            FocusScope.of(context).unfocus();
-            _scrollToTop();
-            setState(() {
-              _activeTab = index;
-              _page = 0;
-            });
-          },
-        ),
-        Expanded(
-          child: ListView(
-            key: const PageStorageKey('kloter-scroll'),
-            controller: _scroll,
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: EdgeInsets.fromLTRB(
-              niraInset,
-              10,
-              niraInset,
-              NiraSpace.lg,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final short = constraints.maxHeight < 180;
+        return Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                inset,
+                short ? NiraSpace.xs : NiraSpace.lg,
+                inset,
+                short ? NiraSpace.xs : NiraSpace.sm,
+              ),
+              child: Row(
+                spacing: 8,
+                children: [
+                  Expanded(child: _searchBox()),
+                  _filterButton(context),
+                  if (widget.onCreate case final create?)
+                    IconButton(
+                      tooltip: 'Tambah kloter',
+                      onPressed: create,
+                      icon: const Icon(Icons.add, color: niraGreen),
+                    ),
+                ],
+              ),
             ),
-            children: [
-              if (widget.statusMessage case final status?)
-                status
-              else if (pageDates.isEmpty)
-                _empty()
-              else
-                for (final date in pageDates)
-                  _dateAccordion(
-                    date,
-                    groups[date]!,
-                    latest: date == pageDates.first,
+            if (!short) tabs,
+            Expanded(
+              child: CustomScrollView(
+                key: const PageStorageKey('kloter-scroll'),
+                controller: _scroll,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                slivers: [
+                  if (short) SliverToBoxAdapter(child: tabs),
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(
+                      inset,
+                      10,
+                      inset,
+                      NiraSpace.lg,
+                    ),
+                    sliver: SliverList.list(
+                      children: [
+                        if (widget.statusMessage case final status?)
+                          status
+                        else if (pageDates.isEmpty)
+                          _empty()
+                        else ...[
+                          for (final date in pageDates)
+                            _dateAccordion(
+                              date,
+                              groups[date]!,
+                              latest: date == pageDates.first,
+                            ),
+                          if (pageCount > 1)
+                            NiraPagination(
+                              page: _page + 1,
+                              pageCount: pageCount,
+                              onPrevious: _page > 0
+                                  ? () => _showPage(_page - 1)
+                                  : null,
+                              onNext: _page + 1 < pageCount
+                                  ? () => _showPage(_page + 1)
+                                  : null,
+                            ),
+                        ],
+                      ],
+                    ),
                   ),
-            ],
-          ),
-        ),
-        if (widget.statusMessage == null && pageCount > 1)
-          Padding(
-            padding: const EdgeInsets.only(bottom: NiraSpace.sm),
-            child: NiraPagination(
-              page: _page + 1,
-              pageCount: pageCount,
-              onPrevious: _page > 0 ? () => _showPage(_page - 1) : null,
-              onNext: _page + 1 < pageCount ? () => _showPage(_page + 1) : null,
+                ],
+              ),
             ),
-          ),
-      ],
+          ],
+        );
+      },
     );
   }
 
@@ -296,7 +313,7 @@ class _KloterListPageState extends State<KloterListPage> {
       cursorColor: niraGreen,
       onChanged: (_) => _showPage(0),
       decoration: InputDecoration(
-        hintText: 'Telusuri Kloter berdasarkan ID',
+        hintText: 'Cari ID kloter',
         hintStyle: niraText(NiraType.body, color: niraLeaf),
         isDense: true,
         filled: true,

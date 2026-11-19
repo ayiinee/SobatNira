@@ -129,123 +129,147 @@ class _ProductionChartState extends State<ProductionChart> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: AlignmentDirectional.centerStart,
-                    child: Text(
-                      'Gula final per hari (Kg)',
-                      style: niraText(NiraType.body, weight: FontWeight.w700),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: NiraSpace.sm),
-                PopupMenuButton<ProductionVariant>(
-                  tooltip: 'Jenis grafik',
-                  onSelected: (variant) {
-                    setState(() => _selectedDay = null);
-                    widget.analytics.setVariant(variant);
-                  },
-                  color: niraPaper,
-                  position: PopupMenuPosition.under,
-                  offset: Offset.zero,
-                  elevation: 4,
-                  shadowColor: const Color(0x33174B35),
-                  menuPadding: EdgeInsets.zero,
-                  clipBehavior: Clip.antiAlias,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(niraRadius),
-                    side: const BorderSide(color: niraGreen, width: 1.2),
-                  ),
-                  itemBuilder: (_) => [
-                    for (final variant in [
-                      widget.analytics.variant,
-                      if (grade)
-                        ProductionVariant.rendemen
-                      else
-                        ProductionVariant.grade,
-                    ])
-                      PopupMenuItem(
-                        key: ValueKey('chart-option-${variant.name}'),
-                        value: variant,
-                        height: 0,
-                        padding: EdgeInsets.zero,
-                        child: Container(
-                          constraints: const BoxConstraints(minHeight: 44),
-                          color: variant == widget.analytics.variant
-                              ? niraGreen
-                              : niraPaper,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: NiraSpace.md,
-                            vertical: NiraSpace.md,
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  variant == ProductionVariant.grade
-                                      ? 'Grade'
-                                      : 'Rendemen',
-                                  style: niraText(
-                                    NiraType.caption,
-                                    color: variant == widget.analytics.variant
-                                        ? Colors.white
-                                        : niraGreen,
-                                    weight: variant == widget.analytics.variant
-                                        ? FontWeight.w600
-                                        : FontWeight.w400,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final title = Text(
+                  'Gula final per hari (Kg)',
+                  style: niraText(NiraType.body, weight: FontWeight.w700),
+                );
+                final controls = Wrap(
+                  spacing: NiraSpace.sm,
+                  runSpacing: NiraSpace.sm,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    PopupMenuButton<ProductionVariant>(
+                      tooltip: 'Jenis grafik',
+                      onSelected: (variant) {
+                        setState(() => _selectedDay = null);
+                        widget.analytics.setVariant(variant);
+                      },
+                      color: niraPaper,
+                      position: PopupMenuPosition.under,
+                      offset: Offset.zero,
+                      elevation: 4,
+                      shadowColor: const Color(0x33174B35),
+                      menuPadding: EdgeInsets.zero,
+                      clipBehavior: Clip.antiAlias,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(niraRadius),
+                        side: const BorderSide(color: niraGreen, width: 1.2),
+                      ),
+                      itemBuilder: (_) => [
+                        for (final variant in [
+                          widget.analytics.variant,
+                          if (grade)
+                            ProductionVariant.rendemen
+                          else
+                            ProductionVariant.grade,
+                        ])
+                          PopupMenuItem(
+                            key: ValueKey('chart-option-${variant.name}'),
+                            value: variant,
+                            height: 0,
+                            padding: EdgeInsets.zero,
+                            child: Container(
+                              constraints: const BoxConstraints(minHeight: 44),
+                              color: variant == widget.analytics.variant
+                                  ? niraGreen
+                                  : niraPaper,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: NiraSpace.md,
+                                vertical: NiraSpace.md,
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      variant == ProductionVariant.grade
+                                          ? 'Grade'
+                                          : 'Rendemen',
+                                      style: niraText(
+                                        NiraType.caption,
+                                        color:
+                                            variant == widget.analytics.variant
+                                            ? Colors.white
+                                            : niraGreen,
+                                        weight:
+                                            variant == widget.analytics.variant
+                                            ? FontWeight.w600
+                                            : FontWeight.w400,
+                                      ),
+                                    ),
                                   ),
+                                  if (variant == widget.analytics.variant)
+                                    const Icon(
+                                      Icons.check,
+                                      size: 16,
+                                      color: Colors.white,
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                      child: Container(
+                        constraints: const BoxConstraints(minHeight: 44),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: NiraSpace.sm,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3F6F1),
+                          border: Border.all(color: niraLine),
+                          borderRadius: BorderRadius.circular(niraRadius),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                grade ? 'Grade' : 'Rendemen',
+                                style: niraText(
+                                  NiraType.caption,
+                                  weight: FontWeight.w600,
                                 ),
                               ),
-                              if (variant == widget.analytics.variant)
-                                const Icon(
-                                  Icons.check,
-                                  size: 16,
-                                  color: Colors.white,
-                                ),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(width: NiraSpace.xs),
+                            const Icon(
+                              Icons.keyboard_arrow_down,
+                              size: 18,
+                              color: niraGreen,
+                            ),
+                          ],
                         ),
                       ),
+                    ),
+                    if (widget.onFilter != null)
+                      ReportDateButton(onPressed: widget.onFilter!),
                   ],
-                  child: Container(
-                    constraints: const BoxConstraints(minHeight: 44),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: NiraSpace.sm,
+                );
+                final textSize = MediaQuery.textScalerOf(
+                  context,
+                ).scale(NiraType.body);
+                if (constraints.maxWidth < 260 || textSize > 16) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    spacing: NiraSpace.sm,
+                    children: [title, controls],
+                  );
+                }
+                return Row(
+                  spacing: NiraSpace.sm,
+                  children: [
+                    Expanded(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: AlignmentDirectional.centerStart,
+                        child: title,
+                      ),
                     ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF3F6F1),
-                      border: Border.all(color: niraLine),
-                      borderRadius: BorderRadius.circular(niraRadius),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          grade ? 'Grade' : 'Rendemen',
-                          style: niraText(
-                            NiraType.caption,
-                            weight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(width: NiraSpace.xs),
-                        const Icon(
-                          Icons.keyboard_arrow_down,
-                          size: 18,
-                          color: niraGreen,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                if (widget.onFilter != null) ...[
-                  const SizedBox(width: NiraSpace.sm),
-                  ReportDateButton(onPressed: widget.onFilter!),
-                ],
-              ],
+                    controls,
+                  ],
+                );
+              },
             ),
             const SizedBox(height: NiraSpace.md),
             Wrap(
@@ -372,7 +396,9 @@ class _ProductionChartState extends State<ProductionChart> {
         ),
       ),
       const SizedBox(width: NiraSpace.xs),
-      Text(label, style: niraText(NiraType.caption, color: niraLeaf)),
+      Flexible(
+        child: Text(label, style: niraText(NiraType.caption, color: niraLeaf)),
+      ),
     ],
   );
 

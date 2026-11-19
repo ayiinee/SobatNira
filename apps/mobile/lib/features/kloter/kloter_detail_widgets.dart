@@ -8,41 +8,89 @@ import 'demo_production.dart';
 const reviewActionHeight = 52.0;
 const reviewedActionHeight = 44.0;
 
-class DetailTitle extends StatelessWidget {
-  const DetailTitle(this.title, {this.inset = niraInset, super.key});
+class KloterDetailBody extends StatelessWidget {
+  const KloterDetailBody({
+    required this.section,
+    required this.header,
+    required this.padding,
+    required this.children,
+    super.key,
+  });
 
-  final String title;
-  final double inset;
+  final int section;
+  final List<Widget> header;
+  final EdgeInsets padding;
+  final List<Widget> children;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: EdgeInsets.symmetric(horizontal: inset),
-    child: Stack(
-      alignment: Alignment.centerLeft,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(32, NiraSpace.md, 0, NiraSpace.md),
-          child: Text(
-            title,
-            style: niraText(NiraType.title, weight: FontWeight.w700),
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final titleSize = MediaQuery.textScalerOf(context).scale(NiraType.title);
+      if (constraints.maxHeight < 200 + titleSize * 3) {
+        return CustomScrollView(
+          key: ValueKey(section),
+          slivers: [
+            SliverList.list(children: header),
+            SliverPadding(
+              padding: padding,
+              sliver: SliverList.list(children: children),
+            ),
+          ],
+        );
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ...header,
+          Expanded(
+            child: ListView(
+              key: ValueKey(section),
+              padding: padding,
+              children: children,
+            ),
           ),
-        ),
-        Positioned(
-          left: -18,
-          top: 0,
-          bottom: 0,
-          width: 48,
-          child: IconButton(
+        ],
+      );
+    },
+  );
+}
+
+class DetailTitle extends StatelessWidget {
+  const DetailTitle(this.title, {this.inset, super.key});
+
+  final String title;
+  final double? inset;
+
+  @override
+  Widget build(BuildContext context) {
+    final gutter = inset ?? niraPageInset(context);
+    return Padding(
+      padding: EdgeInsets.only(
+        left: (gutter - NiraSpace.lg).clamp(0, double.infinity),
+        right: gutter,
+      ),
+      child: Row(
+        children: [
+          IconButton(
             tooltip: 'Kembali',
             onPressed: () => Navigator.maybePop(context),
             icon: const Icon(Icons.chevron_left, color: niraGreen, size: 23),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
           ),
-        ),
-      ],
-    ),
-  );
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: NiraSpace.md),
+              child: Text(
+                title,
+                style: niraText(NiraType.title, weight: FontWeight.w700),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class KloterHeading extends StatelessWidget {
@@ -51,7 +99,7 @@ class KloterHeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: niraInset),
+    padding: EdgeInsets.symmetric(horizontal: niraPageInset(context)),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -423,8 +471,10 @@ class BatchReviewActions extends StatelessWidget {
     final batchTitle = batchCode ?? 'Batch $batchNumber';
     final cancelColor = verified ? colors.error : colors.primary;
     const buttonPadding = EdgeInsets.symmetric(horizontal: NiraSpace.sm);
-    final confirmed = await showDialog<bool>(
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final route = DialogRoute<bool>(
       context: context,
+      themes: InheritedTheme.capture(from: context, to: navigator.context),
       barrierColor: const Color(0x66000000),
       builder: (dialogContext) => AlertDialog(
         scrollable: true,
@@ -437,6 +487,7 @@ class BatchReviewActions extends StatelessWidget {
           verified
               ? 'Batch kembali ke status Perlu ditinjau dan datanya bisa diedit lagi.'
               : 'Pastikan data batch sudah benar. Data akan terkunci setelah divalidasi.',
+          textAlign: TextAlign.center,
         ),
         actions: [
           Row(
@@ -474,6 +525,9 @@ class BatchReviewActions extends StatelessWidget {
         ],
       ),
     );
+    final confirmed = await navigator.push(route);
+    // Let the dialog and its scrim finish leaving before the notice slides in.
+    await route.completed;
     if (confirmed != true || !context.mounted) return;
     if (verified) {
       onReopen?.call();

@@ -22,8 +22,15 @@ const niraOchre = Color(0xFFB97105);
 const niraPaper = Color(0xFFFEFDF9);
 const niraMuted = Color(0xFFB1BFC2);
 const niraLine = Color(0xFFD8DEDB);
-const niraInset = 30.0;
 const niraRadius = 8.0;
+const niraMaxContentWidth = 600.0;
+
+double niraPageInset(BuildContext context) {
+  final width =
+      MediaQuery.sizeOf(context).width -
+      MediaQuery.viewPaddingOf(context).horizontal;
+  return (16 + (width - 320) * .2).clamp(16.0, 30.0);
+}
 
 abstract final class NiraType {
   static const caption = 12.0;
@@ -189,8 +196,10 @@ class NiraScaffold extends StatelessWidget {
             focusContext.findAncestorStateOfType<EditableTextState>() != null);
     final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
     final hideNavigation = keyboard || (hideNavigationWhileEditing && editing);
+    final inset = niraPageInset(context);
+    final short = MediaQuery.sizeOf(context).height - padding.vertical < 500;
     const navigationHeight = 58.0;
-    final navigationBottom = math.max(padding.bottom, 16.0);
+    final navigationBottom = math.max(padding.bottom, short ? 4.0 : 16.0);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark.copyWith(
         statusBarColor: Colors.transparent,
@@ -202,61 +211,80 @@ class NiraScaffold extends StatelessWidget {
         body: SafeArea(
           top: false,
           bottom: false,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Column(
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: niraMaxContentWidth),
+              child: Stack(
+                fit: StackFit.expand,
                 children: [
-                  SizedBox(height: padding.top + topGap),
-                  Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        bottom:
-                            floatingNavigation &&
-                                !hideNavigation &&
-                                !extendBehindNavigation
-                            ? navigationHeight + navigationBottom + NiraSpace.md
-                            : 0,
+                  Column(
+                    children: [
+                      SizedBox(
+                        height:
+                            padding.top +
+                            (short ? math.min(topGap, 4) : topGap),
                       ),
-                      child: ClipRect(child: RepaintBoundary(child: body)),
-                    ),
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.only(
+                            bottom:
+                                floatingNavigation &&
+                                    !hideNavigation &&
+                                    !extendBehindNavigation
+                                ? navigationHeight +
+                                      navigationBottom +
+                                      NiraSpace.md
+                                : hideNavigation && !keyboard
+                                ? padding.bottom
+                                : 0,
+                          ),
+                          child: ClipRect(child: RepaintBoundary(child: body)),
+                        ),
+                      ),
+                      if (!keyboard && bottomAction != null)
+                        Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            inset,
+                            NiraSpace.sm,
+                            inset,
+                            short
+                                ? math.min(actionGap, NiraSpace.sm)
+                                : actionGap,
+                          ),
+                          child: bottomAction,
+                        ),
+                      if (!hideNavigation && !floatingNavigation)
+                        Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            inset,
+                            short ? 4 : 14,
+                            inset,
+                            math.max(padding.bottom, short ? 4 : 30),
+                          ),
+                          child: _BottomNavigation(
+                            tab: tab,
+                            onNavigate: onNavigate,
+                          ),
+                        ),
+                    ],
                   ),
-                  if (!keyboard && bottomAction != null)
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        niraInset,
-                        NiraSpace.sm,
-                        niraInset,
-                        actionGap,
-                      ),
-                      child: bottomAction,
-                    ),
-                  if (!hideNavigation && !floatingNavigation)
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        niraInset,
-                        14,
-                        niraInset,
-                        math.max(padding.bottom, 30),
-                      ),
-                      child: _BottomNavigation(
-                        tab: tab,
-                        onNavigate: onNavigate,
+                  if (!hideNavigation && floatingNavigation)
+                    Positioned(
+                      left: inset,
+                      right: inset,
+                      bottom: navigationBottom,
+                      height: navigationHeight,
+                      child: RepaintBoundary(
+                        child: _BottomNavigation(
+                          tab: tab,
+                          onNavigate: onNavigate,
+                        ),
                       ),
                     ),
                 ],
               ),
-              if (!hideNavigation && floatingNavigation)
-                Positioned(
-                  left: niraInset,
-                  right: niraInset,
-                  bottom: navigationBottom,
-                  height: navigationHeight,
-                  child: RepaintBoundary(
-                    child: _BottomNavigation(tab: tab, onNavigate: onNavigate),
-                  ),
-                ),
-            ],
+            ),
           ),
         ),
       ),
@@ -278,103 +306,143 @@ class _BottomNavigation extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: niraGreen,
-    borderRadius: BorderRadius.circular(29),
-    clipBehavior: Clip.antiAlias,
-    child: SizedBox(
-      height: 58,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final inset = (constraints.maxWidth * .09).clamp(20.0, 36.0);
-          final available = constraints.maxWidth - inset * 2;
-          final style = niraText(12, weight: FontWeight.w600, height: 1.15);
-          final activeWidths = [
-            for (final (_, label, _, iconSize) in _items)
-              (() {
-                final painter = TextPainter(
-                  text: TextSpan(text: label, style: style),
-                  textDirection: Directionality.of(context),
-                  textScaler: MediaQuery.textScalerOf(context),
-                )..layout();
-                final width = painter.width + iconSize + 28;
-                painter.dispose();
-                return width;
-              })(),
-          ];
-          return Padding(
-            padding: EdgeInsets.symmetric(horizontal: inset),
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(
-                begin: tab.index.toDouble(),
-                end: tab.index.toDouble(),
-              ),
-              duration: MediaQuery.disableAnimationsOf(context)
-                  ? Duration.zero
-                  : const Duration(milliseconds: 260),
-              curve: Curves.easeInOutCubic,
-              builder: (context, position, _) {
-                final lower = position.floor();
-                final upper = position.ceil();
-                final fraction = position - lower;
-                final activeWidth =
-                    (activeWidths[lower] +
-                            (activeWidths[upper] - activeWidths[lower]) *
-                                fraction)
-                        .clamp(48.0, available - 34 * (_items.length - 1));
-                final idleWidth =
-                    (available - activeWidth) / (_items.length - 1);
-                final weights = [
-                  for (var i = 0; i < _items.length; i++)
-                    (1 - (position - i).abs()).clamp(0.0, 1.0),
-                ];
-                final widths = [
-                  for (final weight in weights)
-                    idleWidth + (activeWidth - idleWidth) * weight,
-                ];
-                final starts = <double>[0];
-                for (final width in widths) {
-                  starts.add(starts.last + width);
-                }
-                final left =
-                    starts[lower] + (starts[upper] - starts[lower]) * fraction;
-                final width =
-                    widths[lower] + (widths[upper] - widths[lower]) * fraction;
-                return Stack(
-                  alignment: Alignment.centerLeft,
-                  children: [
-                    Positioned(
-                      left: left + 2,
-                      width: width - 4,
-                      top: 13,
-                      bottom: 13,
-                      child: const DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.all(Radius.circular(18)),
-                        ),
+  Widget build(BuildContext context) => Center(
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 440),
+      child: Material(
+        color: niraGreen,
+        borderRadius: BorderRadius.circular(29),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          height: 58,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final style = niraText(12, weight: FontWeight.w600, height: 1.15);
+              final activeWidths = [
+                for (final (_, label, _, iconSize) in _items)
+                  (() {
+                    final painter = TextPainter(
+                      text: TextSpan(text: label, style: style),
+                      textDirection: Directionality.of(context),
+                      textScaler: MediaQuery.textScalerOf(context),
+                    )..layout();
+                    final width = painter.width + iconSize + 28;
+                    painter.dispose();
+                    return width;
+                  })(),
+              ];
+              const targetWidth = 48.0;
+              final requiredWidth =
+                  activeWidths.reduce(math.max) +
+                  targetWidth * (_items.length - 1);
+              final showLabel = constraints.maxWidth >= requiredWidth;
+              final desiredInset = (constraints.maxWidth * .09).clamp(
+                8.0,
+                36.0,
+              );
+              final inset = showLabel
+                  ? math.min(
+                      desiredInset,
+                      (constraints.maxWidth - requiredWidth) / 2,
+                    )
+                  : math.min(
+                      desiredInset,
+                      math.max(
+                        0.0,
+                        (constraints.maxWidth - targetWidth * _items.length) /
+                            2,
                       ),
-                    ),
-                    Row(
+                    );
+              final available = constraints.maxWidth - inset * 2;
+              return Padding(
+                padding: EdgeInsets.symmetric(horizontal: inset),
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(
+                    begin: tab.index.toDouble(),
+                    end: tab.index.toDouble(),
+                  ),
+                  duration: MediaQuery.disableAnimationsOf(context)
+                      ? Duration.zero
+                      : const Duration(milliseconds: 260),
+                  curve: Curves.easeInOutCubic,
+                  builder: (context, position, _) {
+                    final lower = position.floor();
+                    final upper = position.ceil();
+                    final fraction = position - lower;
+                    final activeWidth = showLabel
+                        ? activeWidths[lower] +
+                              (activeWidths[upper] - activeWidths[lower]) *
+                                  fraction
+                        : available / _items.length;
+                    final idleWidth =
+                        (available - activeWidth) / (_items.length - 1);
+                    final weights = [
+                      for (var i = 0; i < _items.length; i++)
+                        (1 - (position - i).abs()).clamp(0.0, 1.0),
+                    ];
+                    final widths = [
+                      for (final weight in weights)
+                        idleWidth + (activeWidth - idleWidth) * weight,
+                    ];
+                    final starts = <double>[0];
+                    for (final width in widths) {
+                      starts.add(starts.last + width);
+                    }
+                    final left =
+                        starts[lower] +
+                        (starts[upper] - starts[lower]) * fraction;
+                    final width =
+                        widths[lower] +
+                        (widths[upper] - widths[lower]) * fraction;
+                    return Stack(
+                      alignment: Alignment.centerLeft,
                       children: [
-                        for (var i = 0; i < _items.length; i++)
-                          SizedBox(
-                            width: widths[i],
-                            child: _destination(i, weights[i], style),
+                        Positioned(
+                          left: left + 2,
+                          width: width - 4,
+                          top: 13,
+                          bottom: 13,
+                          child: const DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(18),
+                              ),
+                            ),
                           ),
+                        ),
+                        Row(
+                          children: [
+                            for (var i = 0; i < _items.length; i++)
+                              SizedBox(
+                                width: widths[i],
+                                child: _destination(
+                                  i,
+                                  weights[i],
+                                  style,
+                                  showLabel,
+                                ),
+                              ),
+                          ],
+                        ),
                       ],
-                    ),
-                  ],
-                );
-              },
-            ),
-          );
-        },
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+        ),
       ),
     ),
   );
 
-  Widget _destination(int index, double emphasis, TextStyle style) {
+  Widget _destination(
+    int index,
+    double emphasis,
+    TextStyle style,
+    bool showLabel,
+  ) {
     final (item, label, icon, size) = _items[index];
     return Semantics(
       label: label,
@@ -398,26 +466,27 @@ class _BottomNavigation extends StatelessWidget {
                   size,
                   color: Color.lerp(Colors.white, niraGreen, emphasis),
                 ),
-                Flexible(
-                  child: ClipRect(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      widthFactor: emphasis,
-                      child: Opacity(
-                        opacity: emphasis,
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 4),
-                          child: Text(
-                            label,
-                            maxLines: 1,
-                            overflow: TextOverflow.clip,
-                            style: style,
+                if (showLabel)
+                  Flexible(
+                    child: ClipRect(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: emphasis,
+                        child: Opacity(
+                          opacity: emphasis,
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 4),
+                            child: Text(
+                              label,
+                              maxLines: 1,
+                              overflow: TextOverflow.clip,
+                              style: style,
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -548,7 +617,7 @@ class NiraTabs extends StatelessWidget {
                         child: Text(
                           labels[index],
                           textAlign: TextAlign.center,
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -557,11 +626,16 @@ class NiraTabs extends StatelessWidget {
                       const SizedBox(width: NiraSpace.xs),
                       Container(
                         alignment: Alignment.center,
-                        width: 20,
-                        height: 20,
-                        decoration: const BoxDecoration(
+                        constraints: const BoxConstraints(
+                          minWidth: 20,
+                          minHeight: 20,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: NiraSpace.xs,
+                        ),
+                        decoration: BoxDecoration(
                           color: niraGold,
-                          shape: BoxShape.circle,
+                          borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
                           '$badgeCount',

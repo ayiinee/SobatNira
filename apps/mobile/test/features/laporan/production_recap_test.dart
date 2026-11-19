@@ -24,7 +24,7 @@ void main() {
         production: production,
       );
       final recap = report.recap!;
-      expect(recap.kloter.length, 16);
+      expect(recap.kloter.length, 17);
       expect(recap.sugarCount, 12);
       expect(
         recap.kloter.firstWhere((lot) => lot.code == 'MJT-200926-1A').sugar,

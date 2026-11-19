@@ -78,7 +78,7 @@ void main() {
     expect(find.text('Rincian perhitungan'), findsOneWidget);
   });
 
-  testWidgets('Pagination Rendemen tetap terlihat saat digulir dan berpindah', (
+  testWidgets('Pagination Rendemen ikut bergulir di bawah data', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(370, 760));
@@ -89,22 +89,27 @@ void main() {
 
     final next = find.byTooltip('Berikutnya');
     final previous = find.byTooltip('Sebelumnya');
-    final initialTop = tester.getTopLeft(next).dy;
+    final scrollable = find.descendant(
+      of: find.byKey(const PageStorageKey('laporan-scroll')),
+      matching: find.byType(Scrollable),
+    );
+    Future<void> revealNext() async {
+      await tester.scrollUntilVisible(next, 160, scrollable: scrollable);
+      await tester.pumpAndSettle();
+    }
+
+    expect(next.hitTestable(), findsNothing);
+    await revealNext();
     expect(next.hitTestable(), findsOneWidget);
-    await tester.drag(find.byType(ListView), const Offset(0, -280));
-    await tester.pumpAndSettle();
-    expect(tester.getTopLeft(next).dy, initialTop);
 
     for (final page in [2, 3]) {
-      await tester.tap(next);
-      await tester.pumpAndSettle();
+      await tap(tester, next);
       expect(find.text('$page dari 3'), findsOneWidget);
-      expect(tester.getTopLeft(previous).dy, initialTop);
     }
     expect(find.text('11–12 dari 12'), findsNothing);
     expect(previous.hitTestable(), findsOneWidget);
-    await tester.tap(previous);
-    await tester.pumpAndSettle();
+    await tap(tester, previous);
+    await revealNext();
     expect(find.text('2 dari 3'), findsOneWidget);
   });
 

@@ -7,7 +7,7 @@ import 'package:sobatnira/features/kloter/demo_lot_fixture.dart';
 
 void main() {
   testWidgets(
-    'panel kloter ditarik tanpa menggeser header dan memuat 7/8 kloter',
+    'panel kloter ditarik tanpa menggeser header dan memuat 7/9 kloter',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(393, 853));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -18,7 +18,7 @@ void main() {
       );
       expect(
         demo.kloter.where((item) => item.status == KloterStatus.done).length,
-        8,
+        9,
       );
       demo.dispose();
       await tester.pumpWidget(const SobatNiraApp(connected: false));
@@ -59,12 +59,12 @@ void main() {
       await tester.tap(find.text('Tuntas'));
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
-        find.text('MJT-170926-1A'),
+        find.text('MJT-160926-1A'),
         150,
         scrollable: scrollable,
       );
       await tester.pumpAndSettle();
-      expect(find.text('MJT-170926-1A').hitTestable(), findsOneWidget);
+      expect(find.text('MJT-160926-1A').hitTestable(), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

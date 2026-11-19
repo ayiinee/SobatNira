@@ -4,6 +4,7 @@ import '../../sobatnira_ui.dart';
 import '../pekerjaan/review_api.dart';
 import 'batch_detail_page.dart';
 import 'demo_production.dart';
+import 'juice_volume.dart';
 import 'kloter_detail_widgets.dart';
 import 'kloter_detail_page.dart';
 import '../laporan/connected_reports.dart';
@@ -50,7 +51,10 @@ class _OfficialLotBatchesState extends State<OfficialLotBatches> {
   Future<Json> _load() =>
       widget.api.factoryBatches(widget.scope, widget.lotId, offset: _offset);
 
-  void _reload() => setState(() => _result = _load());
+  void _reload() {
+    final result = _load();
+    setState(() { _result = result; });
+  }
 
   Future<void> _create() async {
     final id = ReviewApi.requestUuid();
@@ -137,24 +141,25 @@ class _OfficialLotBatchesState extends State<OfficialLotBatches> {
         children: [
           if (batches.isEmpty)
             Text(
-              'Belum ada batch pada halaman ini.',
+              'Belum ada batch',
               style: niraText(NiraType.caption, color: niraLeaf),
             ),
           const SizedBox(height: NiraSpace.md),
           for (final batch in batches)
             Padding(
               padding: const EdgeInsets.only(bottom: NiraSpace.md),
-              child: KloterBatchCard(
+              child: KloterBatchTile(
                 title: batch['code'] as String,
                 pending: batch['status'] != 'approved',
                 cancelled: batch['status'] == 'cancelled',
-                juice: '${reportNumber(batch['quantity_ml'])} mL',
-                physical: '${reportNumber(batch['physical_weight_kg'])} kg',
+                juice:
+                    '${reportNumber(millilitersToLiters(batch['quantity_ml'] as String))} L',
+                physicalWeight:
+                    '${reportNumber(batch['physical_weight_kg'])} kg',
                 onTap: () => _open(batch),
               ),
             ),
           if (widget.canCreate) DocumentLink('Tambah batch', _create),
-          DocumentLink('Produksi dan margin kloter', () => widget.reportLink()),
           if (_offset > 0 || batches.length == 20)
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -225,7 +230,10 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
   String? _error;
 
   Future<Json> _load() => widget.api.factoryBatch(widget.scope, _id);
-  void _reload() => setState(() => _detail = _load());
+  void _reload() {
+    final detail = _load();
+    setState(() { _detail = detail; });
+  }
 
   Future<void> _costs() async {
     final result = await _form(

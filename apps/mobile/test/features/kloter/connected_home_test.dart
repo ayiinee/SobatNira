@@ -188,6 +188,162 @@ void main() {
     },
   );
 
+  testWidgets(
+    'team lot detail opens scoped batches and keeps operations in process tabs',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(430, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      const root = '/tenants/tenant/factories/A';
+      final first = {
+        ..._lot('first'),
+        'displayCode': 'OCR-SAMA',
+        'brix': '19.5',
+      };
+      final second = {
+        ..._lot('second'),
+        'displayCode': 'OCR-SAMA',
+        'netWeightGrams': '875000',
+      };
+      final opened = <String>[];
+      var stockReads = 0;
+      final batch = {
+        'id': 'batch-first',
+        'lot_id': 'first',
+        'wok_number': 1,
+        'code': 'BATCH-UJI-1',
+        'status': 'approved',
+        'occurred_at': '2026-11-10T06:00:00Z',
+        'quantity_ml': '83500',
+        'physical_weight_kg': '29.25',
+        'costSaved': true,
+        'remainingMl': '0',
+        'grades': [],
+        'finalSugarKg': '27',
+        'exactValueRupiah': '540000',
+      };
+      final api = ReviewApi(
+        'local-token',
+        client: MockClient((request) async {
+          final path = request.url.path;
+          if (path.endsWith('/juice/availability')) {
+            stockReads++;
+            return _json({
+              'onHandMl': '1000',
+              'reservedMl': '0',
+              'availableMl': '1000',
+            });
+          }
+          if (path == '$root/lots/first' || path == '$root/lots/second') {
+            opened.add(path);
+          }
+          return switch (path) {
+            '/auth/me' => _json({
+              'access': [_factory('A')],
+            }),
+            '$root/lots' => _json({
+              'items': [first, second],
+              'total': 2,
+            }),
+            '$root/lots/first' => _json(first),
+            '$root/lots/second' => _json(second),
+            '$root/production/batches' => _json({
+              'items': request.url.queryParameters['lotId'] == 'first'
+                  ? [batch]
+                  : [],
+            }),
+            '$root/production/batches/batch-first' => _json(batch),
+            '$root/production/production-report' => _json({
+              'items': [
+                {'lotId': 'second', 'code': 'OCR-SAMA', 'batches': []},
+                {
+                  'lotId': 'first',
+                  'code': 'OCR-SAMA',
+                  'supplier': first['supplierName'],
+                  'receivedAt': first['receivedAt'],
+                  'batches': [
+                    {
+                      'code': 'BATCH-UJI-1',
+                      'wokNumber': 1,
+                      'occurredAt': '2026-11-10T06:00:00Z',
+                      'quantityMl': '83500',
+                      'physicalWeightKg': '29.25',
+                      'finalSugarKg': '27',
+                      'grades': [],
+                    },
+                  ],
+                },
+              ],
+              'grades': [],
+              'totals': {'lotCount': 2},
+            }),
+            _ => http.Response('{}', 404),
+          };
+        }),
+      );
+      await tester.pumpWidget(
+        SobatNiraApp(
+          connected: true,
+          configurationErrors: const [],
+          signIn: (_, _) async => api,
+        ),
+      );
+      await openDemoLogin(tester);
+      final fields = find.byType(TextFormField);
+      await tester.enterText(fields.at(0), 'admin@example.invalid');
+      await tester.enterText(fields.at(1), 'sobatnira-demo');
+      final submit = find.widgetWithText(FilledButton, 'Masuk');
+      await tester.ensureVisible(submit);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+
+      Future<void> tap(Finder finder) async {
+        await tester.ensureVisible(finder);
+        await tester.tap(finder);
+        await tester.pumpAndSettle();
+      }
+
+      await tap(find.bySemanticsLabel('Kloter'));
+      expect(find.text('1.250,01 kg'), findsOneWidget);
+      await tap(find.text('Pemasok first'));
+      expect(find.text('1.250,01 kg'), findsOneWidget);
+      expect(find.text('19,5 °Bx'), findsOneWidget);
+      expect(find.text('90 L'), findsOneWidget);
+      expect(find.text('83,5 L'), findsOneWidget);
+      expect(find.text('29,25 kg'), findsOneWidget);
+      for (final extra in [
+        'Stok fisik nira',
+        'Edit kloter',
+        'Transfer nira',
+        'Penutupan dan riwayat',
+        'Produksi dan margin kloter',
+      ]) {
+        expect(find.text(extra), findsNothing);
+      }
+      expect(stockReads, 0);
+      await tap(find.text('Data tebu dan penggilingan'));
+      expect(find.text('Edit kloter'), findsOneWidget);
+      expect(stockReads, 0);
+      await tap(find.text('Penggilingan'));
+      expect(find.text('Stok fisik nira'), findsOneWidget);
+      expect(find.text('Transfer nira'), findsOneWidget);
+      expect(find.text('Penutupan dan riwayat'), findsOneWidget);
+      expect(stockReads, 1);
+      await tap(find.byTooltip('Kembali'));
+      await tap(find.text('BATCH-UJI-1'));
+      expect(find.text('Detail batch'), findsOneWidget);
+      expect(find.text('83.500 mL'), findsOneWidget);
+      expect(find.text('29,25 kg'), findsOneWidget);
+      await tap(find.byTooltip('Kembali'));
+      await tap(find.byTooltip('Kembali'));
+
+      await tap(find.text('Pemasok second'));
+      expect(find.text('875 kg'), findsOneWidget);
+      expect(find.text('Belum ada batch'), findsOneWidget);
+      expect(find.text('BATCH-UJI-1'), findsNothing);
+      expect(opened.toSet(), {'$root/lots/first', '$root/lots/second'});
+    },
+  );
+
   test(
     'connected recap and PDF use the same approved factory-period snapshot',
     () async {

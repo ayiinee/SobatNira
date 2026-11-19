@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../sobatnira_ui.dart';
 import 'demo_production.dart';
@@ -84,14 +85,20 @@ class _BatchDetailPageState extends State<BatchDetailPage>
 
   bool? _validationNotice;
   Timer? _noticeTimer;
-  late final _noticeAnimation = AnimationController(vsync: this)
-    ..addStatusListener(_onNoticeStatus);
+  late final AnimationController _noticeAnimation;
   late final _noticeSlide = _noticeAnimation.drive(
     Tween(
       begin: const Offset(0, -1),
       end: Offset.zero,
-    ).chain(CurveTween(curve: Curves.easeOutCubic)),
+    ).chain(CurveTween(curve: Curves.easeInOutCubic)),
   );
+
+  @override
+  void initState() {
+    super.initState();
+    _noticeAnimation = AnimationController(vsync: this)
+      ..addStatusListener(_onNoticeStatus);
+  }
 
   @override
   void dispose() {
@@ -131,55 +138,68 @@ class _BatchDetailPageState extends State<BatchDetailPage>
 
   void _showValidation(bool validated) {
     _noticeTimer?.cancel();
-    setState(() => _validationNotice = validated);
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     _noticeAnimation
       ..duration = reduceMotion
           ? Duration.zero
-          : const Duration(milliseconds: 280)
+          : const Duration(milliseconds: 400)
       ..reverseDuration = reduceMotion
           ? Duration.zero
-          : const Duration(milliseconds: 240);
-    if (_noticeAnimation.isCompleted) {
-      _onNoticeStatus(AnimationStatus.completed);
-    } else {
-      _noticeAnimation.forward();
-    }
+          : const Duration(milliseconds: 240)
+      ..forward(from: 0);
+    setState(() => _validationNotice = validated);
   }
 
   @override
-  Widget build(BuildContext context) => Stack(
-    fit: StackFit.expand,
-    children: [
-      _buildScaffold(),
-      if (_validationNotice case final validated?)
+  Widget build(BuildContext context) {
+    final safeInsets = MediaQuery.viewPaddingOf(context);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _buildScaffold(),
         Positioned(
-          top: MediaQuery.viewPaddingOf(context).top,
+          top: 0,
           left: 0,
           right: 0,
-          child: IgnorePointer(
-            child: ClipRect(
-              child: SlideTransition(
-                position: _noticeSlide,
+          height: safeInsets.top,
+          child: const AnnotatedRegion<SystemUiOverlayStyle>(
+            value: SystemUiOverlayStyle(
+              statusBarColor: Colors.transparent,
+              statusBarIconBrightness: Brightness.light,
+              statusBarBrightness: Brightness.dark,
+            ),
+            child: ColoredBox(color: niraGreen),
+          ),
+        ),
+        if (_validationNotice case final validated?)
+          Positioned(
+            top: safeInsets.top,
+            left: 0,
+            right: 0,
+            child: IgnorePointer(
+              child: ClipRect(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    niraInset,
+                  padding: EdgeInsets.fromLTRB(
+                    safeInsets.left + niraPageInset(context),
+                    0,
+                    safeInsets.right + niraPageInset(context),
                     NiraSpace.sm,
-                    niraInset,
-                    NiraSpace.md,
                   ),
-                  child: _BatchValidationNotice(
-                    batchNumber: widget.officialNumber ?? _batch.number,
-                    kloterCode: widget.kloterCode,
-                    validated: validated,
+                  child: SlideTransition(
+                    position: _noticeSlide,
+                    child: _BatchValidationNotice(
+                      batchNumber: widget.officialNumber ?? _batch.number,
+                      kloterCode: widget.kloterCode,
+                      validated: validated,
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-    ],
-  );
+      ],
+    );
+  }
 
   List<Widget> _tabContent() => switch (_tab) {
     0 => _summary(),
@@ -219,15 +239,21 @@ class _BatchDetailPageState extends State<BatchDetailPage>
     tab: NiraTab.kloter,
     onNavigate: widget.onNavigate,
     bottomAction: bottomAction,
-    body: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+    body: KloterDetailBody(
+      section: _tab,
+      padding: EdgeInsets.fromLTRB(
+        niraPageInset(context),
+        NiraSpace.sm,
+        niraPageInset(context),
+        NiraSpace.xs,
+      ),
+      header: [
         const DetailTitle('Detail batch'),
         Padding(
-          padding: const EdgeInsets.fromLTRB(
-            niraInset,
+          padding: EdgeInsets.fromLTRB(
+            niraPageInset(context),
             NiraSpace.xs,
-            niraInset,
+            niraPageInset(context),
             0,
           ),
           child: Row(
@@ -250,19 +276,8 @@ class _BatchDetailPageState extends State<BatchDetailPage>
           height: 44,
           inset: 12,
         ),
-        Expanded(
-          child: ListView(
-            key: ValueKey(_tab),
-            padding: const EdgeInsets.fromLTRB(
-              niraInset,
-              NiraSpace.sm,
-              niraInset,
-              NiraSpace.xs,
-            ),
-            children: content,
-          ),
-        ),
       ],
+      children: content,
     ),
   );
 
@@ -467,11 +482,12 @@ class _BatchValidationNotice extends StatelessWidget {
       label: '$title. $detail',
       excludeSemantics: true,
       child: Material(
-        color: niraPaper,
+        color: Colors.white,
+        surfaceTintColor: Colors.transparent,
         elevation: 4,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(niraRadius),
-          side: BorderSide(color: accent.withValues(alpha: .3)),
+          side: const BorderSide(color: niraLine),
         ),
         child: Padding(
           padding: const EdgeInsets.all(NiraSpace.md),

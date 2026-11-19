@@ -3,7 +3,10 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../laporan/connected_reports.dart' show reportNumber;
+import '../pekerjaan/review_api.dart';
 import 'demo_production.dart';
+import 'juice_volume.dart';
 import 'kloter_detail_widgets.dart';
 
 class KloterProcessPage extends StatefulWidget {
@@ -13,6 +16,10 @@ class KloterProcessPage extends StatefulWidget {
     required this.onNavigate,
     this.onOpenPekerjaan,
     this.approvedPhoto,
+    this.loadStock,
+    this.onEdit,
+    this.onTransfer,
+    this.onClosure,
     super.key,
   });
 
@@ -21,6 +28,10 @@ class KloterProcessPage extends StatefulWidget {
   final ValueChanged<NiraTab> onNavigate;
   final VoidCallback? onOpenPekerjaan;
   final Future<Uint8List?> Function(String)? approvedPhoto;
+  final Future<Json> Function()? loadStock;
+  final Future<bool> Function()? onEdit;
+  final Future<void> Function()? onTransfer;
+  final Future<void> Function()? onClosure;
 
   @override
   State<KloterProcessPage> createState() => _KloterProcessPageState();
@@ -29,6 +40,49 @@ class KloterProcessPage extends StatefulWidget {
 class _KloterProcessPageState extends State<KloterProcessPage> {
   int _selected = 0;
   final _photos = <String, Future<Uint8List?>?>{};
+  late Future<Json>? _stock = widget.loadStock?.call();
+
+  Future<void> _edit() async {
+    if (await widget.onEdit!() && mounted) Navigator.of(context).pop();
+  }
+
+  Future<void> _runStockAction(Future<void> Function() action) async {
+    await action();
+    if (mounted) _reloadStock();
+  }
+
+  void _reloadStock() {
+    final stock = widget.loadStock?.call();
+    setState(() { _stock = stock; });
+  }
+
+  Widget _stockDetails() => FutureBuilder<Json>(
+    future: _stock,
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return const LinearProgressIndicator();
+      }
+      final stock = snapshot.data;
+      if (stock == null) {
+        return TextButton(
+          onPressed: _reloadStock,
+          child: const Text('Coba lagi memuat stok nira'),
+        );
+      }
+      String liters(String key) {
+        final value = stock[key];
+        return value == null
+            ? 'Belum tersedia'
+            : '${reportNumber(millilitersToLiters(value.toString()))} L';
+      }
+
+      return DetailMetrics([
+        ('Stok fisik nira', liters('onHandMl')),
+        ('Nira direservasi', liters('reservedMl')),
+        ('Nira tersedia', liters('availableMl')),
+      ]);
+    },
+  );
 
   Future<Uint8List?>? _photo(bool intake) {
     final revision = widget.kloter.noteRevision(intake: intake);
@@ -44,9 +98,11 @@ class _KloterProcessPageState extends State<KloterProcessPage> {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: widget.demo,
     builder: (context, _) {
+      final kloter = widget.kloter;
       final intake = _selected == 0;
-      final connected = widget.kloter.id != null;
-      final review = intake ? widget.kloter.intake : widget.kloter.milling;
+      final connected = kloter.id != null;
+      final review = intake ? kloter.intake : kloter.milling;
+      final inset = niraPageInset(context);
       return NiraScaffold(
         tab: NiraTab.kloter,
         onNavigate: widget.onNavigate,
@@ -68,11 +124,17 @@ class _KloterProcessPageState extends State<KloterProcessPage> {
                     ? reviewedActionHeight
                     : reviewActionHeight,
               ),
-        body: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+        body: KloterDetailBody(
+          section: _selected,
+          padding: EdgeInsets.fromLTRB(
+            inset,
+            NiraSpace.lg,
+            inset,
+            NiraSpace.sm,
+          ),
+          header: [
             const DetailTitle('Detail kloter'),
-            KloterHeading(widget.kloter),
+            KloterHeading(kloter),
             const SizedBox(height: 12),
             NiraTabs(
               labels: const ['Tebu masuk', 'Penggilingan'],
@@ -83,75 +145,71 @@ class _KloterProcessPageState extends State<KloterProcessPage> {
               inset: 27,
               onSelected: (value) => setState(() => _selected = value),
             ),
-            Expanded(
-              child: ListView(
-                key: ValueKey(_selected),
-                padding: const EdgeInsets.fromLTRB(
-                  niraInset,
-                  NiraSpace.lg,
-                  niraInset,
-                  NiraSpace.sm,
-                ),
-                children: [
-                  if (connected)
-                    ApprovedDocumentPreview(
-                      batch: false,
-                      photo: _photo(intake),
-                      fallback: DocumentLink(
+          ],
+          children: [
+            if (connected)
+              ApprovedDocumentPreview(
+                batch: false,
+                photo: _photo(intake),
+                fallback: widget.onOpenPekerjaan == null
+                    ? const Text('Foto belum tersedia')
+                    : DocumentLink(
                         'Foto, bukti, dan revisi di Pekerjaan',
                         widget.onOpenPekerjaan!,
                       ),
-                    )
-                  else
-                    const DocumentPreview(batch: false),
-                  const SizedBox(height: NiraSpace.xl),
-                  const DetailSectionTitle('Ringkasan proses'),
-                  const SizedBox(height: NiraSpace.sm),
-                  DetailMetrics(
-                    connected
-                        ? (intake
-                              ? [
-                                  ('Tebu bersih', widget.kloter.weight),
-                                  (
-                                    'Brix tebu',
-                                    formatQuantity(widget.kloter.brix, '°Bx'),
-                                  ),
-                                ]
-                              : [
-                                  (
-                                    'Nira dihasilkan',
-                                    formatQuantity(
-                                      widget.kloter.juiceLiters,
-                                      'L',
-                                    ),
-                                  ),
-                                ])
-                        : intake
-                        ? const [
-                            ('Tebu bersih', '1.500Kg'),
-                            ('Brix tebu', '90Kg'),
-                          ]
-                        : const [('Nira dihasilkan', '360L')],
-                  ),
-                  const SizedBox(height: NiraSpace.lg),
-                  EditableFields(
-                    fields: review.fields,
-                    onEdit: connected
-                        ? null
-                        : (field) async {
-                            final value = await editDemoValue(
-                              context,
-                              label: field.label,
-                              initial: field.value,
-                            );
-                            if (mounted && value != null) {
-                              widget.demo.edit(review, field, value);
-                            }
-                          },
-                  ),
-                ],
-              ),
+              )
+            else
+              const DocumentPreview(batch: false),
+            const SizedBox(height: NiraSpace.xl),
+            const DetailSectionTitle('Ringkasan proses'),
+            const SizedBox(height: NiraSpace.sm),
+            DetailMetrics([
+              if (intake) ...[
+                ('Tebu bersih', kloter.weight),
+                ('Brix tebu', formatQuantity(kloter.brix, '°Bx')),
+              ] else if (connected)
+                ('Nira dihasilkan', formatQuantity(kloter.juiceLiters, 'L'))
+              else
+                (
+                  'Nira batch tercatat',
+                  formatQuantity(kloter.batchJuiceLiters, 'L'),
+                ),
+            ]),
+            const SizedBox(height: NiraSpace.lg),
+            EditableFields(
+              fields: review.fields,
+              onEdit: connected
+                  ? null
+                  : (field) async {
+                      final value = await editDemoValue(
+                        context,
+                        label: field.label,
+                        initial: field.value,
+                      );
+                      if (mounted && value != null) {
+                        widget.demo.edit(review, field, value);
+                      }
+                    },
             ),
+            if (intake && widget.onEdit != null) ...[
+              const SizedBox(height: NiraSpace.md),
+              DocumentLink('Edit kloter', _edit),
+            ],
+            if (!intake && widget.loadStock != null) ...[
+              const SizedBox(height: NiraSpace.md),
+              _stockDetails(),
+              if (widget.onTransfer case final transfer?) ...[
+                const SizedBox(height: NiraSpace.sm),
+                DocumentLink('Transfer nira', () => _runStockAction(transfer)),
+              ],
+              if (widget.onClosure case final closure?) ...[
+                const SizedBox(height: NiraSpace.sm),
+                DocumentLink(
+                  'Penutupan dan riwayat',
+                  () => _runStockAction(closure),
+                ),
+              ],
+            ],
           ],
         ),
       );

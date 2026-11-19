@@ -30,10 +30,10 @@ class PengaturanPage extends StatelessWidget {
     listenable: settings,
     builder: (context, _) => ListView(
       key: const PageStorageKey('pengaturan-scroll'),
-      padding: const EdgeInsets.fromLTRB(
-        niraInset,
+      padding: EdgeInsets.fromLTRB(
+        niraPageInset(context),
         NiraSpace.lg,
-        niraInset,
+        niraPageInset(context),
         NiraSpace.lg,
       ),
       children: [

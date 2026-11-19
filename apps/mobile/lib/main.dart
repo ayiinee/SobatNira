@@ -14,7 +14,6 @@ import 'features/pekerjaan/pekerjaan_page.dart';
 import 'features/kloter/demo_production.dart';
 import 'features/kloter/demo_lot_fixture.dart';
 import 'features/kloter/kloter_detail_page.dart';
-import 'features/kloter/kloter_detail_widgets.dart';
 import 'features/kloter/kloter_list_page.dart';
 import 'features/laporan/demo_analytics.dart';
 import 'features/laporan/laporan_page.dart';
@@ -430,17 +429,14 @@ class _LotDetailState extends State<_LotDetail> {
   FactoryScope get _scope => widget.live.scope;
   String get _id => widget.initial.id!;
   late DemoKloter _lot = widget.initial;
-  late Future<(Json, Json)> _request = _load();
+  late Future<Json> _request = _load();
 
-  Future<(Json, Json)> _load() async {
-    final results = await Future.wait([
-      _api.lot(_scope, _id),
-      _api.juice(_scope, _id),
-    ]);
-    return (results[0], results[1]);
+  Future<Json> _load() => _api.lot(_scope, _id);
+
+  void _reload() {
+    final request = _load();
+    setState(() { _request = request; });
   }
-
-  void _reload() => setState(() => _request = _load());
 
   Future<void> _open(Widget page) async {
     await Navigator.of(
@@ -450,30 +446,28 @@ class _LotDetailState extends State<_LotDetail> {
   }
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<(Json, Json)>(
+  Widget build(BuildContext context) => FutureBuilder<Json>(
     future: _request,
     builder: (context, snapshot) {
       if (snapshot.connectionState == ConnectionState.done &&
           snapshot.hasData) {
-        _lot = connectedLot(snapshot.requireData.$1);
+        _lot = connectedLot(snapshot.requireData);
       }
-      final stock = snapshot.data?.$2;
+      final canManage = snapshot.hasData && _scope.role == 'admin';
       return KloterDetailPage(
         kloter: _lot,
         demo: widget.demo,
         onNavigate: widget.onNavigate,
         onOpenPekerjaan: widget.onOpenPekerjaan,
         approvedPhoto: (revision) => _api.approvedPhoto(_scope, revision),
-        onEdit: snapshot.hasError || _scope.role != 'admin'
-            ? null
-            : () async {
-                if (await widget.onEdit(_lot.record!) && mounted) _reload();
-              },
-        onTransfer: stock == null || snapshot.hasError || _scope.role != 'admin'
-            ? null
-            : () => _open(
-                JuiceTransferPage(api: _api, scope: _scope, lotId: _id),
-              ),
+        onReturnFromProcess: () {
+          if (mounted) _reload();
+        },
+        onEdit: canManage ? () => widget.onEdit(_lot.record!) : null,
+        onTransfer: canManage
+            ? () =>
+                  _open(JuiceTransferPage(api: _api, scope: _scope, lotId: _id))
+            : null,
         onClosure: snapshot.hasError
             ? null
             : () => _open(LotClosurePage(api: _api, scope: _scope, lotId: _id)),
@@ -496,25 +490,10 @@ class _LotDetailState extends State<_LotDetail> {
           },
           reportLink: _production,
         ),
-        stock: switch (snapshot) {
-          AsyncSnapshot(connectionState: ConnectionState.waiting) =>
-            const LinearProgressIndicator(),
-          AsyncSnapshot(:final error?) => _LoadFailed(error, _reload),
-          _ => DetailMetrics([
-            (
-              'Stok fisik nira',
-              formatQuantity(_liters(stock?['onHandMl']), 'L'),
-            ),
-            (
-              'Nira direservasi',
-              formatQuantity(_liters(stock?['reservedMl']), 'L'),
-            ),
-            (
-              'Nira tersedia',
-              formatQuantity(_liters(stock?['availableMl']), 'L'),
-            ),
-          ]),
-        },
+        loadStock: () => _api.juice(_scope, _id),
+        statusMessage: snapshot.hasError
+            ? _LoadFailed(snapshot.error!, _reload)
+            : null,
       );
     },
   );
@@ -554,11 +533,6 @@ class _LotDetailState extends State<_LotDetail> {
         );
       }
     }
-  }
-
-  num? _liters(Object? milliliters) {
-    final value = num.tryParse(milliliters?.toString() ?? '');
-    return value == null ? null : value / 1000;
   }
 }
 

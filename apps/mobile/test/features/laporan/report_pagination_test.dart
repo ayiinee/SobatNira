@@ -35,17 +35,24 @@ void main() {
       expect(find.text('1–5 dari 12'), findsNothing);
       expect(find.text('1 dari 3'), findsOneWidget);
       expect(find.byTooltip('Sebelumnya'), findsNothing);
+      final footer = find.byType(NiraPagination);
+      expect(
+        find.ancestor(of: footer, matching: find.byType(ListView)),
+        findsOneWidget,
+      );
       await next();
       expect(find.byTooltip('Sebelumnya'), findsOneWidget);
       expect(find.byTooltip('Berikutnya'), findsOneWidget);
       expect(find.text('Sugeng'), findsNothing);
       expect(find.text('Salim'), findsOneWidget);
       expect(find.text('Wahyu'), findsOneWidget);
+      final fullPageFooterTop = tester.getTopLeft(footer).dy;
       await next();
       expect(find.text('Budi'), findsOneWidget);
       expect(find.text('Rini'), findsOneWidget);
       expect(find.text('11–12 dari 12'), findsNothing);
       expect(find.text('3 dari 3'), findsOneWidget);
+      expect(tester.getTopLeft(footer).dy, lessThan(fullPageFooterTop));
       expect(find.byTooltip('Sebelumnya'), findsOneWidget);
       expect(find.byTooltip('Berikutnya'), findsNothing);
 

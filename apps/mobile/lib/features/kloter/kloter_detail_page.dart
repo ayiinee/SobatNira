@@ -15,26 +15,30 @@ class KloterDetailPage extends StatelessWidget {
     required this.kloter,
     required this.demo,
     required this.onNavigate,
-    this.stock,
+    this.loadStock,
     this.production,
     this.onEdit,
     this.onTransfer,
     this.onClosure,
     this.onOpenPekerjaan,
+    this.onReturnFromProcess,
     this.approvedPhoto,
+    this.statusMessage,
     super.key,
   });
 
   final DemoKloter kloter;
   final DemoProduction demo;
   final ValueChanged<NiraTab> onNavigate;
-  final Widget? stock;
+  final Future<Map<String, dynamic>> Function()? loadStock;
   final Widget? production;
-  final VoidCallback? onEdit;
-  final VoidCallback? onTransfer;
-  final VoidCallback? onClosure;
+  final Future<bool> Function()? onEdit;
+  final Future<void> Function()? onTransfer;
+  final Future<void> Function()? onClosure;
   final VoidCallback? onOpenPekerjaan;
+  final VoidCallback? onReturnFromProcess;
   final Future<Uint8List?> Function(String)? approvedPhoto;
+  final Widget? statusMessage;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -49,42 +53,44 @@ class KloterDetailPage extends StatelessWidget {
               const DetailTitle('Detail kloter'),
               KloterHeading(kloter),
               Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  niraInset,
+                padding: EdgeInsets.fromLTRB(
+                  niraPageInset(context),
                   NiraSpace.xl,
-                  niraInset,
+                  niraPageInset(context),
                   NiraSpace.lg,
                 ),
                 child: Column(
                   children: [
-                    DetailMetrics(
-                      kloter.record == null
-                          ? const [
-                              ('Tebu bersih', '1.500Kg'),
-                              ('Brix tebu', '90Kg'),
-                              ('Nira tercatat', '360L'),
-                            ]
-                          : [
-                              ('Tebu bersih', kloter.weight),
-                              ('Brix tebu', formatQuantity(kloter.brix, '°Bx')),
-                              (
-                                'Nira dihasilkan',
-                                formatQuantity(kloter.juiceLiters, 'L'),
-                              ),
-                            ],
-                    ),
-                    if (stock != null) ...[
-                      const SizedBox(height: NiraSpace.md),
-                      stock!,
-                    ],
-                    if (onEdit != null) DocumentLink('Edit kloter', onEdit!),
-                    if (onTransfer != null)
-                      DocumentLink('Transfer nira', onTransfer!),
-                    if (onClosure != null)
-                      DocumentLink('Penutupan dan riwayat', onClosure!),
+                    DetailMetrics([
+                      (
+                        'Tebu bersih',
+                        kloter.record != null && kloter.netWeightKg == null
+                            ? '—'
+                            : kloter.weight,
+                      ),
+                      (
+                        'Brix tebu',
+                        kloter.brix == null
+                            ? '—'
+                            : formatQuantity(kloter.brix, '°Bx'),
+                      ),
+                      if (kloter.record == null)
+                        (
+                          'Nira batch',
+                          formatQuantity(kloter.batchJuiceLiters, 'L'),
+                        )
+                      else
+                        (
+                          'Nira dihasilkan',
+                          kloter.juiceLiters == null
+                              ? '—'
+                              : formatQuantity(kloter.juiceLiters, 'L'),
+                        ),
+                    ]),
+                    ?statusMessage,
                     const SizedBox(height: NiraSpace.lg),
-                    DocumentLink('Data tebu dan penggilingan', () {
-                      Navigator.of(context).push(
+                    DocumentLink('Data tebu dan penggilingan', () async {
+                      await Navigator.of(context).push(
                         MaterialPageRoute<void>(
                           builder: (_) => KloterProcessPage(
                             demo: demo,
@@ -92,9 +98,14 @@ class KloterDetailPage extends StatelessWidget {
                             onNavigate: onNavigate,
                             onOpenPekerjaan: onOpenPekerjaan,
                             approvedPhoto: approvedPhoto,
+                            loadStock: loadStock,
+                            onEdit: onEdit,
+                            onTransfer: onTransfer,
+                            onClosure: onClosure,
                           ),
                         ),
                       );
+                      onReturnFromProcess?.call();
                     }),
                   ],
                 ),
@@ -113,10 +124,10 @@ class KloterDetailPage extends StatelessWidget {
                 ),
               ),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  niraInset,
+                padding: EdgeInsets.fromLTRB(
+                  niraPageInset(context),
                   NiraSpace.lg,
-                  niraInset,
+                  niraPageInset(context),
                   NiraSpace.md,
                 ),
                 child: Column(
@@ -144,11 +155,11 @@ class KloterDetailPage extends StatelessWidget {
                     for (final batch in kloter.batches)
                       Padding(
                         padding: const EdgeInsets.only(bottom: NiraSpace.md),
-                        child: KloterBatchCard(
+                        child: KloterBatchTile(
                           title: 'Batch ${batch.number}',
+                          juice: batch.juice.display,
+                          physicalWeight: batch.physicalWeight.display,
                           pending: !batch.review.verified,
-                          juice: '180L',
-                          physical: '90Kg',
                           onTap: () => Navigator.of(context).push(
                             MaterialPageRoute<void>(
                               builder: (_) => BatchDetailPage(
@@ -172,20 +183,21 @@ class KloterDetailPage extends StatelessWidget {
   );
 }
 
-class KloterBatchCard extends StatelessWidget {
-  const KloterBatchCard({
+class KloterBatchTile extends StatelessWidget {
+  const KloterBatchTile({
     required this.title,
-    required this.pending,
     required this.juice,
-    required this.physical,
+    required this.physicalWeight,
+    required this.pending,
     required this.onTap,
     this.cancelled = false,
     super.key,
   });
 
   final String title;
+  final String juice;
+  final String physicalWeight;
   final bool pending;
-  final String juice, physical;
   final VoidCallback onTap;
   final bool cancelled;
 
@@ -244,7 +256,7 @@ class KloterBatchCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     _info(context, 'Nira batch', juice, foreground),
                     const SizedBox(height: 2),
-                    _info(context, 'Hasil fisik', physical, foreground),
+                    _info(context, 'Hasil fisik', physicalWeight, foreground),
                   ],
                 ),
               ),

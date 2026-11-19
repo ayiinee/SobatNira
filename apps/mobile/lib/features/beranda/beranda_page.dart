@@ -76,7 +76,37 @@ class _BerandaPageState extends State<BerandaPage> {
       builder: (context, constraints) {
         _measureHeader();
         final height = constraints.maxHeight;
-        final headerHeight = (_headerHeight ?? 440).clamp(0.0, height * .72);
+        final inset = niraPageInset(context);
+        final header = _header(inset);
+        final headerHeight = _headerHeight ?? 440;
+        if (height - headerHeight < 160 || headerHeight > height * .78) {
+          return CustomScrollView(
+            key: const PageStorageKey('beranda-compact-scroll'),
+            slivers: [
+              SliverToBoxAdapter(child: header),
+              SliverToBoxAdapter(child: _tabs()),
+              if (widget.statusMessage case final status?)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: inset),
+                    child: status,
+                  ),
+                ),
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(
+                  inset,
+                  NiraSpace.md,
+                  inset,
+                  NiraSpace.lg,
+                ),
+                sliver: SliverList.builder(
+                  itemCount: items.length,
+                  itemBuilder: (context, index) => _card(items[index]),
+                ),
+              ),
+            ],
+          );
+        }
         final collapsed = (1 - headerHeight / height).clamp(.22, .75);
         final expanded = (collapsed + .22).clamp(collapsed, .94);
         void settle() {
@@ -100,47 +130,7 @@ class _BerandaPageState extends State<BerandaPage> {
               height: headerHeight,
               child: SingleChildScrollView(
                 key: const PageStorageKey('beranda-fixed-header'),
-                child: CustomPaint(
-                  key: _headerKey,
-                  painter: const _BerandaGeometryPainter(),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      niraInset,
-                      0,
-                      niraInset,
-                      NiraSpace.lg,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _Profile(
-                          factoryId: widget.factoryId,
-                          factories: widget.factories,
-                          onFactoryChanged: widget.onFactoryChanged,
-                          profile: widget.profile,
-                        ),
-                        const SizedBox(height: NiraSpace.lg),
-                        _ProductionSummary(
-                          summary: widget.summary,
-                          profit: widget.profit,
-                          period: widget.period,
-                          onPeriod: widget.onPeriod,
-                        ),
-                        if (widget.reportStatus != null) widget.reportStatus!,
-                        const SizedBox(height: NiraSpace.md),
-                        _QuickActions(onSelected: widget.onQuickAction),
-                        if (widget.onOpenPekerjaan case final open?) ...[
-                          const SizedBox(height: NiraSpace.md),
-                          OutlinedButton.icon(
-                            onPressed: open,
-                            icon: const Icon(Icons.assignment_outlined),
-                            label: const Text('Pekerjaan'),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
+                child: header,
               ),
             ),
             DraggableScrollableSheet(
@@ -161,18 +151,7 @@ class _BerandaPageState extends State<BerandaPage> {
                     Stack(
                       alignment: Alignment.topCenter,
                       children: [
-                        NiraTabs(
-                          labels: const ['Tinjau', 'Tuntas'],
-                          selected: _selected,
-                          inset: 27,
-                          wideIndicator: true,
-                          onSelected: (value) {
-                            if (scrollController.hasClients) {
-                              scrollController.jumpTo(0);
-                            }
-                            setState(() => _selected = value);
-                          },
-                        ),
+                        _tabs(scrollController),
                         Semantics(
                           label: 'Tarik daftar kloter ke atas',
                           button: true,
@@ -201,7 +180,7 @@ class _BerandaPageState extends State<BerandaPage> {
                             },
                             onVerticalDragEnd: (_) => settle(),
                             child: SizedBox(
-                              height: 12,
+                              height: 20,
                               width: 48,
                               child: Center(
                                 child: Container(
@@ -220,9 +199,7 @@ class _BerandaPageState extends State<BerandaPage> {
                     ),
                     if (widget.statusMessage case final status?)
                       Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: niraInset,
-                        ),
+                        padding: EdgeInsets.symmetric(horizontal: inset),
                         child: status,
                       ),
                     Expanded(
@@ -230,19 +207,13 @@ class _BerandaPageState extends State<BerandaPage> {
                         key: const ValueKey('beranda-kloter-list'),
                         controller: scrollController,
                         padding: EdgeInsets.fromLTRB(
-                          niraInset,
+                          inset,
                           NiraSpace.md,
-                          niraInset,
+                          inset,
                           NiraSpace.lg,
                         ),
                         itemCount: items.length,
-                        itemBuilder: (context, index) => Padding(
-                          padding: const EdgeInsets.only(bottom: NiraSpace.sm),
-                          child: KloterCard(
-                            kloter: items[index],
-                            onTap: () => widget.onOpenKloter(items[index]),
-                          ),
-                        ),
+                        itemBuilder: (context, index) => _card(items[index]),
                       ),
                     ),
                   ],
@@ -254,6 +225,59 @@ class _BerandaPageState extends State<BerandaPage> {
       },
     );
   }
+
+  Widget _header(double inset) => CustomPaint(
+    key: _headerKey,
+    painter: const _BerandaGeometryPainter(),
+    child: Padding(
+      padding: EdgeInsets.fromLTRB(inset, 0, inset, NiraSpace.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _Profile(
+            factoryId: widget.factoryId,
+            factories: widget.factories,
+            onFactoryChanged: widget.onFactoryChanged,
+            profile: widget.profile,
+          ),
+          const SizedBox(height: NiraSpace.lg),
+          _ProductionSummary(
+            summary: widget.summary,
+            profit: widget.profit,
+            period: widget.period,
+            onPeriod: widget.onPeriod,
+          ),
+          if (widget.reportStatus != null) widget.reportStatus!,
+          const SizedBox(height: NiraSpace.md),
+          _QuickActions(onSelected: widget.onQuickAction),
+          if (widget.onOpenPekerjaan case final open?) ...[
+            const SizedBox(height: NiraSpace.md),
+            OutlinedButton.icon(
+              onPressed: open,
+              icon: const Icon(Icons.assignment_outlined),
+              label: const Text('Pekerjaan'),
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
+
+  Widget _tabs([ScrollController? controller]) => NiraTabs(
+    labels: const ['Tinjau', 'Tuntas'],
+    selected: _selected,
+    inset: 27,
+    wideIndicator: true,
+    onSelected: (value) {
+      if (controller != null && controller.hasClients) controller.jumpTo(0);
+      setState(() => _selected = value);
+    },
+  );
+
+  Widget _card(DemoKloter item) => Padding(
+    padding: const EdgeInsets.only(bottom: NiraSpace.sm),
+    child: KloterCard(kloter: item, onTap: () => widget.onOpenKloter(item)),
+  );
 }
 
 class _Profile extends StatefulWidget {
