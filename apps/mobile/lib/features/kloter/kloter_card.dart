@@ -95,20 +95,24 @@ class KloterCard extends StatelessWidget {
                         style: niraText(NiraType.body, color: foreground),
                       ),
                       const SizedBox(height: NiraSpace.xs),
-                      Wrap(
-                        spacing: NiraSpace.sm,
-                        runSpacing: NiraSpace.xs,
-                        crossAxisAlignment: WrapCrossAlignment.center,
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Text(
-                            kloter.weight,
-                            style: niraText(NiraType.body, color: foreground),
+                          Expanded(
+                            child: Text(
+                              kloter.weight,
+                              style: niraText(NiraType.body, color: foreground),
+                            ),
                           ),
-                          Text(
-                            formatDate(kloter.date),
-                            style: niraText(
-                              NiraType.caption,
-                              color: foreground,
+                          const SizedBox(width: NiraSpace.sm),
+                          Expanded(
+                            child: Text(
+                              formatDate(kloter.date),
+                              textAlign: TextAlign.end,
+                              style: niraText(
+                                NiraType.caption,
+                                color: foreground,
+                              ),
                             ),
                           ),
                         ],
