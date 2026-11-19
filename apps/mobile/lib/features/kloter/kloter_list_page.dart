@@ -29,8 +29,10 @@ class _KloterListPageState extends State<KloterListPage> {
   final _expandedDates = <DateTime, bool>{};
   KloterDateFilter? _dateFilter;
   int _activeTab = 0;
+  int _page = 0;
 
   static const _statuses = [null, KloterStatus.review, KloterStatus.done];
+  static const _datesPerPage = 10;
   static const _searchControlSize = 48.0;
 
   @override
@@ -44,6 +46,11 @@ class _KloterListPageState extends State<KloterListPage> {
     if (_scroll.hasClients) _scroll.jumpTo(0);
   }
 
+  void _showPage(int page) {
+    _scrollToTop();
+    setState(() => _page = page);
+  }
+
   Future<void> _selectDate() async {
     FocusScope.of(context).unfocus();
     final result = await showKloterDateFilter(
@@ -53,34 +60,37 @@ class _KloterListPageState extends State<KloterListPage> {
     );
     if (!mounted || result == null) return;
     _scrollToTop();
-    setState(() => _dateFilter = result.selection);
+    setState(() {
+      _dateFilter = result.selection;
+      _page = 0;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final term = _search.text.trim().toLowerCase();
     final status = _statuses[_activeTab];
-    final matching = widget.kloter
-        .where(
-          (item) =>
-              (item.code.toLowerCase().contains(term) ||
-                  (item.id != null &&
-                      item.supplier.toLowerCase().contains(term))) &&
-              (_dateFilter?.contains(item.date) ?? true),
-        )
-        .toList();
-    final visible = matching.where(
-      (item) => status == null || item.status == status,
-    );
-    final pending = matching
-        .where((item) => item.status == KloterStatus.review)
-        .length;
     final groups = <DateTime, List<DemoKloter>>{};
-    for (final item in visible) {
+    var pending = 0;
+    for (final item in widget.kloter) {
+      final matchesSearch =
+          item.code.toLowerCase().contains(term) ||
+          (item.id != null && item.supplier.toLowerCase().contains(term));
+      if (!matchesSearch || !(_dateFilter?.contains(item.date) ?? true)) {
+        continue;
+      }
+      if (item.status == KloterStatus.review) pending++;
+      if (status != null && item.status != status) continue;
       final date = DateUtils.dateOnly(item.date);
       groups.putIfAbsent(date, () => []).add(item);
     }
     final dates = groups.keys.toList()..sort((a, b) => b.compareTo(a));
+    final pageCount = (dates.length + _datesPerPage - 1) ~/ _datesPerPage;
+    // Keep the current page if a refresh temporarily replaces the list.
+    if (widget.statusMessage == null) {
+      _page = _page.clamp(0, pageCount > 0 ? pageCount - 1 : 0);
+    }
+    final pageDates = dates.skip(_page * _datesPerPage).take(_datesPerPage);
 
     return Column(
       children: [
@@ -115,7 +125,10 @@ class _KloterListPageState extends State<KloterListPage> {
           onSelected: (index) {
             FocusScope.of(context).unfocus();
             _scrollToTop();
-            setState(() => _activeTab = index);
+            setState(() {
+              _activeTab = index;
+              _page = 0;
+            });
           },
         ),
         Expanded(
@@ -132,18 +145,28 @@ class _KloterListPageState extends State<KloterListPage> {
             children: [
               if (widget.statusMessage case final status?)
                 status
-              else if (visible.isEmpty)
+              else if (pageDates.isEmpty)
                 _empty()
               else
-                for (final date in dates)
+                for (final date in pageDates)
                   _dateAccordion(
                     date,
                     groups[date]!,
-                    latest: date == dates.first,
+                    latest: date == pageDates.first,
                   ),
             ],
           ),
         ),
+        if (widget.statusMessage == null && pageCount > 1)
+          Padding(
+            padding: const EdgeInsets.only(bottom: NiraSpace.sm),
+            child: NiraPagination(
+              page: _page + 1,
+              pageCount: pageCount,
+              onPrevious: _page > 0 ? () => _showPage(_page - 1) : null,
+              onNext: _page + 1 < pageCount ? () => _showPage(_page + 1) : null,
+            ),
+          ),
       ],
     );
   }
@@ -271,10 +294,7 @@ class _KloterListPageState extends State<KloterListPage> {
       textAlignVertical: TextAlignVertical.center,
       style: niraText(NiraType.body),
       cursorColor: niraGreen,
-      onChanged: (_) {
-        _scrollToTop();
-        setState(() {});
-      },
+      onChanged: (_) => _showPage(0),
       decoration: InputDecoration(
         hintText: 'Telusuri Kloter berdasarkan ID',
         hintStyle: niraText(NiraType.body, color: niraLeaf),
@@ -303,8 +323,7 @@ class _KloterListPageState extends State<KloterListPage> {
             : IconButton(
                 onPressed: () {
                   _search.clear();
-                  _scrollToTop();
-                  setState(() {});
+                  _showPage(0);
                 },
                 tooltip: 'Hapus pencarian',
                 icon: const Icon(Icons.close, size: 16, color: niraGreen),

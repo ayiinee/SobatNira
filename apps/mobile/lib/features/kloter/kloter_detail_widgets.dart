@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../../sobatnira_ui.dart';
 import 'demo_production.dart';
 
+const reviewActionHeight = 52.0;
+const reviewedActionHeight = 44.0;
+
 class DetailTitle extends StatelessWidget {
   const DetailTitle(this.title, {this.inset = niraInset, super.key});
 
@@ -375,6 +378,8 @@ class BatchReviewActions extends StatelessWidget {
 
   Future<void> _confirm(BuildContext context) async {
     final colors = Theme.of(context).colorScheme;
+    final cancelColor = verified ? colors.error : colors.primary;
+    const buttonPadding = EdgeInsets.symmetric(horizontal: NiraSpace.sm);
     final confirmed = await showDialog<bool>(
       context: context,
       barrierColor: const Color(0x66000000),
@@ -392,31 +397,38 @@ class BatchReviewActions extends StatelessWidget {
               ? 'Batch kembali ke status Perlu ditinjau dan datanya bisa diedit lagi.'
               : 'Pastikan data batch sudah benar. Data akan terkunci setelah divalidasi.',
         ),
-        actionsAlignment: MainAxisAlignment.spaceBetween,
-        actionsOverflowButtonSpacing: NiraSpace.sm,
         actions: [
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: colors.error,
-              side: BorderSide(color: colors.error),
-              minimumSize: const Size(80, 48),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(niraRadius),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: cancelColor,
+                    side: BorderSide(color: cancelColor),
+                    minimumSize: const Size(0, 48),
+                    padding: buttonPadding,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(niraRadius),
+                    ),
+                  ),
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Batal', textAlign: TextAlign.center),
+                ),
               ),
-            ),
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            style: verified
-                ? FilledButton.styleFrom(
-                    backgroundColor: colors.error,
-                    foregroundColor: Colors.white,
-                  )
-                : null,
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Konfirmasi'),
+              const SizedBox(width: NiraSpace.sm),
+              Expanded(
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: verified ? colors.error : null,
+                    foregroundColor: verified ? Colors.white : null,
+                    padding: buttonPadding,
+                  ),
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('Konfirmasi', textAlign: TextAlign.center),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -437,7 +449,7 @@ class BatchReviewActions extends StatelessWidget {
           label,
           verified ? null : () => _confirm(context),
           visualDensity: VisualDensity.standard,
-          minimumHeight: verified ? 44 : 52,
+          minimumHeight: verified ? reviewedActionHeight : reviewActionHeight,
         ),
       ),
       if (verified) ...[
@@ -448,7 +460,7 @@ class BatchReviewActions extends StatelessWidget {
           style: IconButton.styleFrom(
             backgroundColor: Theme.of(context).colorScheme.error,
             foregroundColor: Colors.white,
-            minimumSize: const Size.square(44),
+            minimumSize: const Size.square(reviewedActionHeight),
             iconSize: 20,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(niraRadius),

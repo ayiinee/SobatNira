@@ -140,6 +140,7 @@ class KloterDetailPage extends StatelessWidget {
                             MaterialPageRoute<void>(
                               builder: (_) => BatchDetailPage(
                                 batch: batch,
+                                kloterCode: kloter.code,
                                 demo: demo,
                                 onNavigate: onNavigate,
                               ),

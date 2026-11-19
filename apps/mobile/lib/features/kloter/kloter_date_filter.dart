@@ -42,8 +42,11 @@ class KloterDateFilter {
   final KloterPeriod period;
   final DateTimeRange range;
 
-  bool contains(DateTime day) =>
-      !day.isBefore(range.start) && !day.isAfter(range.end);
+  bool contains(DateTime date) {
+    final day = DateUtils.dateOnly(date);
+    return !day.isBefore(DateUtils.dateOnly(range.start)) &&
+        !day.isAfter(DateUtils.dateOnly(range.end));
+  }
 }
 
 // A null result closes the dialog. An empty selection applies Reset.
@@ -118,15 +121,14 @@ class _FilterPanelState extends State<_FilterPanel> {
   Widget build(BuildContext context) {
     if (_showRange) {
       final current = widget.current;
+      final today = DateUtils.dateOnly(widget.today ?? DemoProduction.today);
       return _RangeEditor(
-        initialRange: current?.period == KloterPeriod.custom
-            ? current!.range
-            : DateTimeRange(
-                start:
-                    widget.today?.subtract(const Duration(days: 9)) ??
-                    DateTime(2026, 10, 20),
-                end: widget.today ?? DemoProduction.today,
-              ),
+        initialRange:
+            current?.range ??
+            DateTimeRange(
+              start: DateTime(today.year, today.month, today.day - 9),
+              end: today,
+            ),
         onBack: () => setState(() => _showRange = false),
         onApply: (range) =>
             _apply(KloterDateFilter(KloterPeriod.custom, range)),

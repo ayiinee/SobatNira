@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
@@ -7,12 +9,14 @@ import 'kloter_detail_widgets.dart';
 class BatchDetailPage extends StatefulWidget {
   const BatchDetailPage({
     required this.batch,
+    required this.kloterCode,
     required this.demo,
     required this.onNavigate,
     super.key,
   });
 
   final DemoBatch batch;
+  final String kloterCode;
   final DemoProduction demo;
   final ValueChanged<NiraTab> onNavigate;
 
@@ -20,12 +24,99 @@ class BatchDetailPage extends StatefulWidget {
   State<BatchDetailPage> createState() => _BatchDetailPageState();
 }
 
-class _BatchDetailPageState extends State<BatchDetailPage> {
+class _BatchDetailPageState extends State<BatchDetailPage>
+    with SingleTickerProviderStateMixin {
   int _tab = 0;
   DemoBatch get _batch => widget.batch;
 
+  bool? _validationNotice;
+  Timer? _noticeTimer;
+  late final _noticeAnimation = AnimationController(vsync: this)
+    ..addStatusListener(_onNoticeStatus);
+  late final _noticeSlide = _noticeAnimation.drive(
+    Tween(
+      begin: const Offset(0, -1),
+      end: Offset.zero,
+    ).chain(CurveTween(curve: Curves.easeOutCubic)),
+  );
+
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
+  void dispose() {
+    _noticeTimer?.cancel();
+    _noticeAnimation.dispose();
+    super.dispose();
+  }
+
+  void _onNoticeStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed) {
+      _noticeTimer = Timer(
+        const Duration(seconds: 7),
+        _noticeAnimation.reverse,
+      );
+    } else if (status == AnimationStatus.dismissed) {
+      setState(() => _validationNotice = null);
+    }
+  }
+
+  void _updateValidation(bool validated) {
+    if (validated) {
+      widget.demo.verify(_batch.review);
+    } else {
+      widget.demo.reopenBatch(_batch);
+    }
+
+    _noticeTimer?.cancel();
+    setState(() => _validationNotice = validated);
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    _noticeAnimation
+      ..duration = reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 280)
+      ..reverseDuration = reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 240);
+    if (_noticeAnimation.isCompleted) {
+      _onNoticeStatus(AnimationStatus.completed);
+    } else {
+      _noticeAnimation.forward();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
+    children: [
+      _buildScaffold(),
+      if (_validationNotice case final validated?)
+        Positioned(
+          top: MediaQuery.viewPaddingOf(context).top,
+          left: 0,
+          right: 0,
+          child: IgnorePointer(
+            child: ClipRect(
+              child: SlideTransition(
+                position: _noticeSlide,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    niraInset,
+                    NiraSpace.sm,
+                    niraInset,
+                    NiraSpace.md,
+                  ),
+                  child: _BatchValidationNotice(
+                    batchNumber: _batch.number,
+                    kloterCode: widget.kloterCode,
+                    validated: validated,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+    ],
+  );
+
+  Widget _buildScaffold() => ListenableBuilder(
     listenable: widget.demo,
     builder: (context, _) {
       final reviewed = _batch.review.verified;
@@ -36,8 +127,8 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
           batchNumber: _batch.number,
           label: reviewed ? 'Batch tervalidasi' : 'Validasi',
           verified: reviewed,
-          onVerify: () => verifyDemoReview(context, widget.demo, _batch.review),
-          onReopen: () => widget.demo.reopenBatch(_batch),
+          onVerify: () => _updateValidation(true),
+          onReopen: () => _updateValidation(false),
         ),
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -240,6 +331,69 @@ class _PriceRow extends StatelessWidget {
   );
 }
 
+class _BatchValidationNotice extends StatelessWidget {
+  const _BatchValidationNotice({
+    required this.batchNumber,
+    required this.kloterCode,
+    required this.validated,
+  });
+
+  final int batchNumber;
+  final String kloterCode;
+  final bool validated;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = validated
+        ? 'Batch $batchNumber berhasil divalidasi'
+        : 'Validasi Batch $batchNumber dibatalkan';
+    final detail = 'Kloter $kloterCode';
+    final accent = validated ? niraGreen : niraOchre;
+    return Semantics(
+      liveRegion: true,
+      label: '$title. $detail',
+      excludeSemantics: true,
+      child: Material(
+        color: niraPaper,
+        elevation: 4,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(niraRadius),
+          side: BorderSide(color: accent.withValues(alpha: .3)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(NiraSpace.md),
+          child: Row(
+            children: [
+              Icon(
+                validated ? Icons.check_circle : Icons.info_outline,
+                color: accent,
+              ),
+              const SizedBox(width: NiraSpace.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: niraText(NiraType.body, weight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: NiraSpace.xs),
+                    Text(
+                      detail,
+                      style: niraText(NiraType.caption, color: niraLeaf),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ReviewBadge extends StatelessWidget {
   const _ReviewBadge({required this.reviewed});
 
@@ -247,7 +401,7 @@ class _ReviewBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const textColor = niraGreen;
+    final foregroundColor = reviewed ? niraGreen : Colors.white;
     return Container(
       padding: const EdgeInsets.fromLTRB(
         NiraSpace.sm,
@@ -269,7 +423,7 @@ class _ReviewBadge extends StatelessWidget {
           Icon(
             reviewed ? Icons.check_circle : Icons.error,
             size: 14,
-            color: textColor,
+            color: foregroundColor,
           ),
           const SizedBox(width: NiraSpace.xs),
           Flexible(
@@ -277,7 +431,7 @@ class _ReviewBadge extends StatelessWidget {
               reviewed ? 'Tervalidasi' : 'Perlu ditinjau',
               style: niraText(
                 NiraType.body,
-                color: textColor,
+                color: foregroundColor,
                 weight: FontWeight.w700,
               ),
             ),

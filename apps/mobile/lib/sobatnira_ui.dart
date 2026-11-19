@@ -744,7 +744,10 @@ class NiraPagination extends StatelessWidget {
         padding: const EdgeInsets.only(top: NiraSpace.sm),
         child: Material(
           color: niraPaper,
-          shape: const StadiumBorder(side: BorderSide(color: niraLine)),
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(niraRadius)),
+            side: BorderSide(color: niraLine),
+          ),
           clipBehavior: Clip.antiAlias,
           child: Row(
             mainAxisSize: MainAxisSize.min,

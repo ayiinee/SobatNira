@@ -99,7 +99,7 @@ class DemoProduction extends ChangeNotifier {
 
   DemoProduction.empty() : kloter = [];
 
-  static final today = DateTime(2026, 10, 29);
+  static final today = DateTime(2026, 10, 25);
   final List<DemoKloter> kloter;
 
   void edit(DemoReview review, DemoField field, String value) {

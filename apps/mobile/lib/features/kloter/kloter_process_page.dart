@@ -35,7 +35,6 @@ class _KloterProcessPageState extends State<KloterProcessPage> {
       return NiraScaffold(
         tab: NiraTab.kloter,
         onNavigate: widget.onNavigate,
-        actionGap: 32,
         bottomAction: connected
             ? NiraButton('Buka Pekerjaan', widget.onOpenPekerjaan)
             : NiraButton(
@@ -49,6 +48,10 @@ class _KloterProcessPageState extends State<KloterProcessPage> {
                 review.verified
                     ? null
                     : () => verifyDemoReview(context, widget.demo, review),
+                visualDensity: VisualDensity.standard,
+                minimumHeight: review.verified
+                    ? reviewedActionHeight
+                    : reviewActionHeight,
               ),
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

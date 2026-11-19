@@ -52,19 +52,13 @@ class _ReportPaginatedListState<T> extends State<ReportPaginatedList<T>> {
     );
     final footer = widget.items.length <= _pageSize
         ? null
-        : Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: NiraSpace.sm),
-              NiraPagination(
-                page: _page + 1,
-                pageCount: _pageCount,
-                onPrevious: _page > 0 ? () => setState(() => _page--) : null,
-                onNext: _page + 1 < _pageCount
-                    ? () => setState(() => _page++)
-                    : null,
-              ),
-            ],
+        : NiraPagination(
+            page: _page + 1,
+            pageCount: _pageCount,
+            onPrevious: _page > 0 ? () => setState(() => _page--) : null,
+            onNext: _page + 1 < _pageCount
+                ? () => setState(() => _page++)
+                : null,
           );
     final scrollHeader = widget.scrollHeader;
     return Column(
@@ -90,7 +84,7 @@ class _ReportPaginatedListState<T> extends State<ReportPaginatedList<T>> {
             footer
           else
             Padding(
-              padding: const EdgeInsets.only(bottom: NiraSpace.sm),
+              padding: const EdgeInsets.only(bottom: NiraSpace.md),
               child: footer,
             ),
       ],

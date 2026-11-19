@@ -1,6 +1,7 @@
 import 'dart:ui' show PointerDeviceKind;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sobatnira/features/laporan/demo_analytics.dart';
 import 'package:sobatnira/features/laporan/production_chart.dart';
@@ -22,13 +23,19 @@ void main() {
               padding: const EdgeInsets.all(30),
               child: ListenableBuilder(
                 listenable: analytics,
-                builder: (_, _) => ProductionChart(analytics: analytics),
+                builder: (_, _) =>
+                    ProductionChart(analytics: analytics, onFilter: () {}),
               ),
             ),
           ),
         ),
       );
       await tester.pumpAndSettle();
+      final title = tester.renderObject<RenderParagraph>(
+        find.text('Gula final per hari (Kg)'),
+      );
+      final singleLineHeight = title.getMaxIntrinsicHeight(double.infinity);
+      expect(title.size.height, closeTo(singleLineHeight, 0.01));
       final plot = find.byKey(const ValueKey('production-chart-plot'));
       final detail = find.byKey(const ValueKey('production-chart-detail'));
       expect(find.text('Gula final (kg)'), findsOneWidget);
@@ -61,12 +68,19 @@ void main() {
       await tester.tap(find.text('Grade').last);
       await tester.pumpAndSettle();
       expect(analytics.variant, ProductionVariant.grade);
+      expect(title.size.height, closeTo(singleLineHeight, 0.01));
       expect(find.text('Grade A'), findsOneWidget);
       expect(find.text('Grade C'), findsOneWidget);
       await tester.tapAt(point);
       await tester.pumpAndSettle();
       expect(detail, findsOneWidget);
       expect(find.textContaining('A: '), findsOneWidget);
+      await tester.tap(find.byTooltip('Jenis grafik'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('chart-option-rendemen')));
+      await tester.pumpAndSettle();
+      expect(analytics.variant, ProductionVariant.rendemen);
+      expect(title.size.height, closeTo(singleLineHeight, 0.01));
       expect(tester.takeException(), isNull);
     },
   );
