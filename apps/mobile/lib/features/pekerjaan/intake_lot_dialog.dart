@@ -21,6 +21,7 @@ class IntakeLotDialog extends StatefulWidget {
 }
 
 class _IntakeLotDialogState extends State<IntakeLotDialog> {
+  final _pageHeight = NiraPageHeight();
   final _offsets = [0];
   late Future<Json> _page = _fetch(0);
   Json? _selected;
@@ -77,8 +78,10 @@ class _IntakeLotDialogState extends State<IntakeLotDialog> {
     ),
     content: SizedBox(
       width: 480,
-      child: FutureBuilder<Json>(
+      child: NiraPagedFutureBuilder<Json>(
         future: _page,
+        page: _offsets.length,
+        dataset: (widget.taskId, widget.millingLabel),
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const LinearProgressIndicator();
@@ -110,49 +113,58 @@ class _IntakeLotDialogState extends State<IntakeLotDialog> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (lots.isEmpty)
-                  Text(
-                    _milling
-                        ? 'Tidak ada kloter penggilingan pada halaman ini.'
-                        : 'Belum ada kloter siap menerima nota di pabrik ini.',
+                NiraPageBody(
+                  height: _pageHeight,
+                  firstPage: _offsets.length == 1,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (lots.isEmpty)
+                        Text(
+                          _milling
+                              ? 'Tidak ada kloter penggilingan pada halaman ini.'
+                              : 'Belum ada kloter siap menerima nota di pabrik ini.',
+                        ),
+                      for (final lot in lots)
+                        ListTile(
+                          selected: _selected?['id'] == lot['id'],
+                          leading: Icon(
+                            _selected?['id'] == lot['id']
+                                ? Icons.radio_button_checked
+                                : Icons.radio_button_unchecked,
+                          ),
+                          title: Text('${lot['displayCode'] ?? lot['id']}'),
+                          subtitle: Text(
+                            '${lot['supplierName']}\n${_receivedAt(lot)}',
+                          ),
+                          onTap: () => setState(() => _selected = lot),
+                        ),
+                      if (_milling && lots.isNotEmpty) ...[
+                        TextFormField(
+                          initialValue: _liters,
+                          onChanged: (value) => setState(
+                            () => _liters = value.trim().replaceAll(',', '.'),
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: const InputDecoration(
+                            labelText: 'Total nira hasil giling (L)',
+                          ),
+                        ),
+                        TextFormField(
+                          initialValue: _occurredAt,
+                          onChanged: (value) =>
+                              setState(() => _occurredAt = value.trim()),
+                          decoration: const InputDecoration(
+                            labelText: 'Waktu penggilingan dan zona waktu',
+                            hintText: '2026-11-16T09:00:00+07:00',
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                for (final lot in lots)
-                  ListTile(
-                    selected: _selected?['id'] == lot['id'],
-                    leading: Icon(
-                      _selected?['id'] == lot['id']
-                          ? Icons.radio_button_checked
-                          : Icons.radio_button_unchecked,
-                    ),
-                    title: Text('${lot['displayCode'] ?? lot['id']}'),
-                    subtitle: Text(
-                      '${lot['supplierName']}\n${_receivedAt(lot)}',
-                    ),
-                    onTap: () => setState(() => _selected = lot),
-                  ),
-                if (_milling && lots.isNotEmpty) ...[
-                  TextFormField(
-                    initialValue: _liters,
-                    onChanged: (value) => setState(
-                      () => _liters = value.trim().replaceAll(',', '.'),
-                    ),
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Total nira hasil giling (L)',
-                    ),
-                  ),
-                  TextFormField(
-                    initialValue: _occurredAt,
-                    onChanged: (value) =>
-                        setState(() => _occurredAt = value.trim()),
-                    decoration: const InputDecoration(
-                      labelText: 'Waktu penggilingan dan zona waktu',
-                      hintText: '2026-11-16T09:00:00+07:00',
-                    ),
-                  ),
-                ],
+                ),
                 if (_offsets.length > 1 || next != null)
                   NiraPagination(
                     page: _offsets.length,
