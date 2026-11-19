@@ -65,7 +65,8 @@ class WhatsAppController {
     const inbound = readInbound(event, 'IMAGE', key);
     const mime = imageMime(file.buffer, file.mimetype);
     if (inbound.media_mime_type && inbound.media_mime_type !== mime) throw new BadRequestException('Tipe media tidak cocok');
-    return this.intake.photo(inbound, mime, file.buffer);
+    const result = await this.intake.photo(inbound, mime, file.buffer);
+    return result.duplicate ? result : { ...result, commit_confirmed_at_ms: Date.now() };
   }
 
   @Get('documents/:documentId/revisions/:revisionId')
@@ -144,8 +145,10 @@ class MobileReviewController {
   }
 
   @Patch('review-notifications/:id/read')
-  async markRead(@Headers('authorization') token: string, @Param('id') id: string) {
-    return this.review.markNotificationRead(await this.review.user(token), requireUuid(id));
+  async markRead(@Headers('authorization') token: string, @Param('id') id: string,
+    @Body('revision_id') revision?: unknown) {
+    return this.review.markNotificationRead(await this.review.user(token), requireUuid(id),
+      revision === undefined ? undefined : requireUuid(revision));
   }
 
   @Get('review-tasks')

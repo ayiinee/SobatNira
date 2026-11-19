@@ -31,6 +31,8 @@ SCHEMAS = {
 }
 MAX_BYTES = 10 * 1024 * 1024
 MAX_PIXELS = 20_000_000
+NOTE_SCHEMA_VERSION = "1.0.0"
+NOTE_TEMPLATE_VERSION = "1.0.0"
 PADDLE_WORKER = ThreadPoolExecutor(max_workers=1, thread_name_prefix="sobatnira-paddle")
 router = APIRouter()
 
@@ -90,8 +92,8 @@ class ExtractionRequest(BaseModel):
     revision_id: UUID
     factory_id: UUID
     document_type_hint: Literal["TRUCK_ARRIVAL_NOTE", "PRODUCTION_NOTE"] | None = None
-    schema_version: Literal["1.0.0"]
-    template_version: Literal["1.0.0"] | None = "1.0.0"
+    schema_version: Literal[NOTE_SCHEMA_VERSION]
+    template_version: Literal[NOTE_TEMPLATE_VERSION] | None = NOTE_TEMPLATE_VERSION
     image: ImageReference
     options: ExtractionOptions = Field(default_factory=ExtractionOptions)
 
@@ -166,6 +168,11 @@ def _recognize(image, preprocess):
     return tokens
 
 
+def read_note(image, asset_id, schema_version, template_version, preprocess=True, *, infer=None):
+    tokens = (infer if infer is not None else recognize)(image, preprocess)
+    return tokens, extract(tokens, asset_id, schema_version, template_version, image)
+
+
 def reread(image, bbox, model, key, *, supplier_name=False):
     width, height = image.size
     x, y, w, h = bbox
@@ -197,6 +204,7 @@ def resolve_ambiguities(note, image, options, processing):
     key = os.getenv("GEMINI_API_KEY")
     enabled = options.gemini_reread == "SELECTIVE" and key and model and re.fullmatch(r"[a-zA-Z0-9._-]+", model)
     attempt_count = 0
+    reread_seconds = 0.0
     issues = []
     for path, value in extracted_fields(note):
         if value["status"] == "ILLEGIBLE":
@@ -209,6 +217,7 @@ def resolve_ambiguities(note, image, options, processing):
             continue
         attempt_count += 1
         processing.update(vision_provider="GEMINI_DIRECT", vision_model=model)
+        started = monotonic()
         try:
             bbox = value["evidence"][0]["bbox"]
             supplier_name = path == "header.supplier_name"
@@ -225,12 +234,15 @@ def resolve_ambiguities(note, image, options, processing):
         except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
             issues.append({"code": "VISION_UNAVAILABLE", "severity": "WARNING", "message": "Pembacaan ulang belum tersedia.", "field_path": path})
             continue
+        finally:
+            reread_seconds += monotonic() - started
         if candidate and candidate.strip() != (value["raw_value"] or "").strip():
             candidates = [{"value": value["raw_value"], "source": "PADDLE_OCR", "confidence": value["confidence"]},
                           {"value": candidate, "source": "GEMINI_REREAD", "confidence": None}]
             if path.rsplit(".", 1)[-1] != "gamping":
                 value["alternatives"] = candidates
             issue.update(code="OCR_VISION_DISAGREE", candidates=candidates, evidence=value["evidence"])
+    processing.update(reread_attempts=attempt_count, reread_duration_ms=int(reread_seconds * 1000))
     return issues
 
 
@@ -269,15 +281,18 @@ def run_extraction(request: ExtractionRequest, x_internal_service_token: str = H
     except ValueError:
         response.update(status="FAILED", issues=[{"code": "INVALID_IMAGE", "severity": "ERROR", "message": "Foto tidak dapat dibaca."}])
     else:
+        infer_started = monotonic()
         try:
-            tokens = recognize(image, request.options.preprocess)
+            tokens, note = read_note(image, str(request.image.asset_id), request.schema_version,
+                                     request.template_version, request.options.preprocess)
         except (ImportError, RuntimeError, OSError, ValueError, KeyError):
             raise HTTPException(503, "PaddleOCR inference unavailable") from None
+        processing.update(media_duration_ms=int((infer_started - start) * 1000),
+                          infer_parse_duration_ms=int((monotonic() - infer_started) * 1000))
         processing["raw_ocr"] = [
             {"text": token.text, "confidence": token.confidence, **token.evidence(str(request.image.asset_id))}
             for token in tokens
         ]
-        note = extract(tokens, str(request.image.asset_id), request.schema_version, request.template_version, image)
         if note is None or request.document_type_hint not in (None, note["document_type"]):
             response.update(status="NEEDS_REVIEW", issues=[{"code": "UNKNOWN_LAYOUT", "severity": "ERROR", "message": "Template nota perlu ditinjau."}])
         else:

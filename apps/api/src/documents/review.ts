@@ -126,11 +126,21 @@ export class Review {
     return result;
   }
 
-  async markNotificationRead(user: string, id: string) {
-    await this.db.query(`UPDATE admin_review_notifications n SET read_at=now()
-      FROM admin_review_tasks t JOIN source_documents d ON d.id=t.document_id JOIN review_memberships a ON a.factory_id=d.factory_id
-      WHERE n.task_id=t.id AND n.task_id=$2 AND n.user_id=$1 AND a.user_id=n.user_id AND a.active AND ${ACTIVE_REVIEW_ACCESS_SQL} AND a.role='ADMIN'
-        AND n.read_at IS NULL`, [user, id]);
+  async markNotificationRead(user: string, id: string, revision?: string) {
+    await this.db.query(`WITH task AS (
+      SELECT t.id,t.document_id,t.revision_id,t.status,t.created_at,d.current_revision_id,a.role
+      FROM admin_review_tasks t JOIN source_documents d ON d.id=t.document_id
+      JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1 AND a.active AND ${ACTIVE_REVIEW_ACCESS_SQL}
+      WHERE t.id=$2 AND ($3::uuid IS NULL OR t.revision_id=$3)
+    ), opened AS (
+      INSERT INTO audit_events (document_id,revision_id,action,actor_id,details)
+      SELECT document_id,revision_id,'REVIEW_OPENED',$1,jsonb_build_object('task_id',id,'task_created_at',created_at)
+      FROM task WHERE revision_id=$3 AND revision_id=current_revision_id
+        AND status IN ('PENDING_VALIDATION','MANUAL_REVIEW_REQUIRED')
+      ON CONFLICT (revision_id,actor_id) WHERE action='REVIEW_OPENED' DO NOTHING
+    ) UPDATE admin_review_notifications n SET read_at=now()
+      FROM task WHERE n.task_id=task.id AND n.user_id=$1 AND task.role='ADMIN' AND n.read_at IS NULL`,
+    [user, id, revision ?? null]);
     return { acknowledged: true };
   }
 

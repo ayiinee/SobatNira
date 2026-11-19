@@ -87,6 +87,17 @@ class OcrTest(TestCase):
         self.assertEqual(batch["cooking"]["gamping"]["normalized_value"], "1 1/2")
         self.assertEqual(batch["cooking"]["jam_turun"]["normalized_value"], "15:35")
         self.assertEqual(batch["unmapped_cells"][0]["header_raw"], "?")
+        with TemporaryDirectory() as folder:
+            root = Path(folder)
+            image.save(root / "grid.png", "PNG")
+            manifest = root / "ground-truth.json"
+            manifest.write_text(json.dumps([{"image": "grid.png", "document_type": "PRODUCTION_NOTE", "fields": {
+                "cane_blocks.0.batches.0.output.hasil_kg": {"normalized_value": 22, "unit": "kg"},
+                "cane_blocks.1.batches.0.cooking.jam_turun": {"normalized_value": "15:35"},
+            }}]), encoding="utf-8")
+            report = evaluate(load_cases(manifest), lambda *_: tokens)
+        self.assertEqual(report["classification"], {"PRODUCTION_NOTE": {"PRODUCTION_NOTE": 1}})
+        self.assertTrue(all(field["correct"] == 1 for field in report["fields"].values()))
 
     def test_examples_conform_to_note_schemas(self):
         directory = Path(__file__).resolve().parents[2] / "docs" / "ai" / "examples"
@@ -118,6 +129,8 @@ class OcrTest(TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         data = response.json()
         self.assertEqual(data["status"], "PARTIAL")
+        self.assertEqual(data["processing"]["reread_attempts"], 1)
+        self.assertGreaterEqual(data["processing"]["reread_duration_ms"], 0)
         SCHEMAS["extraction-envelope"].validate(data)
         self.assertEqual(len(data["processing"]["raw_ocr"]), len(tokens))
         weight = data["extraction"]["header"]["net_weight_kg"]
@@ -266,9 +279,11 @@ class OcrTest(TestCase):
             root = Path(folder)
             (root / "synthetic.png").write_bytes(self.image)
             manifest = root / "ground-truth.json"
-            manifest.write_text(json.dumps([{"image": "synthetic.png", "document_type": "TRUCK_ARRIVAL_NOTE", "fields": {
+            manifest.write_text(json.dumps([{"image": "synthetic.png", "document_type": "TRUCK_ARRIVAL_NOTE",
+                                             "required_fields": ["header.net_weight_kg"], "fields": {
                 "header.net_weight_kg": {"normalized_value": 1250, "unit": "kg"},
                 "header.supplier_name": {"normalized_value": "Pemasok Berbeda"},
+                "header.vehicle_number": {"status": "ILLEGIBLE"},
                 "header.unknown": {"status": "READ"},
             }}, {"image": "synthetic.png", "document_type": "TRUCK_ARRIVAL_NOTE", "fields": {
                 "header.net_weight_kg": {"normalized_value": 1280, "unit": "kg"},
@@ -286,4 +301,19 @@ class OcrTest(TestCase):
         scores = report["critical_read_calibration"][metric]["thresholds"]
         self.assertEqual(scores["0.9"], {"read_kept": 2, "wrong_read_kept": 1})
         self.assertEqual(scores["0.95"], {"read_kept": 0, "wrong_read_kept": 0})
-        self.assertGreaterEqual(report["p95_processing_ms"], report["median_processing_ms"])
+        self.assertEqual(report["required_fields_per_note"], {"TRUCK_ARRIVAL_NOTE": {"total": 1, "all_correct": 1}})
+        self.assertEqual(report["fields"]["TRUCK_ARRIVAL_NOTE.header.vehicle_number"],
+                         {"unscorable": 1, "read_without_ground_truth_value": 1})
+        self.assertIsNone(report["p95_processing_ms"])
+
+    def test_benchmark_rejects_revisions_split_between_tuning_and_test(self):
+        with TemporaryDirectory() as folder:
+            root = Path(folder)
+            for name in ("first.png", "retake.png"):
+                (root / name).write_bytes(self.image)
+            manifest = root / "ground-truth.json"
+            manifest.write_text(json.dumps([{"image": name, "document_type": "PRODUCTION_NOTE",
+                                             "document_group": "same-note", "split": split}
+                                            for name, split in (("first.png", "tuning"), ("retake.png", "test"))]), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "lebih dari satu split"):
+                load_cases(manifest, "test")

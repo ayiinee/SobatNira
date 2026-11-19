@@ -553,11 +553,12 @@ class ReviewApi {
     return response['unread_count'] as int;
   }
 
-  Future<void> markNotificationRead(String taskId) async {
+  Future<void> markNotificationRead(String taskId, String revisionId) async {
     await _json(
       _client.patch(
         _url('review-notifications/$taskId/read'),
-        headers: _headers,
+        headers: {..._headers, 'Content-Type': 'application/json'},
+        body: jsonEncode({'revision_id': revisionId}),
       ),
     );
   }

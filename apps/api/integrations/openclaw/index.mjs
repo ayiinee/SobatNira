@@ -136,14 +136,16 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
         form.set('event', JSON.stringify({ ...metadata, message_type: 'IMAGE', media_mime_type: media.contentType }));
         form.set('media', new Blob([bytes], { type: media.contentType }), 'nota');
         const accepted = await call('inbound', { method: 'POST', body: form }, messageId);
+        const acceptedAt = performance.now();
         observe({ event: 'whatsapp_photo_accepted', revisionId: accepted.revision_id,
-          duplicate: accepted.duplicate, elapsedMs: Math.round(performance.now() - started) });
+          duplicate: accepted.duplicate, elapsedMs: Math.round(acceptedAt - started) });
         const label = reference(accepted.document_id);
         return { text: accepted.duplicate
           ? `Foto ini sudah tercatat ${label}. Balas foto yang Anda kirim dengan *STATUS* untuk melihat nota ini.`
           : `Foto diterima. Sedang membaca nota… ${label}\nSaya akan kirim hasilnya di chat ini. Ketik *STATUS* untuk cek progres.`,
         photoReceipt: { revisionId: accepted.revision_id, duplicate: accepted.duplicate,
-          adapterStarted: started, eventTimestamp: timestamp.valueOf() } };
+          adapterStarted: started, eventTimestamp: timestamp.valueOf(), acceptedAt,
+          commitConfirmedAtMs: accepted.commit_confirmed_at_ms } };
       }
       const quote = metadata.quoted_message_id;
       const shortStatus = /^STATUS(?:\s+(\d+))?$/i.exec(content);
@@ -332,10 +334,14 @@ export default {
         }, {});
         queuedFinal = !event.suppressUserDelivery && context.dispatcher.sendFinalReply({ text: result.text });
         if (result.photoReceipt) {
-          const { revisionId, duplicate, adapterStarted, eventTimestamp } = result.photoReceipt;
+          const { revisionId, duplicate, adapterStarted, eventTimestamp, acceptedAt, commitConfirmedAtMs } = result.photoReceipt;
+          const dispatchedAt = Date.now();
           observe({ event: 'whatsapp_photo_reply_dispatch', revisionId, duplicate, queued: Boolean(queuedFinal),
             adapterToDispatchMs: Math.round(performance.now() - adapterStarted),
-            messageToDispatchMs: Math.max(0, Date.now() - eventTimestamp) });
+            messageToDispatchMs: Math.max(0, dispatchedAt - eventTimestamp),
+            ...(queuedFinal ? { apiResponseToDispatchMs: Math.round(performance.now() - acceptedAt) } : {}),
+            ...(queuedFinal && !duplicate && Number.isFinite(commitConfirmedAtMs) && dispatchedAt >= commitConfirmedAtMs
+              ? { commitToDispatchMs: dispatchedAt - commitConfirmedAtMs } : {}) });
         }
       }
       context.recordProcessed('completed', { reason: 'sobatnira_intake' });

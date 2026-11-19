@@ -1,0 +1,44 @@
+[
+  {
+    "image": "truck.png",
+    "document_type": "TRUCK_ARRIVAL_NOTE",
+    "document_group": "SYNTHETIC-TRUCK",
+    "split": "test",
+    "required_fields": ["header.arrival_date", "header.supplier_name", "header.cane_type", "header.net_weight_kg"],
+    "fields": {
+      "header.arrival_date": { "normalized_value": "2026-11-16" },
+      "header.supplier_name": { "normalized_value": "PEMASOK DEMO" },
+      "header.cane_type": { "normalized_value": "BL" },
+      "header.net_weight_kg": { "normalized_value": 1250, "unit": "kg" }
+    }
+  },
+  {
+    "image": "production.png",
+    "document_type": "PRODUCTION_NOTE",
+    "document_group": "SYNTHETIC-PRODUCTION",
+    "split": "test",
+    "fields": {
+      "cane_blocks.0.cane_label": { "normalized_value": "DEMO-A" },
+      "cane_blocks.0.batches.0.output.grade": { "normalized_value": "A" },
+      "cane_blocks.0.batches.0.output.hasil_kg": { "normalized_value": 25, "unit": "kg" }
+    }
+  },
+  {
+    "image": "update.png",
+    "document_type": "PRODUCTION_NOTE",
+    "document_group": "SYNTHETIC-PRODUCTION",
+    "split": "test",
+    "fields": {
+      "cane_blocks.0.cane_label": { "normalized_value": "DEMO-A" },
+      "cane_blocks.0.batches.0.output.grade": { "normalized_value": "A" },
+      "cane_blocks.0.batches.0.output.hasil_kg": { "normalized_value": 26, "unit": "kg" }
+    }
+  },
+  {
+    "image": "manual.png",
+    "document_type": "UNKNOWN",
+    "document_group": "SYNTHETIC-MANUAL",
+    "split": "test",
+    "fields": {}
+  }
+]

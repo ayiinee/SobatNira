@@ -8,7 +8,7 @@ import { openClarifications } from './clarifications';
 import { operatorChecks } from './operator-readiness';
 import { enqueueNotice } from './notices';
 
-type Job = { id: string; revision_id: string; attempts: number; claim_token: string };
+type Job = { id: string; revision_id: string; attempts: number; claim_token: string; eligible_at: Date };
 type Work = Revision & { created_at: Date; factory_id: string; document_type: DocumentType; parent_revision_id: string | null;
   media_asset_id: string; object_key: string; mime_type: string; explicit_new: boolean };
 const MAX_ATTEMPTS = 3;
@@ -41,10 +41,11 @@ export class DocumentProcessor implements OnModuleInit, OnModuleDestroy {
   async processOne() {
     const task = await this.db.transaction(async (db) => {
       const { rows: [job] } = await db.query<Job>(`WITH candidate AS (
-        SELECT id FROM document_jobs WHERE (status='QUEUED' AND available_at<=now()) OR
+        SELECT id,CASE WHEN status='PROCESSING' THEN lease_until ELSE available_at END AS eligible_at
+        FROM document_jobs WHERE (status='QUEUED' AND available_at<=now()) OR
           (status='PROCESSING' AND lease_until<=now()) ORDER BY available_at LIMIT 1 FOR UPDATE SKIP LOCKED
         ) UPDATE document_jobs j SET status='PROCESSING',attempts=j.attempts+1,lease_until=now()+$2*interval '1 millisecond',
-          claim_token=$1 FROM candidate WHERE j.id=candidate.id RETURNING j.*`, [randomUUID(), LEASE]);
+          claim_token=$1 FROM candidate WHERE j.id=candidate.id RETURNING j.*,candidate.eligible_at`, [randomUUID(), LEASE]);
       if (!job) return null;
       const { rows: [work] } = await db.query<Work>(`SELECT r.*,d.factory_id,d.document_type,s.media_asset_id,s.explicit_new,a.object_key,a.mime_type
         FROM document_revisions r JOIN source_documents d ON d.id=r.document_id
@@ -56,7 +57,9 @@ export class DocumentProcessor implements OnModuleInit, OnModuleDestroy {
     if (!task) return false;
     const { job, work } = task;
     const requestId = randomUUID();
-    const queueMs = Math.max(0, Date.now() - work.created_at.getTime());
+    const startedAt = Date.now();
+    const queueMs = Math.max(0, startedAt - work.created_at.getTime());
+    const eligibleWaitMs = Math.max(0, startedAt - job.eligible_at.getTime());
     const started = performance.now();
     let result: Envelope | undefined;
     let errorCode: string | undefined;
@@ -134,7 +137,10 @@ export class DocumentProcessor implements OnModuleInit, OnModuleDestroy {
       return status;
     });
     if (outcome) this.logger.log({ event: 'ocr_attempt', revisionId: work.id, attempt: job.attempts,
-      queueMs, extractionMs, outcome, errorCode, documentType: result?.extraction?.document_type ?? work.document_type });
+      queueMs, eligibleWaitMs, extractionMs, outcome, errorCode, documentType: result?.extraction?.document_type ?? work.document_type,
+      mediaMs: result?.processing.media_duration_ms, inferParseMs: result?.processing.infer_parse_duration_ms,
+      serviceMs: result?.processing.duration_ms, rereadAttempts: result?.processing.reread_attempts,
+      rereadMs: result?.processing.reread_duration_ms });
     return true;
   }
 

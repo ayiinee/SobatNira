@@ -73,7 +73,11 @@ export function answerExample(path) {
 }
 
 export function summary(revision, page = 1, { fromStatus = false, retryQueued = false } = {}) {
-  if (!terminal.has(revision.processing_status)) return 'Foto sudah masuk dan sedang diproses. Saya akan kirim ringkasannya di chat ini.';
+  if (!terminal.has(revision.processing_status)) {
+    return revision.processing_status === 'QUEUED'
+      ? 'Foto tersimpan dan menunggu giliran baca. Saya akan kirim ringkasannya di chat ini. Ketik *STATUS* untuk cek progres.'
+      : 'Foto sedang dibaca. Saya akan kirim ringkasannya di chat ini. Ketik *STATUS* untuk cek progres.';
+  }
   const note = revision.extraction;
   const production = note?.document_type === 'PRODUCTION_NOTE';
   const title = note ? `Nota ${production ? 'Produksi' : 'Kedatangan Truk'}` : 'Foto nota';
@@ -100,12 +104,22 @@ export function summary(revision, page = 1, { fromStatus = false, retryQueued = 
   }
   const sections = [heading, returned ? '*Dikembalikan admin.*' :
     revision.can_confirm ? '*Siap dikonfirmasi.*' : '*Perlu diperiksa.*'];
+  const question = revision.pending_question;
   const header = Object.entries(note.header ?? {}).flatMap(([key, value]) => line(key, value) ?? []);
   const batches = (note.cane_blocks ?? []).flatMap((block, i) => (block.batches ?? []).map((batch, j) => ({ block, batch, i, j })));
   const pageSize = 6;
   const pages = Math.max(1, Math.ceil(batches.length / pageSize));
   if (!Number.isInteger(page) || page < 1 || page > pages) return `Pilih halaman 1–${pages} dengan STATUS <nomor halaman>.`;
   if (page === 1) {
+    if (question && !retryQueued) {
+      const path = question.field_path;
+      const key = path.split('.').at(-1);
+      sections.push(`*Perlu dicek — ${fieldContext(note, path)}${labels[key] ?? 'kolom nota'}*`);
+      if (question.issue_code === 'DUPLICATE_CANE_LABEL') sections.push('Label ini sama dengan blok lain. Periksa label yang tertulis pada foto.');
+      if (question.issue_code === 'ILLEGIBLE_FIELD') sections.push('Bagian ini kurang jelas pada foto. Periksa nilainya di nota asli.');
+      if (question.candidates?.length) sections.push(`Kemungkinan bacaan — ${question.candidates.map(value => shown(key ?? '', value)).join(' / ')}`);
+      sections.push(`Balas ${target} dengan *JAWAB* diikuti nilai dari foto. Contoh JAWAB ${answerExample(path)}.`);
+    }
     const changes = (revision.changed_fields ?? []).flatMap(path => {
       const key = path.split('.').at(-1);
       const field = path.split('.').reduce((value, part) => value?.[part], note);
@@ -133,22 +147,13 @@ export function summary(revision, page = 1, { fromStatus = false, retryQueued = 
       sections.push(`• Baris ${j + 1}${parts.length ? `: ${parts.join(' · ')}` : ' — perlu dicek'}`);
     }
   }
-  const question = revision.pending_question;
   if (retryQueued) sections.push('Ringkasan dijadwalkan untuk dikirim ulang.');
-  else if (question && page === 1) {
-    const path = question.field_path;
-    const key = path.split('.').at(-1);
-    sections.push(`*Perlu dicek — ${fieldContext(note, path)}${labels[key] ?? 'kolom nota'}*`);
-    if (question.issue_code === 'DUPLICATE_CANE_LABEL') sections.push('Label ini sama dengan blok lain. Periksa label yang tertulis pada foto.');
-    if (question.issue_code === 'ILLEGIBLE_FIELD') sections.push('Bagian ini kurang jelas pada foto. Periksa nilainya di nota asli.');
-    if (question.candidates?.length) sections.push(`Kemungkinan bacaan — ${question.candidates.map(value => shown(key ?? '', value)).join(' / ')}`);
-    sections.push(`Balas ${target} dengan *JAWAB* diikuti nilai dari foto. Contoh JAWAB ${answerExample(path)}.`);
-  } else if (page < pages) {
+  else if (page < pages) {
     sections.push(`Balas ringkasan otomatis nota ini dengan *STATUS ${page + 1}* untuk halaman berikutnya.`);
+  } else if (question) {
+    if (page > 1) sections.push('Balas pertanyaan pada ringkasan otomatis nota ini.');
   } else if (revision.can_confirm) {
     sections.push(`Jika data sesuai foto, balas ${page > 1 ? 'ringkasan otomatis nota ini' : target} dengan *KONFIRMASI*.`);
-  } else if (question) {
-    sections.push('Balas pertanyaan pada ringkasan otomatis nota ini.');
   } else if (revision.photo_retake_allowed) {
     if (revision.issues?.some(({ code }) => code === 'ROW_MATCH_REQUIRED')) {
       sections.push('Pastikan label tebu, nomor wajan, dan jam turun terlihat pada bagian yang berubah.');
