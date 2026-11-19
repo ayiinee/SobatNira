@@ -10,12 +10,14 @@ class ReportPaginatedList<T> extends StatefulWidget {
     required this.items,
     required this.builder,
     this.resetToken,
+    this.scrollHeader,
     super.key,
   });
 
   final List<T> items;
   final Widget Function(List<T> rows) builder;
   final Object? resetToken;
+  final Widget? scrollHeader;
 
   @override
   State<ReportPaginatedList<T>> createState() => _ReportPaginatedListState<T>();
@@ -43,30 +45,54 @@ class _ReportPaginatedListState<T> extends State<ReportPaginatedList<T>> {
   Widget build(BuildContext context) {
     final start = _page * _pageSize;
     final end = math.min(start + _pageSize, widget.items.length);
+    final body = NiraPageBody(
+      height: _pageHeight,
+      firstPage: _page == 0,
+      child: widget.builder(widget.items.sublist(start, end)),
+    );
+    final footer = widget.items.length <= _pageSize
+        ? null
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: NiraSpace.sm),
+              NiraPagination(
+                page: _page + 1,
+                pageCount: _pageCount,
+                onPrevious: _page > 0 ? () => setState(() => _page--) : null,
+                onNext: _page + 1 < _pageCount
+                    ? () => setState(() => _page++)
+                    : null,
+              ),
+            ],
+          );
+    final scrollHeader = widget.scrollHeader;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        NiraPageBody(
-          height: _pageHeight,
-          firstPage: _page == 0,
-          child: widget.builder(widget.items.sublist(start, end)),
-        ),
-        if (widget.items.length > _pageSize) ...[
-          const SizedBox(height: NiraSpace.sm),
-          Text(
-            '${start + 1}–$end dari ${widget.items.length}',
-            textAlign: TextAlign.center,
-            style: niraText(NiraType.caption, color: niraLeaf),
+        if (scrollHeader == null)
+          body
+        else
+          Expanded(
+            child: ListView(
+              key: const PageStorageKey('laporan-scroll'),
+              padding: const EdgeInsets.fromLTRB(
+                niraInset,
+                NiraSpace.md,
+                niraInset,
+                NiraSpace.lg,
+              ),
+              children: [scrollHeader, body],
+            ),
           ),
-          NiraPagination(
-            page: _page + 1,
-            pageCount: _pageCount,
-            onPrevious: _page > 0 ? () => setState(() => _page--) : null,
-            onNext: _page + 1 < _pageCount
-                ? () => setState(() => _page++)
-                : null,
-          ),
-        ],
+        if (footer != null)
+          if (scrollHeader == null)
+            footer
+          else
+            Padding(
+              padding: const EdgeInsets.only(bottom: NiraSpace.sm),
+              child: footer,
+            ),
       ],
     );
   }

@@ -139,8 +139,10 @@ class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
               icon: const Icon(Icons.add),
               label: Text('Tambah ${widget.kind.itemLabel}'),
             ),
-          FutureBuilder<Json>(
+          NiraPagedFutureBuilder<Json>(
             future: _page,
+            page: _offset,
+            dataset: (widget.scope.factoryId, widget.kind, _query),
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
                 return const LinearProgressIndicator();

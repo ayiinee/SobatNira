@@ -32,28 +32,22 @@ void main() {
       expect(find.text('Sugeng'), findsOneWidget);
       expect(find.text('Masud'), findsOneWidget);
       expect(find.text('Salim'), findsNothing);
-      expect(find.text('1–5 dari 12'), findsOneWidget);
+      expect(find.text('1–5 dari 12'), findsNothing);
       expect(find.text('1 dari 3'), findsOneWidget);
+      expect(find.byTooltip('Sebelumnya'), findsNothing);
       await next();
+      expect(find.byTooltip('Sebelumnya'), findsOneWidget);
+      expect(find.byTooltip('Berikutnya'), findsOneWidget);
       expect(find.text('Sugeng'), findsNothing);
       expect(find.text('Salim'), findsOneWidget);
       expect(find.text('Wahyu'), findsOneWidget);
       await next();
       expect(find.text('Budi'), findsOneWidget);
       expect(find.text('Rini'), findsOneWidget);
-      expect(find.text('11–12 dari 12'), findsOneWidget);
+      expect(find.text('11–12 dari 12'), findsNothing);
       expect(find.text('3 dari 3'), findsOneWidget);
-      expect(
-        tester
-            .widget<IconButton>(
-              find.byWidgetPredicate(
-                (widget) =>
-                    widget is IconButton && widget.tooltip == 'Berikutnya',
-              ),
-            )
-            .onPressed,
-        isNull,
-      );
+      expect(find.byTooltip('Sebelumnya'), findsOneWidget);
+      expect(find.byTooltip('Berikutnya'), findsNothing);
 
       analytics.setQuery('Sugeng');
       await tester.pumpAndSettle();
@@ -66,7 +60,7 @@ void main() {
       analytics.setQuery('');
       analytics.setTab(ReportTab.margin);
       await tester.pumpAndSettle();
-      expect(find.text('1–5 dari 10'), findsOneWidget);
+      expect(find.text('1–5 dari 10'), findsNothing);
       await next();
       expect(find.text('Hadi'), findsOneWidget);
       expect(find.text('Rini'), findsOneWidget);

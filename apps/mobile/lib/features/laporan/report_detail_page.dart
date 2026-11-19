@@ -282,15 +282,18 @@ class ReportDetailPage extends StatelessWidget {
             'Porsi',
             header: true,
           ),
-          ReportPaginatedList<(String, String, String)>(
-            items: contributions,
-            resetToken: kind,
-            builder: (rows) => Column(
-              children: [
-                for (final row in rows) _tableRow(row.$1, row.$2, row.$3),
-              ],
-            ),
-          ),
+          if (kind == ReportDetailKind.grade)
+            ReportPaginatedList<(String, String, String)>(
+              items: contributions,
+              resetToken: kind,
+              builder: (rows) => Column(
+                children: [
+                  for (final row in rows) _tableRow(row.$1, row.$2, row.$3),
+                ],
+              ),
+            )
+          else
+            for (final row in contributions) _tableRow(row.$1, row.$2, row.$3),
           const Divider(height: 10),
           _tableRow(
             'Total',

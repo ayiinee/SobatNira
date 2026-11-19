@@ -366,8 +366,10 @@ class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
         onSubmitted: _changeSearch,
       ),
       const SizedBox(height: NiraSpace.md),
-      FutureBuilder<Json>(
+      NiraPagedFutureBuilder<Json>(
         future: _lots,
+        page: _offset,
+        dataset: (scope.factoryId, _search),
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const LinearProgressIndicator();

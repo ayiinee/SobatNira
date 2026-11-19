@@ -217,8 +217,10 @@ class _PekerjaanPageState extends State<PekerjaanPage>
             _load();
           }),
         ),
-        FutureBuilder<List<Json>>(
+        NiraPagedFutureBuilder<List<Json>>(
           future: _tasks,
+          page: _page,
+          dataset: (_api, widget.factoryId, _status),
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
               return const LinearProgressIndicator();

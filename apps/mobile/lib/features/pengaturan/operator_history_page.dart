@@ -50,8 +50,10 @@ class _OperatorHistoryPageState extends State<OperatorHistoryPage> {
       ],
     ),
     body: SafeArea(
-      child: FutureBuilder<Json>(
+      child: NiraPagedFutureBuilder<Json>(
         future: _page,
+        page: _offset,
+        dataset: (widget.scope.factoryId, widget.operatorId),
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Align(

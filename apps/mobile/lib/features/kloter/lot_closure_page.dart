@@ -157,8 +157,10 @@ class _LotClosurePageState extends State<LotClosurePage> {
                 child: Text(_notice!),
               ),
             if (_submitting) const LinearProgressIndicator(),
-            FutureBuilder<List<Json>>(
+            NiraPagedFutureBuilder<List<Json>>(
               future: _data,
+              page: _offset,
+              dataset: (widget.scope.factoryId, widget.lotId),
               builder: (context, snapshot) {
                 if (snapshot.connectionState != ConnectionState.done) {
                   return const LinearProgressIndicator();

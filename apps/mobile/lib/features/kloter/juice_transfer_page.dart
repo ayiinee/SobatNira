@@ -428,8 +428,10 @@ class _TransferDestinationState extends State<_TransferDestination> {
               _reload();
             },
           ),
-          FutureBuilder<Json>(
+          NiraPagedFutureBuilder<Json>(
             future: _page,
+            page: _offset,
+            dataset: (widget.scope.factoryId, _query),
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
                 return const LinearProgressIndicator();

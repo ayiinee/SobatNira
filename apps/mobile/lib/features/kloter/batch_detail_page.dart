@@ -33,6 +33,7 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
         tab: NiraTab.kloter,
         onNavigate: widget.onNavigate,
         bottomAction: BatchReviewActions(
+          batchNumber: _batch.number,
           label: reviewed ? 'Batch tervalidasi' : 'Validasi',
           verified: reviewed,
           onVerify: () => verifyDemoReview(context, widget.demo, _batch.review),

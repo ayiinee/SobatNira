@@ -360,26 +360,92 @@ class _DocumentViewerState extends State<_DocumentViewer> {
 
 class BatchReviewActions extends StatelessWidget {
   const BatchReviewActions({
+    required this.batchNumber,
     required this.label,
     required this.verified,
     required this.onVerify,
     required this.onReopen,
     super.key,
   });
+  final int batchNumber;
   final String label;
   final bool verified;
   final VoidCallback onVerify;
   final VoidCallback onReopen;
 
+  Future<void> _confirm(BuildContext context) async {
+    final colors = Theme.of(context).colorScheme;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierColor: const Color(0x66000000),
+      builder: (dialogContext) => AlertDialog(
+        scrollable: true,
+        backgroundColor: niraPaper,
+        icon: Icon(
+          Icons.warning_amber_rounded,
+          color: verified ? colors.error : niraOchre,
+        ),
+        title: Text(
+          verified
+              ? 'Batalkan validasi Batch $batchNumber?'
+              : 'Validasi Batch $batchNumber?',
+        ),
+        content: Text(
+          verified
+              ? 'Batch kembali ke status Perlu ditinjau dan datanya bisa diedit lagi.'
+              : 'Pastikan data batch sudah benar. Data akan terkunci setelah divalidasi.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            style: verified
+                ? FilledButton.styleFrom(
+                    backgroundColor: colors.error,
+                    foregroundColor: Colors.white,
+                  )
+                : null,
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Konfirmasi'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    if (verified) {
+      onReopen();
+    } else {
+      onVerify();
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Row(
     children: [
-      Expanded(child: NiraButton(label, verified ? null : onVerify)),
+      Expanded(
+        child: NiraButton(
+          label,
+          verified ? null : () => _confirm(context),
+          visualDensity: VisualDensity.standard,
+          minimumHeight: verified ? 44 : 52,
+        ),
+      ),
       if (verified) ...[
         const SizedBox(width: NiraSpace.sm),
-        IconButton.outlined(
+        IconButton.filled(
           tooltip: 'Batalkan validasi batch',
-          onPressed: onReopen,
+          onPressed: () => _confirm(context),
+          style: IconButton.styleFrom(
+            backgroundColor: Theme.of(context).colorScheme.error,
+            foregroundColor: Colors.white,
+            minimumSize: const Size.square(44),
+            iconSize: 20,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(niraRadius),
+            ),
+          ),
           icon: const Icon(Icons.close_rounded),
         ),
       ],

@@ -101,8 +101,19 @@ void main() {
     expect(find.byType(KloterCard).evaluate().length, greaterThanOrEqualTo(1));
 
     await tap(tester, find.bySemanticsLabel('Kloter'));
+    void expectSearchAligned() {
+      final search = InputDecorator.containerOf(
+        tester.element(find.byType(EditableText)),
+      )!;
+      final filter = tester.getRect(find.byTooltip('Filter tanggal'));
+      expect(search.localToGlobal(Offset.zero).dy, filter.top);
+      expect(search.size.height, filter.height);
+    }
+
+    expectSearchAligned();
     await tester.enterText(find.byType(TextField), ' mjt-260926-2a ');
     await tester.pumpAndSettle();
+    expectSearchAligned();
     await tap(tester, find.text('Perlu Ditinjau'));
     expect(find.byType(KloterCard), findsOneWidget);
     expect(find.text('MJT-260926-2A'), findsOneWidget);
@@ -178,7 +189,33 @@ void main() {
 
     await tap(tester, find.text('Ringkasan'));
     await tap(tester, find.text('Validasi'));
+    expect(find.text('Validasi Batch 3?'), findsOneWidget);
+    await tap(tester, find.text('Batal'));
+    expect(find.text('Batch tervalidasi'), findsNothing);
+    expect(
+      tester.widget<EditableFields>(find.byType(EditableFields)).onEdit,
+      isNotNull,
+    );
+    await tap(tester, find.text('Validasi'));
+    await tap(tester, find.text('Konfirmasi'));
     expect(find.text('Batch tervalidasi'), findsOneWidget);
+    final validationButton = tester.getRect(
+      find.descendant(
+        of: find.byType(NiraButton),
+        matching: find.byType(Material),
+      ),
+    );
+    final cancelButton = tester.getRect(
+      find.descendant(
+        of: find.byWidgetPredicate(
+          (widget) =>
+              widget is IconButton && widget.tooltip == 'Batalkan validasi batch',
+        ),
+        matching: find.byType(Material),
+      ),
+    );
+    expect(validationButton.top, cancelButton.top);
+    expect(validationButton.bottom, cancelButton.bottom);
     expect(
       tester.widget<EditableFields>(find.byType(EditableFields)).onEdit,
       isNull,
@@ -189,8 +226,15 @@ void main() {
     );
     expect(find.bySemanticsLabel(RegExp('Edit berat grade')), findsNothing);
     await tap(tester, find.byTooltip('Batalkan validasi batch'));
+    expect(find.text('Batalkan validasi Batch 3?'), findsOneWidget);
+    await tap(tester, find.text('Batal'));
+    expect(find.text('Batch tervalidasi'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('Edit berat grade')), findsNothing);
+    await tap(tester, find.byTooltip('Batalkan validasi batch'));
+    await tap(tester, find.text('Konfirmasi'));
     expect(find.bySemanticsLabel(RegExp('Edit berat grade B')), findsOneWidget);
     await tap(tester, find.text('Validasi'));
+    await tap(tester, find.text('Konfirmasi'));
     await tap(tester, find.text('Ringkasan'));
     await tester.pump(const Duration(seconds: 5));
     await tap(tester, find.byTooltip('Kembali'));
@@ -216,6 +260,7 @@ void main() {
       isNull,
     );
     await tap(tester, find.byTooltip('Batalkan validasi batch'));
+    await tap(tester, find.text('Konfirmasi'));
     expect(
       tester.widget<EditableFields>(find.byType(EditableFields)).onEdit,
       isNotNull,

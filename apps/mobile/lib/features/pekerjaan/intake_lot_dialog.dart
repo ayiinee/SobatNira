@@ -78,8 +78,10 @@ class _IntakeLotDialogState extends State<IntakeLotDialog> {
     ),
     content: SizedBox(
       width: 480,
-      child: FutureBuilder<Json>(
+      child: NiraPagedFutureBuilder<Json>(
         future: _page,
+        page: _offsets.length,
+        dataset: (widget.taskId, widget.millingLabel),
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const LinearProgressIndicator();
