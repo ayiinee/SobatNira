@@ -18,6 +18,8 @@ class OfficialLotBatches extends StatefulWidget {
     required this.scope,
     required this.lotId,
     required this.kloterCode,
+    required this.caneWeight,
+    required this.onOpenPekerjaan,
     required this.canCreate,
     required this.onNavigate,
     required this.onChanged,
@@ -29,6 +31,8 @@ class OfficialLotBatches extends StatefulWidget {
   final FactoryScope scope;
   final String lotId;
   final String kloterCode;
+  final String caneWeight;
+  final VoidCallback onOpenPekerjaan;
   final bool canCreate;
   final ValueChanged<NiraTab> onNavigate;
   final VoidCallback onChanged;
@@ -93,6 +97,8 @@ class _OfficialLotBatchesState extends State<OfficialLotBatches> {
           scope: scope,
           initial: batch,
           kloterCode: widget.kloterCode,
+          caneWeight: widget.caneWeight,
+          onOpenPekerjaan: widget.onOpenPekerjaan,
           onNavigate: widget.onNavigate,
           reportLink: widget.reportLink,
         ),
@@ -126,12 +132,12 @@ class _OfficialLotBatchesState extends State<OfficialLotBatches> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextButton(
-            onPressed: () => widget.reportLink(),
-            child: const Text('Produksi dan margin kloter'),
-          ),
-          if (widget.canCreate) DocumentLink('Tambah batch', _create),
-          if (batches.isEmpty) const Text('Belum ada batch pada halaman ini.'),
+          if (batches.isEmpty)
+            Text(
+              'Belum ada batch pada halaman ini.',
+              style: niraText(NiraType.caption, color: niraLeaf),
+            ),
+          const SizedBox(height: NiraSpace.md),
           for (final batch in batches)
             Padding(
               padding: const EdgeInsets.only(bottom: NiraSpace.md),
@@ -144,6 +150,8 @@ class _OfficialLotBatchesState extends State<OfficialLotBatches> {
                 onTap: () => _open(batch),
               ),
             ),
+          if (widget.canCreate) DocumentLink('Tambah batch', _create),
+          DocumentLink('Produksi dan margin kloter', () => widget.reportLink()),
           if (_offset > 0 || batches.length == 20)
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -174,18 +182,14 @@ class _OfficialLotBatchesState extends State<OfficialLotBatches> {
   );
 }
 
-String _status(Json batch) => switch (batch['status']) {
-  'approved' => 'Disahkan',
-  'cancelled' => 'Dibatalkan',
-  _ => 'Draf',
-};
-
 class _OfficialBatchDetail extends StatefulWidget {
   const _OfficialBatchDetail({
     required this.api,
     required this.scope,
     required this.initial,
     required this.kloterCode,
+    required this.caneWeight,
+    required this.onOpenPekerjaan,
     required this.onNavigate,
     required this.reportLink,
   });
@@ -194,6 +198,8 @@ class _OfficialBatchDetail extends StatefulWidget {
   final FactoryScope scope;
   final Json initial;
   final String kloterCode;
+  final String caneWeight;
+  final VoidCallback onOpenPekerjaan;
   final ValueChanged<NiraTab> onNavigate;
   final Future<void> Function([String? batchId]) reportLink;
 
@@ -273,92 +279,84 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
     }
   }
 
-  List<Widget> _content(int tab, AsyncSnapshot<Json> snapshot) {
-    if (snapshot.connectionState != ConnectionState.done) {
-      return [const LinearProgressIndicator()];
-    }
-    if (snapshot.hasError) {
-      return [
-        Text(_errorText(snapshot.error)),
-        TextButton(onPressed: _reload, child: const Text('Muat ulang batch')),
-      ];
-    }
-    final batch = snapshot.requireData;
+  BatchDetailData _data(Json batch) {
+    final date = DateTime.parse(batch['occurred_at'] as String).toLocal();
+    final juice = '${reportNumber(batch['quantity_ml'])} mL';
+    final physical = '${reportNumber(batch['physical_weight_kg'])} kg';
+    final grades = (batch['grades'] as List? ?? const []).cast<Json>();
+    return (
+      summary: [
+        DemoField('Nira yang dimasak', juice),
+        DemoField('Hasil fisik', physical),
+      ],
+      cooking: [
+        DemoField('Wajan', '${batch['wok_number']}'),
+        DemoField('Waktu pemasakan', date.toString()),
+        DemoField('Volume nira', juice),
+      ],
+      grades: [
+        for (final grade in grades)
+          (
+            code: grade['code'] as String,
+            weight: '${reportNumber(grade['weightKg'])} kg',
+            price: reportMoney(grade['pricePerKgRupiah']),
+          ),
+      ],
+      totalWeight: batch['finalSugarKg'] == null
+          ? '—'
+          : '${reportNumber(batch['finalSugarKg'])} kg',
+      value: batch['exactValueRupiah'] == null
+          ? '—'
+          : reportMoney(batch['exactValueRupiah']),
+      physicalWeight: physical,
+      caneWeight: widget.caneWeight,
+    );
+  }
+
+  List<Widget> _actions(Json batch) {
     final costSaved = batch['costSaved'] == true;
     final remaining = batch['remainingMl'] as String;
-    final reserved = remaining == '0';
-    final draft = batch['status'] == 'draft';
-    return switch (tab) {
-      1 => [
-        const DetailSectionTitle('Data pemasakan'),
-        EditableFields(
-          onEdit: null,
-          fields: [
-            DemoField('Wajan', '${batch['wok_number']}'),
-            DemoField(
-              'Waktu pemasakan',
-              DateTime.parse(
-                batch['occurred_at'] as String,
-              ).toLocal().toString(),
-            ),
-            DemoField('Volume nira', '${batch['quantity_ml']} mL'),
-          ],
-        ),
-      ],
-      2 => [
-        const DetailSectionTitle('Hasil dan Grade'),
-        EditableFields(
-          onEdit: null,
-          fields: [
-            DemoField('Hasil fisik', '${batch['physical_weight_kg']} kg'),
-            for (final g in (batch['grades'] as List? ?? const []).cast<Json>())
-              DemoField(
-                'Grade ${g['code']}',
-                '${g['weightKg']} kg · Rp${g['pricePerKgRupiah']}/kg',
-              ),
-          ],
-        ),
-      ],
-      _ => [
-        DetailSectionTitle(_status(batch)),
-        EditableFields(
-          onEdit: null,
-          fields: [
-            DemoField('Status biaya', costSaved ? 'Tercatat' : 'Belum diisi'),
-            DemoField('Nira yang masih perlu direservasi', '$remaining mL'),
-          ],
-        ),
-        if (_error != null) Text(_error!),
-        if (_busy) const LinearProgressIndicator(),
-        if (batch['status'] == 'approved')
-          DocumentLink(
-            'Nilai produksi dan margin kloter',
-            () => widget.reportLink(_id),
-          ),
-        if (draft && !_busy && widget.scope.role == 'admin') ...[
-          if (!costSaved) NiraButton('Isi biaya kloter', _costs),
-          if (costSaved && !reserved)
-            NiraButton(
-              'Reservasi nira',
-              () => _run(
-                () => widget.api.reserveBatchJuice(
-                  widget.scope,
-                  _lot,
-                  _id,
-                  remaining,
-                ),
-              ),
-            ),
-          TextButton(
-            onPressed: () => _run(
-              () => widget.api.finishBatch(widget.scope, _id, cancel: true),
-              confirmation: 'Batalkan draf dan lepaskan reservasi aktif?',
-            ),
-            child: const Text('Batalkan draf'),
-          ),
+    return [
+      const SizedBox(height: NiraSpace.md),
+      EditableFields(
+        onEdit: null,
+        fields: [
+          DemoField('Status biaya', costSaved ? 'Tercatat' : 'Belum diisi'),
+          DemoField('Nira yang masih perlu direservasi', '$remaining mL'),
         ],
+      ),
+      if (_error != null) Text(_error!),
+      if (_busy) const LinearProgressIndicator(),
+      if (batch['status'] == 'approved')
+        DocumentLink(
+          'Nilai produksi dan margin kloter',
+          () => widget.reportLink(_id),
+        ),
+      if (batch['status'] == 'draft' &&
+          !_busy &&
+          widget.scope.role == 'admin') ...[
+        if (!costSaved) NiraButton('Isi biaya kloter', _costs),
+        if (costSaved && remaining != '0')
+          NiraButton(
+            'Reservasi nira',
+            () => _run(
+              () => widget.api.reserveBatchJuice(
+                widget.scope,
+                _lot,
+                _id,
+                remaining,
+              ),
+            ),
+          ),
+        TextButton(
+          onPressed: () => _run(
+            () => widget.api.finishBatch(widget.scope, _id, cancel: true),
+            confirmation: 'Batalkan draf dan lepaskan reservasi aktif?',
+          ),
+          child: const Text('Batalkan draf'),
+        ),
       ],
-    };
+    ];
   }
 
   @override
@@ -366,7 +364,8 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
     future: _detail,
     builder: (_, snapshot) {
       final current = snapshot.data;
-      final approved = current?['status'] == 'approved';
+      final status = current?['status'] ?? widget.initial['status'];
+      final approved = status == 'approved';
       final canApprove =
           current?['status'] == 'draft' &&
           current?['costSaved'] == true &&
@@ -378,11 +377,25 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
         officialTitle: widget.initial['code'] as String,
         kloterCode: widget.kloterCode,
         officialReviewed: approved,
-        officialCancelled: current?['status'] == 'cancelled',
-        officialContent: (tab) => _content(tab, snapshot),
-        officialAction: approved || canApprove
+        officialCancelled: status == 'cancelled',
+        officialData: current == null ? null : _data(current),
+        officialNumber: widget.initial['wok_number'] as int,
+        officialDocument: widget.onOpenPekerjaan,
+        officialActions: current == null ? const [] : _actions(current),
+        officialStatus: snapshot.hasError
+            ? Column(
+                children: [
+                  Text(_errorText(snapshot.error)),
+                  TextButton(
+                    onPressed: _reload,
+                    child: const Text('Muat ulang batch'),
+                  ),
+                ],
+              )
+            : const LinearProgressIndicator(),
+        officialAction: current != null && (approved || canApprove)
             ? BatchReviewActions(
-                batchNumber: current!['wok_number'] as int,
+                batchNumber: current['wok_number'] as int,
                 batchCode: widget.initial['code'] as String,
                 label: approved ? 'Batch tervalidasi' : 'Validasi',
                 verified: approved,

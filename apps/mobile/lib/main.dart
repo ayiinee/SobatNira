@@ -18,7 +18,7 @@ import 'features/kloter/kloter_detail_widgets.dart';
 import 'features/kloter/kloter_list_page.dart';
 import 'features/laporan/demo_analytics.dart';
 import 'features/laporan/laporan_page.dart';
-import 'features/laporan/connected_report_view.dart';
+import 'features/laporan/connected_report_controls.dart';
 import 'features/laporan/report_detail_page.dart';
 import 'features/laporan/report_export_page.dart';
 import 'features/laporan/printable_report.dart';
@@ -187,18 +187,11 @@ class _HomeState extends State<_Home> {
           onCreate: widget.scope?.role == 'admin' ? () => _editLot() : null,
           statusMessage: _loadStatus(),
         ),
-        NiraTab.laporan =>
-          _live != null
-              ? ConnectedReportView(
-                  reports: _live.reports,
-                  onNavigate: _navigate,
-                )
-              : LaporanPage(
-                  analytics: _analytics,
-                  onOpenDetail: _openReportDetail,
-                  approvedLots: _live?.lots,
-                  statusMessage: _loadStatus(),
-                ),
+        NiraTab.laporan => LaporanPage(
+          analytics: _analytics,
+          reports: _live?.reports,
+          onOpenDetail: _openReportDetail,
+        ),
         NiraTab.pengaturan => PengaturanPage(
           settings: _settings,
           onNavigate: _navigate,
@@ -305,13 +298,22 @@ class _HomeState extends State<_Home> {
   }
 
   void _openReportDetail(ReportDetailKind kind) {
+    final row = _analytics.selectedRow;
+    final reports = _live?.reports;
+    final report = reports?.data;
+    final lot = reports?.lots
+        .where((item) => item['lotId'] == row?.id)
+        .firstOrNull;
+    if (reports != null && report == null) return;
     _navigator.push(
       MaterialPageRoute<void>(
         builder: (_) => ReportDetailPage(
           kind: kind,
           onNavigate: _navigate,
-          row: _analytics.selectedRow,
+          row: row,
           analytics: _analytics,
+          report: report,
+          officialLot: lot,
         ),
       ),
     );
@@ -338,33 +340,15 @@ class _HomeState extends State<_Home> {
       );
       return;
     }
-    if (_live != null) {
-      _navigator.push(
-        MaterialPageRoute<void>(
-          builder: (_) => ConnectedReportExport(
-            reports: _live.reports,
-            kind: kind,
-            onNavigate: _navigate,
-          ),
-        ),
-      );
-      return;
-    }
     _navigator.push(
       MaterialPageRoute<void>(
-        builder: (_) => ListenableBuilder(
-          listenable: _live == null
-              ? _demo
-              : Listenable.merge([_live, _live.reports]),
-          builder: (_, _) => ReportExportPage(
-            kind: kind,
-            analytics: _analytics,
-            production: _live == null ? _demo : null,
-            approvedLots: _live?.lots,
-            statusMessage: _loadStatus(),
-            factory: widget.scope?.factoryName ?? _settings.factory.name,
-            onNavigate: _navigate,
-          ),
+        builder: (_) => ReportExportPage(
+          kind: kind,
+          analytics: _analytics,
+          production: _live == null ? _demo : null,
+          reports: _live?.reports,
+          factory: widget.scope?.factoryName ?? _settings.factory.name,
+          onNavigate: _navigate,
         ),
       ),
     );
@@ -497,6 +481,8 @@ class _LotDetailState extends State<_LotDetail> {
           scope: _scope,
           lotId: _id,
           kloterCode: _lot.code,
+          caneWeight: _lot.weight,
+          onOpenPekerjaan: widget.onOpenPekerjaan,
           canCreate:
               _scope.role == 'admin' &&
               _lot.milling.verified &&
@@ -546,16 +532,13 @@ class _LotDetailState extends State<_LotDetail> {
         );
         return;
       }
-      final batch = (lot['batches'] as List)
-          .cast<Json>()
-          .where((item) => item['id'] == batchId)
-          .firstOrNull;
       await Navigator.of(context).push<void>(
         MaterialPageRoute(
-          builder: (_) => ConnectedReportDetail(
-            data: report,
-            lot: lot,
-            batch: batch,
+          builder: (_) => ReportDetailPage(
+            kind: ReportDetailKind.margin,
+            report: report,
+            officialLot: lot,
+            batchId: batchId,
             onNavigate: widget.onNavigate,
           ),
         ),

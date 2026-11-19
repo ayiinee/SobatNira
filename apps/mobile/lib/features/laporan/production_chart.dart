@@ -5,6 +5,10 @@ import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
 import '../../widgets/chart_growth.dart';
+import '../kloter/demo_lot_fixture.dart';
+import '../kloter/demo_production.dart';
+import '../pekerjaan/review_api.dart';
+import 'connected_reports.dart';
 import 'demo_analytics.dart';
 import 'report_date_button.dart';
 
@@ -13,8 +17,8 @@ const _gradeB = Color(0xFFD3A734);
 const _gradeC = Color(0xFFDCE6DE);
 
 class _ChartDay {
-  const _ChartDay(this.day, this.kg, this.rendemen, this.a, this.b, this.c);
-  final int day;
+  const _ChartDay(this.date, this.kg, this.rendemen, this.a, this.b, this.c);
+  final DateTime date;
   final double kg;
   final double rendemen;
   final double a;
@@ -23,8 +27,14 @@ class _ChartDay {
 }
 
 class ProductionChart extends StatefulWidget {
-  const ProductionChart({required this.analytics, this.onFilter, super.key});
+  const ProductionChart({
+    required this.analytics,
+    this.reports,
+    this.onFilter,
+    super.key,
+  });
   final DemoAnalytics analytics;
+  final ConnectedReports? reports;
   final VoidCallback? onFilter;
 
   @override
@@ -32,10 +42,12 @@ class ProductionChart extends StatefulWidget {
 }
 
 class _ProductionChartState extends State<ProductionChart> {
-  int? _selectedDay;
+  DateTime? _selectedDay;
 
-  _ChartDay _chartDay(int day) {
-    final lots = widget.analytics.visibleLots.where((lot) => lot.day == day);
+  _ChartDay _chartDay(DateTime date) {
+    final lots = widget.analytics.visibleLots.where(
+      (lot) => lot.day == date.day,
+    );
     final sugar = lots.fold(0, (sum, lot) => sum + lot.sugarKg);
     final cane = lots.fold(0, (sum, lot) => sum + lot.caneKg);
     double grade(String code) {
@@ -49,12 +61,54 @@ class _ProductionChartState extends State<ProductionChart> {
     }
 
     return _ChartDay(
-      day,
+      date,
       sugar.toDouble(),
       cane == 0 ? 0 : sugar / cane * 100,
       grade('A'),
       grade('B'),
       grade('C'),
+    );
+  }
+
+  List<_ChartDay> _officialDays(ConnectedReports reports) {
+    final byDate = <DateTime, List<Json>>{};
+    for (final lot in reports.lots) {
+      if (lot['calculation'] == null) continue;
+      final local = DateTime.parse(lot['receivedAt'] as String).toLocal();
+      final date = DateTime(local.year, local.month, local.day);
+      (byDate[date] ??= []).add(lot);
+    }
+    return [
+      for (final date in byDate.keys.toList()..sort())
+        _officialDay(date, byDate[date]!),
+    ];
+  }
+
+  _ChartDay _officialDay(DateTime date, List<Json> lots) {
+    double sugar = 0, cane = 0;
+    final grades = <String, double>{};
+    double quantity(Object? value) => double.tryParse('$value') ?? 0;
+    for (final lot in lots) {
+      cane += quantity(lot['caneNetKg']);
+      sugar += quantity((lot['calculation'] as Json)['finalSugarKg']);
+      for (final batch in (lot['batches'] as List).cast<Json>()) {
+        for (final grade in (batch['grades'] as List).cast<Json>()) {
+          final code = grade['code'] as String;
+          grades.update(
+            code,
+            (total) => total + quantity(grade['weightKg']),
+            ifAbsent: () => quantity(grade['weightKg']),
+          );
+        }
+      }
+    }
+    return _ChartDay(
+      date,
+      sugar,
+      cane == 0 ? 0 : sugar / cane * 100,
+      grades['A'] ?? 0,
+      grades['B'] ?? 0,
+      grades['C'] ?? 0,
     );
   }
 
@@ -64,8 +118,11 @@ class _ProductionChartState extends State<ProductionChart> {
     final dates =
         widget.analytics.visibleLots.map((lot) => lot.day).toSet().toList()
           ..sort();
-    final days = [for (final day in dates) _chartDay(day)];
-    final selected = days.indexWhere((day) => day.day == _selectedDay);
+    final reports = widget.reports;
+    final days = reports == null
+        ? [for (final day in dates) _chartDay(DateTime(2026, 10, day))]
+        : _officialDays(reports);
+    final selected = days.indexWhere((day) => day.date == _selectedDay);
     return NiraOutline(
       Padding(
         padding: const EdgeInsets.all(NiraSpace.md),
@@ -229,8 +286,8 @@ class _ProductionChartState extends State<ProductionChart> {
                         ((position.dx - plot.left) / plot.width * days.length)
                             .floor()
                             .clamp(0, days.length - 1);
-                    if (_selectedDay != days[index].day) {
-                      setState(() => _selectedDay = days[index].day);
+                    if (_selectedDay != days[index].date) {
+                      setState(() => _selectedDay = days[index].date);
                     }
                   }
 
@@ -256,7 +313,8 @@ class _ProductionChartState extends State<ProductionChart> {
                                 child: ChartGrowth(
                                   replayKey: (
                                     widget.analytics.variant,
-                                    widget.analytics.dateFilter,
+                                    reports?.filter ??
+                                        widget.analytics.dateFilter,
                                   ),
                                   builder: (context, progress) => CustomPaint(
                                     painter: _ProductionPainter(
@@ -319,12 +377,15 @@ class _ProductionChartState extends State<ProductionChart> {
   );
 
   List<String> _detailLines(_ChartDay day, bool grade) => [
-    '${day.day} Oktober 2026',
-    'Gula final: ${day.kg.toInt()} kg',
+    formatDate(day.date),
+    'Gula final: ${demoNumber(day.kg, decimals: day.kg % 1 == 0 ? 0 : 3)} kg',
     grade
-        ? 'A: ${day.a.toInt()} · B: ${day.b.toInt()} · C: ${day.c.toInt()} kg'
+        ? 'A: ${_chartAmount(day.a)} · B: ${_chartAmount(day.b)} · C: ${_chartAmount(day.c)} kg'
         : 'Rendemen: ${day.rendemen.toStringAsFixed(1).replaceAll('.', ',')}%',
   ];
+
+  String _chartAmount(double value) =>
+      demoNumber(value, decimals: value % 1 == 0 ? 0 : 3);
 
   TextStyle _detailStyle(int index) => niraText(
     NiraType.caption,
@@ -452,7 +513,13 @@ class _ProductionPainter extends CustomPainter {
           Paint()..color = i == selected ? niraGreenHover : _barColor,
         );
       }
-      _text(canvas, '${day.day}', Offset(x, plot.bottom + 16));
+      final multiMonth =
+          days.first.date.month != days.last.date.month ||
+          days.first.date.year != days.last.date.year;
+      final label = multiMonth
+          ? '${day.date.day}/${day.date.month}'
+          : '${day.date.day}';
+      _text(canvas, label, Offset(x, plot.bottom + 16));
     }
   }
 

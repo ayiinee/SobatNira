@@ -24,6 +24,8 @@ test('batch approval freezes costs, consumes once, isolates scope and produces a
   assert.equal(detail.body.costSaved,true);
   assert.equal(detail.body.remainingMl,'0');
   assert.equal(detail.body.grades[0].weightKg,'30');
+  assert.equal(detail.body.finalSugarKg,'30');
+  assert.equal(detail.body.exactValueRupiah,'600000');
   assert.equal((await f.request(root+'/batches/'+batch+'/approve','POST',undefined,'fixture-owner')).status,403);
   const approved=await f.request(root+'/batches/'+batch+'/approve','POST');assert.equal(approved.status,200,JSON.stringify(approved.body));
   assert.equal(approved.body.output_snapshot.productionMarginRupiah,'475000');

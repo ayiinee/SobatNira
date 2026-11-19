@@ -1,6 +1,6 @@
 import { sumDecimals } from './decimal';
 
-type Grade = { code: string; weightKg: string; pricePerKgRupiah: string };
+export type Grade = { code: string; weightKg: string; pricePerKgRupiah: string };
 type Batch = { id: string; code: string; wokNumber: number; occurredAt: string; quantityMl: string; physicalWeightKg: string; grades: Grade[] };
 type Calculation = { finalSugarKg: string; rendemenPercent: string; productionValueRupiah: string; totalCostRupiah: string; productionMarginRupiah: string; costs: Record<string, string> };
 export type ProductionReportLot = {
@@ -21,18 +21,23 @@ function exactValue(grade: Grade): string {
     : value.toString();
 }
 
+export function batchGradeTotals(grades: Grade[]) {
+  const results = grades.map(grade => ({ ...grade, exactValueRupiah: exactValue(grade) }));
+  return { grades: results, finalSugarKg: sumDecimals(results.map(grade => grade.weightKg)),
+    exactValueRupiah: sumDecimals(results.map(grade => grade.exactValueRupiah)) };
+}
+
 export function productionReport(items: ProductionReportLot[]) {
   const grades = new Map<string, { code: string; weightKg: string; exactValueRupiah: string }>();
   const lots = items.map(lot => ({ ...lot, batches: lot.batches.map(batch => {
-    const results = batch.grades.map(grade => ({ ...grade, exactValueRupiah: exactValue(grade) }));
-    for (const grade of results) {
+    const totals = batchGradeTotals(batch.grades);
+    for (const grade of totals.grades) {
       const previous = grades.get(grade.code);
       grades.set(grade.code, { code: grade.code,
         weightKg: sumDecimals([previous?.weightKg ?? '0', grade.weightKg]),
         exactValueRupiah: sumDecimals([previous?.exactValueRupiah ?? '0', grade.exactValueRupiah]) });
     }
-    return { ...batch, grades: results, finalSugarKg: sumDecimals(results.map(g => g.weightKg)),
-      exactValueRupiah: sumDecimals(results.map(g => g.exactValueRupiah)) };
+    return { ...batch, ...totals };
   }) }));
   const produced = items.flatMap(lot => lot.calculation ? [lot.calculation] : []);
   const money = (field: 'productionValueRupiah' | 'totalCostRupiah' | 'productionMarginRupiah') =>

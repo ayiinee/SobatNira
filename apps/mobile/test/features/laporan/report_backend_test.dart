@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/io_client.dart';
 import 'package:sobatnira/features/laporan/connected_reports.dart';
-import 'package:sobatnira/features/laporan/connected_report_view.dart';
+import 'package:sobatnira/features/laporan/demo_analytics.dart';
+import 'package:sobatnira/features/laporan/laporan_page.dart';
 import 'package:sobatnira/features/laporan/printable_report.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
 import 'package:sobatnira/sobatnira_ui.dart';
@@ -61,12 +62,17 @@ void main() {
         MaterialApp(
           theme: niraTheme(),
           home: Scaffold(
-            body: ConnectedReportView(reports: reports, onNavigate: (_) {}),
+            body: LaporanPage(
+              analytics: DemoAnalytics(),
+              reports: reports,
+              onOpenDetail: (_) {},
+            ),
           ),
         ),
       );
       await tester.pumpAndSettle();
       expect(find.text('30 kg'), findsWidgets);
+      expect(find.text('Gula final per hari (Kg)'), findsOneWidget);
       await tester.tap(find.text('Margin').first);
       await tester.pumpAndSettle();
       expect(find.text('Rp475.000'), findsWidgets);

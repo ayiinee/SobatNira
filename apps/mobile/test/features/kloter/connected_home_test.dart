@@ -9,7 +9,7 @@ import 'package:sobatnira/features/beranda/beranda_page.dart';
 import 'package:sobatnira/features/kloter/connected_production.dart';
 import 'package:sobatnira/features/kloter/kloter_date_filter.dart';
 import 'package:sobatnira/features/laporan/printable_report.dart';
-import 'package:sobatnira/features/laporan/connected_report_view.dart';
+import 'package:sobatnira/features/laporan/laporan_page.dart';
 import 'package:sobatnira/features/laporan/report_pdf.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
 import 'package:sobatnira/main.dart';
@@ -161,7 +161,8 @@ void main() {
       expect(find.text('OCR-B'), findsOneWidget);
       await tester.tap(find.bySemanticsLabel('Laporan'));
       await tester.pumpAndSettle();
-      expect(find.byType(ConnectedReportView), findsOneWidget);
+      expect(find.byType(LaporanPage), findsOneWidget);
+      expect(find.text('Gula final per hari (Kg)'), findsOneWidget);
       expect(find.text('25 kg'), findsWidgets);
       await tester.tap(find.text('Margin').first);
       await tester.pumpAndSettle();

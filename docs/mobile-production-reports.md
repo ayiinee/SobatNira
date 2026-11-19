@@ -18,6 +18,8 @@ Satu statement PostgreSQL membaca semua bagian laporan dalam snapshot baca yang 
 
 ## Layar dan ekspor
 
+Mode terhubung dan demo memakai `LaporanPage`, `ReportDetailPage`, dan `ReportExportPage` yang sama. Data dari API mengisi kartu ringkasan, grafik Produksi dan Margin, tabel, serta hasil ekspor pada komponen tersebut. `BatchDetailPage` juga memakai tab Ringkasan, Masak, dan Grade yang sama untuk kedua sumber data.
+
 Beranda memakai total laporan dan menyediakan pemilih periode di baris kalender. Tab Laporan menyediakan pilihan periode/data contoh, total produksi atau margin, daftar kloter dan kontribusi grade. Buka kloter untuk rincian rendemen/biaya serta batch sah; Detail Kloter juga membuka rincian produksi tersebut. Pintasan Laba dan Rekap memakai state laporan yang sama.
 
 Rekap memuat gula, margin, jumlah dan rincian batch sah. Tampilan dan PDF menerima snapshot objek yang sama, termasuk nominal total eksak, identitas kloter duplikat dan kode batch. Nilai yang belum tercatat tidak diperkirakan. Laporan laba tetap mempertahankan nama produk tersebut, dengan isi berupa margin produksi kumulatif.

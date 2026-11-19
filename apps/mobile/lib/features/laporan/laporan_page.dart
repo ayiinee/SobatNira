@@ -3,42 +3,45 @@ import 'package:flutter/material.dart';
 import '../../sobatnira_ui.dart';
 import '../../widgets/summary_card.dart';
 import '../kloter/kloter_date_filter.dart';
+import 'connected_report_controls.dart'
+    show ConnectedReportStatus, filterConnectedReport;
+import 'connected_reports.dart';
 import 'demo_analytics.dart';
 import '../kloter/demo_lot_fixture.dart';
 import 'margin_chart.dart';
 import 'production_chart.dart';
 import 'report_detail_page.dart';
 import 'report_paginated_list.dart';
-import '../kloter/demo_production.dart';
-import 'production_recap.dart';
-import 'production_recap_section.dart';
-import 'report_date_button.dart';
 
 class LaporanPage extends StatefulWidget {
   const LaporanPage({
     required this.analytics,
     required this.onOpenDetail,
-    this.approvedLots,
-    this.statusMessage,
+    this.reports,
     super.key,
   });
 
   final DemoAnalytics analytics;
   final ValueChanged<ReportDetailKind> onOpenDetail;
-  final List<DemoKloter>? approvedLots;
-  final Widget? statusMessage;
+  final ConnectedReports? reports;
 
   @override
   State<LaporanPage> createState() => _LaporanPageState();
 }
 
 class _LaporanPageState extends State<LaporanPage> {
+  ConnectedReports? get _reports => widget.reports;
+  List<AnalyticsRow> get _rows =>
+      _reports?.rows(widget.analytics.tab) ?? widget.analytics.visibleRows;
+
   Future<void> _dateFilter() async {
     FocusScope.of(context).unfocus();
+    if (_reports case final reports?) {
+      return filterConnectedReport(context, reports);
+    }
     final result = await showKloterDateFilter(
       context,
       widget.analytics.dateFilter,
-      today: widget.approvedLots == null ? null : DateTime.now(),
     );
     if (!mounted || result == null) return;
     widget.analytics.setDateFilter(result.selection);
@@ -46,7 +49,7 @@ class _LaporanPageState extends State<LaporanPage> {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: widget.analytics,
+    listenable: Listenable.merge([widget.analytics, _reports]),
     builder: (context, _) => Column(
       children: [
         NiraTabs(
@@ -58,60 +61,13 @@ class _LaporanPageState extends State<LaporanPage> {
               widget.analytics.setTab(ReportTab.values[index]),
         ),
         Expanded(
-          child: widget.approvedLots != null
-              ? ListView(
-                  key: const PageStorageKey('laporan-connected-scroll'),
-                  padding: const EdgeInsets.fromLTRB(
-                    niraInset,
-                    NiraSpace.md,
-                    niraInset,
-                    NiraSpace.lg,
-                  ),
-                  children: [_connectedReport()],
-                )
-              : widget.analytics.tab == ReportTab.production
+          child: widget.analytics.tab == ReportTab.production
               ? _production()
               : _margin(),
         ),
       ],
     ),
   );
-
-  Widget _connectedReport() {
-    if (widget.analytics.tab == ReportTab.margin) {
-      return const NiraSummaryCard('Margin produksi', 'Belum tersedia');
-    }
-    final lots = widget.approvedLots!
-        .where((lot) => widget.analytics.dateFilter?.contains(lot.date) ?? true)
-        .toList();
-    final weights = lots.map((lot) => lot.netWeightKg).nonNulls;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        NiraSummaryPair(
-          first: const NiraSummaryCard('Gula final', 'Belum tersedia'),
-          second: NiraSummaryCard(
-            'Tebu diterima',
-            formatQuantity(
-              weights.isEmpty ? null : weights.reduce((a, b) => a + b),
-              'kg',
-            ),
-            boxes: true,
-          ),
-        ),
-        const SizedBox(height: NiraSpace.md),
-        Align(
-          alignment: Alignment.centerRight,
-          child: ReportDateButton(onPressed: _dateFilter),
-        ),
-        const SizedBox(height: NiraSpace.md),
-        widget.statusMessage ??
-            ProductionRecapSection(
-              recap: ProductionRecap.fromApprovedLots(lots),
-            ),
-      ],
-    );
-  }
 
   Widget _production() {
     final header = _productionHeader();
@@ -126,14 +82,17 @@ class _LaporanPageState extends State<LaporanPage> {
       NiraSummaryPair(
         first: NiraSummaryCard(
           'Gula final',
-          '${demoNumber(widget.analytics.sugarTotal)}Kg',
+          _reports?.amount('finalSugarKg', unit: ' kg') ??
+              '${demoNumber(widget.analytics.sugarTotal)}Kg',
         ),
         second: NiraSummaryCard(
           'Tebu diterima',
-          '${demoNumber(widget.analytics.caneTotal)}Kg',
+          _reports?.amount('caneNetKg', unit: ' kg') ??
+              '${demoNumber(widget.analytics.caneTotal)}Kg',
           boxes: true,
         ),
       ),
+      if (_reports case final reports?) ConnectedReportStatus(reports: reports),
       const SizedBox(height: NiraSpace.md),
       _chartCard(),
       const SizedBox(height: NiraSpace.md),
@@ -145,20 +104,31 @@ class _LaporanPageState extends State<LaporanPage> {
     children: [
       NiraSummaryCard(
         'Margin Produksi',
-        demoMoney(widget.analytics.marginTotal),
+        _reports?.amount('productionMarginRupiah', money: true) ??
+            demoMoney(widget.analytics.marginTotal),
         cane: true,
         compactValue: true,
       ),
+      if (_reports case final reports?) ...[
+        ConnectedReportStatus(reports: reports),
+        if (reports.provisional)
+          Text(
+            'Margin sementara untuk kloter yang masih terbuka.',
+            style: niraText(NiraType.caption, color: niraLeaf),
+          ),
+      ],
       const SizedBox(height: NiraSpace.sm),
       NiraSummaryPair(
         first: NiraSummaryCard(
           'Nilai produksi',
-          demoMoney(widget.analytics.valueTotal),
+          _reports?.amount('productionValueRupiah', money: true) ??
+              demoMoney(widget.analytics.valueTotal),
           compactValue: true,
         ),
         second: NiraSummaryCard(
           'Total biaya',
-          demoMoney(widget.analytics.costTotal),
+          _reports?.amount('totalCostRupiah', money: true) ??
+              demoMoney(widget.analytics.costTotal),
           boxes: true,
           compactValue: true,
         ),
@@ -170,15 +140,22 @@ class _LaporanPageState extends State<LaporanPage> {
   );
 
   Widget _chartCard({bool margin = false}) => margin
-      ? MarginChart(rows: widget.analytics.visibleRows, onFilter: _dateFilter)
-      : ProductionChart(analytics: widget.analytics, onFilter: _dateFilter);
+      ? MarginChart(
+          rows: _rows.where((row) => row.value != '—').toList(),
+          onFilter: _dateFilter,
+        )
+      : ProductionChart(
+          analytics: widget.analytics,
+          reports: _reports,
+          onFilter: _dateFilter,
+        );
 
   Widget _rendemenTable(Widget header) => _tableSection(
     title: 'Rendemen',
     scrollHeader: header,
     plain: true,
     columns: const ['Pemasok', 'Gula final', 'Rendemen'],
-    rows: widget.analytics.visibleRows,
+    rows: _rows,
     onTap: (row) {
       widget.analytics.selectedRow = row;
       widget.onOpenDetail(ReportDetailKind.rendemen);
@@ -190,17 +167,19 @@ class _LaporanPageState extends State<LaporanPage> {
     scrollHeader: header,
     plain: true,
     columns: const ['Grade', 'Berat', 'Porsi'],
-    rows: [
-      for (final grade in ['A', 'B', 'C'])
-        AnalyticsRow(
-          'Grade $grade',
-          '',
-          '${widget.analytics.gradeWeight(grade)}Kg',
-          widget.analytics.sugarTotal == 0
-              ? '0,0%'
-              : '${demoNumber(widget.analytics.gradeWeight(grade) / widget.analytics.sugarTotal * 100, decimals: 1)}%',
-        ),
-    ],
+    rows:
+        _reports?.gradeRows ??
+        [
+          for (final grade in ['A', 'B', 'C'])
+            AnalyticsRow(
+              'Grade $grade',
+              '',
+              '${widget.analytics.gradeWeight(grade)}Kg',
+              widget.analytics.sugarTotal == 0
+                  ? '0,0%'
+                  : '${demoNumber(widget.analytics.gradeWeight(grade) / widget.analytics.sugarTotal * 100, decimals: 1)}%',
+            ),
+        ],
     onTap: (row) {
       widget.analytics.selectedRow = row;
       widget.onOpenDetail(ReportDetailKind.grade);
@@ -212,7 +191,7 @@ class _LaporanPageState extends State<LaporanPage> {
     scrollHeader: _marginHeader(),
     plain: true,
     columns: const ['Pemasok', 'Margin'],
-    rows: widget.analytics.visibleRows,
+    rows: _rows,
     onTap: (row) {
       widget.analytics.selectedRow = row;
       widget.onOpenDetail(ReportDetailKind.margin);
@@ -310,7 +289,11 @@ class _LaporanPageState extends State<LaporanPage> {
   }) => ReportPaginatedList<AnalyticsRow>(
     items: rows,
     scrollHeader: scrollHeader,
-    resetToken: (title, widget.analytics.dateFilter, widget.analytics.query),
+    resetToken: (
+      title,
+      _reports?.filter ?? widget.analytics.dateFilter,
+      widget.analytics.query,
+    ),
     builder: (visibleRows) => plain
         ? _plainTable(title, columns, visibleRows, onTap)
         : Column(

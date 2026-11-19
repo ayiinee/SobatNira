@@ -167,6 +167,12 @@ class _MarginPainter extends CustomPainter {
       200.0,
       (values.reduce(math.max) / 200).ceil() * 200.0,
     );
+    final minimum = math.min(
+      0.0,
+      (values.reduce(math.min) / 200).floor() * 200.0,
+    );
+    final range = maximum - minimum;
+    final zero = plot.bottom + minimum / range * plot.height;
     for (var i = 0; i <= 2; i++) {
       final y = plot.bottom - plot.height * i / 2;
       canvas.drawLine(
@@ -178,18 +184,18 @@ class _MarginPainter extends CustomPainter {
       );
       _text(
         canvas,
-        (maximum * i / 2).toInt().toString(),
+        (minimum + range * i / 2).toInt().toString(),
         Offset(plot.left - 20, y),
       );
     }
     final slot = plot.width / rows.length;
     for (var i = 0; i < rows.length; i++) {
       final x = plot.left + (i + .5) * slot;
-      final h = values[i] / maximum * plot.height * progress;
+      final h = values[i] / range * plot.height * progress;
       final w = math.min(36.0, slot * .55);
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(x - w / 2, plot.bottom - h, w, h),
+          Rect.fromLTWH(x - w / 2, math.min(zero, zero - h), w, h.abs()),
           const Radius.circular(3),
         ),
         Paint()..color = i == selected ? niraGreenHover : niraGreen,
@@ -197,7 +203,7 @@ class _MarginPainter extends CustomPainter {
       _text(
         canvas,
         values[i].toInt().toString(),
-        Offset(x, plot.bottom - h - 10),
+        Offset(x, zero - h + (h < 0 ? 10 : -10)),
         bold: true,
       );
       _text(canvas, rows[i].supplier, Offset(x, plot.bottom + 18));

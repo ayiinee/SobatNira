@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../kloter/kloter_date_filter.dart';
+import '../kloter/demo_lot_fixture.dart';
 import '../kloter/demo_production.dart';
 import '../pekerjaan/review_api.dart';
 import 'demo_analytics.dart';
@@ -40,6 +41,19 @@ class ConnectedReports extends ChangeNotifier {
   Json get totals => data?['totals'] as Json? ?? const {};
   bool get provisional =>
       lots.any((lot) => lot['calculation'] != null && lot['closed'] == false);
+  List<AnalyticsRow> rows(ReportTab tab) => [
+    for (final lot in lots) _reportRow(lot, tab),
+  ];
+  List<AnalyticsRow> get gradeRows => [
+    for (final grade in grades)
+      AnalyticsRow(
+        'Grade ${grade['code']}',
+        '',
+        '${reportNumber(grade['weightKg'])} kg',
+        reportShare(grade['weightKg'], totals['finalSugarKg']),
+        id: grade['code'] as String,
+      ),
+  ];
   String get period => filter == null
       ? 'Semua tanggal'
       : '${formatDate(filter!.range.start)} - ${formatDate(filter!.range.end)}';
@@ -108,16 +122,12 @@ class ConnectedReports extends ChangeNotifier {
     ),
     rows: [
       for (final lot in lots)
-        if (lot['calculation'] case final Map<String, dynamic> calculation)
-          AnalyticsRow(
-            lot['supplier'] as String,
-            lot['code'] as String,
+        if (lot['calculation'] != null)
+          _reportRow(
+            lot,
             kind == PrintableReportKind.profit
-                ? reportMoney(calculation['productionMarginRupiah'])
-                : '${reportNumber(calculation['finalSugarKg'])} kg',
-            '${reportNumber(calculation['rendemenPercent'])}%',
-            id: lot['lotId'] as String,
-            date: DateTime.parse(lot['receivedAt'] as String).toLocal(),
+                ? ReportTab.margin
+                : ReportTab.production,
           ),
     ],
     recap: kind == PrintableReportKind.profit
@@ -178,4 +188,29 @@ class ConnectedReports extends ChangeNotifier {
     _generation++;
     super.dispose();
   }
+}
+
+String reportShare(Object? weight, Object? total) {
+  final denominator = double.tryParse('$total') ?? 0;
+  final numerator = double.tryParse('$weight') ?? 0;
+  return '${demoNumber(denominator == 0 ? 0 : numerator / denominator * 100, decimals: 1)}%';
+}
+
+AnalyticsRow _reportRow(Json lot, ReportTab tab) {
+  final calculation = lot['calculation'] as Json?;
+  final margin = tab == ReportTab.margin;
+  return AnalyticsRow(
+    lot['supplier'] as String,
+    lot['code'] as String,
+    calculation == null
+        ? '—'
+        : margin
+        ? reportMoney(calculation['productionMarginRupiah'])
+        : '${reportNumber(calculation['finalSugarKg'])} kg',
+    calculation == null
+        ? '—'
+        : '${reportNumber(calculation['rendemenPercent'])}%',
+    id: lot['lotId'] as String,
+    date: DateTime.parse(lot['receivedAt'] as String).toLocal(),
+  );
 }

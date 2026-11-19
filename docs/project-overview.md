@@ -24,7 +24,7 @@ Kontrak dan kriteria penerimaan terperinci tersedia di paket PRD internal tim.
 
 | Layanan | Tanggung jawab | Yang tersedia di repo |
 | --- | --- | --- |
-| Flutter | Antarmuka admin dan owner untuk melihat serta meninjau data. | Build dengan autentikasi Supabase membuka Beranda, Kloter, Pekerjaan serta laporan produksi/margin melalui API NestJS dengan satu sesi dan pilihan pabrik. Laporan memakai penerimaan dan batch sah dengan periode penerimaan kloter. Build tanpa konfigurasi Supabase membuka demo lokal. |
+| Flutter | Antarmuka admin dan owner untuk melihat serta meninjau data. | Build dengan autentikasi Supabase membuka Beranda, Kloter, Pekerjaan serta laporan produksi/margin melalui API NestJS dengan satu sesi dan pilihan pabrik. Laporan memakai penerimaan dan batch sah dengan periode penerimaan kloter. Demo lokal tersedia lewat `SOBATNIRA_MODE=demo`. |
 | NestJS | Otorisasi, validasi domain, dan kalkulasi resmi. | Intake foto privat, pekerjaan OCR, revisi, konfirmasi dan review berbasis PostgreSQL. Modul produksi mencatat penerimaan, penggilingan, saldo nira, dan koreksi stok dari nota sah. |
 | FastAPI | Pemrosesan AI internal dan keluaran draf ekstraksi. | Ekstraksi draf dua tipe nota dengan PaddleOCR, parser dan evidence. Gemini dapat dikonfigurasi untuk crop ambigu. |
 

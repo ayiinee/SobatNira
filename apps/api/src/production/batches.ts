@@ -8,7 +8,7 @@ import { JuiceRepository } from '../juice/juice.repository';
 import { object, uuid, text, timestamp, scopeValues, found, parsePage } from './production.dto';
 import { decimal, sumDecimals, compareDecimals } from './decimal';
 import { calculateProductionPreview } from './calculation';
-import { productionReport, ProductionReportLot } from './production-report';
+import { batchGradeTotals, type Grade, productionReport, ProductionReportLot } from './production-report';
 export function parseBatch(input: unknown) {
     const b = object(input, ['id', 'lotId', 'code', 'wokNumber', 'occurredAt', 'quantityMl', 'physicalWeightKg', 'grades', 'synthetic']);
     if (!Number.isSafeInteger(b.wokNumber) || Number(b.wokNumber) < 1 || Number(b.wokNumber) > 10000)
@@ -107,7 +107,7 @@ export class Batches {
         });
     }
     async detail(access: FactoryAccess, id: string) {
-        const { rows: [row] } = await this.db.query(`WITH ${FACTORY_SCOPE_CTE}
+        const { rows: [row] } = await this.db.query<{ lot_id: string; grades: Grade[] | null }>(`WITH ${FACTORY_SCOPE_CTE}
           SELECT b.*,
             (SELECT jsonb_agg(jsonb_build_object('code',g.code,'weightKg',g.weight_kg::text,
               'pricePerKgRupiah',g.price_per_kg_rupiah::text) ORDER BY g.code)
@@ -120,7 +120,8 @@ export class Batches {
                  AND r.is_synthetic=b.is_synthetic AND r.state<>'released') AS "remainingMl"
           FROM sobatnira.production_batches b JOIN authorized_scope s
             ON s."tenantId"=b.tenant_id AND s."factoryId"=b.factory_id WHERE b.id=$4`, [...scopeValues(access), id]);
-        return found(row);
+        const batch = found(row);
+        return { ...batch, ...batchGradeTotals(batch.grades ?? []) };
     }
 
     async cancel(access: FactoryAccess, id: string) {
