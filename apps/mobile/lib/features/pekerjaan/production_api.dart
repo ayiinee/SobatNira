@@ -28,7 +28,10 @@ class ClosureApi {
 class EconomicsApi {
   EconomicsApi(this.api);
   final ReviewApi api;
-  Future<Json> stock(FactoryScope scope, {String? grade}) => api.getProduction(['economics', 'stock', 'sugar'], query: {if (grade != null) 'grade': grade});
+  Future<Json> stock(FactoryScope scope, {String? grade}) => api.getProduction(
+    ['economics', 'stock', 'sugar'],
+    query: {'grade': ?grade},
+  );
   Future<Json> movement(FactoryScope scope, Json body) => api.writeProduction(['economics', 'stock', 'sugar', 'movements'], body, requestId: body['requestId'] as String?);
   Future<Json> correction(FactoryScope scope, Json body) => api.writeProduction(['economics', 'stock', 'sugar', 'corrections'], body, requestId: body['requestId'] as String?);
   Future<Json> summary(FactoryScope scope, String batchId) => api.getProduction(['economics', 'batches', batchId, 'economics']);
