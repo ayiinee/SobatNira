@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sobatnira/features/kloter/demo_production.dart';
 import 'package:sobatnira/main.dart';
+import 'package:sobatnira/features/laporan/demo_analytics.dart';
+import 'package:sobatnira/features/kloter/demo_lot_fixture.dart';
 
 void main() {
   testWidgets(
@@ -21,7 +23,9 @@ void main() {
       demo.dispose();
       await tester.pumpWidget(const SobatNiraApp());
       await tester.pumpAndSettle();
-      final amount = find.text('Rp15.745.000');
+      final analytics = DemoAnalytics();
+      addTearDown(analytics.dispose);
+      final amount = find.text(demoMoney(analytics.marginTotal));
       final eye = find.byTooltip('Sembunyikan keuntungan');
       expect(
         tester.getCenter(eye).dx,

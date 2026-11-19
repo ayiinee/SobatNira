@@ -104,7 +104,7 @@ Future<Uint8List> buildProductionRecapPdf(
                 ('Gula final', report.totalDisplay),
                 ('Margin tercatat', recap.marginTotal),
                 ('Kloter', '${recap.kloter.length}'),
-                ('Batch', report.connected ? '-' : '${recap.batchCount}'),
+                ('Batch', '${recap.batchCount}'),
               ])
                 pw.Expanded(
                   child: pw.Column(

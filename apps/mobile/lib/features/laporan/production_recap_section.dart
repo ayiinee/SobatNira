@@ -36,14 +36,16 @@ class ProductionRecapSection extends StatelessWidget {
         ),
       ReportPaginatedList<RecapKloter>(
         items: recap.kloter,
-        resetToken: recap.kloter.map((lot) => lot.code).join('|'),
+        resetToken: recap.kloter.map((lot) => lot.id ?? lot.code).join('|'),
         builder: (lots) => Column(
           children: [
             for (final lot in lots)
               _KloterRecap(
-                key: ValueKey(lot.code),
+                key: ValueKey(lot.id ?? lot.code),
                 lot: lot,
-                initiallyExpanded: lot.code == recap.kloter.first.code,
+                initiallyExpanded:
+                    (lot.id ?? lot.code) ==
+                    (recap.kloter.first.id ?? recap.kloter.first.code),
               ),
           ],
         ),
@@ -78,7 +80,7 @@ class _KloterRecapState extends State<_KloterRecap> {
   Widget build(BuildContext context) {
     final lot = widget.lot;
     return ExpansionTile(
-      key: PageStorageKey('rekap-${lot.code}'),
+      key: PageStorageKey('rekap-${lot.id ?? lot.code}'),
       initiallyExpanded: widget.initiallyExpanded,
       tilePadding: const EdgeInsets.symmetric(vertical: NiraSpace.xs),
       childrenPadding: const EdgeInsets.only(bottom: NiraSpace.lg),
@@ -133,13 +135,13 @@ class _KloterRecapState extends State<_KloterRecap> {
         else ...[
           ReportPaginatedList<RecapBatch>(
             items: lot.batches,
-            resetToken: lot.code,
+            resetToken: lot.id ?? lot.code,
             builder: (batches) => LayoutBuilder(
               builder: (context, constraints) => Scrollbar(
                 controller: _horizontal,
                 thumbVisibility: true,
                 child: SingleChildScrollView(
-                  key: PageStorageKey('batch-table-${lot.code}'),
+                  key: PageStorageKey('batch-table-${lot.id ?? lot.code}'),
                   controller: _horizontal,
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.only(bottom: NiraSpace.md),

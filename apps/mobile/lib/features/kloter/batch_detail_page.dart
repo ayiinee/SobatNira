@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
 import 'demo_production.dart';
+import 'demo_lot_fixture.dart';
 import 'kloter_detail_widgets.dart';
 
 class BatchDetailPage extends StatefulWidget {
@@ -115,17 +116,21 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
       ),
     _PriceRow(
       grade: Text(
-        'Margin Produksi',
+        'Nilai produksi batch',
         style: niraText(NiraType.caption, weight: FontWeight.w700),
       ),
       weight: Text('${_batch.gradeWeight}Kg', style: niraText(NiraType.body)),
       price: Text(
-        'Rp670.000',
+        demoMoney(_batch.productionValue),
         style: niraText(NiraType.section, weight: FontWeight.w700),
       ),
       height: 32,
       line: niraGold,
     ),
+    if (_batch.lot != null)
+      DetailMetrics([
+        ('Margin kumulatif kloter (demo)', demoMoney(_batch.lot!.marginRupiah)),
+      ]),
   ];
 
   List<Widget> _cooking() => [
@@ -147,13 +152,13 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
     const SizedBox(height: NiraSpace.xs),
     Text('Hasil timbang', style: niraText(NiraType.caption, color: niraMuted)),
     const SizedBox(height: NiraSpace.md),
-    const DetailMetrics([
-      ('Tebu bersih', '1.500Kg'),
-      ('Nira tercatat', '360L'),
+    DetailMetrics([
+      ('Tebu bersih kloter', '${demoNumber(_batch.lot?.caneKg ?? 0)} kg'),
+      ('Nilai produksi batch', demoMoney(_batch.productionValue)),
     ], separate: true),
     const SizedBox(height: NiraSpace.sm),
     _priceHeader(),
-    for (final grade in const ['A', 'B'])
+    for (final grade in DemoBatch.gradePrices.keys)
       _PriceRow(
         grade: Text(grade, style: niraText(NiraType.body)),
         weight: _GradeWeight(
