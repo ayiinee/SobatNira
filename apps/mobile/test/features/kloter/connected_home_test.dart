@@ -47,6 +47,78 @@ http.Response _json(Object result) => http.Response(
 );
 
 void main() {
+  test(
+    'changing report source keeps lots and batch requests in factory scope',
+    () async {
+      final requests = <Uri>[];
+      final api = ReviewApi(
+        'fixture',
+        client: MockClient((request) async {
+          final uri = request.url;
+          requests.add(uri);
+          expect(uri.path, startsWith('/tenants/tenant/factories/A/'));
+          if (uri.path.endsWith('/production-report')) {
+            return _json({
+              'items': uri.queryParameters['synthetic'] == 'true'
+                  ? [
+                      {'lotId': 'example'},
+                    ]
+                  : [],
+              'grades': [],
+              'totals': {'lotCount': 1},
+            });
+          }
+          if (uri.path.endsWith('/lots/example')) {
+            expect(uri.queryParameters['synthetic'], 'true');
+            return _json({..._lot('example'), 'synthetic': true});
+          }
+          if (uri.path.endsWith('/production/batches')) {
+            expect(uri.queryParameters, {
+              'lotId': 'example',
+              'synthetic': 'true',
+              'limit': '20',
+              'offset': '20',
+            });
+            return _json({'items': []});
+          }
+          expect(uri.path, endsWith('/lots'));
+          return _json({
+            'items': [_lot('official')],
+            'total': 1,
+          });
+        }),
+      );
+      final scope = FactoryScope.fromJson(_factory('A'));
+      final changes = <bool>[];
+      final live = ConnectedProduction(
+        api,
+        scope,
+        synthetic: true,
+        onSyntheticChanged: changes.add,
+      );
+      addTearDown(live.dispose);
+      addTearDown(api.close);
+      await live.refresh();
+      expect(live.error, isNull);
+      expect(live.reports.error, isNull);
+      expect(live.lots.single.id, 'example');
+      expect(requests.any((uri) => uri.path.endsWith('/lots')), isFalse);
+      await api.factoryBatches(scope, 'example', synthetic: true, offset: 20);
+      final changed = Completer<void>();
+      live.addListener(() {
+        if (!live.loading &&
+            live.lots.single.id == 'official' &&
+            !changed.isCompleted) {
+          changed.complete();
+        }
+      });
+      await live.reports.setSynthetic(false);
+      await changed.future;
+      expect(changes, [false]);
+      expect(live.lots.single.id, 'official');
+    },
+  );
+
   testWidgets(
     'login opens the team home and isolates data when switching factory',
     (tester) async {

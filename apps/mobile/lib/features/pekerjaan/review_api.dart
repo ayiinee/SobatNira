@@ -320,11 +320,12 @@ class ReviewApi {
     FactoryScope scope,
     String lotId, {
     int offset = 0,
+    bool synthetic = false,
   }) => _productionGet(
     [...scope._base, 'production', 'batches'],
     query: {
       'lotId': lotId,
-      'synthetic': 'false',
+      'synthetic': '$synthetic',
       'limit': '20',
       'offset': '$offset',
     },
@@ -390,11 +391,17 @@ class ReviewApi {
     },
   );
 
-  Future<Json> lot(FactoryScope scope, String id) =>
-      _productionGet([...scope._lots, id]);
+  Future<Json> lot(FactoryScope scope, String id, {bool synthetic = false}) =>
+      _productionGet(
+        [...scope._lots, id],
+        query: {if (synthetic) 'synthetic': 'true'},
+      );
 
-  Future<Json> juice(FactoryScope scope, String id) =>
-      _productionGet([...scope._lots, id, 'juice', 'availability']);
+  Future<Json> juice(FactoryScope scope, String id, {bool synthetic = false}) =>
+      _productionGet(
+        [...scope._lots, id, 'juice', 'availability'],
+        query: {if (synthetic) 'synthetic': 'true'},
+      );
 
   Future<Json> catalog(
     FactoryScope scope,

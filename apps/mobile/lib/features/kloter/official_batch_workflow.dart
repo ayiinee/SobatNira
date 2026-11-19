@@ -18,6 +18,7 @@ class OfficialLotBatches extends StatefulWidget {
     required this.api,
     required this.scope,
     required this.lotId,
+    this.synthetic = false,
     required this.kloterCode,
     required this.caneWeight,
     required this.onOpenPekerjaan,
@@ -32,6 +33,7 @@ class OfficialLotBatches extends StatefulWidget {
   final ReviewApi api;
   final FactoryScope scope;
   final String lotId;
+  final bool synthetic;
   final String kloterCode;
   final String caneWeight;
   final VoidCallback onOpenPekerjaan;
@@ -48,12 +50,18 @@ class OfficialLotBatches extends StatefulWidget {
 class _OfficialLotBatchesState extends State<OfficialLotBatches> {
   int _offset = 0;
   late Future<Json> _result = _load();
-  Future<Json> _load() =>
-      widget.api.factoryBatches(widget.scope, widget.lotId, offset: _offset);
+  Future<Json> _load() => widget.api.factoryBatches(
+    widget.scope,
+    widget.lotId,
+    offset: _offset,
+    synthetic: widget.synthetic,
+  );
 
   void _reload() {
     final result = _load();
-    setState(() { _result = result; });
+    setState(() {
+      _result = result;
+    });
   }
 
   Future<void> _create() async {
@@ -232,7 +240,9 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
   Future<Json> _load() => widget.api.factoryBatch(widget.scope, _id);
   void _reload() {
     final detail = _load();
-    setState(() { _detail = detail; });
+    setState(() {
+      _detail = detail;
+    });
   }
 
   Future<void> _costs() async {
@@ -352,6 +362,7 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
         ),
       if (batch['status'] == 'draft' &&
           !_busy &&
+          widget.initial['is_synthetic'] != true &&
           widget.scope.role == 'admin') ...[
         if (!costSaved) NiraButton('Isi biaya kloter', _costs),
         if (costSaved && remaining != '0')
@@ -389,6 +400,7 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
           current?['costSaved'] == true &&
           current?['remainingMl'] == '0' &&
           widget.scope.role == 'admin' &&
+          widget.initial['is_synthetic'] != true &&
           !_busy &&
           snapshot.connectionState == ConnectionState.done;
       return BatchDetailPage.official(
