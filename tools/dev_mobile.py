@@ -12,7 +12,8 @@ import threading
 import time
 
 
-MOBILE = Path(__file__).resolve().parents[1] / "apps" / "mobile"
+ROOT = Path(__file__).resolve().parents[1]
+MOBILE = ROOT / "apps" / "mobile"
 
 
 def snapshot():
@@ -37,8 +38,11 @@ def send(process, request_id, method, app_id, **params):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--port", type=int, default=8085)
+    parser.add_argument("--port", type=int)
+    parser.add_argument("--connected", action="store_true", help="Gunakan Supabase dan API dari .env akar repo.")
     args = parser.parse_args()
+    if args.port is None:
+        args.port = 8080 if args.connected else 8085
     if not 1 <= args.port <= 65535:
         parser.error("Port harus antara 1 dan 65535.")
     flutter = shutil.which("flutter")
@@ -48,9 +52,20 @@ def main():
         if probe.connect_ex(("127.0.0.1", args.port)) == 0:
             parser.exit(1, f"Port {args.port} sedang dipakai. Hentikan Flutter lama dengan q atau pilih --port lain.\n")
 
+    command = [flutter, "run", "-d", "chrome", "--web-hostname", "127.0.0.1",
+               "--web-port", str(args.port), "--hot", "--machine"]
+    if args.connected:
+        node = shutil.which("node")
+        if not node:
+            parser.exit(1, "Node.js 24 diperlukan untuk membaca .env.\n")
+        configured = subprocess.run([node, str(ROOT / "tools" / "mobile_config.mjs")], cwd=ROOT)
+        if configured.returncode:
+            return configured.returncode
+        command.append(f"--dart-define-from-file={ROOT / '.tmp' / 'mobile' / 'public-defines.json'}")
+
     previous = snapshot()
     process = subprocess.Popen(
-        [flutter, "run", "-d", "chrome", "--web-port", str(args.port), "--hot", "--machine"],
+        command,
         cwd=MOBILE,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
@@ -73,7 +88,7 @@ def main():
     dirty_at = None
     request_id = 0
     pending = None
-    print(f"SobatNira otomatis: http://localhost:{args.port}", flush=True)
+    print(f"SobatNira otomatis: http://127.0.0.1:{args.port}", flush=True)
     print("Pantau perubahan apps/mobile/lib. Tekan Ctrl+C untuk berhenti.", flush=True)
     try:
         while process.poll() is None or not messages.empty():
