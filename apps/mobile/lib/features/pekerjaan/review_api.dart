@@ -62,15 +62,19 @@ class FactoryScope {
     : tenantId = row['tenantId'] as String,
       tenantName = row['tenantName'] as String,
       factoryId = row['factoryId'] as String,
-      factoryName = row['factoryName'] as String;
+      factoryName = row['factoryName'] as String,
+      role = row['role'] as String?;
 
   final String tenantId;
   final String tenantName;
   final String factoryId;
   final String factoryName;
+  final String? role;
 
   List<String> get _base => ['tenants', tenantId, 'factories', factoryId];
   List<String> get _lots => [..._base, 'lots'];
+  List<String> get basePath => List.unmodifiable(_base);
+  List<String> lotsPath(String lotId) => [..._lots, lotId];
 }
 
 String documentType(Object? type) => switch (type) {
@@ -265,6 +269,9 @@ class ReviewApi {
     ),
   );
 
+  Future<Json> getProduction(List<String> path, {Map<String, String>? query}) =>
+      _productionGet(path, query: query);
+
   Future<List<FactoryScope>> factories() async {
     final response = await _productionGet(['auth', 'me']);
     return (response['access'] as List)
@@ -291,11 +298,14 @@ class ReviewApi {
     FactoryScope scope, {
     required int offset,
     required String search,
+    int limit = 20,
+    bool includeSummary = false,
   }) => _productionGet(
     scope._lots,
     query: {
-      'limit': '20',
+      'limit': '$limit',
       'offset': '$offset',
+      if (includeSummary) 'includeSummary': 'true',
       if (search.isNotEmpty) 'q': search,
     },
   );
@@ -332,6 +342,29 @@ class ReviewApi {
     return _json(
       _client.send(request).then(http.Response.fromStream),
       expectedStatus: id == null ? 201 : 200,
+    );
+  }
+
+  Future<Json> writeProduction(
+    List<String> path,
+    Json values, {
+    String? id,
+    String? requestId,
+    int? expectedStatus,
+  }) {
+    final request = http.Request(
+      id == null ? 'POST' : 'PATCH',
+      Uri.parse(baseUrl).replace(pathSegments: ['', ...path, ?id]),
+    );
+    request.headers.addAll({
+      ..._headers,
+      'Content-Type': 'application/json',
+      if (requestId != null) 'idempotency-key': requestId,
+    });
+    request.body = jsonEncode(values);
+    return _json(
+      _client.send(request).then(http.Response.fromStream),
+      expectedStatus: expectedStatus ?? (id == null ? 201 : 200),
     );
   }
 

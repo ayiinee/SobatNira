@@ -1,0 +1,36 @@
+export type BatchStatus = 'DRAFT' | 'COOKED' | 'WEIGHED' | 'GRADED' | 'VALIDATED';
+
+export type Batch = {
+  id: string;
+  tenantId: string;
+  factoryId: string;
+  kloterId: string;
+  panId: string;
+  status: BatchStatus;
+  occurredAt: string;
+  createdAt: string;
+  updatedAt: string;
+  productionConfig: { id: string; maxNiraMl: number };
+  priceVersion: { id: string; effectiveAt: string };
+  contributions: Contribution[];
+  cooking?: CookingRecord;
+  weighing?: Weighing;
+  grading?: Grading;
+  reworks: Rework[];
+};
+
+export type Contribution = { id: string; kloterId: string; volumeMl: number; occurredAt: string };
+export type CookingRecord = { id: string; startedAt: string; endedAt?: string; additiveIds: string[] };
+export type Weighing = { id: string; caneWeightKg?: number; sugarWeightKg?: number; occurredAt: string; caneWeightGrams?: number; sugarWeightGrams?: number };
+export type Grading = { id: string; gradeCode: string; sugarWeightKg?: number; occurredAt: string; sugarWeightGrams?: number };
+export type Rework = { id: string; sourceBatchId: string; receivingBatchId: string; weightKg?: number; status: 'RECORDED'; occurredAt: string; weightGrams?: number };
+
+export type BatchInput = {
+  factoryId: string;
+  /** Canonical B1 source identifier. `lotId` is accepted as Backend A alias. */
+  kloterId?: string;
+  lotId?: string;
+  panId: string;
+  occurredAt: string;
+  contributions?: Array<{ kloterId: string; volumeMl: number; occurredAt?: string }>;
+};

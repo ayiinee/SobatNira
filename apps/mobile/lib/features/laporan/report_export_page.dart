@@ -21,6 +21,8 @@ class ReportExportPage extends StatefulWidget {
     this.production,
     this.report,
     this.onFilter,
+    this.approvedLots,
+    this.statusMessage,
     super.key,
   });
 
@@ -31,6 +33,8 @@ class ReportExportPage extends StatefulWidget {
   final DemoProduction? production;
   final PrintableReport? report;
   final VoidCallback? onFilter;
+  final List<DemoKloter>? approvedLots;
+  final Widget? statusMessage;
 
   @override
   State<ReportExportPage> createState() => _ReportExportPageState();
@@ -47,6 +51,7 @@ class _ReportExportPageState extends State<ReportExportPage> {
     final result = await showKloterDateFilter(
       context,
       widget.analytics.dateFilter,
+      today: widget.approvedLots == null ? null : DateTime.now(),
     );
     if (mounted && result != null) {
       widget.analytics.setDateFilter(result.selection);
@@ -92,14 +97,23 @@ class _ReportExportPageState extends State<ReportExportPage> {
     builder: (context, _) {
       final report =
           widget.report ??
-          PrintableReport.fromAnalytics(
-            widget.kind,
-            widget.analytics,
-            factory: widget.factory,
-            production: widget.production,
-          );
+          (widget.approvedLots != null
+              ? PrintableReport.fromApprovedLots(
+                  widget.kind,
+                  factory: widget.factory,
+                  filter: widget.analytics.dateFilter,
+                  lots: widget.approvedLots!,
+                )
+              : PrintableReport.fromAnalytics(
+                  widget.kind,
+                  widget.analytics,
+                  factory: widget.factory,
+                  production: widget.production,
+                ));
       final enabled =
-          !_busy && (report.recap?.kloter.isNotEmpty ?? report.rows.isNotEmpty);
+          !_busy &&
+          widget.statusMessage == null &&
+          (report.recap?.kloter.isNotEmpty ?? report.rows.isNotEmpty);
       return NiraScaffold(
         tab: NiraTab.beranda,
         onNavigate: widget.onNavigate,
@@ -181,12 +195,18 @@ class _ReportExportPageState extends State<ReportExportPage> {
                   ),
                   const SizedBox(height: NiraSpace.md),
                   NiraSummaryCard(report.totalLabel, report.totalDisplay),
+                  if (widget.statusMessage case final status?) ...[
+                    const SizedBox(height: NiraSpace.md),
+                    status,
+                  ],
                   if (report.recap case final recap?) ...[
                     const SizedBox(height: NiraSpace.sm),
                     NiraSummaryCard('Margin tercatat', recap.marginTotal),
                     const SizedBox(height: NiraSpace.sm),
                     Text(
-                      '${recap.kloter.length} kloter · ${recap.batchCount} batch\nGula final ${recap.sugarCount}/${recap.kloter.length} · Margin ${recap.marginCount}/${recap.kloter.length} kloter',
+                      report.connected
+                          ? '${recap.kloter.length} kloter · Batch, gula final, dan margin belum tersedia'
+                          : '${recap.kloter.length} kloter · ${recap.batchCount} batch\nGula final ${recap.sugarCount}/${recap.kloter.length} · Margin ${recap.marginCount}/${recap.kloter.length} kloter',
                       style: niraText(NiraType.caption, color: niraLeaf),
                     ),
                     const SizedBox(height: NiraSpace.lg),
@@ -205,7 +225,9 @@ class _ReportExportPageState extends State<ReportExportPage> {
                     ),
                     const SizedBox(height: NiraSpace.xs),
                     Text(
-                      '${report.synthetic ? 'Data demo' : 'Data disahkan'} · ${report.rows.length} kloter',
+                      report.connected && report.rows.isEmpty
+                          ? 'Data margin belum tersedia.'
+                          : '${report.synthetic ? 'Data demo' : 'Data disahkan'} · ${report.rows.length} kloter',
                       style: niraText(NiraType.caption, color: niraLeaf),
                     ),
                     const SizedBox(height: NiraSpace.sm),

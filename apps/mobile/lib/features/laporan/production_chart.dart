@@ -8,16 +8,6 @@ import '../../widgets/chart_growth.dart';
 import 'demo_analytics.dart';
 import 'report_date_button.dart';
 
-// Synthetic presentation fixture; no production calculation is performed here.
-const _demoDays = [
-  _ChartDay(16, 40, 5.8, 24, 10, 6),
-  _ChartDay(17, 50, 6.4, 30, 12, 8),
-  _ChartDay(18, 45, 6.0, 27, 11, 7),
-  _ChartDay(19, 60, 7.1, 36, 15, 9),
-  _ChartDay(20, 70, 7.6, 42, 18, 10),
-  _ChartDay(21, 45, 6.8, 27, 11, 7),
-  _ChartDay(22, 50, 7.3, 30, 13, 7),
-];
 const _barColor = niraGreen;
 const _gradeB = Color(0xFFD3A734);
 const _gradeC = Color(0xFFDCE6DE);
@@ -44,18 +34,37 @@ class ProductionChart extends StatefulWidget {
 class _ProductionChartState extends State<ProductionChart> {
   int? _selectedDay;
 
+  _ChartDay _chartDay(int day) {
+    final lots = widget.analytics.visibleLots.where((lot) => lot.day == day);
+    final sugar = lots.fold(0, (sum, lot) => sum + lot.sugarKg);
+    final cane = lots.fold(0, (sum, lot) => sum + lot.caneKg);
+    double grade(String code) {
+      var total = 0;
+      for (final lot in lots) {
+        for (final (i, weight) in lot.batchWeights.indexed) {
+          if (['A', 'B', 'C'][i % 3] == code) total += weight;
+        }
+      }
+      return total.toDouble();
+    }
+
+    return _ChartDay(
+      day,
+      sugar.toDouble(),
+      cane == 0 ? 0 : sugar / cane * 100,
+      grade('A'),
+      grade('B'),
+      grade('C'),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final grade = widget.analytics.variant == ProductionVariant.grade;
-    final days = _demoDays
-        .where(
-          (day) =>
-              widget.analytics.dateFilter?.contains(
-                DateTime(2026, 10, day.day),
-              ) ??
-              true,
-        )
-        .toList();
+    final dates =
+        widget.analytics.visibleLots.map((lot) => lot.day).toSet().toList()
+          ..sort();
+    final days = [for (final day in dates) _chartDay(day)];
     final selected = days.indexWhere((day) => day.day == _selectedDay);
     return NiraOutline(
       Padding(
@@ -389,13 +398,23 @@ class _ProductionPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    final maximum = math.max(
+      100.0,
+      (days.fold<double>(0, (highest, day) => math.max(highest, day.kg)) / 100)
+              .ceil() *
+          100.0,
+    );
     final grid = Paint()
       ..color = niraLine
       ..strokeWidth = 1;
     for (var tick = 0; tick <= 4; tick++) {
       final y = plot.bottom - tick * plot.height / 4;
       canvas.drawLine(Offset(plot.left, y), Offset(plot.right, y), grid);
-      _text(canvas, '${tick * 25}', Offset(plot.left - 18, y));
+      _text(
+        canvas,
+        '${(tick * maximum / 4).round()}',
+        Offset(plot.left - 18, y),
+      );
     }
     final slot = plot.width / days.length;
     final barWidth = math.min(19.0, slot * .48);
@@ -409,7 +428,7 @@ class _ProductionPainter extends CustomPainter {
           (day.b, _gradeB),
           (day.a, niraGreen),
         ]) {
-          final h = value / 100 * plot.height * progress;
+          final h = value / maximum * plot.height * progress;
           canvas.drawRect(
             Rect.fromLTWH(x - barWidth / 2, bottom - h, barWidth, h),
             Paint()
@@ -420,7 +439,7 @@ class _ProductionPainter extends CustomPainter {
           bottom -= h;
         }
       } else {
-        final h = day.kg / 100 * plot.height * progress;
+        final h = day.kg / maximum * plot.height * progress;
         canvas.drawRRect(
           RRect.fromRectAndRadius(
             Rect.fromLTWH(x - barWidth / 2, plot.bottom - h, barWidth, h),

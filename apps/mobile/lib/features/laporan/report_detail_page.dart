@@ -4,6 +4,9 @@ import '../../sobatnira_ui.dart';
 import '../../widgets/summary_card.dart';
 import '../kloter/kloter_detail_widgets.dart';
 import 'report_paginated_list.dart';
+import 'demo_analytics.dart';
+import '../kloter/demo_lot_fixture.dart';
+import '../kloter/demo_production.dart';
 
 enum ReportDetailKind { rendemen, grade, margin }
 
@@ -11,10 +14,51 @@ class ReportDetailPage extends StatelessWidget {
   const ReportDetailPage({
     required this.kind,
     required this.onNavigate,
+    this.row,
+    this.analytics,
     super.key,
   });
 
   final ReportDetailKind kind;
+  final AnalyticsRow? row;
+  final DemoAnalytics? analytics;
+  DemoLotFixture get lot => demoLotFor(
+    row?.code.isNotEmpty == true ? row!.code : demoLotFixtures.first.code,
+  );
+  String get grade => row?.supplier.startsWith('Grade ') == true
+      ? row!.supplier.substring(6)
+      : 'A';
+  int get gradeTotal =>
+      analytics?.gradeWeight(grade) ??
+      lot.batchWeights.indexed
+          .where((entry) => ['A', 'B', 'C'][entry.$1 % 3] == grade)
+          .fold(0, (sum, entry) => sum + entry.$2);
+  List<(String, String, String)> get contributions {
+    if (kind == ReportDetailKind.grade) {
+      return [
+        for (final source in analytics?.visibleLots ?? [lot])
+          if (_gradeKg(source) > 0)
+            (
+              source.code,
+              '${_gradeKg(source)}Kg',
+              '${demoNumber(_gradeKg(source) / gradeTotal * 100, decimals: 1)}%',
+            ),
+      ];
+    }
+    return [
+      for (final (index, weight) in lot.batchWeights.indexed)
+        (
+          'Batch ${index + 1}',
+          '${weight}Kg',
+          '${demoNumber(weight / lot.sugarKg * 100, decimals: 1)}%',
+        ),
+    ];
+  }
+
+  int _gradeKg(DemoLotFixture source) => source.batchWeights.indexed
+      .where((entry) => ['A', 'B', 'C'][entry.$1 % 3] == grade)
+      .fold(0, (sum, entry) => sum + entry.$2);
+
   final ValueChanged<NiraTab> onNavigate;
 
   String get title => switch (kind) {
@@ -57,7 +101,7 @@ class ReportDetailPage extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'MJT-260926-1A',
+          lot.code,
           style: niraText(
             NiraType.title,
             color: niraYellow,
@@ -65,10 +109,10 @@ class ReportDetailPage extends StatelessWidget {
           ),
         ),
         const SizedBox(height: NiraSpace.xs),
-        Text('Sugeng', style: niraText(NiraType.body, color: Colors.white)),
+        Text(lot.supplier, style: niraText(NiraType.body, color: Colors.white)),
         const SizedBox(height: NiraSpace.xs),
         Text(
-          '16 Oktober 2026',
+          formatDate(DateTime(2026, 10, lot.day)),
           style: niraText(NiraType.caption, color: Colors.white),
         ),
       ],
@@ -80,10 +124,13 @@ class ReportDetailPage extends StatelessWidget {
     children: [
       _entityCard(),
       const SizedBox(height: NiraSpace.md),
-      const DetailMetrics([
-        ('Tebu', '1.500Kg'),
-        ('Gula final', '90Kg'),
-        ('Rendemen', '6,0%'),
+      DetailMetrics([
+        ('Tebu', '${demoNumber(lot.caneKg)}Kg'),
+        ('Gula final', '${lot.sugarKg}Kg'),
+        (
+          'Rendemen',
+          '${demoNumber(lot.sugarKg / lot.caneKg * 100, decimals: 1)}%',
+        ),
       ]),
       const SizedBox(height: NiraSpace.lg),
       const DetailSectionTitle('Kontribusi hasil per batch'),
@@ -95,12 +142,18 @@ class ReportDetailPage extends StatelessWidget {
   Widget _grade() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      const NiraSummaryCard('Nilai produksi', 'Rp3.600.000'),
+      NiraSummaryCard(
+        'Nilai produksi',
+        demoMoney(gradeTotal * {'A': 20000, 'B': 18000, 'C': 15000}[grade]!),
+      ),
       const SizedBox(height: NiraSpace.md),
-      const DetailMetrics([('Grade A', '360Kg'), ('Kloter asal', '4')]),
+      DetailMetrics([
+        ('Grade $grade', '${gradeTotal}Kg'),
+        ('Kloter asal', '${contributions.length}'),
+      ]),
       const SizedBox(height: NiraSpace.lg),
       Text(
-        '50,0% dari total 360 Kg',
+        '${demoNumber(gradeTotal / ((analytics?.sugarTotal ?? lot.sugarKg) == 0 ? 1 : (analytics?.sugarTotal ?? lot.sugarKg)) * 100, decimals: 1)}% dari total ${analytics?.sugarTotal ?? lot.sugarKg} Kg',
         style: niraText(NiraType.caption, color: niraLeaf),
       ),
       const SizedBox(height: NiraSpace.sm),
@@ -115,10 +168,13 @@ class ReportDetailPage extends StatelessWidget {
     children: [
       _entityCard(),
       const SizedBox(height: NiraSpace.md),
-      const DetailMetrics([
-        ('Tebu', '1.500Kg'),
-        ('Gula final', '90Kg'),
-        ('Rendemen', '6,0%'),
+      DetailMetrics([
+        ('Tebu', '${demoNumber(lot.caneKg)}Kg'),
+        ('Gula final', '${lot.sugarKg}Kg'),
+        (
+          'Rendemen',
+          '${demoNumber(lot.sugarKg / lot.caneKg * 100, decimals: 1)}%',
+        ),
       ]),
       const SizedBox(height: NiraSpace.md),
       const DetailSectionTitle('Rincian perhitungan'),
@@ -129,11 +185,21 @@ class ReportDetailPage extends StatelessWidget {
           child: Column(
             children: [
               _moneyRow('Komponen', 'Nilai', bold: true),
-              _moneyRow('Nilai produksi', 'Rp1.750.000'),
-              _moneyRow('Modal tebu', '-Rp1.000.000'),
-              _moneyRow('Biaya operasional', '-Rp180.000'),
+              _moneyRow('Nilai produksi', demoMoney(lot.productionValue)),
+              _moneyRow(
+                'Modal tebu',
+                demoMoney(-(lot.totalCost - (100000 + lot.day * 2000))),
+              ),
+              _moneyRow(
+                'Biaya operasional',
+                demoMoney(-(100000 + lot.day * 2000)),
+              ),
               const Divider(height: 12, thickness: 1, color: niraLine),
-              _moneyRow('Margin Produksi', 'Rp570.000', bold: true),
+              _moneyRow(
+                'Margin Produksi',
+                demoMoney(lot.marginRupiah),
+                bold: true,
+              ),
             ],
           ),
         ),
@@ -148,10 +214,17 @@ class ReportDetailPage extends StatelessWidget {
             children: [
               _moneyRow('Batch', 'Nilai', bold: true),
               ReportPaginatedList<int>(
-                items: const [1, 2, 3, 4],
+                items: List.generate(lot.batchCount, (index) => index + 1),
                 builder: (rows) => Column(
                   children: [
-                    for (final i in rows) _moneyRow('Wajan $i', 'Rp600.000'),
+                    for (final i in rows)
+                      _moneyRow(
+                        'Batch $i',
+                        demoMoney(
+                          lot.batchWeights[i - 1] *
+                              [20000, 18000, 15000][(i - 1) % 3],
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -191,14 +264,14 @@ class ReportDetailPage extends StatelessWidget {
       padding: const EdgeInsets.all(NiraSpace.sm),
       child: Column(
         children: [
-          _tableRow('Batch', 'Berat', 'Porsi', header: true),
+          _tableRow(
+            kind == ReportDetailKind.grade ? 'Kloter' : 'Batch',
+            'Berat',
+            'Porsi',
+            header: true,
+          ),
           ReportPaginatedList<(String, String, String)>(
-            items: const [
-              ('Sugeng', '90Kg', '25,0%'),
-              ('Slamet', '90Kg', '25,0%'),
-              ('Darto', '90Kg', '25,0%'),
-              ('Mulyanto', '90Kg', '25,0%'),
-            ],
+            items: contributions,
             resetToken: kind,
             builder: (rows) => Column(
               children: [
@@ -207,7 +280,12 @@ class ReportDetailPage extends StatelessWidget {
             ),
           ),
           const Divider(height: 10),
-          _tableRow('Total', '180Kg', '100%', header: true),
+          _tableRow(
+            'Total',
+            '${kind == ReportDetailKind.grade ? gradeTotal : lot.sugarKg}Kg',
+            '100%',
+            header: true,
+          ),
         ],
       ),
     ),

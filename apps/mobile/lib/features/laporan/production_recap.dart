@@ -46,6 +46,29 @@ class ProductionRecap {
     return ProductionRecap(result);
   }
 
+  factory ProductionRecap.fromApprovedLots(Iterable<DemoKloter> lots) =>
+      ProductionRecap(
+        lots
+            .where((lot) => lot.intake.verified || lot.milling.verified)
+            .map(
+              (lot) => RecapKloter(
+                code: lot.code,
+                supplier: lot.supplier,
+                date: lot.date,
+                sugar: '-',
+                rendemen: '-',
+                cane: lot.netWeightKg == null ? null : lot.weight,
+                caneType: lot.record?['caneTypeCode'] as String?,
+                vehicle: null,
+                juice: lot.juiceLiters == null
+                    ? null
+                    : formatQuantity(lot.juiceLiters, 'L'),
+                margin: null,
+                batches: const [],
+              ),
+            ),
+      );
+
   final List<RecapKloter> kloter;
   int get batchCount => kloter.fold(0, (sum, lot) => sum + lot.batches.length);
   int get marginCount => kloter.where((lot) => lot.margin != null).length;
@@ -66,6 +89,7 @@ class RecapKloter {
     required this.cane,
     required this.caneType,
     required this.vehicle,
+    this.juice,
     required this.margin,
     required Iterable<RecapBatch> batches,
   }) : batches = List.unmodifiable(batches);
@@ -89,7 +113,7 @@ class RecapKloter {
 
   final String code, supplier, sugar, rendemen;
   final DateTime date;
-  final String? cane, caneType, vehicle, margin;
+  final String? cane, caneType, vehicle, margin, juice;
   final List<RecapBatch> batches;
 }
 
@@ -149,8 +173,9 @@ class RecapBatch {
 
 String? _field(List<DemoField> fields, String label) {
   for (final field in fields) {
-    if (field.label == label && field.value.trim().isNotEmpty)
+    if (field.label == label && field.value.trim().isNotEmpty) {
       return field.display;
+    }
   }
   return null;
 }

@@ -4,20 +4,29 @@ import '../../sobatnira_ui.dart';
 import '../../widgets/summary_card.dart';
 import '../kloter/kloter_date_filter.dart';
 import 'demo_analytics.dart';
+import '../kloter/demo_lot_fixture.dart';
 import 'margin_chart.dart';
 import 'production_chart.dart';
 import 'report_detail_page.dart';
 import 'report_paginated_list.dart';
+import '../kloter/demo_production.dart';
+import 'production_recap.dart';
+import 'production_recap_section.dart';
+import 'report_date_button.dart';
 
 class LaporanPage extends StatefulWidget {
   const LaporanPage({
     required this.analytics,
     required this.onOpenDetail,
+    this.approvedLots,
+    this.statusMessage,
     super.key,
   });
 
   final DemoAnalytics analytics;
   final ValueChanged<ReportDetailKind> onOpenDetail;
+  final List<DemoKloter>? approvedLots;
+  final Widget? statusMessage;
 
   @override
   State<LaporanPage> createState() => _LaporanPageState();
@@ -29,6 +38,7 @@ class _LaporanPageState extends State<LaporanPage> {
     final result = await showKloterDateFilter(
       context,
       widget.analytics.dateFilter,
+      today: widget.approvedLots == null ? null : DateTime.now(),
     );
     if (!mounted || result == null) return;
     widget.analytics.setDateFilter(result.selection);
@@ -57,7 +67,9 @@ class _LaporanPageState extends State<LaporanPage> {
               NiraSpace.lg,
             ),
             children: [
-              if (widget.analytics.tab == ReportTab.production)
+              if (widget.approvedLots != null)
+                _connectedReport()
+              else if (widget.analytics.tab == ReportTab.production)
                 _production()
               else
                 _margin(),
@@ -68,12 +80,55 @@ class _LaporanPageState extends State<LaporanPage> {
     ),
   );
 
+  Widget _connectedReport() {
+    if (widget.analytics.tab == ReportTab.margin) {
+      return const NiraSummaryCard('Margin produksi', 'Belum tersedia');
+    }
+    final lots = widget.approvedLots!
+        .where((lot) => widget.analytics.dateFilter?.contains(lot.date) ?? true)
+        .toList();
+    final weights = lots.map((lot) => lot.netWeightKg).nonNulls;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        NiraSummaryPair(
+          first: const NiraSummaryCard('Gula final', 'Belum tersedia'),
+          second: NiraSummaryCard(
+            'Tebu diterima',
+            formatQuantity(
+              weights.isEmpty ? null : weights.reduce((a, b) => a + b),
+              'kg',
+            ),
+            boxes: true,
+          ),
+        ),
+        const SizedBox(height: NiraSpace.md),
+        Align(
+          alignment: Alignment.centerRight,
+          child: ReportDateButton(onPressed: _dateFilter),
+        ),
+        const SizedBox(height: NiraSpace.md),
+        widget.statusMessage ??
+            ProductionRecapSection(
+              recap: ProductionRecap.fromApprovedLots(lots),
+            ),
+      ],
+    );
+  }
+
   Widget _production() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      const NiraSummaryPair(
-        first: NiraSummaryCard('Gula final', '360Kg'),
-        second: NiraSummaryCard('Tebu diterima', '5.567Kg', boxes: true),
+      NiraSummaryPair(
+        first: NiraSummaryCard(
+          'Gula final',
+          '${demoNumber(widget.analytics.sugarTotal)}Kg',
+        ),
+        second: NiraSummaryCard(
+          'Tebu diterima',
+          '${demoNumber(widget.analytics.caneTotal)}Kg',
+          boxes: true,
+        ),
       ),
       const SizedBox(height: NiraSpace.md),
       _chartCard(),
@@ -88,11 +143,22 @@ class _LaporanPageState extends State<LaporanPage> {
   Widget _margin() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      const NiraSummaryCard('Margin Produksi', 'Rp1.580.000', cane: true),
+      NiraSummaryCard(
+        'Margin Produksi',
+        demoMoney(widget.analytics.marginTotal),
+        cane: true,
+      ),
       const SizedBox(height: NiraSpace.sm),
-      const NiraSummaryPair(
-        first: NiraSummaryCard('Nilai produksi', '360Kg'),
-        second: NiraSummaryCard('Total biaya', '5.567Kg', boxes: true),
+      NiraSummaryPair(
+        first: NiraSummaryCard(
+          'Nilai produksi',
+          demoMoney(widget.analytics.valueTotal),
+        ),
+        second: NiraSummaryCard(
+          'Total biaya',
+          demoMoney(widget.analytics.costTotal),
+          boxes: true,
+        ),
       ),
       const SizedBox(height: NiraSpace.md),
       _chartCard(margin: true),
@@ -110,19 +176,31 @@ class _LaporanPageState extends State<LaporanPage> {
     plain: true,
     columns: const ['Pemasok', 'Gula final', 'Rendemen'],
     rows: widget.analytics.visibleRows,
-    onTap: () => widget.onOpenDetail(ReportDetailKind.rendemen),
+    onTap: (row) {
+      widget.analytics.selectedRow = row;
+      widget.onOpenDetail(ReportDetailKind.rendemen);
+    },
   );
 
   Widget _gradeTable() => _tableSection(
     title: 'Komposisi Grade',
     plain: true,
     columns: const ['Grade', 'Berat', 'Porsi'],
-    rows: const [
-      AnalyticsRow('Grade A', '', '90Kg', '50,0%'),
-      AnalyticsRow('Grade B', '', '90Kg', '50,0%'),
-      AnalyticsRow('Grade C', '', '90Kg', '50,0%'),
+    rows: [
+      for (final grade in ['A', 'B', 'C'])
+        AnalyticsRow(
+          'Grade $grade',
+          '',
+          '${widget.analytics.gradeWeight(grade)}Kg',
+          widget.analytics.sugarTotal == 0
+              ? '0,0%'
+              : '${demoNumber(widget.analytics.gradeWeight(grade) / widget.analytics.sugarTotal * 100, decimals: 1)}%',
+        ),
     ],
-    onTap: () => widget.onOpenDetail(ReportDetailKind.grade),
+    onTap: (row) {
+      widget.analytics.selectedRow = row;
+      widget.onOpenDetail(ReportDetailKind.grade);
+    },
   );
 
   Widget _marginTable() => _tableSection(
@@ -130,14 +208,17 @@ class _LaporanPageState extends State<LaporanPage> {
     plain: true,
     columns: const ['Pemasok', 'Margin'],
     rows: widget.analytics.visibleRows,
-    onTap: () => widget.onOpenDetail(ReportDetailKind.margin),
+    onTap: (row) {
+      widget.analytics.selectedRow = row;
+      widget.onOpenDetail(ReportDetailKind.margin);
+    },
   );
 
   Widget _plainTable(
     String title,
     List<String> columns,
     List<AnalyticsRow> rows,
-    VoidCallback onTap,
+    ValueChanged<AnalyticsRow> onTap,
   ) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
@@ -175,7 +256,7 @@ class _LaporanPageState extends State<LaporanPage> {
       else
         for (final row in rows) ...[
           InkWell(
-            onTap: onTap,
+            onTap: () => onTap(row),
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 40),
               child: Padding(
@@ -218,7 +299,7 @@ class _LaporanPageState extends State<LaporanPage> {
     required String title,
     required List<String> columns,
     required List<AnalyticsRow> rows,
-    required VoidCallback onTap,
+    required ValueChanged<AnalyticsRow> onTap,
     bool plain = false,
   }) => ReportPaginatedList<AnalyticsRow>(
     items: rows,
@@ -271,7 +352,7 @@ class _LaporanPageState extends State<LaporanPage> {
                     else
                       for (final row in visibleRows)
                         InkWell(
-                          onTap: onTap,
+                          onTap: () => onTap(row),
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(
                               NiraSpace.sm,

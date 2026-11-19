@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../pekerjaan/review_api.dart';
+import '../pekerjaan/production_api.dart';
 
 class LotClosurePage extends StatefulWidget {
   const LotClosurePage({
@@ -77,12 +78,12 @@ class _LotClosurePageState extends State<LotClosurePage> {
       }
       if (!mounted) return;
       setState(() => _submitting = true);
-      await widget.api.changeLotClosure(
-        widget.scope,
-        widget.lotId,
-        closureId: reopen ? status['closureId'] as String : null,
-        reason: reason,
-      );
+      final closure = ClosureApi(widget.api);
+      if (reopen) {
+        await closure.reopen(widget.scope, widget.lotId, status['closureId'] as String, reason!);
+      } else {
+        await closure.close(widget.scope, widget.lotId);
+      }
       if (mounted) {
         setState(() {
           _notice = reopen

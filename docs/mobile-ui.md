@@ -41,6 +41,6 @@ Saat teks diperbesar, kartu ringkasan dapat disusun vertikal, empat aksi Beranda
 
 Ukuran ini menjadi dasar bersama. Penyesuaian berikutnya sebaiknya mengikuti fungsi teks/komponen, bukan menambahkan ukuran pecahan untuk tiap halaman.
 
-Mode demo langsung membuka Beranda. Mode terhubung membuka sambutan dan form login email, lalu memeriksa akses pabrik melalui API sebelum membuka Kloter. Kloter dan Pekerjaan berbagi sesi di memori. Saat keluar atau sesi berakhir, pengguna kembali ke form masuk.
+Mode demo langsung membuka Beranda dengan fixture. Mode terhubung membuka sambutan dan login email, lalu memeriksa akses pabrik dan membuka Beranda yang sama dengan navigasi **Beranda**, **Kloter**, **Laporan**, dan **Pengaturan**. Gunakan pemilih pabrik di profil Beranda ketika akun memiliki beberapa pabrik. Saat keluar dari Pengaturan atau ketika sesi berakhir, aplikasi kembali ke form masuk.
 
-Di mode demo, navbar utama berisi Beranda, Kloter, Laporan, dan Pengaturan. Tombol Pekerjaan di Beranda membuka antrean review nota. Sesi review tersimpan selama halaman Pekerjaan terbuka. Header detail menggunakan panah kembali yang dirapatkan secara konsisten ke margin kiri konten.
+Dalam mode terhubung, tombol **Pekerjaan** di Beranda membuka antrean, foto, bukti, dan revisi nota untuk pabrik aktif. Setelah validasi, kembali ke Beranda untuk melihat kartu kloter dan Rekap Produksi yang sudah dimuat ulang. Rekap mengunduh penerimaan dan penggilingan yang disahkan. Laba, biaya, gula final, grade, dan batch resmi memakai status **Belum tersedia** sampai sumber datanya tersedia.

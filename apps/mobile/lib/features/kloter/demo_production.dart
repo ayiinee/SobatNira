@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'demo_lot_fixture.dart';
 
 const _months = [
   'Januari',
@@ -23,6 +24,20 @@ String formatDate(DateTime date, {bool short = false}) {
 }
 
 String formatMonth(DateTime date) => '${monthName(date)} ${date.year}';
+
+String formatQuantity(num? number, String unit) {
+  if (number == null) return 'Belum tersedia';
+  final parts = number
+      .toStringAsFixed(5)
+      .replaceFirst(RegExp(r'0+$'), '')
+      .split('.');
+  final integer = parts.first.replaceAllMapped(
+    RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+    (match) => '${match[1]}.',
+  );
+  final fraction = parts.last;
+  return fraction.isEmpty ? '$integer $unit' : '$integer,$fraction $unit';
+}
 
 enum KloterStatus { review, done }
 
@@ -81,6 +96,8 @@ class DemoProduction extends ChangeNotifier {
         DemoKloter('MJT-170926-1A', 11, KloterStatus.done, 'Pemasok Contoh F'),
       ];
 
+  DemoProduction.empty() : kloter = [];
+
   static final today = DateTime(2026, 10, 29);
   final List<DemoKloter> kloter;
 
@@ -120,39 +137,74 @@ class DemoProduction extends ChangeNotifier {
 
 class DemoKloter {
   DemoKloter(this.code, int day, KloterStatus status, String supplier)
-    : date = DateTime(2026, 10, day),
+    : record = null,
+      date = DateTime(2026, 10, day),
       intake = DemoReview([
         DemoField('Tanggal masuk', formatDate(DateTime(2026, 10, day))),
-        DemoField('Jenis tebu', 'Bululawang (BL)'),
-        DemoField('Pengirim', supplier),
-        DemoField('No. Kendaraan', 'DEMO 001'),
-        DemoField('Operator', 'Operator Demo'),
+        DemoField(
+          'Jenis tebu',
+          ['Bululawang (BL)', 'PS 862', 'PS 864'][day % 3],
+        ),
+        DemoField('Pengirim', demoLotFor(code).supplier),
+        DemoField(
+          'No. Kendaraan',
+          'DEMO ${day * 37 + demoLotFor(code).caneKg % 100}',
+        ),
+        DemoField('Operator', 'Operator Demo ${day % 3 + 1}'),
       ], verified: status == KloterStatus.done),
       milling = DemoReview([
         DemoField('Tanggal penggilingan', formatDate(DateTime(2026, 10, day))),
-        DemoField('Operator', 'Operator Demo'),
+        DemoField('Operator', 'Operator Demo ${day % 3 + 1}'),
         DemoField('Kloter sumber', code),
       ], verified: status == KloterStatus.done),
       batches = [
-        for (var number = 1; number <= 5; number++)
+        for (var number = 1; number <= demoLotFor(code).batchCount; number++)
           DemoBatch(
             number,
-            verified: number < 5 || status == KloterStatus.done,
+            verified:
+                number < demoLotFor(code).batchCount ||
+                status == KloterStatus.done,
+            lot: demoLotFor(code),
           ),
       ];
 
+  DemoKloter.connected({
+    required this.record,
+    required this.code,
+    required this.date,
+    required this.intake,
+    required this.milling,
+  }) : batches = const [];
+
+  final Map<String, Object?>? record;
   final String code;
   final DateTime date;
-  KloterStatus get status =>
-      intake.verified && milling.verified && batchesToReview == 0
+  String? get id => record?['id'] as String?;
+  num? get netWeightKg => _number('netWeightGrams', divisor: 1000);
+  num? get brix => _number('brix');
+  num? get juiceLiters => _number('juiceProducedLiters');
+
+  num? _number(String field, {int divisor = 1}) {
+    final value = num.tryParse(record?[field]?.toString() ?? '');
+    return value == null ? null : value / divisor;
+  }
+
+  KloterStatus get status => record != null
+      ? (record!['status'] == 'closed'
+            ? KloterStatus.done
+            : KloterStatus.review)
+      : intake.verified && milling.verified && batchesToReview == 0
       ? KloterStatus.done
       : KloterStatus.review;
   final DemoReview intake;
   final DemoReview milling;
   final List<DemoBatch> batches;
 
-  String get supplier => intake.fields[2].value;
-  String get weight => '8.200Kg';
+  String get supplier =>
+      (record?['supplierName'] as String?) ?? intake.fields[2].value;
+  String get weight => record == null
+      ? '${demoNumber(demoLotFor(code).caneKg)}Kg'
+      : formatQuantity(netWeightKg, 'kg');
   int get batchesToReview =>
       batches.where((batch) => !batch.review.verified).length;
 }
@@ -165,14 +217,38 @@ class DemoReview {
 }
 
 class DemoBatch {
-  DemoBatch(this.number, {required bool verified})
+  DemoBatch(this.number, {required bool verified, DemoLotFixture? lot})
     : review = DemoReview([
-        DemoField('Nira yang dimasak', '360', unit: 'L'),
-        DemoField('Brix tebu acuan', 'Bululawang (BL)'),
-        DemoField('Jam turun', '17.00'),
-        DemoField('Hasil timbang', '30', unit: 'Kg'),
+        DemoField(
+          'Nira yang dimasak',
+          '${80 + ((lot?.caneKg ?? 1500) + number * 7) % 36}',
+          unit: 'L',
+        ),
+        DemoField('Brix tebu acuan', '${15 + number % 6}', unit: ' °Bx'),
+        DemoField(
+          'Jam turun',
+          '${8 + number + (lot?.day ?? 20) % 4}.${number.isEven ? '15' : '40'}',
+        ),
+        DemoField(
+          'Hasil timbang',
+          '${(lot?.batchWeights[number - 1] ?? 20) + 2 + number % 3}',
+          unit: 'Kg',
+        ),
         DemoField('Bagian kloter', '100', unit: '%'),
-      ], verified: verified);
+      ], verified: verified) {
+    grade = ['A', 'B', 'C'][(number - 1) % 3];
+    gradeWeight = '${lot?.batchWeights[number - 1] ?? 20}';
+    cooking[0].value = formatDate(DateTime(2026, 10, lot?.day ?? 20));
+    cooking[1].value = [
+      'Bululawang (BL)',
+      'PS 862',
+      'PS 864',
+    ][(lot?.day ?? 20) % 3];
+    cooking[2].value = lot?.supplier ?? 'Pemasok Demo';
+    cooking[3].value = cooking[0].value;
+    cooking[4].value = number.isEven ? 'Sore' : 'Pagi';
+    cooking[5].value = ['1/2 wadah', '1 wadah', '1 1/2 wadah'][number % 3];
+  }
 
   final int number;
   final DemoReview review;

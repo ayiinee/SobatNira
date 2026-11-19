@@ -32,14 +32,14 @@ void main() {
       );
       final lot = recap.kloter.first;
       expect(lot.code, 'MJT-260926-1A');
-      expect(lot.supplier, 'Pemasok Contoh A');
+      expect(lot.supplier, 'Sugeng');
       expect(lot.margin, 'Rp570.000');
       expect(lot.sugar, '90Kg');
       expect(lot.rendemen, '6,0%');
       expect(lot.batches.length, 5);
       expect(lot.batches.first.brix, '18,5 °Bx');
-      expect(lot.batches.first.juice, '360L');
-      expect(lot.batches.first.physical, '30Kg');
+      expect(lot.batches.first.juice, '111L');
+      expect(lot.batches.first.physical, '20Kg');
       expect(recap.marginCount, 10);
       expect(recap.marginTotal, 'Rp6.290.000');
       final missingMargin = recap.kloter.firstWhere(
@@ -62,7 +62,7 @@ void main() {
         '250',
       );
       expect(lot.batches.first.verified, isTrue);
-      expect(lot.batches.first.juice, '360L');
+      expect(lot.batches.first.juice, '111L');
       expect(() => lot.batches.clear(), throwsUnsupportedError);
       final refreshed = PrintableReport.fromAnalytics(
         PrintableReportKind.production,
@@ -88,9 +88,9 @@ void main() {
         production: production,
       );
       expect(filtered.recap!.kloter.length, 3);
-      expect(filtered.recap!.batchCount, 15);
+      expect(filtered.recap!.batchCount, 12);
       expect(filtered.recap!.marginTotal, 'Rp1.940.000');
-      expect(filtered.totalDisplay, '270Kg');
+      expect(filtered.totalDisplay, '288Kg');
       analytics.setDateFilter(
         KloterDateFilter(
           KloterPeriod.custom,

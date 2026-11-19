@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../kloter/kloter_date_filter.dart';
+import '../kloter/demo_lot_fixture.dart';
 
 enum ReportTab { production, margin }
 
@@ -12,33 +13,68 @@ class DemoAnalytics extends ChangeNotifier {
   String query = '';
   KloterDateFilter? dateFilter;
 
-  final rendemenRows = const [
-    AnalyticsRow('Sugeng', 'MJT-260926-1A', '90Kg', '6,0%', day: 20),
-    AnalyticsRow('Slamet', 'MJT-260926-2A', '90Kg', '6,0%', day: 20),
-    AnalyticsRow('Darto', 'MJT-260926-3A', '90Kg', '6,0%', day: 20),
-    AnalyticsRow('Mulyanto', 'MJT-250926-1A', '90Kg', '6,0%', day: 19),
-    AnalyticsRow('Masud', 'MJT-250926-2A', '90Kg', '6,0%', day: 19),
-    AnalyticsRow('Salim', 'MJT-240926-1A', '90Kg', '6,0%', day: 18),
-    AnalyticsRow('Mawarji', 'MJT-240926-2A', '90Kg', '6,0%', day: 18),
-    AnalyticsRow('Hadi', 'MJT-230926-1A', '85Kg', '5,8%', day: 17),
-    AnalyticsRow('Joko', 'MJT-230926-2A', '95Kg', '6,3%', day: 17),
-    AnalyticsRow('Wahyu', 'MJT-220926-1A', '80Kg', '5,5%', day: 16),
-    AnalyticsRow('Budi', 'MJT-220926-2A', '100Kg', '6,7%', day: 16),
-    AnalyticsRow('Rini', 'MJT-210926-1A', '88Kg', '5,9%', day: 15),
+  final rendemenRows = [
+    _row('MJT-260926-1A', false),
+    _row('MJT-260926-2A', false),
+    _row('MJT-260926-3A', false),
+    _row('MJT-250926-1A', false),
+    _row('MJT-250926-2A', false),
+    _row('MJT-240926-1A', false),
+    _row('MJT-240926-2A', false),
+    _row('MJT-230926-1A', false),
+    _row('MJT-230926-2A', false),
+    _row('MJT-220926-1A', false),
+    _row('MJT-220926-2A', false),
+    _row('MJT-210926-1A', false),
   ];
 
-  final marginRows = const [
-    AnalyticsRow('Sugeng', 'MJT-260926-1A', 'Rp570.000', '', day: 20),
-    AnalyticsRow('Slamet', 'MJT-260926-2A', 'Rp230.000', '', day: 20),
-    AnalyticsRow('Darto', 'MJT-260926-3A', 'Rp1.140.000', '', day: 20),
-    AnalyticsRow('Mulyanto', 'MJT-250926-1A', 'Rp430.000', '', day: 19),
-    AnalyticsRow('Masud', 'MJT-250926-2A', 'Rp800.000', '', day: 19),
-    AnalyticsRow('Hadi', 'MJT-230926-1A', 'Rp670.000', '', day: 17),
-    AnalyticsRow('Joko', 'MJT-230926-2A', 'Rp350.000', '', day: 17),
-    AnalyticsRow('Wahyu', 'MJT-220926-1A', 'Rp900.000', '', day: 16),
-    AnalyticsRow('Budi', 'MJT-220926-2A', 'Rp420.000', '', day: 16),
-    AnalyticsRow('Rini', 'MJT-210926-1A', 'Rp780.000', '', day: 15),
+  final marginRows = [
+    _row('MJT-260926-1A', true),
+    _row('MJT-260926-2A', true),
+    _row('MJT-260926-3A', true),
+    _row('MJT-250926-1A', true),
+    _row('MJT-250926-2A', true),
+    _row('MJT-230926-1A', true),
+    _row('MJT-230926-2A', true),
+    _row('MJT-220926-1A', true),
+    _row('MJT-220926-2A', true),
+    _row('MJT-210926-1A', true),
   ];
+
+  AnalyticsRow? selectedRow;
+  static AnalyticsRow _row(String code, bool margin) {
+    final lot = demoLotFor(code);
+    return AnalyticsRow(
+      lot.supplier,
+      code,
+      margin ? demoMoney(lot.marginRupiah) : '${lot.sugarKg}Kg',
+      margin
+          ? ''
+          : '${demoNumber(lot.sugarKg / lot.caneKg * 100, decimals: 1)}%',
+      day: lot.day,
+    );
+  }
+
+  List<DemoLotFixture> get visibleLots =>
+      rowsFor(ReportTab.production).map((row) => demoLotFor(row.code)).toList();
+  int get sugarTotal => visibleLots.fold(0, (sum, lot) => sum + lot.sugarKg);
+  int get caneTotal => visibleLots.fold(0, (sum, lot) => sum + lot.caneKg);
+  int get marginTotal => rowsFor(
+    ReportTab.margin,
+  ).fold(0, (sum, row) => sum + demoLotFor(row.code).marginRupiah);
+  int get valueTotal => rowsFor(
+    ReportTab.margin,
+  ).fold(0, (sum, row) => sum + demoLotFor(row.code).productionValue);
+  int get costTotal => valueTotal - marginTotal;
+  int gradeWeight(String grade) {
+    var result = 0;
+    for (final lot in visibleLots) {
+      for (var i = 0; i < lot.batchCount; i++) {
+        if (['A', 'B', 'C'][i % 3] == grade) result += lot.batchWeights[i];
+      }
+    }
+    return result;
+  }
 
   void setTab(ReportTab value) {
     if (tab == value) return;

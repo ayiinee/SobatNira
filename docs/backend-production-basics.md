@@ -174,3 +174,8 @@ Tes integrasi mencakup alur HTTP tambah/baca/ubah/history, pemakaian pemasok ant
 Fixture Auth hanya dibuat jika belum ada trigger aplikasi pada `auth.users` yang perlu diperiksa. Token tiruan hanya diterima server Auth lokal milik tes dan tidak menambahkan jalur masuk khusus pada aplikasi.
 
 Flutter saat ini masih memakai data lokal untuk Beranda/Kloter. Penyambungan UI ke kontrak ini dilakukan terpisah. Alur [dokumen penerimaan dan pengesahan](backend-intake-documents.md) sudah menghubungkan catatan penerimaan sintetis ke identitas kloter ini.
+
+
+### Ringkasan kloter untuk Flutter
+
+Tambahkan `includeSummary=true` pada daftar kloter untuk meminta status penutupan, berat bersih penerimaan dalam gram, Brix, kode jenis tebu, volume nira yang diproduksi dalam liter, dan referensi penerimaan serta penggilingan yang disahkan. Field yang belum dibukukan bernilai `null`. Ringkasan membaca volume nira hasil rekonsiliasi terbaru dan tidak mencakup saldo, reservasi, batch resmi, harga, atau margin. Detail kloter mengembalikan field ringkasan yang sama. Scope pabrik, filter, urutan, dan paginasi daftar tetap berlaku.

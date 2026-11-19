@@ -148,7 +148,7 @@ void main() {
     await tap(tester, find.text('Operator'));
     await tester.enterText(find.byType(TextFormField), 'Operator Coba');
     await tap(tester, find.text('Batal'));
-    expect(find.text('Operator Demo'), findsOneWidget);
+    expect(find.text('Operator Demo 3'), findsOneWidget);
 
     await tap(tester, find.text('Operator'));
     await tester.enterText(find.byType(TextFormField), 'Operator Baru');
@@ -159,7 +159,7 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
     await tap(tester, find.byTooltip('Kembali'));
     expect(find.text('1 Batch perlu ditinjau'), findsOneWidget);
-    await tap(tester, find.text('Batch 5'));
+    await tap(tester, find.text('Batch 3'));
 
     await tap(tester, find.text('Masak'));
     expect(find.text('Data pemasakan'), findsOneWidget);
@@ -194,7 +194,7 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
     await tap(tester, find.byTooltip('Kembali'));
     expect(find.text('Semua batch telah ditinjau'), findsOneWidget);
-    expect(find.text('Batch 5'), findsOneWidget);
+    expect(find.text('Batch 3'), findsOneWidget);
   });
 
   testWidgets('pembatalan validasi hanya tersedia pada batch yang dipilih', (

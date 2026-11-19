@@ -12,12 +12,22 @@ class KloterDetailPage extends StatelessWidget {
     required this.kloter,
     required this.demo,
     required this.onNavigate,
+    this.stock,
+    this.onEdit,
+    this.onTransfer,
+    this.onClosure,
+    this.onOpenPekerjaan,
     super.key,
   });
 
   final DemoKloter kloter;
   final DemoProduction demo;
   final ValueChanged<NiraTab> onNavigate;
+  final Widget? stock;
+  final VoidCallback? onEdit;
+  final VoidCallback? onTransfer;
+  final VoidCallback? onClosure;
+  final VoidCallback? onOpenPekerjaan;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -40,11 +50,31 @@ class KloterDetailPage extends StatelessWidget {
                 ),
                 child: Column(
                   children: [
-                    const DetailMetrics([
-                      ('Tebu bersih', '1.500Kg'),
-                      ('Brix tebu', '90Kg'),
-                      ('Nira tercatat', '360L'),
-                    ]),
+                    DetailMetrics(
+                      kloter.record == null
+                          ? const [
+                              ('Tebu bersih', '1.500Kg'),
+                              ('Brix tebu', '90Kg'),
+                              ('Nira tercatat', '360L'),
+                            ]
+                          : [
+                              ('Tebu bersih', kloter.weight),
+                              ('Brix tebu', formatQuantity(kloter.brix, '°Bx')),
+                              (
+                                'Nira dihasilkan',
+                                formatQuantity(kloter.juiceLiters, 'L'),
+                              ),
+                            ],
+                    ),
+                    if (stock != null) ...[
+                      const SizedBox(height: NiraSpace.md),
+                      stock!,
+                    ],
+                    if (onEdit != null) DocumentLink('Edit kloter', onEdit!),
+                    if (onTransfer != null)
+                      DocumentLink('Transfer nira', onTransfer!),
+                    if (onClosure != null)
+                      DocumentLink('Penutupan dan riwayat', onClosure!),
                     const SizedBox(height: NiraSpace.lg),
                     DocumentLink('Data tebu dan penggilingan', () {
                       Navigator.of(context).push(
@@ -53,6 +83,7 @@ class KloterDetailPage extends StatelessWidget {
                             demo: demo,
                             kloter: kloter,
                             onNavigate: onNavigate,
+                            onOpenPekerjaan: onOpenPekerjaan,
                           ),
                         ),
                       );
@@ -86,7 +117,9 @@ class KloterDetailPage extends StatelessWidget {
                     const DetailSectionTitle('Batch kloter'),
                     const SizedBox(height: NiraSpace.xs),
                     Text(
-                      kloter.batchesToReview == 0
+                      kloter.id != null
+                          ? 'Rincian batch resmi belum tersedia.'
+                          : kloter.batchesToReview == 0
                           ? 'Semua batch telah ditinjau'
                           : '${kloter.batchesToReview} Batch perlu ditinjau',
                       style: niraText(

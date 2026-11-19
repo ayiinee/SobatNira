@@ -212,7 +212,9 @@ async function smoke() {
   assert.doesNotMatch(await receive(body(randomUUID(),`KONFIRMASI ${initial.document} ${initial.revision}`)),/masuk antrean/);
   assert.match(await receive(body(randomUUID(),`KONFIRMASI ${updated.document} ${updated.revision}`)),/masuk antrean/);
   const ambiguous = await submitPhoto(photo('ambiguous.png', 'BARU'));
-  const question = (await ready(ambiguous)).pending_question;
+  const ambiguousDraft = await ready(ambiguous);
+  const question = ambiguousDraft.pending_question;
+  assert.ok(question, `Nota ambigu tidak menghasilkan pertanyaan (${ambiguousDraft.processing_status})`);
   assert.equal(question.field_path,'header.net_weight_kg');
   const answer = `JAWAB ${ambiguous.document} ${ambiguous.revision} ${question.id} 1250`;
   assert.match(await receive(body(randomUUID(), answer)), /1\.250 kg/);
@@ -277,6 +279,13 @@ async function smoke() {
       source: 'ocr', documentId: updated.document, revisionId: updated.revision, revisionNumber: null,
     });
   }
+  const summaries = await fetch(`${url(ports.api)}/tenants/${tenant}/factories/${factory}/lots?includeSummary=true&limit=100&q=${lotA.code.slice(4)}`, {
+    headers: { Authorization: `Bearer ${userTokens['admin@example.invalid']}` }, signal: AbortSignal.timeout(5_000),
+  });
+  assert.equal(summaries.status, 200);
+  const summary = (await summaries.json()).items.find((item) => item.id === lotA.id);
+  assert.equal(summary.netWeightGrams, '1250000');
+  assert.equal(summary.juiceProducedLiters, '90');
   console.log('Smoke Flutter + PostgreSQL lulus. Kedua kloter mendebit 1250 kg dan mengkredit 90 L serta 85 L nira.');
 }
 

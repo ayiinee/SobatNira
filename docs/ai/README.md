@@ -29,7 +29,7 @@ Panggilan pertama PaddleOCR mengunduh model. Gunakan `PADDLE_PDX_CACHE_HOME` unt
    flutter run -d web-server --web-hostname 127.0.0.1 --web-port 8080 --dart-define=API_BASE_URL=http://127.0.0.1:3000 --dart-define=SUPABASE_URL=http://127.0.0.1:8077 --dart-define=SUPABASE_PUBLISHABLE_KEY=local-synthetic-publishable
    ```
 
-4. Masuk dengan `admin@example.invalid` / `sobatnira-demo`, pilih **Pabrik Demo**, lalu buka **Pekerjaan**. Gunakan ID tugas dan kode kloter yang dicetak terminal.
+4. Masuk dengan `admin@example.invalid` / `sobatnira-demo`, buka **Pekerjaan** dari Beranda **Pabrik Demo**. Gunakan ID tugas dan kode kloter yang dicetak terminal.
 
    - Buka **Nota Kedatangan Truk**, periksa foto dan riwayat, pilih **Validasi revisi ini**, pilih kloter `OCR-A-…`, lalu pilih **Sahkan dan catat stok**.
    - Buka tugas dari **Perlu tinjauan manual**. Lengkapi tanggal `2026-11-16`, pemasok `PEMASOK DEMO`, jenis tebu `BL`, berat `1250` dan catatan pemeriksaan. Simpan draf dan sahkan ke kloter `OCR-B-…`.
@@ -109,7 +109,7 @@ Jalankan gateway, NestJS dan FastAPI pada host yang sama untuk memakai alamat lo
    flutter build web --dart-define=SOBATNIRA_MODE=connected --dart-define=API_BASE_URL=https://api.example.invalid --dart-define=SUPABASE_URL=https://project.supabase.co --dart-define=SUPABASE_PUBLISHABLE_KEY=sb_publishable_EXAMPLE
    ```
 
-   Sajikan `build/web` dari origin yang terdaftar di `CORS_ORIGINS`. Masuk dengan akun Supabase, pilih pabrik yang terdaftar di akun, lalu buka **Kloter** atau **Pekerjaan**.
+   Sajikan `build/web` dari origin yang terdaftar di `CORS_ORIGINS`. Masuk dengan akun Supabase. Beranda membuka pabrik pertama yang dapat diakses. Jika akun mempunyai akses ke beberapa pabrik, gunakan pemilih di profil Beranda. Buka **Pekerjaan** untuk meninjau nota, **Kloter** untuk detail dan saldo nira, atau **Laporan** dan aksi **Rekap** untuk melihat data yang sudah disahkan.
 
    Jika probe privasi R2 gagal karena koneksi ke hostname lama terputus, cocokkan hostname dengan daftar domain publik bucket di dashboard R2 dan ulangi `check-media-privacy` dari host deployment. Bila hostname lama sudah dihapus dan dashboard menunjukkan seluruh akses publik dinonaktifkan, `R2_PUBLIC_BASE_URL` boleh dikosongkan. Verifikasi ini terpisah dari pemeriksaan akses S3.
 

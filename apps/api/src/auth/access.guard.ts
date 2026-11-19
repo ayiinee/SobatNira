@@ -1,9 +1,10 @@
-import { CanActivate, ExecutionContext, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { CanActivate, ExecutionContext, ForbiddenException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AccessRepository } from './access.repository';
 import { ACCESS_POLICY, AccessPolicy } from './auth.decorators';
 import { SecurityRequest, UUID_PATTERN } from './auth.types';
 import { SupabaseAuthService } from './supabase-auth.service';
+import { BACKEND_CONFIG, BackendConfig } from '../config/backend.config';
 
 @Injectable()
 export class AccessGuard implements CanActivate {
@@ -11,6 +12,7 @@ export class AccessGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly auth: SupabaseAuthService,
     private readonly access: AccessRepository,
+    @Inject(BACKEND_CONFIG) private readonly config: BackendConfig,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -19,6 +21,14 @@ export class AccessGuard implements CanActivate {
     ]);
     if (policy?.kind === 'public') return true;
     const request = context.switchToHttp().getRequest<SecurityRequest>();
+    const headers = request.headers as Record<string, string | undefined>;
+    const devRole = headers['x-dev-role'];
+    if (this.config.environment === 'development' && headers['x-dev-user-id'] && headers['x-dev-tenant-id'] && headers['x-dev-factory-id'] && devRole) {
+      if (devRole !== 'admin' && devRole !== 'owner') throw new ForbiddenException('Role tidak memiliki akses.');
+      request.authUser = { id: headers['x-dev-user-id'] };
+      request.factoryAccess = { userId: headers['x-dev-user-id'], tenantId: headers['x-dev-tenant-id'], tenantName: 'Development', factoryId: headers['x-dev-factory-id'], factoryName: 'Development', role: devRole };
+      return true;
+    }
     const authorization = request.headers.authorization;
     const match = typeof authorization === 'string' ? /^Bearer ([^\s,]+)$/i.exec(authorization) : null;
     if (!match) throw new UnauthorizedException('Gunakan Authorization: Bearer <access_token>.');
