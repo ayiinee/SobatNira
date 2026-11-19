@@ -43,6 +43,34 @@ flutter run -d chrome --web-hostname 127.0.0.1 --web-port 8080
 
 Untuk membuka layar draf sintetis secara mandiri, tambahkan `-t lib/main_demo.dart --dart-define=USE_LOCAL_FIXTURE=true`.
 
+## Flutter dengan Supabase dan backend dari .env
+
+Pastikan `.env` di akar repo sudah berisi `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, dan koneksi PostgreSQL sesuai [konfigurasi backend](backend-configuration.md). Jalankan NestJS di terminal terpisah dari `apps/api` dengan `npm run dev`.
+
+Dari akar repo jalankan:
+
+```powershell
+.\dev-mobile.cmd --connected
+```
+
+Perintah ini membuka Chrome di `http://127.0.0.1:8080` dengan layar login Supabase. Setelah masuk memakai akun Supabase yang memiliki membership pabrik, Kloter dan Pekerjaan mengambil data dari NestJS. [Panduan akses backend](backend-authentication.md) menjelaskan migrasi dan pemberian akses pabrik. Beranda dan Laporan pada mode demo belum merupakan layar data backend.
+
+Launcher membaca `.env` menggunakan Node.js 24 dan membuat `.tmp/mobile/public-defines.json` yang diabaikan Git. Hanya `SOBATNIRA_MODE`, `API_BASE_URL`, `SUPABASE_URL`, dan publishable/anon key yang disertakan. Jangan memberikan `.env` backend langsung ke `--dart-define-from-file` karena semua nilainya dapat masuk ke aplikasi klien.
+
+Alamat API mengikuti `API_BASE_URL` bila diisi, atau `API_HOST` dan `API_PORT` (bawaan `http://127.0.0.1:3000`). Port tampilan dapat diganti dengan `--port 8086`; tambahkan origin `http://127.0.0.1:8086` ke `CORS_ORIGINS` dan mulai ulang NestJS. Perubahan `.env` memerlukan menjalankan ulang launcher. Tanpa `--connected`, launcher tetap membuka demo lokal pada port 8085.
+
+Untuk mengisi database development dengan data sintetis, jalankan dari `apps/api`:
+
+```powershell
+npm.cmd run db:migrate
+npm.cmd run db:migrate:ocr
+npm.cmd run db:seed:demo
+```
+
+Seeder memerlukan `NODE_ENV=development` serta `SUPABASE_SECRET_KEY` untuk membuat akun Auth sintetis `admin.demo@example.invalid`. Seeder mengonfirmasi akun ini melalui Admin API tanpa mengirim email, lalu memberi akses admin hanya ke **Pabrik Demo Sintetis**. Seeder membuat satu usaha, satu pabrik, dua pemasok, dua jenis tebu dan tiga kloter dengan ID tetap, sehingga pengulangan tidak menggandakan data. Stok tetap nol sampai nota disahkan melalui alur bisnis.
+
+Email dan kata sandi acak disimpan di `.tmp/mobile/demo-login.json`, di luar Git dan di luar konfigurasi publik Flutter. Gunakan akun tersebut pada layar login. Seeder menolak mengambil alih akun lain yang memakai email demo; akun yang dinonaktifkan tidak diaktifkan ulang. Jika file login hilang, pengulangan seeder mengganti kata sandi khusus akun demo yang ditandai oleh seeder ini.
+
 ## Kerjakan satu layanan
 
 - **NestJS.** Di `apps/api`, jalankan `npm ci`, `npm test`, lalu `npm run dev`. Cek `http://127.0.0.1:3000/health`. Tes API memakai upstream lokal khusus tes. Endpoint `/demo/draft` memerlukan FastAPI yang sedang berjalan.

@@ -69,6 +69,8 @@ uv run --locked uvicorn main:app --host 127.0.0.1 --port 8000
 
 Pemeriksaan koneksi tidak dijalankan otomatis pada setiap startup atau request API. `GET /health` tetap hanya menunjukkan proses NestJS hidup. Gunakan CLI untuk memeriksa dependency dan `GET /demo/draft` untuk memeriksa integrasi NestJS ke FastAPI.
 
+Perintah development `npm run dev` dan migrasi OCR `npm run db:migrate:ocr` juga memuat `.env` akar repo ke environment proses melalui Node.js. Ini diperlukan modul intake/review OCR yang membaca `process.env`. Untuk `npm run dev`, nilai dari `apps/api/.env` menimpa nilai yang sama dari `.env` akar repo. Environment yang sudah diberikan terminal tetap memiliki prioritas tertinggi. Pemuat konfigurasi bisnis sendiri tetap tidak mengubah `process.env`.
+
 ## Cakupan pemeriksaan
 
 | Layanan | Operasi | Batas pemeriksaan |
