@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/review_status_label.dart';
 import 'batch_detail_page.dart';
 import 'demo_production.dart';
 import 'kloter_card.dart';
@@ -201,78 +202,45 @@ class _BatchTile extends StatelessWidget {
                   horizontal: NiraSpace.md,
                   vertical: NiraSpace.sm,
                 ),
-                child:
-                    MediaQuery.textScalerOf(context).scale(NiraType.body) > 17
-                    ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Wrap(
+                            alignment: WrapAlignment.spaceBetween,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: NiraSpace.sm,
+                            runSpacing: NiraSpace.xs,
                             children: [
-                              Expanded(
-                                child: Text(
-                                  'Batch ${batch.number}',
-                                  style: niraText(
-                                    NiraType.section,
-                                    color: pending ? foreground : niraYellow,
-                                    weight: FontWeight.w700,
-                                  ),
+                              Text(
+                                'Batch ${batch.number}',
+                                style: niraText(
+                                  NiraType.section,
+                                  color: pending ? foreground : niraYellow,
+                                  weight: FontWeight.w700,
                                 ),
                               ),
-                              Icon(
-                                Icons.chevron_right,
-                                color: foreground,
-                                size: 20,
-                              ),
+                              ReviewStatusLabel(pending: pending),
                             ],
                           ),
-                          const SizedBox(height: NiraSpace.sm),
-                          _info(context, 'Nira batch', '180L', foreground),
-                          const SizedBox(height: NiraSpace.xs),
-                          _info(context, 'Hasil fisik', '90Kg', foreground),
-                        ],
-                      )
-                    : Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            flex: 24,
-                            child: Text(
-                              'Batch ${batch.number}',
-                              style: niraText(
-                                NiraType.section,
-                                color: pending ? foreground : niraYellow,
-                                weight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: NiraSpace.xs),
-                          Expanded(
-                            flex: 66,
-                            child: Column(
-                              children: [
-                                _info(
-                                  context,
-                                  'Nira batch',
-                                  '180L',
-                                  foreground,
-                                ),
-                                const SizedBox(height: NiraSpace.xs),
-                                _info(
-                                  context,
-                                  'Hasil fisik',
-                                  '90Kg',
-                                  foreground,
-                                ),
-                              ],
-                            ),
-                          ),
-                          Icon(
-                            Icons.chevron_right,
-                            size: 20,
-                            color: foreground,
-                          ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(width: NiraSpace.xs),
+                        const Icon(
+                          Icons.chevron_right,
+                          size: 20,
+                          color: foreground,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: NiraSpace.sm),
+                    _info(context, 'Nira batch', '180L', foreground),
+                    const SizedBox(height: NiraSpace.xs),
+                    _info(context, 'Hasil fisik', '90Kg', foreground),
+                  ],
+                ),
               ),
             ),
           ],

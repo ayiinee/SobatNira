@@ -97,7 +97,8 @@ void main() {
   ) async {
     await openDemo(tester);
     expect(find.text('Tebu diterima'), findsOneWidget);
-    expect(find.byType(KloterCard).evaluate().length, greaterThanOrEqualTo(3));
+    // Status labels change how many cards fit in the initial viewport.
+    expect(find.byType(KloterCard).evaluate().length, greaterThanOrEqualTo(1));
 
     await tap(tester, find.bySemanticsLabel('Kloter'));
     await tester.enterText(find.byType(TextField), ' mjt-260926-2a ');
@@ -221,6 +222,16 @@ void main() {
     );
     await tap(tester, find.byTooltip('Kembali'));
     expect(find.text('1 Batch perlu ditinjau'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byTooltip('Kembali'),
+      -300,
+      scrollable: find
+          .descendant(
+            of: find.byType(CustomScrollView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     await tap(tester, find.byTooltip('Kembali'));
     final card = tester.widget<KloterCard>(
       find.ancestor(

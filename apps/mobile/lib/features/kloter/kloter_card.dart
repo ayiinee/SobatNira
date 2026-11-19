@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/review_status_label.dart';
 import 'demo_production.dart';
 
 double caneOverlayOpacity(bool pending) => pending ? .82 : .55;
@@ -61,71 +62,32 @@ class KloterCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Builder(
-                        builder: (context) {
-                          if (MediaQuery.textScalerOf(
-                                context,
-                              ).scale(NiraType.section) >
-                              19) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  kloter.code,
-                                  style: niraText(
-                                    NiraType.section,
-                                    color: titleColor,
-                                    weight: FontWeight.w700,
-                                  ),
-                                ),
-                                const SizedBox(height: NiraSpace.xs),
-                                Text(
-                                  formatDate(kloter.date),
-                                  style: niraText(
-                                    NiraType.caption,
-                                    color: foreground,
-                                  ),
-                                ),
-                              ],
-                            );
-                          }
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                flex: 3,
-                                child: Text(
-                                  kloter.code,
-                                  style: niraText(
-                                    NiraType.section,
-                                    color: titleColor,
-                                    weight: FontWeight.w700,
-                                  ),
-                                ),
+                      SizedBox(
+                        width: double.infinity,
+                        child: Wrap(
+                          alignment: WrapAlignment.spaceBetween,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: NiraSpace.sm,
+                          runSpacing: NiraSpace.xs,
+                          children: [
+                            Text(
+                              kloter.code,
+                              style: niraText(
+                                NiraType.section,
+                                color: titleColor,
+                                weight: FontWeight.w700,
                               ),
-                              const SizedBox(width: NiraSpace.xs),
-                              Flexible(
-                                flex: 2,
-                                child: Padding(
-                                  padding: const EdgeInsets.only(
-                                    top: NiraSpace.xs,
-                                  ),
-                                  child: Align(
-                                    alignment: Alignment.centerRight,
-                                    child: Text(
-                                      formatDate(kloter.date),
-                                      textAlign: TextAlign.end,
-                                      style: niraText(
-                                        NiraType.caption,
-                                        color: foreground,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          );
-                        },
+                            ),
+                            ReviewStatusLabel(
+                              pending: pending,
+                              label: kloter.record == null
+                                  ? null
+                                  : pending
+                                  ? 'Kloter terbuka'
+                                  : 'Kloter tuntas',
+                            ),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: NiraSpace.xs),
                       Text(
@@ -133,9 +95,23 @@ class KloterCard extends StatelessWidget {
                         style: niraText(NiraType.body, color: foreground),
                       ),
                       const SizedBox(height: NiraSpace.xs),
-                      Text(
-                        kloter.weight,
-                        style: niraText(NiraType.body, color: foreground),
+                      Wrap(
+                        spacing: NiraSpace.sm,
+                        runSpacing: NiraSpace.xs,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(
+                            kloter.weight,
+                            style: niraText(NiraType.body, color: foreground),
+                          ),
+                          Text(
+                            formatDate(kloter.date),
+                            style: niraText(
+                              NiraType.caption,
+                              color: foreground,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
