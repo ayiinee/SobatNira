@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { LogLevel } from '@nestjs/common';
+import { ConsoleLogger, LogLevel } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { BACKEND_CONFIG, BackendConfig, ConfigOptions } from './config/backend.config';
@@ -11,7 +11,7 @@ export async function createApplication(options: ConfigOptions = {}) {
     silent: [], error: ['error'], warn: ['error', 'warn'],
     info: ['error', 'warn', 'log'], debug: ['error', 'warn', 'log', 'debug', 'verbose'],
   };
-  app.useLogger(levels[config.logLevel]);
+  app.useLogger(new ConsoleLogger({ json: true, logLevels: levels[config.logLevel] }));
   app.enableCors({ origin: config.corsOrigins });
   app.enableShutdownHooks();
   return app;

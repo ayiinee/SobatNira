@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'features/beranda/beranda_page.dart';
+import 'features/kloter/official_batch_workflow.dart';
+import 'features/laporan/connected_profit_page.dart';
 import 'features/bantuan/bantuan_page.dart';
 import 'features/beranda/quick_action_icon.dart';
 import 'features/kloter/connected_kloter_page.dart';
@@ -165,13 +167,20 @@ class _HomeState extends State<_Home> {
         NiraTab.kloter => KloterListPage(
           kloter: _lots,
           onOpenKloter: _openKloter,
-          onCreate: _live == null ? null : () => _editLot(),
+          onCreate: widget.scope?.role == 'admin' ? () => _editLot() : null,
           statusMessage: _loadStatus(),
         ),
         NiraTab.laporan => LaporanPage(
           analytics: _analytics,
           onOpenDetail: _openReportDetail,
           approvedLots: _live?.lots,
+          loadOfficial: _live == null
+              ? null
+              : (kind, filter) =>
+                    loadFactoryReport(widget.api!, widget.scope!, kind, filter),
+          openOfficial: _live == null
+              ? null
+              : (report) => _openOfficialReport(report.kind, initial: report),
           statusMessage: _loadStatus(),
         ),
         NiraTab.pengaturan => PengaturanPage(
@@ -287,6 +296,24 @@ class _HomeState extends State<_Home> {
     );
   }
 
+  void _openOfficialReport(
+    PrintableReportKind kind, {
+    PrintableReport? initial,
+  }) {
+    _navigator.push<void>(
+      MaterialPageRoute(
+        builder: (_) => ConnectedProfitPage(
+          api: widget.api!,
+          scope: widget.scope!,
+          kind: kind,
+          onNavigate: _navigate,
+          initialFilter: _analytics.dateFilter,
+          initialReport: initial,
+        ),
+      ),
+    );
+  }
+
   void _openQuickAction(QuickActionKind action) {
     final kind = switch (action) {
       QuickActionKind.profit => PrintableReportKind.profit,
@@ -306,6 +333,10 @@ class _HomeState extends State<_Home> {
               : BantuanPage(onNavigate: _navigate),
         ),
       );
+      return;
+    }
+    if (_live != null) {
+      _openOfficialReport(kind);
       return;
     }
     _navigator.push(
@@ -435,12 +466,23 @@ class _LotDetailState extends State<_LotDetail> {
         demo: widget.demo,
         onNavigate: widget.onNavigate,
         onOpenPekerjaan: widget.onOpenPekerjaan,
-        onEdit: snapshot.hasError
+        batchSection: OfficialLotBatches(
+          api: _api,
+          scope: _scope,
+          lotId: _id,
+          canCreate:
+              _scope.role == 'admin' &&
+              _lot.milling.verified &&
+              _lot.record?['status'] != 'closed',
+          onNavigate: widget.onNavigate,
+          onChanged: _reload,
+        ),
+        onEdit: snapshot.hasError || _scope.role != 'admin'
             ? null
             : () async {
                 if (await widget.onEdit(_lot.record!) && mounted) _reload();
               },
-        onTransfer: stock == null || snapshot.hasError
+        onTransfer: stock == null || snapshot.hasError || _scope.role != 'admin'
             ? null
             : () => _open(
                 JuiceTransferPage(api: _api, scope: _scope, lotId: _id),

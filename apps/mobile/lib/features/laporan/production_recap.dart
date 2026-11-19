@@ -3,7 +3,7 @@ import 'demo_analytics.dart';
 
 // A read-only join of existing demo records. No production values are inferred.
 class ProductionRecap {
-  ProductionRecap(Iterable<RecapKloter> kloter)
+  ProductionRecap(Iterable<RecapKloter> kloter, {this.officialMargin})
     : kloter = List.unmodifiable(kloter);
 
   factory ProductionRecap.fromRows(
@@ -71,17 +71,21 @@ class ProductionRecap {
 
   final List<RecapKloter> kloter;
   int get batchCount => kloter.fold(0, (sum, lot) => sum + lot.batches.length);
+  final String? officialMargin;
   int get marginCount => kloter.where((lot) => lot.margin != null).length;
   int get sugarCount =>
       kloter.where((lot) => readRecapNumber(lot.sugar) != null).length;
-  String get marginTotal => marginCount == 0
-      ? '-'
-      : 'Rp${formatRecapNumber(kloter.fold<num>(0, (sum, lot) => sum + (readRecapNumber(lot.margin) ?? 0)))}';
+  String get marginTotal =>
+      officialMargin ??
+      (marginCount == 0
+          ? '-'
+          : 'Rp${formatRecapNumber(kloter.fold<num>(0, (sum, lot) => sum + (readRecapNumber(lot.margin) ?? 0)))}');
 }
 
 class RecapKloter {
   RecapKloter({
     required this.code,
+    this.id,
     required this.supplier,
     required this.date,
     required this.sugar,
@@ -112,6 +116,8 @@ class RecapKloter {
   );
 
   final String code, supplier, sugar, rendemen;
+  final String? id;
+  String get identity => id ?? code;
   final DateTime date;
   final String? cane, caneType, vehicle, margin, juice;
   final List<RecapBatch> batches;
@@ -128,6 +134,8 @@ class RecapBatch {
     required this.grade,
     required this.time,
     required this.verified,
+    this.code,
+    this.wokNumber,
   });
 
   factory RecapBatch.fromDemo(DemoBatch batch) => RecapBatch(
@@ -143,6 +151,8 @@ class RecapBatch {
   );
 
   final int number;
+  final int? wokNumber;
+  final String? code;
   final String? shift, brix, juice, lime, physical, time;
   final String grade;
   final bool verified;
@@ -159,7 +169,9 @@ class RecapBatch {
     'Status',
   ];
   List<String> get cells => [
-    '$number',
+    wokNumber == null
+        ? code ?? '$number'
+        : '${code ?? number} · Wajan $wokNumber',
     shift ?? '-',
     brix ?? '-',
     juice ?? '-',

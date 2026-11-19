@@ -17,6 +17,7 @@ class KloterDetailPage extends StatelessWidget {
     this.onTransfer,
     this.onClosure,
     this.onOpenPekerjaan,
+    this.batchSection,
     super.key,
   });
 
@@ -24,6 +25,7 @@ class KloterDetailPage extends StatelessWidget {
   final DemoProduction demo;
   final ValueChanged<NiraTab> onNavigate;
   final Widget? stock;
+  final Widget? batchSection;
   final VoidCallback? onEdit;
   final VoidCallback? onTransfer;
   final VoidCallback? onClosure;
@@ -116,36 +118,40 @@ class KloterDetailPage extends StatelessWidget {
                   children: [
                     const DetailSectionTitle('Batch kloter'),
                     const SizedBox(height: NiraSpace.xs),
-                    Text(
-                      kloter.id != null
-                          ? 'Rincian batch resmi belum tersedia.'
-                          : kloter.batchesToReview == 0
-                          ? 'Semua batch telah ditinjau'
-                          : '${kloter.batchesToReview} Batch perlu ditinjau',
-                      style: niraText(
-                        NiraType.caption,
-                        color: kloter.batchesToReview == 0
-                            ? niraLeaf
-                            : niraOchre,
+                    if (batchSection != null)
+                      batchSection!
+                    else ...[
+                      Text(
+                        kloter.id != null
+                            ? 'Rincian batch resmi belum tersedia.'
+                            : kloter.batchesToReview == 0
+                            ? 'Semua batch telah ditinjau'
+                            : '${kloter.batchesToReview} Batch perlu ditinjau',
+                        style: niraText(
+                          NiraType.caption,
+                          color: kloter.batchesToReview == 0
+                              ? niraLeaf
+                              : niraOchre,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: NiraSpace.md),
-                    for (final batch in kloter.batches)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: NiraSpace.md),
-                        child: _BatchTile(
-                          batch,
-                          () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => BatchDetailPage(
-                                batch: batch,
-                                demo: demo,
-                                onNavigate: onNavigate,
+                      const SizedBox(height: NiraSpace.md),
+                      for (final batch in kloter.batches)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: NiraSpace.md),
+                          child: _BatchTile(
+                            batch,
+                            () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => BatchDetailPage(
+                                  batch: batch,
+                                  demo: demo,
+                                  onNavigate: onNavigate,
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
+                    ],
                   ],
                 ),
               ),

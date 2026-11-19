@@ -23,10 +23,10 @@ Panggilan pertama PaddleOCR mengunduh model. Gunakan `PADDLE_PDX_CACHE_HOME` unt
    ```
 
 2. Jalankan `npm run local:stack -- --smoke` dari `apps/api`. Bootstrap membuat schema `sobatnira_local`, menjalankan migration berulang dengan aman, memasang operator/admin sintetis, membuat fixture foto ke `.tmp/local-ai`, dan menyalakan NestJS, worker, FastAPI dan stub Supabase Auth. Media asli sintetis tersimpan privat di `.tmp/local-ai/media`. Plugin OpenClaw yang sama menerima payload sintetis dan mengirim lewat batas WhatsApp simulasi. PaddleOCR menjalankan model CPU dengan foto hasil generasi fixture.
-3. Dari `apps/mobile` jalankan Flutter web dan buka `http://127.0.0.1:8080`. Untuk melihat aplikasi release, gunakan `flutter build web` dengan ketiga `--dart-define` yang sama, lalu sajikan `build/web` pada port 8080.
+3. Dari `apps/mobile` jalankan Flutter web dan buka `http://127.0.0.1:8080`. Untuk melihat aplikasi release, gunakan `flutter build web` dengan definisi lingkungan yang sama, lalu sajikan `build/web` pada port 8080.
 
    ```sh
-   flutter run -d web-server --web-hostname 127.0.0.1 --web-port 8080 --dart-define=API_BASE_URL=http://127.0.0.1:3000 --dart-define=SUPABASE_URL=http://127.0.0.1:8077 --dart-define=SUPABASE_PUBLISHABLE_KEY=local-synthetic-publishable
+   flutter run -d web-server --web-hostname 127.0.0.1 --web-port 8080 --dart-define=SOBATNIRA_MODE=local --dart-define=API_BASE_URL=http://127.0.0.1:3000 --dart-define=SUPABASE_URL=http://127.0.0.1:8077 --dart-define=SUPABASE_PUBLISHABLE_KEY=local-synthetic-publishable
    ```
 
 4. Masuk dengan `admin@example.invalid` / `sobatnira-demo`, buka **Pekerjaan** dari Beranda **Pabrik Demo**. Gunakan ID tugas dan kode kloter yang dicetak terminal.
@@ -35,7 +35,10 @@ Panggilan pertama PaddleOCR mengunduh model. Gunakan `PADDLE_PDX_CACHE_HOME` unt
    - Buka tugas dari **Perlu tinjauan manual**. Lengkapi tanggal `2026-11-16`, pemasok `PEMASOK DEMO`, jenis tebu `BL`, berat `1250` dan catatan pemeriksaan. Simpan draf dan sahkan ke kloter `OCR-B-…`.
    - Buka **Nota Produksi** revisi kedua. Validasi blok `DEMO-A` ke kloter A dengan `90` L dan blok `DEMO-B` ke kloter B dengan `85` L. Isi waktu penggilingan `2026-11-16T09:00:00+07:00` pada kedua blok. Angka liter berasal dari input eksplisit pengujian.
 
-   Terminal memeriksa PostgreSQL untuk kedua kredit penerimaan 1250 kg, debit penggilingan 1250 kg per kloter, serta kredit nira 90 L dan 85 L yang terikat ke revisi produksi. Kembali ke **Kloter**, cari kode yang tampil di terminal dan buka detailnya. Periksa berat 1250000 g, nira tersedia 90000 mL atau 85000 mL, dan ID kedua nota beserta revisinya. Gunakan database lokal khusus demo. Tekan Ctrl+C untuk menghentikan proses.
+5. Buka **Kloter** dan pilih kloter A. Periksa berat 1250000 g, nira tersedia 90000 mL, serta ID nota truk, nota produksi dan kedua revisinya. Pilih **Tambah batch**. Pakai kode yang dicetak terminal, wajan 1, waktu masak setelah penggilingan, 40000 mL nira, hasil fisik 26 kg, grade A 25 kg dan Rp20000/kg. Isi biaya tebu, operasional, bahan dan lainnya masing-masing Rp100000, Rp20000, Rp5000 dan Rp0. Pilih **Reservasi nira**, lalu **Sahkan batch**.
+6. Buka rekap di **Laporan** dan pilih 16 November 2026 atau semua tanggal. Untuk kloter A, cocokkan 25 kg gula final dan margin Rp375.000 yang masih sementara. Gunakan **Simpan PDF** untuk memeriksa periode dan rincian batch. Terminal memeriksa 50000 mL sisa nira, satu reservasi yang dikonsumsi, replay pengesahan, penolakan akses pabrik lain, dan kesamaan ID snapshot rekap dan laba. Gunakan database lokal khusus demo. Tekan Ctrl+C untuk menghentikan layanan setelah pemeriksaan.
+
+Jika port 8080 sedang dipakai, set `LOCAL_WEB_PORT` ke port alternatif sebelum memulai stack dan gunakan port yang sama untuk Flutter. Event `whatsapp_photo_accepted`, `ocr_attempt` dan `whatsapp_notice_delivery` dapat dicocokkan lewat `revisionId`. Catat waktu penerimaan, waktu sejak revisi dibuat sampai percobaan OCR (`queueMs`), durasi ekstraksi (`extractionMs`) dan durasi pengiriman per jenis nota. Ukur persentil dan hasil tinjauan manual di staging dengan sampel yang sudah dianonimkan.
 
 Uji memeriksa dua tipe nota, kutipan pesan bot pada foto produksi lanjutan, kiriman duplikat, operator nonaktif, revisi lama, akses lintas pabrik dan foto ulang. Tes PostgreSQL komponen juga memeriksa lease kedaluwarsa akibat restart dan kegagalan provider yang menuju antrean **Perlu tinjauan manual**. Untuk menjalankan layanan tanpa memasukkan kiriman uji, hilangkan `--smoke`. Gunakan tugas baru dengan status menunggu validasi pada setiap percobaan.
 
@@ -49,7 +52,7 @@ Jalankan gateway, NestJS dan FastAPI pada host yang sama untuk memakai alamat lo
    | --- | --- |
    | PostgreSQL | `DATABASE_URL` dari session pooler atau koneksi langsung. Isi `DATABASE_SSL_CA_FILE` dengan path CA proyek Supabase dari dashboard. Koneksi jarak jauh memverifikasi TLS. |
    | Supabase Auth | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`. Buat akun administrator dengan metode email/password dan salin UUID akun. |
-   | Backend B | Isi `BATCH_API_BASE_URL` dengan origin HTTPS layanan tim untuk mengaktifkan penutupan kloter. `BATCH_CLOSURE_TIMEOUT_MS` opsional. [Kontrak Backend B](../backend-juice-and-closure.md#penutupan-kloter). |
+   | Penutupan kloter | Biarkan `BATCH_API_BASE_URL` kosong agar NestJS membaca status batch resmi dari PostgreSQL yang sama. [Pemeriksaan penutupan](../backend-production-implementation.md#penutupan-kloter). |
    | R2 | `R2_ENDPOINT` berupa endpoint S3 akun, `R2_BUCKET_NAME`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`. Nonaktifkan akses melalui `r2.dev` dan custom domain publik di dashboard bucket. Jika terdapat hostname publik lama, isi `R2_PUBLIC_BASE_URL` untuk probe dengan satu marker sintetis. Probe membutuhkan izin PutObject dan DeleteObject. |
    | Gemini | `GEMINI_API_KEY`, `GEMINI_VISION_MODEL` berisi ID model Gemini yang dapat memproses gambar dan mengembalikan JSON. |
    | OpenRouter | `OPENROUTER_API_KEY`, `OPENROUTER_AGENT_MODEL`, `OPENROUTER_ALLOWED_PROVIDERS` berupa slug yang disetujui dan dipisah koma. Pilih endpoint zero data retention yang mendukung function calling. ID model eksplisit boleh memakai akhiran `:free`. `OPENROUTER_AGENT_FALLBACK_MODEL` opsional. Set `OPENROUTER_AGENT_DISABLE_REASONING=true` bila model yang dipilih mendukung `reasoning.effort=none`. |

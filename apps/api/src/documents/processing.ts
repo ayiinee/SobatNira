@@ -8,7 +8,7 @@ import { openClarifications } from './clarifications';
 import { enqueueNotice } from './notices';
 
 type Job = { id: string; revision_id: string; attempts: number; claim_token: string };
-type Work = Revision & { factory_id: string; document_type: DocumentType; parent_revision_id: string | null;
+type Work = Revision & { created_at: Date; factory_id: string; document_type: DocumentType; parent_revision_id: string | null;
   media_asset_id: string; object_key: string; mime_type: string; explicit_new: boolean };
 const MAX_ATTEMPTS = 3;
 const TIMEOUT = 240_000;
@@ -55,6 +55,8 @@ export class DocumentProcessor implements OnModuleInit, OnModuleDestroy {
     if (!task) return false;
     const { job, work } = task;
     const requestId = randomUUID();
+    const queueMs = Math.max(0, Date.now() - work.created_at.getTime());
+    const started = performance.now();
     let result: Envelope | undefined;
     let errorCode: string | undefined;
     try {
@@ -62,10 +64,12 @@ export class DocumentProcessor implements OnModuleInit, OnModuleDestroy {
       result = await this.extract(work, requestId);
     } catch (error) {
       const code = error instanceof Error ? error.message : '';
-      errorCode = ['INVALID_OCR_CONTRACT', 'OCR_LEASE_EXHAUSTED'].includes(code) ? code : 'OCR_UNAVAILABLE';
+      errorCode = error instanceof Error && error.name === 'TimeoutError' ? 'OCR_TIMEOUT' :
+        ['INVALID_OCR_CONTRACT', 'OCR_LEASE_EXHAUSTED'].includes(code) ? code : 'OCR_UNAVAILABLE';
     }
+    const extractionMs = Math.round(performance.now() - started);
 
-    await this.db.transaction(async (db) => {
+    const outcome = await this.db.transaction(async (db) => {
       const { rowCount } = await db.query(`SELECT id FROM document_jobs WHERE id=$1 AND claim_token=$2 AND status='PROCESSING' FOR UPDATE`, [job.id, job.claim_token]);
       if (!rowCount) return;
       await db.query(`INSERT INTO extraction_attempts (id,job_id,attempt,envelope,error_code) VALUES ($1,$2,$3,$4,$5)`,
@@ -75,7 +79,7 @@ export class DocumentProcessor implements OnModuleInit, OnModuleDestroy {
         await db.query(`UPDATE document_jobs SET status='QUEUED',available_at=now()+$2*interval '1 millisecond',lease_until=NULL,claim_token=NULL WHERE id=$1`, [job.id, delay]);
         await db.query(`UPDATE document_revisions SET processing_status='QUEUED' WHERE id=$1`, [work.id]);
         await audit(db, work, 'OCR_RETRY_SCHEDULED', null, { attempt: job.attempts, code: errorCode });
-        return;
+        return 'QUEUED';
       }
 
       let extraction = result?.extraction ?? null;
@@ -125,7 +129,10 @@ export class DocumentProcessor implements OnModuleInit, OnModuleDestroy {
       }
       await enqueueNotice(db, work.id, 'OCR_RESULT');
       await audit(db, work, status, null, { attempt: job.attempts, request_id: requestId });
+      return status;
     });
+    if (outcome) this.logger.log({ event: 'ocr_attempt', revisionId: work.id, attempt: job.attempts,
+      queueMs, extractionMs, outcome, errorCode, documentType: result?.extraction?.document_type ?? work.document_type });
     return true;
   }
 

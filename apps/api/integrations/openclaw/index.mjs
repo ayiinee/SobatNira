@@ -30,7 +30,7 @@ async function attachment(root, path) {
   }
 }
 
-export function createBridge({ apiUrl, token, mediaDir, request = fetch, classifyIntent }) {
+export function createBridge({ apiUrl, token, mediaDir, request = fetch, classifyIntent, observe = () => {} }) {
   const call = async (endpoint, options = {}, messageId) => {
     const headers = { ...options.headers, 'X-Internal-Service-Token': token };
     if (messageId) headers['Idempotency-Key'] = `baileys:${messageId}`;
@@ -86,6 +86,7 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
   }
 
   async function handle(event, context) {
+    const started = performance.now();
     const phone = asPhone(event.metadata?.senderE164) ?? asPhone(event.senderId) ?? asPhone(context.senderId);
     const messageId = event.messageId ?? context.messageId;
     const chatId = event.conversationId ?? context.conversationId;
@@ -118,6 +119,8 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
         form.set('event', JSON.stringify({ ...metadata, message_type: 'IMAGE', media_mime_type: media.contentType }));
         form.set('media', new Blob([bytes], { type: media.contentType }), 'nota');
         const accepted = await call('inbound', { method: 'POST', body: form }, messageId);
+        observe({ event: 'whatsapp_photo_accepted', revisionId: accepted.revision_id,
+          duplicate: accepted.duplicate, elapsedMs: Math.round(performance.now() - started) });
         return { text: accepted.duplicate ? 'Foto ini sudah tercatat. Ketik STATUS untuk melihat nota terakhir.' :
           'Foto nota sudah diterima. Saya akan mengirim hasil bacaan di sini. Ketik STATUS untuk cek progres.' };
       }
@@ -185,6 +188,7 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
   async function deliverNotice(send) {
     const { notice } = await call('notices/claim', { method: 'POST' });
     if (!notice) return false;
+    const started = performance.now();
     let outcome = 'RETRY';
     let receipt;
     try {
@@ -201,6 +205,8 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
     }
     await call(`notices/${notice.id}/result`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ claim_token: notice.claim_token, outcome, provider_message_id: receipt }) });
+    observe({ event: 'whatsapp_notice_delivery', revisionId: notice.revision_id,
+      kind: notice.kind, outcome, elapsedMs: Math.round(performance.now() - started) });
     return true;
   }
   return { handle, status, deliverNotice };
@@ -243,7 +249,8 @@ export default {
     if (!api.runtime.channel?.outbound?.loadAdapter || !api.registerService) {
       throw new Error('OpenClaw: SDK outbound dan registerService wajib');
     }
-    const bridge = createBridge({ apiUrl, token, mediaDir, classifyIntent });
+    const bridge = createBridge({ apiUrl, token, mediaDir, classifyIntent,
+      observe: (event) => api.logger.info?.(JSON.stringify(event)) });
     let timer;
     let inFlight;
     const send = async ({ to, text, replyToId }) => {

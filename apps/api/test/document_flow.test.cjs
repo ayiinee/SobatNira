@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
+const { Logger } = require('@nestjs/common');
 const { once } = require('node:events');
 const { mkdtemp, readFile, rm } = require('node:fs/promises');
 const { createServer } = require('node:http');
@@ -347,6 +348,15 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     const db = app.get(Database);
     await db.migrate();
     await db.migrate();
+    await t.test('recovers an idle OCR pool connection', { timeout: 5_000 }, async (t) => {
+      const disconnected = Promise.withResolvers();
+      t.mock.method(Logger.prototype, 'warn', () => disconnected.resolve());
+      const { rows: [{ pid }] } = await db.query('SELECT pg_backend_pid() AS pid');
+      assert.equal((await admin.query('SELECT pg_terminate_backend($1) AS terminated', [pid])).rows[0].terminated, true);
+      await disconnected.promise;
+      const { rows: [{ pid: replacement }] } = await db.query('SELECT pg_backend_pid() AS pid');
+      assert.notEqual(replacement, pid);
+    });
     const applied = await db.query('SELECT name, checksum FROM sobatnira._migrations ORDER BY name');
     await assert.rejects(assertBusinessMigrationsApplied({ query: async () => ({ rows: applied.rows.slice(0, -1) }) }), /migrations are missing/);
     const [firstMigration, ...otherMigrations] = applied.rows;
@@ -542,7 +552,7 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     const { task_id: taskId } = await confirmation.json();
     assert.equal((await action(operatorMessage, corrected).then((response) => response.json())).duplicate, true);
     assert.deepEqual(await unread('reviewer'), { unread_count: 1 });
-    assert.deepEqual(await unread('colleague'), { unread_count: 1 });
+    assert.deepEqual(await unread('colleague'), { unread_count: 0 });
     assert.deepEqual(await unread('owner'), { unread_count: 0 });
     assert.deepEqual(await unread('other-user'), { unread_count: 0 });
     const scoped = (path, scope, user = 'reviewer') =>
@@ -559,7 +569,7 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
       assert.equal((await mobile(`review-notifications/${taskId}/read`, 'reviewer', { method: 'PATCH' })).status, 200);
     }
     assert.deepEqual(await unread('reviewer'), { unread_count: 0 });
-    assert.deepEqual(await unread('colleague'), { unread_count: 1 });
+    assert.deepEqual(await unread('colleague'), { unread_count: 0 });
     assert.equal((await mobile(`review-tasks/${taskId}`, 'other-user')).status, 404);
 
     let detail = await mobile(`review-tasks/${taskId}`).then((response) => response.json());
@@ -577,7 +587,7 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     assert.equal(detail.revisions.length, 3);
     assert.equal(detail.operator_confirmation.version, 2);
     const choicePath = `review-tasks/${taskId}/intake-lots`;
-    assert.equal((await mobile(choicePath, 'colleague')).status, 403);
+    assert.equal((await mobile(choicePath, 'colleague')).status, 404);
     assert.equal((await mobile(choicePath, 'other-user')).status, 404);
     const { items } = await mobile(choicePath).then((response) => response.json());
     assert.deepEqual(items.map(({ id, supplierId }) => ({ id, supplierId })), [{ id: lot, supplierId: supplier }]);

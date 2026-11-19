@@ -81,7 +81,7 @@ Future<Uint8List> buildProductionRecapPdf(
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
             pw.Text(
-              '${report.synthetic ? 'Data sintetis' : 'Data disahkan'} · - = belum tercatat · Status mengikuti validasi batch',
+              '${report.synthetic ? 'Data sintetis' : 'Data disahkan'} · - = belum tercatat · Status mengikuti validasi batch${report.provisional ? ' · Margin sementara pada kloter terbuka' : ''}',
               style: const pw.TextStyle(fontSize: 8, color: muted),
             ),
             pw.Text(
@@ -104,7 +104,7 @@ Future<Uint8List> buildProductionRecapPdf(
                 ('Gula final', report.totalDisplay),
                 ('Margin tercatat', recap.marginTotal),
                 ('Kloter', '${recap.kloter.length}'),
-                ('Batch', report.connected ? '-' : '${recap.batchCount}'),
+                ('Batch', '${recap.batchCount}'),
               ])
                 pw.Expanded(
                   child: pw.Column(

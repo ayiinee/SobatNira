@@ -41,7 +41,7 @@ flutter pub get --enforce-lockfile
 flutter run -d chrome --web-hostname 127.0.0.1 --web-port 8080
 ```
 
-Untuk membuka layar draf sintetis secara mandiri, tambahkan `-t lib/main_demo.dart --dart-define=USE_LOCAL_FIXTURE=true`.
+Untuk menguji nota sintetis melalui Pekerjaan dan pembukuan resmi, ikuti [smoke test lokal](ai/README.md#mode-lokal-sintetis).
 
 ## Flutter dengan Supabase dan backend dari .env
 
@@ -53,7 +53,7 @@ Dari akar repo jalankan:
 .\dev-mobile.cmd --connected
 ```
 
-Perintah ini membuka Chrome di `http://127.0.0.1:8080` dengan layar login Supabase. Setelah masuk memakai akun Supabase yang memiliki membership pabrik, Kloter dan Pekerjaan mengambil data dari NestJS. [Panduan akses backend](backend-authentication.md) menjelaskan migrasi dan pemberian akses pabrik. Beranda dan Laporan pada mode demo belum merupakan layar data backend.
+Perintah ini membuka Chrome di `http://127.0.0.1:8080` dengan layar login Supabase. Setelah masuk, Beranda, Pekerjaan, Kloter, dan laporan resmi memakai akses pabrik aktif pada NestJS. [Panduan akses backend](backend-authentication.md) menjelaskan migrasi dan pemberian akses pabrik.
 
 Launcher membaca `.env` menggunakan Node.js 24 dan membuat `.tmp/mobile/public-defines.json` yang diabaikan Git. Hanya `SOBATNIRA_MODE`, `API_BASE_URL`, `SUPABASE_URL`, dan publishable/anon key yang disertakan. Jangan memberikan `.env` backend langsung ke `--dart-define-from-file` karena semua nilainya dapat masuk ke aplikasi klien.
 
@@ -131,10 +131,10 @@ npm run dev
 ```sh
 cd apps/mobile
 flutter pub get --enforce-lockfile
-flutter run -d chrome -t lib/main_demo.dart --web-hostname 127.0.0.1 --web-port 8080
+flutter run -d chrome -t lib/main.dart --web-hostname 127.0.0.1 --web-port 8080 --dart-define-from-file=../../.tmp/mobile/public-defines.json
 ```
 
-Chrome menampilkan **Draf sintetis**, `DEMO-261114-01`, dan berat 1250 kg. Jika API belum berjalan, nyalakan kembali kedua layanan dan tekan **Coba lagi**.
+Gunakan file konfigurasi publik dari launcher terhubung. Untuk stub login dan nota sintetis dari adapter WhatsApp, gunakan perintah Flutter di [smoke test lokal](ai/README.md#mode-lokal-sintetis).
 
 ## Jalankan di Android
 
@@ -148,13 +148,13 @@ Untuk menguji integrasi dari emulator atau HP, jalankan kedua backend. Dengan sa
 
 ```sh
 adb reverse tcp:3000 tcp:3000
-flutter run -d <device-id> -t lib/main_demo.dart
+flutter run -d <device-id> -t lib/main.dart --dart-define-from-file=../../.tmp/mobile/public-defines.json
 ```
 
 Jika beberapa perangkat terhubung, gunakan `adb -s <device-id> reverse tcp:3000 tcp:3000`. Emulator juga dapat mengakses loopback laptop menggunakan `10.0.2.2`.
 
 ```sh
-flutter run -d <emulator-id> -t lib/main_demo.dart --dart-define=API_BASE_URL=http://10.0.2.2:3000
+flutter run -d <emulator-id> -t lib/main.dart --dart-define-from-file=../../.tmp/mobile/public-defines.json --dart-define=API_BASE_URL=http://10.0.2.2:3000
 ```
 
 Untuk cek layanan langsung, buka `http://127.0.0.1:8000/health`, `http://127.0.0.1:3000/health`, dan `http://127.0.0.1:3000/demo/draft`. API dapat mengubah port dengan `API_PORT` dan tujuan AI dengan `AI_BASE_URL`. Jika port API diganti, sesuaikan `--dart-define=API_BASE_URL=...` untuk Flutter. Web memakai port 8080 agar origin sesuai konfigurasi lokal API.

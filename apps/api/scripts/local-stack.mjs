@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -40,8 +40,12 @@ const clearProviders = ['GEMINI_API_KEY','GEMINI_VISION_MODEL','OPENROUTER_API_K
 for (const key of clearProviders) process.env[key] = '';
 const ports = { api: +(process.env.LOCAL_API_PORT ?? 3000), ai: +(process.env.LOCAL_AI_PORT ?? 8000), auth: +(process.env.LOCAL_AUTH_PORT ?? 8077) };
 const url = (port) => `http://127.0.0.1:${port}`;
+const webPort = +(process.env.LOCAL_WEB_PORT ?? 8080);
+if (!Number.isInteger(webPort) || webPort < 1 || webPort > 65535) throw new Error('LOCAL_WEB_PORT tidak valid');
+const webOrigin = url(webPort);
 Object.assign(process.env, { SOBATNIRA_MODE: 'local', NODE_ENV: 'development', DATABASE_URL: scoped.href,
-  API_HOST: '127.0.0.1', API_PORT: String(ports.api), DOCUMENT_WORKER_ENABLED: 'true', CORS_ORIGINS: 'http://127.0.0.1:8080,http://localhost:8080',
+  API_HOST: '127.0.0.1', API_PORT: String(ports.api), DOCUMENT_WORKER_ENABLED: 'true',
+  LOG_LEVEL: process.env.LOCAL_LOG_LEVEL ?? 'info', CORS_ORIGINS: `${webOrigin},http://localhost:${webPort}`,
   AI_BASE_URL: url(ports.ai), AI_SERVICE_BASE_URL: url(ports.ai), OCR_MEDIA_BASE_URL: url(ports.api), DOCUMENT_MEDIA_DIR: resolve(scratch,'media'),
   SUPABASE_URL: url(ports.auth), SUPABASE_PUBLISHABLE_KEY: authKey, SOBATNIRA_API_URL: url(ports.api),
   AI_SERVICE_INTERNAL_TOKEN: randomBytes(32).toString('hex'), WHATSAPP_ADAPTER_INTERNAL_TOKEN: randomBytes(32).toString('hex') });
@@ -104,7 +108,7 @@ async function boot() {
   await db.query(`INSERT INTO review_memberships (user_id,factory_id,role) VALUES ($1,$2,'ADMIN'),($3,$4,'ADMIN') ON CONFLICT DO NOTHING`,
     [admin, factory, outsider, outsideFactory]);
   authServer = createServer(async (request, response) => {
-    response.setHeader('Access-Control-Allow-Origin', 'http://127.0.0.1:8080');
+    response.setHeader('Access-Control-Allow-Origin', webOrigin);
     response.setHeader('Access-Control-Allow-Headers', 'apikey,content-type');
     response.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
     response.setHeader('Content-Type','application/json');
@@ -139,7 +143,7 @@ async function boot() {
   const readiness = await fetch(`${url(ports.ai)}/internal/v1/ocr/ready`, { signal: AbortSignal.timeout(120_000),
     headers: { 'X-Internal-Service-Token': process.env.AI_SERVICE_INTERNAL_TOKEN } });
   if (!readiness.ok) throw new Error('PaddleOCR belum siap');
-  plugin.register({ config: {}, pluginConfig: { accountId: 'local', mediaDir: staging }, logger: { warn: () => {} },
+  plugin.register({ config: {}, pluginConfig: { accountId: 'local', mediaDir: staging }, logger: { warn: () => {}, info: console.log },
     on(name, callback) { if (name === 'reply_dispatch') handler = callback; }, registerService(value) { service = value; },
     runtime: { channel: { outbound: { async loadAdapter(channel) {
       assert.equal(channel,'whatsapp');
@@ -195,7 +199,7 @@ async function smoke() {
   const ready = (target) => waitFor(async () => {
     const status = await client.status(phone(101), target.document, target.revision);
     return ['EXTRACTED','NEEDS_CLARIFICATION','MANUAL_REVIEW_REQUIRED','FAILED_FINAL'].includes(status.processing_status) && status;
-  }, 'OCR belum menyelesaikan nota', 180_000);
+  }, 'OCR belum menyelesaikan nota', 750_000);
   const truck = await ready(first);
   assert.equal(truck.extraction.header.net_weight_kg.normalized_value,1250);
   assert.match(await receive(body(randomUUID(),'STATUS')), /Nota Kedatangan Truk/);
@@ -246,7 +250,7 @@ async function smoke() {
   const approved = async (tasks, timeout) => waitFor(async () =>
     (await db.query("SELECT count(*)::int AS count FROM admin_review_tasks WHERE id=ANY($1::uuid[]) AND status='VALIDATED'",
       [tasks])).rows[0].count === tasks.length, 'Smoke menunggu validasi dari Flutter', timeout);
-  await approved([truckTask, manualTask], 300_000);
+  await approved([truckTask, manualTask], 600_000);
   const { rows: intake } = await db.query(`SELECT i.lot_id,i.ocr_revision_id,s.quantity_delta_kg::text AS weight
     FROM sobatnira.intake_records i JOIN sobatnira.sugarcane_stock_movements s ON s.intake_record_id=i.id
     WHERE i.ocr_document_id=ANY($1::uuid[]) ORDER BY i.ocr_document_id`, [[first.document, manual.document]]);
@@ -254,7 +258,7 @@ async function smoke() {
   assert.deepEqual(intake.find((row) => row.ocr_revision_id === first.revision), { lot_id: lotA.id, ocr_revision_id: first.revision, weight: '1250' });
   assert.equal(intake.find((row) => row.lot_id === lotB.id)?.weight, '1250');
   console.log('Kedua penerimaan sah dan masing-masing mencatat 1250 kg tebu.');
-  await approved([productionTask], 300_000);
+  await approved([productionTask], 600_000);
   const { rows: milling } = await db.query(`SELECT m.ocr_cane_label AS label,m.lot_id,m.ocr_revision_id,
       s.quantity_delta_kg::text AS cane,j.quantity_delta_liters::text AS juice
     FROM sobatnira.milling_records m
@@ -286,14 +290,52 @@ async function smoke() {
   const summary = (await summaries.json()).items.find((item) => item.id === lotA.id);
   assert.equal(summary.netWeightGrams, '1250000');
   assert.equal(summary.juiceProducedLiters, '90');
-  console.log('Smoke Flutter + PostgreSQL lulus. Kedua kloter mendebit 1250 kg dan mengkredit 90 L serta 85 L nira.');
+  const factoryRoot = `${url(ports.api)}/tenants/${tenant}/factories/${factory}`;
+  const scopedRequest = async (path, method = 'GET', body, token = userTokens['admin@example.invalid']) => {
+    const response = await fetch(factoryRoot + path, { method, headers: { Authorization: `Bearer ${token}`,
+      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(5_000) });
+    return { status: response.status, data: await response.json() };
+  };
+  const code = `SMOKE-${lotA.id.slice(0, 8)}`;
+  console.log(`Nota sah. Pada detail ${lotA.code}, buat batch ${code}, wajan 1, masak setelah penggilingan, 40000 mL, hasil fisik 26 kg, grade A 25 kg, Rp20000/kg.`);
+  console.log('Isi biaya Rp100000, Rp20000, Rp5000, Rp0. Reservasi nira lalu sahkan batch.');
+  const batch = await waitFor(async () => (await db.query(`SELECT id, quantity_ml::text AS volume
+      FROM sobatnira.production_batches WHERE lot_id=$1 AND code=$2 AND status='approved'`, [lotA.id, code])).rows[0],
+    'Smoke menunggu pengesahan batch dari Flutter', 600_000);
+  assert.equal(batch.volume, '40000');
+  const reservation = (await db.query(`SELECT request_id, origin_lot_id, quantity_ml::text AS volume
+      FROM sobatnira.juice_reservations WHERE batch_id=$1 AND state='consumed'`, [batch.id])).rows;
+  assert.deepEqual(reservation, [{ request_id: batch.id, origin_lot_id: lotA.id, volume: '40000' }]);
+  const approvePath = `/production/batches/${batch.id}/approve`;
+  const snapshot = await scopedRequest(approvePath, 'POST');
+  assert.equal(snapshot.status, 200);
+  assert.equal(snapshot.data.output_snapshot.productionMarginRupiah, '375000');
+  assert.equal((await scopedRequest(approvePath, 'POST')).data.id, snapshot.data.id);
+  assert.equal((await scopedRequest(approvePath, 'POST', undefined, userTokens['other@example.invalid'])).status, 403);
+  assert.equal((await scopedRequest(`/lots/${lotA.id}/juice/availability`)).data.onHandMl, '50000');
+  const recap = await scopedRequest('/production/recap');
+  const profit = await scopedRequest('/production/profit-report');
+  assert.equal(recap.status, 200);
+  const lotReport = recap.data.items.find((item) => item.lotId === lotA.id);
+  assert.equal(lotReport.snapshotId, snapshot.data.id);
+  assert.equal(lotReport.batches[0].id, batch.id);
+  assert.equal(lotReport.calculation.finalSugarKg, '25');
+  assert.equal(profit.data.items.find((item) => item.lotId === lotA.id).snapshotId, snapshot.data.id);
+  console.log('Smoke Flutter dan PostgreSQL lulus. Batch, stok, pengiriman ulang, dan snapshot laporan cocok.');
 }
 
 async function stop() {
   if (stopping) return;
   stopping = true;
   await service?.stop();
-  for (const process of children) if (process.exitCode === null) process.kill();
+  await Promise.all(children.filter((p) => p.pid && p.exitCode === null).map((p) => {
+    if (process.platform === 'win32') {
+      return new Promise((resolve) => execFile('taskkill.exe', ['/pid', String(p.pid), '/t', '/f'],
+        { windowsHide: true }, resolve));
+    }
+    p.kill();
+  }));
   authServer?.closeAllConnections();
   await new Promise((resolve) => authServer ? authServer.close(resolve) : resolve());
   await db.onModuleDestroy();

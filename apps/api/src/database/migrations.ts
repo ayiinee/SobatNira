@@ -7,7 +7,7 @@ import type { DatabaseSession } from './database.service';
 export const MIGRATIONS_DIRECTORY = resolve(__dirname, '../../migrations');
 
 function migrationSources() {
-  return readdirSync(MIGRATIONS_DIRECTORY).filter((name) => /^\d+_[a-z_]+\.sql$/.test(name)).sort().map((name) => {
+  return readdirSync(MIGRATIONS_DIRECTORY).filter((name) => /^\d+_[a-z0-9_]+\.sql$/.test(name)).sort().map((name) => {
     const sql = readFileSync(resolve(MIGRATIONS_DIRECTORY, name), 'utf8').replace(/\r\n/g, '\n');
     return { name, sql, checksum: createHash('sha256').update(sql).digest('hex') };
   });

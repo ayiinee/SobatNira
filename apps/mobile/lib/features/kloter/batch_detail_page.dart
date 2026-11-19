@@ -10,10 +10,21 @@ class BatchDetailPage extends StatefulWidget {
     required this.demo,
     required this.onNavigate,
     super.key,
-  });
+  }) : officialTitle = null,
+       officialContent = null;
 
-  final DemoBatch batch;
-  final DemoProduction demo;
+  const BatchDetailPage.official({
+    required this.officialTitle,
+    required this.officialContent,
+    required this.onNavigate,
+    super.key,
+  }) : batch = null,
+       demo = null;
+
+  final DemoBatch? batch;
+  final DemoProduction? demo;
+  final String? officialTitle;
+  final List<Widget> Function(int tab)? officialContent;
   final ValueChanged<NiraTab> onNavigate;
 
   @override
@@ -22,74 +33,114 @@ class BatchDetailPage extends StatefulWidget {
 
 class _BatchDetailPageState extends State<BatchDetailPage> {
   int _tab = 0;
-  DemoBatch get _batch => widget.batch;
+  DemoBatch get _batch => widget.batch!;
+  DemoProduction get _demo => widget.demo!;
 
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: widget.demo,
-    builder: (context, _) {
-      final reviewed = _batch.review.verified;
-      return NiraScaffold(
-        tab: NiraTab.kloter,
-        onNavigate: widget.onNavigate,
-        bottomAction: BatchReviewActions(
-          label: reviewed ? 'Batch tervalidasi' : 'Validasi',
-          verified: reviewed,
-          onVerify: () => verifyDemoReview(context, widget.demo, _batch.review),
-          onReopen: () => widget.demo.reopenBatch(_batch),
-        ),
-        body: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const DetailTitle('Detail batch'),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                niraInset,
-                NiraSpace.xs,
-                niraInset,
-                0,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Batch ${_batch.number}',
-                      style: niraText(NiraType.title, weight: FontWeight.w700),
-                    ),
-                  ),
-                  const SizedBox(width: NiraSpace.sm),
-                  _ReviewBadge(reviewed: reviewed),
-                ],
-              ),
-            ),
-            NiraTabs(
-              labels: const ['Ringkasan', 'Masak', 'Grade'],
-              selected: _tab,
-              onSelected: (index) => setState(() => _tab = index),
-              height: 44,
-              inset: 12,
-            ),
-            Expanded(
-              child: ListView(
-                key: ValueKey(_tab),
-                padding: const EdgeInsets.fromLTRB(
-                  niraInset,
-                  NiraSpace.sm,
-                  niraInset,
-                  NiraSpace.xs,
+  Widget build(BuildContext context) {
+    final official = widget.officialContent;
+    return official == null
+        ? ListenableBuilder(
+            listenable: _demo,
+            builder: (context, _) {
+              final reviewed = _batch.review.verified;
+              return NiraScaffold(
+                tab: NiraTab.kloter,
+                onNavigate: widget.onNavigate,
+                bottomAction: BatchReviewActions(
+                  label: reviewed ? 'Batch tervalidasi' : 'Validasi',
+                  verified: reviewed,
+                  onVerify: () =>
+                      verifyDemoReview(context, _demo, _batch.review),
+                  onReopen: () => _demo.reopenBatch(_batch),
                 ),
-                children: switch (_tab) {
-                  0 => _summary(),
-                  1 => _cooking(),
-                  _ => _grade(),
-                },
-              ),
+                body: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const DetailTitle('Detail batch'),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        niraInset,
+                        NiraSpace.xs,
+                        niraInset,
+                        0,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Batch ${_batch.number}',
+                              style: niraText(
+                                NiraType.title,
+                                weight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: NiraSpace.sm),
+                          _ReviewBadge(reviewed: reviewed),
+                        ],
+                      ),
+                    ),
+                    NiraTabs(
+                      labels: const ['Ringkasan', 'Masak', 'Grade'],
+                      selected: _tab,
+                      onSelected: (index) => setState(() => _tab = index),
+                      height: 44,
+                      inset: 12,
+                    ),
+                    Expanded(
+                      child: ListView(
+                        key: ValueKey(_tab),
+                        padding: const EdgeInsets.fromLTRB(
+                          niraInset,
+                          NiraSpace.sm,
+                          niraInset,
+                          NiraSpace.xs,
+                        ),
+                        children: switch (_tab) {
+                          0 => _summary(),
+                          1 => _cooking(),
+                          _ => _grade(),
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          )
+        : NiraScaffold(
+            tab: NiraTab.kloter,
+            onNavigate: widget.onNavigate,
+            body: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const DetailTitle('Detail batch'),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: niraInset),
+                  child: Text(
+                    widget.officialTitle!,
+                    style: niraText(NiraType.title, weight: FontWeight.w700),
+                  ),
+                ),
+                NiraTabs(
+                  labels: const ['Ringkasan', 'Masak', 'Grade'],
+                  selected: _tab,
+                  onSelected: (index) => setState(() => _tab = index),
+                  height: 44,
+                  inset: 12,
+                ),
+                Expanded(
+                  child: ListView(
+                    key: ValueKey(_tab),
+                    padding: const EdgeInsets.all(niraInset),
+                    children: official(_tab),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      );
-    },
-  );
+          );
+  }
 
   List<Widget> _summary() => [
     const DocumentPreview(batch: true),
@@ -186,7 +237,7 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
       initial: field.value,
       unit: field.unit,
     );
-    if (mounted && value != null) widget.demo.editBatch(_batch, field, value);
+    if (mounted && value != null) _demo.editBatch(_batch, field, value);
   }
 
   Future<void> _editGrade(String grade) async {
@@ -197,7 +248,7 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
       initial: _batch.grade == grade ? _batch.gradeWeight : '',
       unit: 'Kg',
     );
-    if (mounted && value != null) widget.demo.setGrade(_batch, grade, value);
+    if (mounted && value != null) _demo.setGrade(_batch, grade, value);
   }
 }
 

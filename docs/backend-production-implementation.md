@@ -20,21 +20,24 @@ Implementasi 19 November 2026. Ini mencatat perubahan yang benar-benar tersedia;
 4. `production_calculation_snapshots`: input/output perhitungan kumulatif saat batch disahkan, versi formula, pelaku dan waktu.
 5. `production_batch_events`: audit pembuatan/pengesahan.
 
-Migration telah diuji dalam transaksi rollback, kemudian diterapkan ke database development tim. Migration 001–016 yang sudah terpasang tidak diubah.
+Migrasi 017 sudah tersedia dari pekerjaan sebelumnya. Cabang integrasi menambahkan `018_active_batch_reservations.sql` untuk mengindeks pencarian reservasi aktif per batch. Migrasi ini diuji di database lokal dan tidak mengubah baris produksi yang sudah ada.
 
 Koneksi PostgreSQL menggunakan CA Supabase pada `.tmp/certs/supabase-prod-ca-2021.crt`, dengan verifikasi TLS tetap aktif. `.env` lokal diarahkan ke CA ini; URL Upstash diperbaiki dari redis ke rediss. Kedua file tetap diabaikan Git. Deployment lain perlu menyediakan CA dan environment sendiri.
 
 ## Endpoint
 
-Prefix: `/tenants/:tenantId/factories/:factoryId/production`. Semua endpoint memerlukan Supabase Bearer token dan role admin/owner dalam scope aktif.
+Prefix: `/tenants/:tenantId/factories/:factoryId/production`. Semua endpoint memerlukan token Bearer Supabase dan membership pabrik. Admin dan owner boleh membaca. Penyimpanan dan pengesahan memerlukan admin.
 
 | Method/path | Fungsi |
 | --- | --- |
-| GET `/batches?limit=20&offset=0` | Daftar batch dalam scope |
+| GET `/batches?lotId=...&limit=20&offset=0` | Daftar batch dalam scope dengan filter kloter opsional |
+| GET `/batches/:id` | Status, grade, status biaya, dan volume yang masih perlu direservasi |
 | POST `/batches` | Buat batch dan hasil grade; UUID yang sama dengan payload sama adalah replay |
 | POST `/lots/:id/costs` | Simpan biaya sebelum pengesahan pertama |
 | POST `/batches/:id/approve` | Sahkan batch, konsumsi reservasi dan simpan snapshot secara atomik |
+| POST `/batches/:id/cancel` | Batalkan draf dan lepaskan reservasinya dalam satu transaksi |
 | GET `/profit-report?from=...&before=...&synthetic=false` | Laporan snapshot terbaru per kloter, total rupiah string eksak |
+| GET `/recap?from=...&before=...&synthetic=false` | Snapshot yang sama beserta batch sah, grade, dan total gula |
 
 Contoh body batch:
 
@@ -56,9 +59,11 @@ Biaya menerima empat string rupiah integer: `caneCostRupiah`, `operationalCostRu
 
 Urutan: receipt dan milling sah → buat batch → simpan biaya kloter → reservasi nira menggunakan UUID batch melalui endpoint juice yang sudah ada → approve batch. Approval mengunci kloter dan batch, memeriksa asal/kategori/volume reservasi, lalu mengonsumsi reservasi dan membuat snapshot dalam transaksi yang sama. Retry approval mengembalikan snapshot yang sama.
 
-Periode laporan mengikuti **waktu penerimaan kloter**, interval `from` inklusif dan `before` eksklusif. Hasilnya adalah snapshot terbaru dari batch yang sudah disahkan pada kloter terpilih, bukan laporan arus transaksi menurut waktu pengesahan. Batch draft tidak dihitung. Kloter dengan sebagian batch sah dapat memiliki margin sementara kumulatif dengan seluruh biaya kloter; jangan menyebutnya laba penjualan atau laba bersih final.
+Periode laporan mengikuti **waktu penerimaan kloter**, interval `from` inklusif dan `before` eksklusif. Laporan memakai snapshot terbaru dari batch sah pada setiap kloter dalam periode. Kloter terbuka memakai label margin sementara karena perhitungan kumulatif memasukkan seluruh biaya kloter.
 
-Jika `BATCH_API_BASE_URL` kosong, penutupan memakai pemeriksaan batch lokal. Draf atau reservasi/konsumsi yang belum terhubung batch lokal sah menghalangi penutupan. Konfigurasi upstream eksplisit tetap memakai kontrak B lama. Pemeriksaan saldo/reservasi yang sudah ada tetap berlaku.
+### Penutupan kloter
+
+Penutupan kloter operasional memeriksa batch dan stok di dalam transaksi PostgreSQL yang sama. Draf atau reservasi/konsumsi yang belum terhubung batch lokal sah menghalangi penutupan. Kontrak upstream masih tersedia untuk fixture sintetis di lingkungan development dan test.
 
 ## Seed development
 
@@ -72,7 +77,7 @@ Fixture ini menggunakan `synthetic=true`. Ia tidak mengirim WhatsApp atau memang
 
 ## Flutter
 
-Pada build terhubung, login dan pilih pabrik, lalu buka **Laporan laba**. Aktifkan **Tampilkan data contoh** untuk membaca seed sintetis. Mode riil tetap default dan tidak dicampur dengan seed.
+Pada build terhubung, login dan pilih pabrik. Sahkan nota di **Pekerjaan** dan buka **Detail Kloter** untuk melihat referensi dokumen serta menambah batch. **Detail Batch** memakai tab Ringkasan, Masak, dan Grade. Admin dapat mencatat biaya dan melanjutkan reservasi, pengesahan atau pembatalan draf. Dari Beranda atau Laporan, buka **Laba** atau **Rekap**. Aktifkan **Tampilkan data contoh** untuk membaca seed sintetis.
 
 Layar memakai komponen laporan dengan pemilih periode, kartu total hijau, rincian pemasok/kloter/tanggal/margin, pagination 5 item, Cetak laporan dan Simpan PDF. Total menggunakan string eksak dari backend. Identitas kloter UUID dipakai agar kode tampilan sama tidak menghilangkan baris. Tanggal API dipertahankan, termasuk bulan di luar Oktober. Cetak/PDF memuat seluruh data snapshot yang dimuat, bukan hanya halaman aktif.
 
@@ -80,13 +85,13 @@ Mode Flutter tanpa konfigurasi Supabase tetap membuka demo lokal lama. Seed data
 
 ## Batasan dan pekerjaan yang belum selesai
 
-Implementasi ini belum menyelesaikan seluruh backlog audit. Masih diperlukan master wajan/shift/BTP, katalog harga dengan rentang berlaku, form Flutter pengelolaan batch/biaya/grade, edit/cancel/reversal batch sah, alokasi campuran, rekap produksi terhubung lengkap, penggantian semua demo/hardcode lama, penyatuan skema dan runner OCR/checksum, otomasi CI seluruh suite DB, retensi/orphan media serta latihan backup/restore. Status cancelled tersedia pada skema namun belum diekspos sebagai workflow API.
+Batch baru memakai satu asal kloter dan satu grade. Alokasi campuran, koreksi batch yang sudah sah, serta katalog harga historis membutuhkan keputusan lanjutan. Master wajan/shift/BTP, retensi media dan latihan backup/restore tetap tercatat di backlog.
 
 Hasil fisik dan berat grade disimpan terpisah; toleransi/kesamaan keduanya belum ditetapkan. Harga draf berasal dari input eksplisit berizin, bukan lookup katalog historis. Kehadiran snapshot tidak berarti katalog harga historis sudah selesai.
 
 Tidak ada deployment API/aplikasi atau build APK baru pada perubahan ini. Jalankan ulang backend dari source terbaru untuk memakai endpoint tambahan.
 
-## Verifikasi terakhir
+## Verifikasi implementasi awal
 
 - API: 61 lulus, 2 tes database standar dilewati. Build TypeScript lulus.
 - `node --test test/integration/batches-database.test.cjs`: lulus pada fixture transaksi rollback PostgreSQL development; memeriksa replay, biaya beku, konsumsi sekali, filter, isolasi scope, serta pemeriksaan closure lokal. Perintah paket: `npm run test:batches-db`.

@@ -70,6 +70,40 @@ void main() {
           if (request.url.path.endsWith('/factories/B/lots')) {
             return nextFactory.future;
           }
+          if (request.url.path.endsWith('/factories/B/production/recap')) {
+            expect(request.headers['authorization'], 'Bearer local-token');
+            return _json({
+              'totalSugarKg': '25',
+              'totalMarginRupiah': '375000',
+              'items': [
+                {
+                  'lotId': 'B',
+                  'code': 'OCR-B',
+                  'supplier': 'Pemasok B',
+                  'receivedAt': '2026-11-10T04:00:00Z',
+                  'closed': false,
+                  'calculation': {
+                    'finalSugarKg': '25',
+                    'rendemenPercent': '2',
+                    'caneNetKg': '1250',
+                    'productionMarginRupiah': '375000',
+                  },
+                  'batches': [
+                    {
+                      'id': 'batch-b',
+                      'code': 'BATCH-UJI',
+                      'wokNumber': 1,
+                      'volumeMl': '40000',
+                      'physicalWeightKg': '26',
+                      'grades': [
+                        {'code': 'A', 'weightKg': '25'},
+                      ],
+                    },
+                  ],
+                },
+              ],
+            });
+          }
           if (request.url.path.endsWith('/review-notifications') ||
               request.url.path.endsWith('/review-tasks')) {
             expect(request.url.queryParameters['factory_id'], 'B');
@@ -113,6 +147,20 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('OCR-B'), findsOneWidget);
+      await tester.tap(find.bySemanticsLabel('Laporan'));
+      await tester.pumpAndSettle();
+      expect(find.text('25 kg'), findsWidgets);
+      expect(
+        find.text('Margin sementara untuk kloter yang masih terbuka.'),
+        findsOneWidget,
+      );
+      final recap = find.text('Buka rekap produksi');
+      await tester.ensureVisible(recap);
+      await tester.tap(recap);
+      await tester.pumpAndSettle();
+      expect(find.text('Simpan PDF'), findsOneWidget);
+      await tester.tap(find.text('Beranda'));
+      await tester.pumpAndSettle();
       final pekerjaan = find.text('Pekerjaan');
       await tester.ensureVisible(pekerjaan);
       await tester.tap(pekerjaan);
