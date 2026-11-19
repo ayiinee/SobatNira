@@ -1,7 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../laporan/connected_reports.dart' show reportNumber;
+import '../pekerjaan/review_api.dart';
 import 'demo_production.dart';
+import 'juice_volume.dart';
 import 'kloter_detail_widgets.dart';
 
 class KloterProcessPage extends StatefulWidget {
@@ -10,6 +15,11 @@ class KloterProcessPage extends StatefulWidget {
     required this.kloter,
     required this.onNavigate,
     this.onOpenPekerjaan,
+    this.approvedPhoto,
+    this.loadStock,
+    this.onEdit,
+    this.onTransfer,
+    this.onClosure,
     super.key,
   });
 
@@ -17,6 +27,11 @@ class KloterProcessPage extends StatefulWidget {
   final DemoKloter kloter;
   final ValueChanged<NiraTab> onNavigate;
   final VoidCallback? onOpenPekerjaan;
+  final Future<Uint8List?> Function(String)? approvedPhoto;
+  final Future<Json> Function()? loadStock;
+  final Future<bool> Function()? onEdit;
+  final Future<void> Function()? onTransfer;
+  final Future<void> Function()? onClosure;
 
   @override
   State<KloterProcessPage> createState() => _KloterProcessPageState();
@@ -24,6 +39,60 @@ class KloterProcessPage extends StatefulWidget {
 
 class _KloterProcessPageState extends State<KloterProcessPage> {
   int _selected = 0;
+  final _photos = <String, Future<Uint8List?>?>{};
+  late Future<Json>? _stock = widget.loadStock?.call();
+
+  Future<void> _edit() async {
+    if (await widget.onEdit!() && mounted) Navigator.of(context).pop();
+  }
+
+  Future<void> _runStockAction(Future<void> Function() action) async {
+    await action();
+    if (mounted) _reloadStock();
+  }
+
+  void _reloadStock() {
+    final stock = widget.loadStock?.call();
+    setState(() { _stock = stock; });
+  }
+
+  Widget _stockDetails() => FutureBuilder<Json>(
+    future: _stock,
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return const LinearProgressIndicator();
+      }
+      final stock = snapshot.data;
+      if (stock == null) {
+        return TextButton(
+          onPressed: _reloadStock,
+          child: const Text('Coba lagi memuat stok nira'),
+        );
+      }
+      String liters(String key) {
+        final value = stock[key];
+        return value == null
+            ? 'Belum tersedia'
+            : '${reportNumber(millilitersToLiters(value.toString()))} L';
+      }
+
+      return DetailMetrics([
+        ('Stok fisik nira', liters('onHandMl')),
+        ('Nira direservasi', liters('reservedMl')),
+        ('Nira tersedia', liters('availableMl')),
+      ]);
+    },
+  );
+
+  Future<Uint8List?>? _photo(bool intake) {
+    final revision = widget.kloter.noteRevision(intake: intake);
+    return revision == null
+        ? null
+        : _photos.putIfAbsent(
+            revision,
+            () => widget.approvedPhoto?.call(revision),
+          );
+  }
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -32,16 +101,13 @@ class _KloterProcessPageState extends State<KloterProcessPage> {
       final kloter = widget.kloter;
       final intake = _selected == 0;
       final connected = kloter.id != null;
-      final openReview = widget.onOpenPekerjaan;
       final review = intake ? kloter.intake : kloter.milling;
       final inset = niraPageInset(context);
       return NiraScaffold(
         tab: NiraTab.kloter,
         onNavigate: widget.onNavigate,
         bottomAction: connected
-            ? openReview == null
-                  ? null
-                  : NiraButton('Buka Pekerjaan', openReview)
+            ? NiraButton('Buka Pekerjaan', widget.onOpenPekerjaan)
             : NiraButton(
                 review.verified
                     ? (intake
@@ -81,9 +147,18 @@ class _KloterProcessPageState extends State<KloterProcessPage> {
             ),
           ],
           children: [
-            if (connected && openReview != null)
-              DocumentLink('Foto, bukti, dan revisi di Pekerjaan', openReview)
-            else if (!connected)
+            if (connected)
+              ApprovedDocumentPreview(
+                batch: false,
+                photo: _photo(intake),
+                fallback: widget.onOpenPekerjaan == null
+                    ? const Text('Foto belum tersedia')
+                    : DocumentLink(
+                        'Foto, bukti, dan revisi di Pekerjaan',
+                        widget.onOpenPekerjaan!,
+                      ),
+              )
+            else
               const DocumentPreview(batch: false),
             const SizedBox(height: NiraSpace.xl),
             const DetailSectionTitle('Ringkasan proses'),
@@ -116,6 +191,25 @@ class _KloterProcessPageState extends State<KloterProcessPage> {
                       }
                     },
             ),
+            if (intake && widget.onEdit != null) ...[
+              const SizedBox(height: NiraSpace.md),
+              DocumentLink('Edit kloter', _edit),
+            ],
+            if (!intake && widget.loadStock != null) ...[
+              const SizedBox(height: NiraSpace.md),
+              _stockDetails(),
+              if (widget.onTransfer case final transfer?) ...[
+                const SizedBox(height: NiraSpace.sm),
+                DocumentLink('Transfer nira', () => _runStockAction(transfer)),
+              ],
+              if (widget.onClosure case final closure?) ...[
+                const SizedBox(height: NiraSpace.sm),
+                DocumentLink(
+                  'Penutupan dan riwayat',
+                  () => _runStockAction(closure),
+                ),
+              ],
+            ],
           ],
         ),
       );

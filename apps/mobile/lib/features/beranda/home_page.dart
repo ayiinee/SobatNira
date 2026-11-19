@@ -4,6 +4,7 @@ import '../beranda/beranda_page.dart';
 import '../bantuan/bantuan_page.dart';
 import '../beranda/quick_action_icon.dart';
 import '../kloter/connected_production.dart';
+import '../kloter/official_batch_workflow.dart';
 import '../kloter/juice_transfer_page.dart';
 import '../kloter/lot_closure_page.dart';
 import '../kloter/production_catalog_page.dart';
@@ -12,13 +13,10 @@ import '../pekerjaan/pekerjaan_page.dart';
 import '../kloter/demo_production.dart';
 import '../kloter/demo_lot_fixture.dart';
 import '../kloter/kloter_detail_page.dart';
-import '../kloter/kloter_detail_widgets.dart';
 import '../kloter/kloter_list_page.dart';
 import '../laporan/demo_analytics.dart';
-import '../laporan/connected_reports.dart';
-import '../laporan/connected_batch_detail.dart';
 import '../laporan/laporan_page.dart';
-import '../laporan/connected_report_view.dart';
+import '../laporan/connected_report_controls.dart';
 import '../laporan/report_detail_page.dart';
 import '../laporan/report_export_page.dart';
 import '../laporan/printable_report.dart';
@@ -27,7 +25,10 @@ import '../pengaturan/pengaturan_page.dart';
 import '../pengaturan/settings_demo.dart';
 import '../pengaturan/harga_biaya_page.dart';
 import '../../sobatnira_ui.dart';
+
 import '../../widgets/page_frame.dart';
+
+const _localMode = String.fromEnvironment('SOBATNIRA_MODE') == 'local';
 
 class NiraHome extends StatefulWidget {
   const NiraHome({
@@ -50,10 +51,10 @@ class NiraHome extends StatefulWidget {
   final ValueChanged<bool>? onSyntheticChanged;
 
   @override
-  State<NiraHome> createState() => _HomeState();
+  State<NiraHome> createState() => _NiraHomeState();
 }
 
-class _HomeState extends State<NiraHome> {
+class _NiraHomeState extends State<NiraHome> {
   NavigatorState get _navigator => Navigator.of(context);
   late final _demo = widget.api == null
       ? DemoProduction()
@@ -79,6 +80,8 @@ class _HomeState extends State<NiraHome> {
   }
 
   List<DemoKloter> get _lots => _live?.lots ?? _demo.kloter;
+  bool get _allowSessionSettings =>
+      _live == null || (_localMode && widget.scope?.role == 'admin');
 
   String get _role => widget.scope?.role == 'owner' ? 'Pemilik' : 'Admin';
   String _factoryLabel(FactoryScope factory) {
@@ -115,6 +118,7 @@ class _HomeState extends State<NiraHome> {
           kloter: _lots,
           onOpenKloter: _openKloter,
           onQuickAction: _openQuickAction,
+          onOpenPekerjaan: _live == null ? null : _openPekerjaan,
           factoryId: widget.scope?.factoryId,
           factories: {
             for (final factory in widget.factories)
@@ -135,34 +139,36 @@ class _HomeState extends State<NiraHome> {
           reportStatus: _live == null
               ? null
               : ConnectedReportStatus(reports: _live.reports),
-          statusMessage: _loadStatus(),
+          statusMessage:
+              _loadStatus() ??
+              (_live != null && _lots.isEmpty
+                  ? const Text('Belum ada kloter di pabrik ini.')
+                  : null),
         ),
         NiraTab.kloter => KloterListPage(
           kloter: _lots,
           onOpenKloter: _openKloter,
           synthetic: _live?.reports.synthetic ?? false,
-          onCreate: _live == null || _live.reports.synthetic
-              ? null
-              : () => _editLot(),
+          onCreate:
+              widget.scope?.role == 'admin' &&
+                  !(_live?.reports.synthetic ?? false)
+              ? () => _editLot()
+              : null,
           statusMessage: _loadStatus(),
         ),
-        NiraTab.laporan =>
-          _live != null
-              ? ConnectedReportView(
-                  reports: _live.reports,
-                  onNavigate: _navigate,
-                )
-              : LaporanPage(
-                  analytics: _analytics,
-                  onOpenDetail: _openReportDetail,
-                ),
+        NiraTab.laporan => LaporanPage(
+          analytics: _analytics,
+          reports: _live?.reports,
+          onOpenDetail: _openReportDetail,
+        ),
         NiraTab.pengaturan => PengaturanPage(
           settings: _settings,
           onNavigate: _navigate,
+          allowSessionSettings: _allowSessionSettings,
+          onOpenPekerjaan: _live == null ? null : _openPekerjaan,
           connectedProfile: _live == null
               ? null
               : '$_role · ${widget.scope!.factoryName}',
-          onOpenPekerjaan: _live == null ? null : _openPekerjaan,
           onConnectedEntry: _live == null
               ? null
               : {
@@ -217,9 +223,9 @@ class _HomeState extends State<NiraHome> {
     await _navigator.push<void>(
       MaterialPageRoute(
         builder: (_) => NiraPageScaffold(
-          title: const Text('Pekerjaan'),
-          onNavigate: _navigate,
+          title: Text(widget.scope!.factoryName),
           tab: NiraTab.pengaturan,
+          onNavigate: _navigate,
           body: SafeArea(
             child: PekerjaanPage(
               api: widget.api!,
@@ -268,13 +274,22 @@ class _HomeState extends State<NiraHome> {
   }
 
   void _openReportDetail(ReportDetailKind kind) {
+    final row = _analytics.selectedRow;
+    final reports = _live?.reports;
+    final report = reports?.data;
+    final lot = reports?.lots
+        .where((item) => item['lotId'] == row?.id)
+        .firstOrNull;
+    if (reports != null && report == null) return;
     _navigator.push(
       MaterialPageRoute<void>(
         builder: (_) => ReportDetailPage(
           kind: kind,
           onNavigate: _navigate,
-          row: _analytics.selectedRow,
+          row: row,
           analytics: _analytics,
+          report: report,
+          officialLot: lot,
         ),
       ),
     );
@@ -294,40 +309,22 @@ class _HomeState extends State<NiraHome> {
                   settings: _settings,
                   onNavigate: _navigate,
                   operationalFirst: true,
-                  unavailable: _live != null,
+                  unavailable: !_allowSessionSettings,
                 )
               : BantuanPage(onNavigate: _navigate),
         ),
       );
       return;
     }
-    if (_live != null) {
-      _navigator.push(
-        MaterialPageRoute<void>(
-          builder: (_) => ConnectedReportExport(
-            reports: _live.reports,
-            kind: kind,
-            onNavigate: _navigate,
-          ),
-        ),
-      );
-      return;
-    }
     _navigator.push(
       MaterialPageRoute<void>(
-        builder: (_) => ListenableBuilder(
-          listenable: _live == null
-              ? _demo
-              : Listenable.merge([_live, _live.reports]),
-          builder: (_, _) => ReportExportPage(
-            kind: kind,
-            analytics: _analytics,
-            production: _live == null ? _demo : null,
-            approvedLots: _live?.lots,
-            statusMessage: _loadStatus(),
-            factory: widget.scope?.factoryName ?? _settings.factory.name,
-            onNavigate: _navigate,
-          ),
+        builder: (_) => ReportExportPage(
+          kind: kind,
+          analytics: _analytics,
+          production: _live == null ? _demo : null,
+          reports: _live?.reports,
+          factory: widget.scope?.factoryName ?? _settings.factory.name,
+          onNavigate: _navigate,
         ),
       ),
     );
@@ -408,42 +405,18 @@ class _LotDetailState extends State<_LotDetail> {
   ReviewApi get _api => widget.live.api;
   FactoryScope get _scope => widget.live.scope;
   String get _id => widget.initial.id!;
-  bool get _synthetic => _lot.record?['synthetic'] == true;
   late DemoKloter _lot = widget.initial;
-  late Future<(Json, Json, Json, List<Json>?)> _request = _load();
+  late Future<Json> _request = _load();
 
-  Future<(Json, Json, Json, List<Json>?)> _load() async {
-    var synthetic = _synthetic;
-    var lot = await _api.lot(_scope, _id, synthetic: synthetic);
-    if (!synthetic && lot['intake'] == null && lot['milling'] == null) {
-      final example = await _api.lot(_scope, _id, synthetic: true);
-      if (example['intake'] != null || example['milling'] != null) {
-        synthetic = true;
-        lot = {...example, 'synthetic': true};
-      }
-    }
-    final results = await Future.wait([
-      _api.juice(_scope, _id, synthetic: synthetic),
-      _api.productionReport(_scope, synthetic: synthetic),
-    ]);
-    List<Json>? batches;
-    try {
-      batches = await _api.lotBatches(_scope, _id, synthetic);
-    } on ReviewApiError {
-      // The approved report remains usable if the batch list is unavailable.
-    }
-    return (lot, results[0], results[1], batches);
-  }
+  bool get _synthetic => widget.live.reports.synthetic;
 
-  void _reload() => setState(() => _request = _load());
+  Future<Json> _load() => _api.lot(_scope, _id, synthetic: _synthetic);
 
-  String _batchTitle(String code) {
-    if (!_synthetic) return code;
-    final prefix = '${_lot.code}-B';
-    final number = code.startsWith(prefix)
-        ? int.tryParse(code.substring(prefix.length))
-        : null;
-    return number == null ? code : 'Batch $number';
+  void _reload() {
+    final request = _load();
+    setState(() {
+      _request = request;
+    });
   }
 
   Future<void> _open(Widget page) async {
@@ -454,173 +427,109 @@ class _LotDetailState extends State<_LotDetail> {
   }
 
   @override
-  Widget build(BuildContext context) =>
-      FutureBuilder<(Json, Json, Json, List<Json>?)>(
-        future: _request,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.done &&
-              snapshot.hasData) {
-            _lot = connectedLot(snapshot.requireData.$1);
-          }
-          final stock = snapshot.data?.$2;
-          return KloterDetailPage(
-            kloter: _lot,
-            demo: widget.demo,
-            onNavigate: widget.onNavigate,
-            onOpenPekerjaan: _synthetic ? null : widget.onOpenPekerjaan,
-            onEdit: _synthetic || !snapshot.hasData || snapshot.hasError
-                ? null
-                : () async {
-                    if (await widget.onEdit(_lot.record!) && mounted) _reload();
-                  },
-            onTransfer: _synthetic || stock == null || snapshot.hasError
-                ? null
-                : () => _open(
-                    JuiceTransferPage(
-                      api: _api,
-                      scope: _scope,
-                      lotId: _id,
-                      onNavigate: widget.onNavigate,
-                    ),
-                  ),
-            onClosure: _synthetic || !snapshot.hasData || snapshot.hasError
-                ? null
-                : () => _open(
-                    LotClosurePage(
-                      api: _api,
-                      scope: _scope,
-                      lotId: _id,
-                      onNavigate: widget.onNavigate,
-                    ),
-                  ),
-            production: snapshot.hasData
-                ? _production(snapshot.requireData.$3, snapshot.requireData.$4)
-                : Text(
-                    snapshot.hasError
-                        ? 'Batch gagal dimuat.'
-                        : 'Memuat batch sah…',
-                  ),
-            stock: switch (snapshot) {
-              AsyncSnapshot(connectionState: ConnectionState.waiting) =>
-                const LinearProgressIndicator(),
-              AsyncSnapshot(:final error?) => _LoadFailed(error, _reload),
-              _ when _synthetic => null,
-              _ => DetailMetrics([
-                (
-                  'Stok fisik nira',
-                  formatQuantity(_liters(stock?['onHandMl']), 'L'),
-                ),
-                (
-                  'Nira direservasi',
-                  formatQuantity(_liters(stock?['reservedMl']), 'L'),
-                ),
-                (
-                  'Nira tersedia',
-                  formatQuantity(_liters(stock?['availableMl']), 'L'),
-                ),
-              ]),
-            },
-          );
+  Widget build(BuildContext context) => FutureBuilder<Json>(
+    future: _request,
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.done &&
+          snapshot.hasData) {
+        _lot = connectedLot(snapshot.requireData);
+      }
+      final canManage =
+          snapshot.hasData && _scope.role == 'admin' && !_synthetic;
+      return KloterDetailPage(
+        kloter: _lot,
+        demo: widget.demo,
+        onNavigate: widget.onNavigate,
+        onOpenPekerjaan: widget.onOpenPekerjaan,
+        approvedPhoto: (revision) => _api.approvedPhoto(_scope, revision),
+        onReturnFromProcess: () {
+          if (mounted) _reload();
         },
-      );
-
-  Widget _production(Json report, List<Json>? records) {
-    final lots = (report['items'] as List).cast<Json>().where(
-      (lot) => lot['lotId'] == _id,
-    );
-    final lot = lots.firstOrNull;
-    final approved = {
-      for (final row in (lot?['batches'] as List? ?? []).cast<Json>())
-        row['code']: row,
-    };
-    final batches = records == null || records.isEmpty
-        ? approved.values.toList()
-        : records;
-    bool needsReview(Json row) =>
-        row.containsKey('status') && row['status'] != 'approved';
-    final pending = batches.where(needsReview).length;
-    void open([Json? batch]) => Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => ConnectedReportDetail(
-          data: report,
-          lot: lot!,
-          batch: batch,
-          navigationTab: NiraTab.kloter,
+        onEdit: canManage ? () => widget.onEdit(_lot.record!) : null,
+        onTransfer: canManage
+            ? () => _open(
+                JuiceTransferPage(
+                  api: _api,
+                  scope: _scope,
+                  lotId: _id,
+                  onNavigate: widget.onNavigate,
+                ),
+              )
+            : null,
+        onClosure: snapshot.hasError || _synthetic
+            ? null
+            : () => _open(
+                LotClosurePage(
+                  api: _api,
+                  scope: _scope,
+                  lotId: _id,
+                  onNavigate: widget.onNavigate,
+                ),
+              ),
+        production: OfficialLotBatches(
+          api: _api,
+          scope: _scope,
+          lotId: _id,
+          synthetic: _synthetic,
+          kloterCode: _lot.code,
+          caneWeight: _lot.weight,
+          onOpenPekerjaan: widget.onOpenPekerjaan,
+          millingRevision: _lot.noteRevision(intake: false),
+          canCreate:
+              _scope.role == 'admin' &&
+              !_synthetic &&
+              _lot.milling.verified &&
+              _lot.record?['status'] != 'closed',
           onNavigate: widget.onNavigate,
+          onChanged: () {
+            _reload();
+            widget.live.reports.refresh();
+          },
+          reportLink: _production,
         ),
-      ),
-    );
-    void openBatch(Json batch) {
-      if (approved[batch['code']] case final official?) {
-        open(official);
+        loadStock: () => _api.juice(_scope, _id, synthetic: _synthetic),
+        statusMessage: snapshot.hasError
+            ? _LoadFailed(snapshot.error!, _reload)
+            : null,
+      );
+    },
+  );
+
+  Future<void> _production([String? batchId]) async {
+    final notice = ScaffoldMessenger.of(context);
+    try {
+      final report = await _api.productionReport(_scope, synthetic: _synthetic);
+      if (!mounted) return;
+      final lot = (report['items'] as List)
+          .cast<Json>()
+          .where((item) => item['lotId'] == _id)
+          .firstOrNull;
+      if (lot == null) {
+        notice.showSnackBar(
+          const SnackBar(content: Text('Belum ada penerimaan sah.')),
+        );
         return;
       }
-      Navigator.of(context).push<void>(
+      await Navigator.of(context).push<void>(
         MaterialPageRoute(
-          builder: (_) => ConnectedBatchDetail(
-            batch: {
-              'code': batch['code'],
-              'physicalWeightKg': batch['physical_weight_kg'],
-              'quantityMl': batch['quantity_ml'],
-              'wokNumber': batch['wok_number'],
-              'occurredAt': batch['occurred_at'],
-            },
-            lotCode: _lot.code,
-            source: _synthetic ? 'Data sintetis' : 'Data produksi',
-            reviewed: !needsReview(batch),
-            hasReport: false,
-            marginDetails: const [],
+          builder: (_) => ReportDetailPage(
+            kind: ReportDetailKind.margin,
+            report: report,
+            officialLot: lot,
+            batchId: batchId,
             onNavigate: widget.onNavigate,
-            navigationTab: NiraTab.kloter,
           ),
         ),
       );
+    } catch (_) {
+      if (mounted) {
+        notice.showSnackBar(
+          const SnackBar(
+            content: Text('Laporan belum dapat dimuat. Coba lagi.'),
+          ),
+        );
+      }
     }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (batches.isEmpty)
-          Text(
-            lot == null ? 'Belum ada penerimaan sah.' : 'Belum ada batch sah.',
-          ),
-        if (pending > 0)
-          Padding(
-            padding: const EdgeInsets.only(bottom: NiraSpace.sm),
-            child: Text(
-              '$pending Batch perlu ditinjau',
-              style: niraText(NiraType.caption, color: niraOchre),
-            ),
-          ),
-        if (records == null && approved.isNotEmpty)
-          const Text('Daftar batch lengkap gagal dimuat.'),
-        for (final batch in batches)
-          Padding(
-            padding: const EdgeInsets.only(bottom: NiraSpace.md),
-            child: KloterBatchTile(
-              title: _batchTitle(batch['code'] as String),
-              juice: formatQuantity(
-                _liters(batch['quantity_ml'] ?? batch['quantityMl']),
-                'L',
-              ),
-              physicalWeight:
-                  '${reportNumber(batch['physical_weight_kg'] ?? batch['physicalWeightKg'])} kg',
-              pending: needsReview(batch),
-              onTap: () => openBatch(batch),
-            ),
-          ),
-        if (lot != null)
-          TextButton(
-            onPressed: () => open(),
-            child: const Text('Produksi dan margin kloter'),
-          ),
-      ],
-    );
-  }
-
-  num? _liters(Object? milliliters) {
-    final value = num.tryParse(milliliters?.toString() ?? '');
-    return value == null ? null : value / 1000;
   }
 }
 

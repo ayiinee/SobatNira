@@ -1,9 +1,9 @@
 const labels = {
-  arrival_date: 'Tanggal datang', supplier_name: 'Pengirim', vehicle_number: 'Nomor kendaraan',
+  arrival_date: 'Tanggal datang', supplier_name: 'Pemasok', vehicle_number: 'Nomor kendaraan',
   brix: 'Brix', net_weight_kg: 'Berat bersih', cane_type: 'Jenis tebu',
   receiving_operator: 'Operator pada nota', production_date: 'Tanggal produksi',
   shift: 'Sif', chef: 'Petugas masak', cane_label: 'Label tebu', pan_number: 'Wajan',
-  isi_kg: 'Isi', gamping: 'Gamping', jam_turun: 'Jam turun', grade: 'Grade', hasil_kg: 'Hasil',
+  isi_kg: 'Isi', gamping: 'Gamping', jam_turun: 'Jam turun', grade: 'Grade', hasil_kg: 'Berat hasil',
 };
 const number = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 5 });
 const date = new Intl.DateTimeFormat('id-ID', { dateStyle: 'long', timeZone: 'UTC' });
@@ -18,7 +18,7 @@ export const operatorInstructions = [
 ].join('\n');
 
 function clean(value) {
-  return String(value).replace(/[\u0000-\u001f]/g, ' ').slice(0, 120);
+  return String(value).replace(/[\u0000-\u001f*_`~]/g, ' ').slice(0, 120);
 }
 
 function shown(key, value) {
@@ -28,42 +28,97 @@ function shown(key, value) {
 }
 
 function valueText(key, field) {
-  const value = field.normalized_value ?? field.raw_value;
+  if (field.status === 'NOT_YET_FILLED') return 'Belum dicatat';
+  if (['AMBIGUOUS','ILLEGIBLE'].includes(field.status)) return 'perlu dicek';
+  const value = field.normalized_value;
   if (value == null) return 'belum terbaca';
   return shown(key, value) + (field.unit === 'kg' && (typeof value === 'number' || !/\bkg\s*$/i.test(value)) ? ' kg' : '');
 }
 
 function line(key, field) {
-  if (!labels[key] || !field || ['NOT_PRESENT', 'NOT_YET_FILLED'].includes(field.status)) return null;
-  const needsCheck = ['AMBIGUOUS', 'ILLEGIBLE'].includes(field.status);
-  return `• ${labels[key]} — ${valueText(key, field)}${needsCheck ? ' (perlu dicek)' : ''}`;
+  if (!labels[key] || !field || ['NOT_PRESENT','BLANK'].includes(field.status)) return null;
+  return `• ${labels[key]} — ${valueText(key, field)}`;
 }
 
-export function summary(revision, page = 1) {
+export function reference(id) {
+  return typeof id === 'string' ? `#${id.slice(0, 8).toUpperCase()}` : '';
+}
+
+function fieldContext(note, path) {
+  const parts = path.split('.');
+  if (parts[0] !== 'cane_blocks') return '';
+  const block = note.cane_blocks?.[Number(parts[1])];
+  const row = block?.batches?.[Number(parts[3])];
+  const label = block?.cane_label;
+  const pan = row?.pan_number;
+  return [
+    label?.status === 'READ' && label.normalized_value ? `Blok ${clean(label.normalized_value)}` : `Blok ${Number(parts[1]) + 1}`,
+    row && (pan?.status === 'READ' && pan.normalized_value != null ? `Wajan ${clean(pan.normalized_value)}` : `Baris ${Number(parts[3]) + 1}`),
+  ].filter(Boolean).join(' · ') + ' · ';
+}
+
+export function answerExample(path) {
+  const key = path.split('.').at(-1);
+  if (key?.endsWith('_date')) return '2026-11-16';
+  if (key === 'jam_turun') return '09:15';
+  if (key === 'supplier_name') return 'Nama Pemasok';
+  if (key === 'cane_type') return 'BL';
+  if (key === 'cane_label') return 'Label pada nota';
+  if (key === 'vehicle_number') return 'Nomor kendaraan';
+  if (key === 'grade') return 'A';
+  if (key === 'pan_number') return '2';
+  if (key === 'net_weight_kg') return '1250';
+  if (['isi_kg','hasil_kg','gamping','brix'].includes(key)) return '25';
+  return 'nilai pada nota';
+}
+
+export function summary(revision, page = 1, { fromStatus = false, retryQueued = false } = {}) {
   if (!terminal.has(revision.processing_status)) return 'Foto sudah masuk dan sedang diproses. Saya akan kirim ringkasannya di chat ini.';
+  const note = revision.extraction;
+  const production = note?.document_type === 'PRODUCTION_NOTE';
+  const title = note ? `Nota ${production ? 'Produksi' : 'Kedatangan Truk'}` : 'Foto nota';
+  const heading = [`*${title}*`, reference(revision.document_id), `Revisi ${revision.version ?? 1}`].filter(Boolean).join(' · ');
+  const target = fromStatus ? 'ringkasan otomatis nota ini' : 'pesan ini';
+  if (revision.workflow_status === 'VALIDATED') return `${heading}\n*Disahkan admin.* Data sudah dibukukan.`;
+  if (revision.workflow_status === 'PENDING_VALIDATION' || (!revision.workflow_status && revision.operator_status === 'CONFIRMED')) {
+    return `${heading}\n*Menunggu pengesahan admin.*`;
+  }
   if (revision.issues?.some(({ code }) => code === 'DOCUMENT_REFERENCE_REQUIRED')) {
     return 'Apakah ini lanjutan nota produksi? Balas foto atau ringkasan nota sebelumnya dengan foto terbaru. Jika ini nota baru, kirim foto terpisah dengan caption BARU.';
   }
   const followUp = revision.follow_up?.comment ? `Catatan admin — ${clean(revision.follow_up.comment)}` : null;
-  const retake = revision.photo_retake_allowed
-    ? 'Jika ingin mengganti foto, balas pesan ini dengan foto baru dan caption FOTO ULANG.' : null;
-  if (!revision.extraction) {
+  const returned = revision.workflow_status === 'RETURNED_FOR_CORRECTION';
+  const retake = `Balas ${target} dengan foto baru dan caption *FOTO ULANG*.`;
+  if (!note) {
     const serviceFailed = revision.processing_status === 'FAILED_FINAL';
-    return [followUp, serviceFailed
-      ? 'Foto asli sudah tersimpan. Pembacaan otomatis sedang bermasalah dan foto masuk antrean pemeriksaan manual admin.'
-      : 'Foto sudah tersimpan. Kolom nota belum bisa saya baca dengan yakin. Admin bisa memeriksa foto asli.',
-    serviceFailed ? 'Untuk membaca ulang foto yang sama, balas ringkasan otomatis dengan COBA LAGI.' :
-      'Jika memotret ulang, usahakan kertas rata, semua judul kolom terlihat, dan pencahayaan merata.', retake].filter(Boolean).join('\n');
+    return [heading, returned ? '*Dikembalikan admin.*' : '*Perlu tinjauan manual.*', followUp,
+      serviceFailed ? 'Foto asli tersimpan. Pembacaan otomatis gagal.' : 'Foto asli tersimpan. Tata letak atau bagian nota belum terbaca.',
+      retryQueued ? 'Ringkasan dijadwalkan untuk dikirim ulang.' :
+        serviceFailed && !returned ? `Balas ${target} dengan *COBA LAGI* untuk membaca ulang foto asli.` :
+          revision.photo_retake_allowed ? `Foto ulang dengan semua judul dan tepi nota terlihat. ${retake}` :
+            'Hubungi admin jika perlu memperbarui foto.'].filter(Boolean).join('\n');
   }
-  const note = revision.extraction;
-  const production = note.document_type === 'PRODUCTION_NOTE';
-  const sections = [`*Draf Nota ${production ? 'Produksi' : 'Kedatangan Truk'}* · revisi ${revision.version ?? 1}`];
+  const sections = [heading, returned ? '*Dikembalikan admin.*' :
+    revision.can_confirm ? '*Siap dikonfirmasi.*' : '*Perlu diperiksa.*'];
   const header = Object.entries(note.header ?? {}).flatMap(([key, value]) => line(key, value) ?? []);
   const batches = (note.cane_blocks ?? []).flatMap((block, i) => (block.batches ?? []).map((batch, j) => ({ block, batch, i, j })));
   const pageSize = 6;
   const pages = Math.max(1, Math.ceil(batches.length / pageSize));
   if (!Number.isInteger(page) || page < 1 || page > pages) return `Pilih halaman 1–${pages} dengan STATUS <nomor halaman>.`;
-  if (page === 1) sections.push(...header);
+  if (page === 1) {
+    const changes = (revision.changed_fields ?? []).flatMap(path => {
+      const key = path.split('.').at(-1);
+      const field = path.split('.').reduce((value, part) => value?.[part], note);
+      if (!labels[key] || !field) return [];
+      return [`• ${fieldContext(note, path)}${labels[key]} — ${valueText(key, field)}`];
+    });
+    if (followUp) sections.push(followUp);
+    if (changes.length) {
+      sections.push('*Perubahan pada revisi ini*', ...changes.slice(0, 4));
+      if (changes.length > 4) sections.push(`Ada ${changes.length - 4} perubahan lain pada rincian nota.`);
+    }
+    sections.push(...header);
+  }
   if (production) {
     sections.push(`${note.cane_blocks?.length ?? 0} blok tebu · ${batches.length} baris masak · halaman ${page}/${pages}`);
     let lastBlock = -1;
@@ -77,23 +132,28 @@ export function summary(revision, page = 1) {
       const parts = Object.entries(values).flatMap(([key, field]) => line(key, field)?.slice(2) ?? []);
       sections.push(`• Baris ${j + 1}${parts.length ? `: ${parts.join(' · ')}` : ' — perlu dicek'}`);
     }
-    if (page < pages) sections.push(`Ketik STATUS ${page + 1} untuk halaman berikutnya.`);
   }
   const question = revision.pending_question;
-  if (followUp && page === 1) sections.push(followUp);
-  if (question && page === 1) {
-    const key = question.field_path?.split('.').at(-1);
-    sections.push(`*Perlu dicek — ${labels[key] ?? 'kolom nota'}*`);
+  if (retryQueued) sections.push('Ringkasan dijadwalkan untuk dikirim ulang.');
+  else if (question && page === 1) {
+    const path = question.field_path;
+    const key = path.split('.').at(-1);
+    sections.push(`*Perlu dicek — ${fieldContext(note, path)}${labels[key] ?? 'kolom nota'}*`);
+    if (question.issue_code === 'DUPLICATE_CANE_LABEL') sections.push('Label ini sama dengan blok lain. Periksa label yang tertulis pada foto.');
+    if (question.issue_code === 'ILLEGIBLE_FIELD') sections.push('Bagian ini kurang jelas pada foto. Periksa nilainya di nota asli.');
     if (question.candidates?.length) sections.push(`Kemungkinan bacaan — ${question.candidates.map(value => shown(key ?? '', value)).join(' / ')}`);
-    sections.push('Balas ringkasan otomatis dengan JAWAB diikuti nilainya. Contoh JAWAB 1250.');
-  }
-  if (revision.operator_status === 'PENDING' && page === pages) {
-    sections.push('Jika data sudah sesuai, balas ringkasan otomatis ini dengan KONFIRMASI.');
-  } else if (revision.operator_status === 'CONFIRMED') {
-    sections.push('Sudah dikonfirmasi dan masuk antrean admin.');
-  } else if (revision.operator_status !== 'PENDING') {
-    sections.push('Draf memerlukan pemeriksaan sebelum konfirmasi.');
-  }
-  if (retake && page === 1) sections.push(retake);
+    sections.push(`Balas ${target} dengan *JAWAB* diikuti nilai dari foto. Contoh JAWAB ${answerExample(path)}.`);
+  } else if (page < pages) {
+    sections.push(`Balas ringkasan otomatis nota ini dengan *STATUS ${page + 1}* untuk halaman berikutnya.`);
+  } else if (revision.can_confirm) {
+    sections.push(`Jika data sesuai foto, balas ${page > 1 ? 'ringkasan otomatis nota ini' : target} dengan *KONFIRMASI*.`);
+  } else if (question) {
+    sections.push('Balas pertanyaan pada ringkasan otomatis nota ini.');
+  } else if (revision.photo_retake_allowed) {
+    if (revision.issues?.some(({ code }) => code === 'ROW_MATCH_REQUIRED')) {
+      sections.push('Pastikan label tebu, nomor wajan, dan jam turun terlihat pada bagian yang berubah.');
+    }
+    sections.push(retake);
+  } else sections.push('Hubungi admin untuk memeriksa draf ini.');
   return sections.join('\n');
 }

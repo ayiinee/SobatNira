@@ -385,6 +385,7 @@ void main() {
                     'tenantName': 'Tenant',
                     'factoryId': 'factory',
                     'factoryName': 'Pabrik Uji',
+                    'role': 'admin',
                   },
                 ],
               }),

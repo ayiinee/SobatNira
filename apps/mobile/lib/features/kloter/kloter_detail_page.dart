@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
@@ -13,28 +15,30 @@ class KloterDetailPage extends StatelessWidget {
     required this.kloter,
     required this.demo,
     required this.onNavigate,
-    this.stock,
+    this.loadStock,
     this.production,
     this.onEdit,
     this.onTransfer,
     this.onClosure,
     this.onOpenPekerjaan,
+    this.onReturnFromProcess,
+    this.approvedPhoto,
+    this.statusMessage,
     super.key,
   });
 
   final DemoKloter kloter;
   final DemoProduction demo;
   final ValueChanged<NiraTab> onNavigate;
-  final Widget? stock;
+  final Future<Map<String, dynamic>> Function()? loadStock;
   final Widget? production;
-  final VoidCallback? onEdit;
-  final VoidCallback? onTransfer;
-  final VoidCallback? onClosure;
+  final Future<bool> Function()? onEdit;
+  final Future<void> Function()? onTransfer;
+  final Future<void> Function()? onClosure;
   final VoidCallback? onOpenPekerjaan;
-
-  Widget _batchSection(Widget child) => stock != null
-      ? SliverToBoxAdapter(child: child)
-      : SliverFillRemaining(hasScrollBody: false, child: child);
+  final VoidCallback? onReturnFromProcess;
+  final Future<Uint8List?> Function(String)? approvedPhoto;
+  final Widget? statusMessage;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -58,8 +62,18 @@ class KloterDetailPage extends StatelessWidget {
                 child: Column(
                   children: [
                     DetailMetrics([
-                      ('Tebu bersih', kloter.weight),
-                      ('Brix tebu', formatQuantity(kloter.brix, '°Bx')),
+                      (
+                        'Tebu bersih',
+                        kloter.record != null && kloter.netWeightKg == null
+                            ? '—'
+                            : kloter.weight,
+                      ),
+                      (
+                        'Brix tebu',
+                        kloter.brix == null
+                            ? '—'
+                            : formatQuantity(kloter.brix, '°Bx'),
+                      ),
                       if (kloter.record == null)
                         (
                           'Nira batch',
@@ -68,29 +82,39 @@ class KloterDetailPage extends StatelessWidget {
                       else
                         (
                           'Nira dihasilkan',
-                          formatQuantity(kloter.juiceLiters, 'L'),
+                          kloter.juiceLiters == null
+                              ? '—'
+                              : formatQuantity(kloter.juiceLiters, 'L'),
                         ),
                     ]),
+                    ?statusMessage,
                     const SizedBox(height: NiraSpace.lg),
-                    DocumentLink('Data tebu dan penggilingan', () {
-                      Navigator.of(context).push(
+                    DocumentLink('Data tebu dan penggilingan', () async {
+                      await Navigator.of(context).push(
                         MaterialPageRoute<void>(
                           builder: (_) => KloterProcessPage(
                             demo: demo,
                             kloter: kloter,
                             onNavigate: onNavigate,
                             onOpenPekerjaan: onOpenPekerjaan,
+                            approvedPhoto: approvedPhoto,
+                            loadStock: loadStock,
+                            onEdit: onEdit,
+                            onTransfer: onTransfer,
+                            onClosure: onClosure,
                           ),
                         ),
                       );
+                      onReturnFromProcess?.call();
                     }),
                   ],
                 ),
               ),
             ],
           ),
-          _batchSection(
-            DecoratedBox(
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: DecoratedBox(
               decoration: const BoxDecoration(
                 borderRadius: BorderRadius.vertical(top: Radius.circular(7)),
                 border: Border(
@@ -127,29 +151,6 @@ class KloterDetailPage extends StatelessWidget {
                               : niraOchre,
                         ),
                       ),
-                    if (stock != null ||
-                        onEdit != null ||
-                        onTransfer != null ||
-                        onClosure != null) ...[
-                      const SizedBox(height: NiraSpace.md),
-                      const DetailSectionTitle('Pengelolaan kloter'),
-                      if (stock != null) ...[
-                        const SizedBox(height: NiraSpace.sm),
-                        stock!,
-                      ],
-                      if (onEdit != null) ...[
-                        const SizedBox(height: NiraSpace.sm),
-                        DocumentLink('Edit kloter', onEdit!),
-                      ],
-                      if (onTransfer != null) ...[
-                        const SizedBox(height: NiraSpace.sm),
-                        DocumentLink('Transfer nira', onTransfer!),
-                      ],
-                      if (onClosure != null) ...[
-                        const SizedBox(height: NiraSpace.sm),
-                        DocumentLink('Penutupan dan riwayat', onClosure!),
-                      ],
-                    ],
                     const SizedBox(height: NiraSpace.md),
                     for (final batch in kloter.batches)
                       Padding(
@@ -189,6 +190,7 @@ class KloterBatchTile extends StatelessWidget {
     required this.physicalWeight,
     required this.pending,
     required this.onTap,
+    this.cancelled = false,
     super.key,
   });
 
@@ -197,6 +199,7 @@ class KloterBatchTile extends StatelessWidget {
   final String physicalWeight;
   final bool pending;
   final VoidCallback onTap;
+  final bool cancelled;
 
   @override
   Widget build(BuildContext context) {
@@ -238,7 +241,16 @@ class KloterBatchTile extends StatelessWidget {
                             weight: FontWeight.w700,
                           ),
                         ),
-                        ReviewStatusLabel(pending: pending),
+                        if (cancelled)
+                          Text(
+                            'Dibatalkan',
+                            style: niraText(
+                              NiraType.caption,
+                              color: foreground,
+                            ),
+                          )
+                        else
+                          ReviewStatusLabel(pending: pending),
                       ],
                     ),
                     const SizedBox(height: 2),

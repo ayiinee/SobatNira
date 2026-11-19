@@ -12,7 +12,11 @@ const blockLabel = (block: Block) => block.cane_label.status === 'READ' && block
 function mergeFields(previous: Record<string, unknown>, incoming: Record<string, unknown>, prefix: string, issues: Issue[]) {
   for (const [path, field] of fields(incoming)) {
     const old = fields(previous).find(([key]) => key === path)?.[1];
-    if (!old || old.status !== 'READ') continue;
+    if (!old || old.status !== 'READ') {
+      if (field.status === 'READ') issues.push({ code: 'REVISION_FIELD_ADDED', severity: 'INFO',
+        field_path: `${prefix}.${path}`, message: 'Nilai baru pada foto lanjutan.' });
+      continue;
+    }
     if (missing.has(field.status)) Object.assign(field, old);
     else if (field.status === 'READ' && field.normalized_value !== old.normalized_value) {
       issues.push({ code: 'REVISION_FIELD_CHANGED', severity: 'WARNING', field_path: `${prefix}.${path}`, message: 'Nilai berbeda dari revisi sebelumnya.' });
@@ -47,7 +51,16 @@ export function mergeProduction(previous: Note, incoming: Note) {
   }
   for (const [index, block] of latest.entries()) {
     block.block_reference = `BLOCK-${index + 1}`;
-    for (const [rowIndex, row] of block.batches.entries()) row.row_reference = `ROW-${rowIndex + 1}`;
+    const oldBlock = prior.find(item => blockLabel(item) === blockLabel(block));
+    if (!oldBlock) issues.push({ code: 'REVISION_FIELD_ADDED', severity: 'INFO',
+      field_path: `cane_blocks.${index}.cane_label`, message: 'Blok tebu baru.' });
+    for (const [rowIndex, row] of block.batches.entries()) {
+      row.row_reference = `ROW-${rowIndex + 1}`;
+      if (oldBlock && !oldBlock.batches.some(item => anchor(item) === anchor(row))) {
+        issues.push({ code: 'REVISION_FIELD_ADDED', severity: 'INFO',
+          field_path: `cane_blocks.${index}.batches.${rowIndex}.pan_number`, message: 'Baris masak baru.' });
+      }
+    }
   }
   const columns = next.unmapped_columns as Array<{ header_raw: string | null }>;
   for (const column of previous.unmapped_columns as typeof columns) {

@@ -1,16 +1,16 @@
 import { PoolClient } from 'pg';
 import { fields, Issue, Note } from './contracts';
+import { operatorChecks } from './operator-readiness';
 
 export type Question = { id: string; field_path: string; issue_code: string };
 
 export async function openClarifications(db: PoolClient, revisionId: string, note: Note, issues: Issue[]) {
-  const openFields = fields(note).filter(([, field]) => field.status === 'AMBIGUOUS' || field.status === 'ILLEGIBLE');
-  if (!openFields.length) return;
-  const conflicts = new Set(issues.filter((issue) => issue.code === 'OCR_VISION_DISAGREE').map((issue) => issue.field_path));
-  const paths = openFields.map(([path]) => path);
-  const codes = openFields.map(([path, field]) => conflicts.has(path) ? 'OCR_VISION_DISAGREE' : `${field.status}_FIELD`);
+  const { questions, documentBlocked } = operatorChecks(note, issues);
+  if (documentBlocked || !questions.size) return;
   await db.query(`INSERT INTO clarification_requests (revision_id,field_path,issue_code,status)
-    SELECT $1,path,code,'OPEN' FROM unnest($2::text[],$3::text[]) AS v(path,code)`, [revisionId, paths, codes]);
+    SELECT $1,path,code,'OPEN' FROM unnest($2::text[],$3::text[]) AS v(path,code)
+    ON CONFLICT (revision_id,field_path) WHERE status='OPEN' DO NOTHING`,
+  [revisionId, [...questions.keys()], [...questions.values()]]);
 }
 
 export async function closeClarifications(db: PoolClient, revisionId: string) {

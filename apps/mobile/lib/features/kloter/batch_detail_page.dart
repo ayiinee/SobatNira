@@ -7,7 +7,17 @@ import '../../sobatnira_ui.dart';
 import 'demo_production.dart';
 import 'demo_lot_fixture.dart';
 import 'kloter_detail_widgets.dart';
-import 'batch_detail_layout.dart';
+
+typedef BatchDetailGrade = ({String code, String weight, String price});
+typedef BatchDetailData = ({
+  List<DemoField> summary,
+  List<DemoField> cooking,
+  List<BatchDetailGrade> grades,
+  String totalWeight,
+  String value,
+  String physicalWeight,
+  String caneWeight,
+});
 
 class BatchDetailPage extends StatefulWidget {
   const BatchDetailPage({
@@ -16,12 +26,48 @@ class BatchDetailPage extends StatefulWidget {
     required this.demo,
     required this.onNavigate,
     super.key,
-  });
+  }) : officialTitle = null,
+       officialReviewed = false,
+       officialCancelled = false,
+       officialAction = null,
+       officialData = null,
+       officialStatus = null,
+       officialDocument = null,
+       officialPreview = null,
+       officialActions = const [],
+       officialNumber = null;
 
-  final DemoBatch batch;
+  const BatchDetailPage.official({
+    required this.officialTitle,
+    required this.officialReviewed,
+    required this.officialCancelled,
+    required this.officialData,
+    required this.officialNumber,
+    this.officialStatus,
+    this.officialDocument,
+    this.officialPreview,
+    this.officialActions = const [],
+    this.officialAction,
+    required this.kloterCode,
+    required this.onNavigate,
+    super.key,
+  }) : batch = null,
+       demo = null;
+
+  final DemoBatch? batch;
   final String kloterCode;
-  final DemoProduction demo;
+  final DemoProduction? demo;
   final ValueChanged<NiraTab> onNavigate;
+  final String? officialTitle;
+  final bool officialReviewed;
+  final bool officialCancelled;
+  final BatchDetailData? officialData;
+  final Widget? officialStatus;
+  final VoidCallback? officialDocument;
+  final Widget? officialPreview;
+  final List<Widget> officialActions;
+  final int? officialNumber;
+  final Widget? officialAction;
 
   @override
   State<BatchDetailPage> createState() => _BatchDetailPageState();
@@ -30,11 +76,22 @@ class BatchDetailPage extends StatefulWidget {
 class _BatchDetailPageState extends State<BatchDetailPage>
     with SingleTickerProviderStateMixin {
   int _tab = 0;
-  DemoBatch get _batch => widget.batch;
+  DemoBatch get _batch => widget.batch!;
+  DemoProduction get _demo => widget.demo!;
+  bool get _official => widget.officialTitle != null;
+  bool get _reviewed =>
+      _official ? widget.officialReviewed : _batch.review.verified;
+  BatchDetailData? get _data => widget.officialData;
 
   bool? _validationNotice;
   Timer? _noticeTimer;
   late final AnimationController _noticeAnimation;
+  late final _noticeSlide = _noticeAnimation.drive(
+    Tween(
+      begin: const Offset(0, -1),
+      end: Offset.zero,
+    ).chain(CurveTween(curve: Curves.easeInOutCubic)),
+  );
 
   @override
   void initState() {
@@ -42,13 +99,6 @@ class _BatchDetailPageState extends State<BatchDetailPage>
     _noticeAnimation = AnimationController(vsync: this)
       ..addStatusListener(_onNoticeStatus);
   }
-
-  late final _noticeSlide = _noticeAnimation.drive(
-    Tween(
-      begin: const Offset(0, -1),
-      end: Offset.zero,
-    ).chain(CurveTween(curve: Curves.easeInOutCubic)),
-  );
 
   @override
   void dispose() {
@@ -70,11 +120,23 @@ class _BatchDetailPageState extends State<BatchDetailPage>
 
   void _updateValidation(bool validated) {
     if (validated) {
-      widget.demo.verify(_batch.review);
+      _demo.verify(_batch.review);
     } else {
-      widget.demo.reopenBatch(_batch);
+      _demo.reopenBatch(_batch);
     }
 
+    _showValidation(validated);
+  }
+
+  @override
+  void didUpdateWidget(covariant BatchDetailPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_official && !oldWidget.officialReviewed && widget.officialReviewed) {
+      _showValidation(true);
+    }
+  }
+
+  void _showValidation(bool validated) {
     _noticeTimer?.cancel();
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     _noticeAnimation
@@ -126,7 +188,7 @@ class _BatchDetailPageState extends State<BatchDetailPage>
                   child: SlideTransition(
                     position: _noticeSlide,
                     child: _BatchValidationNotice(
-                      batchNumber: _batch.number,
+                      batchNumber: widget.officialNumber ?? _batch.number,
                       kloterCode: widget.kloterCode,
                       validated: validated,
                     ),
@@ -139,88 +201,161 @@ class _BatchDetailPageState extends State<BatchDetailPage>
     );
   }
 
-  Widget _buildScaffold() => ListenableBuilder(
-    listenable: widget.demo,
-    builder: (context, _) {
-      final reviewed = _batch.review.verified;
-      return BatchDetailLayout(
-        code: 'Batch ${_batch.number}',
-        reviewed: reviewed,
-        section: _tab,
-        onSection: (index) => setState(() => _tab = index),
-        onNavigate: widget.onNavigate,
-        bottomAction: BatchReviewActions(
-          batchNumber: _batch.number,
-          label: reviewed ? 'Batch tervalidasi' : 'Validasi',
-          verified: reviewed,
-          onVerify: () => _updateValidation(true),
-          onReopen: () => _updateValidation(false),
+  List<Widget> _tabContent() => switch (_tab) {
+    0 => _summary(),
+    1 => _cooking(),
+    _ => _grade(),
+  };
+
+  Widget _buildScaffold() => !_official
+      ? ListenableBuilder(
+          listenable: _demo,
+          builder: (context, _) => _layout(
+            'Batch ${_batch.number}',
+            _batch.review.verified,
+            _tabContent(),
+            bottomAction: BatchReviewActions(
+              batchNumber: _batch.number,
+              label: _batch.review.verified ? 'Batch tervalidasi' : 'Validasi',
+              verified: _batch.review.verified,
+              onVerify: () => _updateValidation(true),
+              onReopen: () => _updateValidation(false),
+            ),
+          ),
+        )
+      : _layout(
+          widget.officialTitle!,
+          widget.officialReviewed,
+          _data == null ? [?widget.officialStatus] : _tabContent(),
+          bottomAction: widget.officialAction,
+        );
+
+  Widget _layout(
+    String title,
+    bool reviewed,
+    List<Widget> content, {
+    Widget? bottomAction,
+  }) => NiraScaffold(
+    tab: NiraTab.kloter,
+    onNavigate: widget.onNavigate,
+    bottomAction: bottomAction,
+    body: KloterDetailBody(
+      section: _tab,
+      padding: EdgeInsets.fromLTRB(
+        niraPageInset(context),
+        NiraSpace.sm,
+        niraPageInset(context),
+        NiraSpace.xs,
+      ),
+      header: [
+        const DetailTitle('Detail batch'),
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            niraPageInset(context),
+            NiraSpace.xs,
+            niraPageInset(context),
+            0,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: niraText(NiraType.title, weight: FontWeight.w700),
+                ),
+              ),
+              const SizedBox(width: NiraSpace.sm),
+              if (!widget.officialCancelled) _ReviewBadge(reviewed: reviewed),
+            ],
+          ),
         ),
-        children: switch (_tab) {
-          0 => _summary(),
-          1 => _cooking(),
-          _ => _grade(),
-        },
-      );
-    },
+        NiraTabs(
+          labels: const ['Ringkasan', 'Masak', 'Grade'],
+          selected: _tab,
+          onSelected: (index) => setState(() => _tab = index),
+          height: 44,
+          inset: 12,
+        ),
+      ],
+      children: content,
+    ),
   );
 
-  List<Widget> _summary() => [
-    BatchSummarySection(
-      photo: const DocumentPreview(batch: true),
-      fields: EditableFields(
-        fields: _batch.review.fields,
-        onEdit: _batch.review.verified ? null : _editField,
-      ),
-      prices: [
+  List<BatchDetailGrade> get _grades =>
+      _data?.grades ??
+      [
         for (final entry in DemoBatch.gradePrices.entries)
-          BatchPriceRow(
-            grade: Text(entry.key, style: niraText(NiraType.body)),
-            weight: Text(
-              _batch.grade == entry.key ? '${_batch.gradeWeight}Kg' : '–',
-              style: niraText(NiraType.body),
-            ),
-            price: Text(entry.value, style: niraText(NiraType.body)),
-            height: 30,
+          (
+            code: entry.key,
+            weight: _batch.grade == entry.key ? _batch.gradeWeight : '–',
+            price: entry.value,
           ),
-      ],
-      total: BatchPriceRow(
-        grade: Text(
-          'Nilai produksi batch',
-          style: niraText(NiraType.caption, weight: FontWeight.w700),
-        ),
-        weight: Text('${_batch.gradeWeight}Kg', style: niraText(NiraType.body)),
-        price: Text(
-          demoMoney(_batch.productionValue),
-          style: niraText(NiraType.section, weight: FontWeight.w700),
-        ),
-        height: 32,
-        line: niraGold,
-      ),
-      footer: [
-        if (_batch.lot != null)
-          DetailMetrics([
-            (
-              'Margin kumulatif kloter (demo)',
-              demoMoney(_batch.lot!.marginRupiah),
-            ),
-          ]),
-      ],
+      ];
+
+  String get _totalWeight => _data?.totalWeight ?? '${_batch.gradeWeight}Kg';
+  String get _productionValue =>
+      _data?.value ?? demoMoney(_batch.productionValue);
+
+  List<Widget> _summary() => [
+    if (!_official)
+      const DocumentPreview(batch: true)
+    else
+      ?widget.officialPreview,
+    const SizedBox(height: NiraSpace.md),
+    const DetailSectionTitle('Ringkasan proses'),
+    const SizedBox(height: NiraSpace.sm),
+    EditableFields(
+      fields: _data?.summary ?? _batch.review.fields,
+      onEdit: _official || _reviewed ? null : _editField,
     ),
+    const SizedBox(height: NiraSpace.sm),
+    const DetailSectionTitle('Harga pengesahan'),
+    _priceHeader(),
+    for (final entry in _grades)
+      _PriceRow(
+        grade: Text(entry.code, style: niraText(NiraType.body)),
+        weight: Text(
+          _official || entry.weight == '–' ? entry.weight : '${entry.weight}Kg',
+          style: niraText(NiraType.body),
+        ),
+        price: Text(entry.price, style: niraText(NiraType.body)),
+        height: 30,
+      ),
+    _PriceRow(
+      grade: Text(
+        'Nilai produksi batch',
+        style: niraText(NiraType.caption, weight: FontWeight.w700),
+      ),
+      weight: Text(_totalWeight, style: niraText(NiraType.body)),
+      price: Text(
+        _productionValue,
+        style: niraText(NiraType.section, weight: FontWeight.w700),
+      ),
+      height: 32,
+      line: niraGold,
+    ),
+    ...widget.officialActions,
+    if (!_official && _batch.lot != null)
+      DetailMetrics([
+        ('Margin kumulatif kloter (demo)', demoMoney(_batch.lot!.marginRupiah)),
+      ]),
   ];
 
   List<Widget> _cooking() => [
     const DetailSectionTitle('Data pemasakan'),
     const SizedBox(height: NiraSpace.sm),
     EditableFields(
-      fields: _batch.cooking,
-      onEdit: _batch.review.verified ? null : _editField,
+      fields: _data?.cooking ?? _batch.cooking,
+      onEdit: _official || _reviewed ? null : _editField,
     ),
     const SizedBox(height: NiraSpace.md),
-    DocumentLink(
-      'Foto pemasakan',
-      () => DocumentPreview.open(context, batch: true),
-    ),
+    if (!_official)
+      DocumentLink(
+        'Foto pemasakan',
+        () => DocumentPreview.open(context, batch: true),
+      )
+    else if (widget.officialDocument case final open?)
+      DocumentLink('Foto nota produksi di Pekerjaan', open),
   ];
 
   List<Widget> _grade() => [
@@ -229,21 +364,25 @@ class _BatchDetailPageState extends State<BatchDetailPage>
     Text('Hasil timbang', style: niraText(NiraType.caption, color: niraMuted)),
     const SizedBox(height: NiraSpace.md),
     DetailMetrics([
-      ('Tebu bersih kloter', '${demoNumber(_batch.lot?.caneKg ?? 0)} kg'),
-      ('Nilai produksi batch', demoMoney(_batch.productionValue)),
+      (
+        'Tebu bersih kloter',
+        _data?.caneWeight ?? '${demoNumber(_batch.lot?.caneKg ?? 0)} kg',
+      ),
+      ('Nilai produksi batch', _productionValue),
+      if (_data case final data?) ('Hasil fisik', data.physicalWeight),
     ], separate: true),
     const SizedBox(height: NiraSpace.sm),
     _priceHeader(),
-    for (final grade in DemoBatch.gradePrices.keys)
-      BatchPriceRow(
-        grade: Text(grade, style: niraText(NiraType.body)),
+    for (final grade in _grades)
+      _PriceRow(
+        grade: Text(grade.code, style: niraText(NiraType.body)),
         weight: _GradeWeight(
-          grade: grade,
-          weight: _batch.grade == grade ? _batch.gradeWeight : '–',
-          onTap: _batch.review.verified ? null : () => _editGrade(grade),
+          grade: grade.code,
+          weight: grade.weight,
+          onTap: _official || _reviewed ? null : () => _editGrade(grade.code),
         ),
         price: Text(
-          '${DemoBatch.gradePrices[grade]}/Kg',
+          '${grade.price}/${_official ? 'kg' : 'Kg'}',
           style: niraText(NiraType.body),
         ),
         height: 35,
@@ -251,7 +390,13 @@ class _BatchDetailPageState extends State<BatchDetailPage>
     const Divider(height: 1, color: niraLine),
   ];
 
-  Widget _priceHeader() => const BatchPriceHeader();
+  Widget _priceHeader() => _PriceRow(
+    grade: Text('Grade', style: niraText(NiraType.caption, color: niraLeaf)),
+    weight: Text('Berat', style: niraText(NiraType.caption, color: niraLeaf)),
+    price: Text('Harga', style: niraText(NiraType.caption, color: niraLeaf)),
+    height: 29,
+    line: Colors.transparent,
+  );
 
   Future<void> _editField(DemoField field) async {
     if (_batch.review.verified) return;
@@ -261,7 +406,7 @@ class _BatchDetailPageState extends State<BatchDetailPage>
       initial: field.value,
       unit: field.unit,
     );
-    if (mounted && value != null) widget.demo.editBatch(_batch, field, value);
+    if (mounted && value != null) _demo.editBatch(_batch, field, value);
   }
 
   Future<void> _editGrade(String grade) async {
@@ -272,8 +417,46 @@ class _BatchDetailPageState extends State<BatchDetailPage>
       initial: _batch.grade == grade ? _batch.gradeWeight : '',
       unit: 'Kg',
     );
-    if (mounted && value != null) widget.demo.setGrade(_batch, grade, value);
+    if (mounted && value != null) _demo.setGrade(_batch, grade, value);
   }
+}
+
+class _PriceRow extends StatelessWidget {
+  const _PriceRow({
+    required this.grade,
+    required this.weight,
+    required this.price,
+    required this.height,
+    this.line = niraLine,
+  });
+
+  final Widget grade;
+  final Widget weight;
+  final Widget price;
+  final double height;
+  final Color line;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: BoxConstraints(minHeight: height),
+    padding: const EdgeInsets.symmetric(vertical: NiraSpace.xs),
+    decoration: BoxDecoration(
+      border: Border(top: BorderSide(color: line)),
+    ),
+    child: Row(
+      children: [
+        Expanded(flex: 40, child: grade),
+        Expanded(
+          flex: 27,
+          child: Align(alignment: Alignment.centerLeft, child: weight),
+        ),
+        Expanded(
+          flex: 33,
+          child: Align(alignment: Alignment.centerRight, child: price),
+        ),
+      ],
+    ),
+  );
 }
 
 class _BatchValidationNotice extends StatelessWidget {
@@ -335,6 +518,54 @@ class _BatchValidationNotice extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ReviewBadge extends StatelessWidget {
+  const _ReviewBadge({required this.reviewed});
+
+  final bool reviewed;
+
+  @override
+  Widget build(BuildContext context) {
+    final foregroundColor = reviewed ? niraGreen : Colors.white;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        NiraSpace.sm,
+        NiraSpace.xs,
+        NiraSpace.sm,
+        NiraSpace.xs,
+      ),
+      constraints: const BoxConstraints(maxWidth: 153),
+      decoration: BoxDecoration(
+        color: reviewed ? const Color(0xFFE6EFE5) : const Color(0xFFDCB95B),
+        borderRadius: BorderRadius.circular(niraRadius),
+        border: Border.all(
+          color: reviewed ? niraLeaf : const Color(0xFFB79845),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            reviewed ? Icons.check_circle : Icons.error,
+            size: 14,
+            color: foregroundColor,
+          ),
+          const SizedBox(width: NiraSpace.xs),
+          Flexible(
+            child: Text(
+              reviewed ? 'Tervalidasi' : 'Perlu ditinjau',
+              style: niraText(
+                NiraType.body,
+                color: foregroundColor,
+                weight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

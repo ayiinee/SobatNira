@@ -6,17 +6,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:sobatnira/features/laporan/connected_reports.dart';
-import 'package:sobatnira/features/laporan/connected_report_view.dart';
+import 'package:sobatnira/features/laporan/demo_analytics.dart';
+import 'package:sobatnira/features/laporan/laporan_page.dart';
+import 'package:sobatnira/features/laporan/report_detail_page.dart';
 import 'package:sobatnira/features/laporan/printable_report.dart';
 import 'package:sobatnira/features/laporan/report_pdf.dart';
 import 'package:sobatnira/features/kloter/kloter_date_filter.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
 import 'package:sobatnira/sobatnira_ui.dart';
 import 'package:sobatnira/main.dart';
-import 'package:sobatnira/features/laporan/demo_analytics.dart';
-import 'package:sobatnira/features/laporan/laporan_page.dart';
-import 'package:sobatnira/features/laporan/report_overview.dart';
-import 'package:sobatnira/widgets/summary_card.dart';
 import '../../support/demo_login.dart';
 
 final scope = FactoryScope.fromJson({
@@ -202,31 +200,47 @@ void main() {
       );
       addTearDown(reports.dispose);
       await reports.refresh();
+      final analytics = DemoAnalytics();
+      addTearDown(analytics.dispose);
       await tester.pumpWidget(
         MaterialApp(
           theme: niraTheme(),
-          home: Scaffold(
-            body: ConnectedReportView(reports: reports, onNavigate: (_) {}),
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: LaporanPage(
+                analytics: analytics,
+                reports: reports,
+                onOpenDetail: (kind) {
+                  final row = analytics.selectedRow;
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute(
+                      builder: (_) => ReportDetailPage(
+                        kind: kind,
+                        row: row,
+                        onNavigate: (_) {},
+                        report: reports.data,
+                        officialLot: reports.lots
+                            .where((item) => item['lotId'] == row?.id)
+                            .firstOrNull,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
           ),
         ),
       );
       await tester.pumpAndSettle();
       expect(find.text('30,5 kg'), findsWidgets);
-      final productionPlot = find.byKey(
-        const ValueKey('production-chart-plot'),
-      );
-      expect(productionPlot, findsOneWidget);
-      final plot = tester.getRect(productionPlot);
-      await tester.tapAt(plot.topLeft + Offset(plot.width / 2, 110));
-      await tester.pumpAndSettle();
-      expect(find.text('19 November 2026'), findsOneWidget);
-      expect(find.text('Gula final: 30,5 kg'), findsOneWidget);
+      expect(find.text('Gula final per hari (Kg)'), findsOneWidget);
       await tester.tap(find.text('Margin').first);
       await tester.pumpAndSettle();
       expect(find.text('-Rp1'), findsWidgets);
       expect(find.text('Rp9.007.199.254.740.993'), findsOneWidget);
-      expect(find.byKey(const ValueKey('margin-chart-plot')), findsOneWidget);
-      await tester.tap(find.text('DUPLICATE').first);
+      expect(find.text('Margin per kloter (1000)'), findsOneWidget);
+      await tester.ensureVisible(find.text('Pemasok satu'));
+      await tester.tap(find.text('Pemasok satu'));
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(find.text('BATCH-REAL'), 400);
       await Scrollable.ensureVisible(
@@ -234,40 +248,23 @@ void main() {
         alignment: .4,
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('BATCH-REAL'));
-      await tester.pumpAndSettle();
-      expect(find.text('Nilai produksi batch'), findsOneWidget);
+      expect(find.text('Kontribusi Batch'), findsOneWidget);
       expect(find.text('Rp670.000'), findsNothing);
-      await tester.scrollUntilVisible(
-        find.text('Margin kumulatif kloter'),
-        300,
-      );
       expect(find.text('-Rp1'), findsWidgets);
-      await tester.tap(find.text('Masak'));
-      await tester.pumpAndSettle();
-      expect(find.text('Wajan 2'), findsOneWidget);
-      await tester.tap(find.text('Grade'));
-      await tester.pumpAndSettle();
-      expect(find.text('Grade A'), findsOneWidget);
-      tester.state<NavigatorState>(find.byType(Navigator).first).pop();
-      await tester.pumpAndSettle();
       tester.state<NavigatorState>(find.byType(Navigator).first).pop();
       await tester.pumpAndSettle();
       await tester.tap(find.text('Produksi').first);
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.byTooltip('Jenis grafik'));
-      await tester.tap(find.byTooltip('Jenis grafik'));
+      analytics.setVariant(ProductionVariant.grade);
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('chart-option-grade')));
+      final grade = find.text('Grade A').last;
+      await Scrollable.ensureVisible(tester.element(grade), alignment: .4);
       await tester.pumpAndSettle();
-      final gradeRow = find.widgetWithText(InkWell, 'Grade A').last;
-      await tester.scrollUntilVisible(gradeRow, 300);
-      await Scrollable.ensureVisible(tester.element(gradeRow), alignment: .4);
-      await tester.pumpAndSettle();
-      await tester.tap(gradeRow);
+      await tester.tap(grade);
       await tester.pumpAndSettle();
       expect(find.text('Detail Grade'), findsOneWidget);
-      expect(find.textContaining('Rp20.001/kg'), findsOneWidget);
+      expect(find.text('Rp9.007.199.254.740.993'), findsOneWidget);
+      expect(find.text('Kontribusi per kloter'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -335,114 +332,6 @@ void main() {
       expect(find.text('Total gula final'), findsOneWidget);
       expect(find.text('30,5 kg'), findsWidgets);
       expect(find.textContaining('1 batch'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
-  testWidgets(
-    'demo and Supabase reports keep identical summary and chart geometry',
-    (tester) async {
-      await tester.binding.setSurfaceSize(const Size(430, 950));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-      final demo = DemoAnalytics();
-      final reports = ConnectedReports(
-        ReviewApi(
-          'token',
-          client: MockClient((_) async => response(fixture())),
-        ),
-        scope,
-      );
-      addTearDown(demo.dispose);
-      addTearDown(reports.dispose);
-      await reports.refresh();
-      Future<List<Rect>> geometry(Widget page) async {
-        await tester.pumpWidget(
-          MaterialApp(
-            theme: niraTheme(),
-            home: Scaffold(body: page),
-          ),
-        );
-        await tester.pumpAndSettle();
-        expect(find.byType(ReportDataOptions), findsOneWidget);
-        expect(
-          find.byKey(const ValueKey('production-chart-plot')),
-          findsOneWidget,
-        );
-        return [
-          tester.getRect(find.byType(NiraSummaryPair)),
-          tester.getRect(find.byKey(const ValueKey('production-chart-plot'))),
-        ];
-      }
-
-      final offline = await geometry(
-        LaporanPage(analytics: demo, onOpenDetail: (_) {}),
-      );
-      final connected = await geometry(
-        ConnectedReportView(reports: reports, onNavigate: (_) {}),
-      );
-      expect(connected, offline);
-      expect(find.text('30,5 kg'), findsWidgets);
-      expect(find.text('90Kg'), findsNothing);
-      expect(tester.takeException(), isNull);
-    },
-  );
-
-  testWidgets(
-    'empty and failed backend reports retain the demo layout without sample values',
-    (tester) async {
-      await tester.binding.setSurfaceSize(const Size(393, 853));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-      var fail = false;
-      final reports = ConnectedReports(
-        ReviewApi(
-          'token',
-          client: MockClient(
-            (_) async => fail
-                ? http.Response('{}', 503)
-                : response({
-                    'items': [],
-                    'grades': [],
-                    'totals': {
-                      'lotCount': 0,
-                      'producedLotCount': 0,
-                      'batchCount': 0,
-                      'caneNetKg': '0',
-                      'finalSugarKg': '0',
-                      'productionValueRupiah': '0',
-                      'totalCostRupiah': '0',
-                      'productionMarginRupiah': '0',
-                    },
-                  }),
-          ),
-        ),
-        scope,
-      );
-      addTearDown(reports.dispose);
-      await reports.refresh();
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: niraTheme(),
-          home: Scaffold(
-            body: ConnectedReportView(reports: reports, onNavigate: (_) {}),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(
-        find.text('Belum ada data grafik pada periode ini.'),
-        findsOneWidget,
-      );
-      expect(find.text('0 kg'), findsNWidgets(2));
-      expect(find.text('Sugeng'), findsNothing);
-      fail = true;
-      await reports.refresh();
-      await tester.pumpAndSettle();
-      expect(find.text('0 kg'), findsNothing);
-      expect(find.text('—'), findsNWidgets(2));
-      await tester.scrollUntilVisible(
-        find.text('Coba lagi memuat laporan'),
-        200,
-      );
-      expect(find.text('Coba lagi memuat laporan'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

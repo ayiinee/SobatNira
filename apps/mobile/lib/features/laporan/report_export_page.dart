@@ -6,12 +6,13 @@ import '../../widgets/summary_card.dart';
 import '../kloter/demo_production.dart';
 import '../kloter/kloter_date_filter.dart';
 import '../kloter/kloter_detail_widgets.dart';
+import 'connected_report_controls.dart';
+import 'connected_reports.dart';
 import 'demo_analytics.dart';
 import 'printable_report.dart';
 import 'production_recap_section.dart';
 import 'report_paginated_list.dart';
 import 'report_pdf.dart';
-import 'report_overview.dart';
 
 class ReportExportPage extends StatefulWidget {
   const ReportExportPage({
@@ -21,10 +22,10 @@ class ReportExportPage extends StatefulWidget {
     required this.onNavigate,
     this.production,
     this.report,
+    this.reports,
     this.onFilter,
     this.approvedLots,
     this.statusMessage,
-    this.reportOptions,
     super.key,
   });
 
@@ -34,10 +35,10 @@ class ReportExportPage extends StatefulWidget {
   final ValueChanged<NiraTab> onNavigate;
   final DemoProduction? production;
   final PrintableReport? report;
+  final ConnectedReports? reports;
   final VoidCallback? onFilter;
   final List<DemoKloter>? approvedLots;
   final Widget? statusMessage;
-  final Widget? reportOptions;
 
   @override
   State<ReportExportPage> createState() => _ReportExportPageState();
@@ -47,6 +48,10 @@ class _ReportExportPageState extends State<ReportExportPage> {
   bool _busy = false;
 
   Future<void> _filter() async {
+    if (widget.reports case final reports?) {
+      await filterConnectedReport(context, reports);
+      return;
+    }
     if (widget.onFilter != null) {
       widget.onFilter!();
       return;
@@ -96,9 +101,11 @@ class _ReportExportPageState extends State<ReportExportPage> {
     listenable: Listenable.merge([
       widget.analytics,
       if (widget.production != null) widget.production!,
+      if (widget.reports != null) widget.reports!,
     ]),
     builder: (context, _) {
       final report =
+          widget.reports?.printable(widget.kind) ??
           widget.report ??
           (widget.approvedLots != null
               ? PrintableReport.fromApprovedLots(
@@ -116,6 +123,7 @@ class _ReportExportPageState extends State<ReportExportPage> {
       final enabled =
           !_busy &&
           widget.statusMessage == null &&
+          (widget.reports == null || widget.reports!.data != null) &&
           (report.recap?.kloter.isNotEmpty ?? report.rows.isNotEmpty);
       return NiraScaffold(
         tab: NiraTab.beranda,
@@ -196,10 +204,27 @@ class _ReportExportPageState extends State<ReportExportPage> {
                       ),
                     ),
                   ),
-                  widget.reportOptions ??
-                      ReportDataOptions(synthetic: report.synthetic),
+                  if (widget.reports case final reports?) ...[
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      title: Text(
+                        'Tampilkan data contoh',
+                        style: niraText(NiraType.caption),
+                      ),
+                      value: reports.synthetic,
+                      onChanged: _busy
+                          ? null
+                          : (value) => reports.setSynthetic(value ?? false),
+                    ),
+                    ConnectedReportStatus(reports: reports),
+                  ],
                   const SizedBox(height: NiraSpace.md),
                   NiraSummaryCard(report.totalLabel, report.totalDisplay),
+                  if (report.provisional)
+                    const Text(
+                      'Margin sementara untuk kloter yang masih terbuka.',
+                    ),
                   if (widget.statusMessage case final status?) ...[
                     const SizedBox(height: NiraSpace.md),
                     status,

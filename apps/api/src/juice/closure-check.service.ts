@@ -1,16 +1,16 @@
 import { ConflictException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
-import { DatabaseService } from '../database/database.service';
+import { DatabaseSession } from '../database/database.service';
 import { FactoryAccess } from '../auth/auth.types';
 import { BACKEND_CONFIG, BackendConfig } from '../config/backend.config';
 
 @Injectable()
 export class ClosureCheckService {
-  constructor(@Inject(BACKEND_CONFIG) private readonly config: BackendConfig, private readonly db: DatabaseService) {}
+  constructor(@Inject(BACKEND_CONFIG) private readonly config: BackendConfig) {}
 
-  async requireClear(access: FactoryAccess, lotId: string, synthetic: boolean, authorization: string) {
-    const upstream = this.config.batchClosure;
+  async requireClear(tx: DatabaseSession, access: FactoryAccess, lotId: string, synthetic: boolean, authorization: string) {
+    const upstream = synthetic && this.config.environment !== 'production' ? this.config.batchClosure : undefined;
     if (!upstream) {
-      const { rows: [result] } = await this.db.query<{blocked:boolean}>(`SELECT
+      const { rows: [result] } = await tx.query<{blocked:boolean}>(`SELECT
         EXISTS(SELECT 1 FROM sobatnira.production_batches WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3 AND is_synthetic=$4 AND status='draft')
         OR EXISTS(SELECT 1 FROM sobatnira.juice_reservations r WHERE r.tenant_id=$1 AND r.factory_id=$2 AND r.origin_lot_id=$3 AND r.is_synthetic=$4 AND r.state IN ('reserved','consumed')
           AND NOT EXISTS(SELECT 1 FROM sobatnira.production_batches b WHERE b.id=r.batch_id AND b.tenant_id=r.tenant_id AND b.factory_id=r.factory_id AND b.status='approved' AND b.is_synthetic=r.is_synthetic)) AS blocked`,

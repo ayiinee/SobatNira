@@ -8,7 +8,7 @@ import { JuiceRepository } from '../juice/juice.repository';
 import { object, uuid, text, timestamp, scopeValues, found, parsePage } from './production.dto';
 import { decimal, sumDecimals, compareDecimals } from './decimal';
 import { calculateProductionPreview } from './calculation';
-import { productionReport, ProductionReportLot } from './production-report';
+import { batchGradeTotals, type Grade, productionReport, ProductionReportLot } from './production-report';
 export function parseBatch(input: unknown) {
     const b = object(input, ['id', 'lotId', 'code', 'wokNumber', 'occurredAt', 'quantityMl', 'physicalWeightKg', 'grades', 'synthetic']);
     if (!Number.isSafeInteger(b.wokNumber) || Number(b.wokNumber) < 1 || Number(b.wokNumber) > 10000)
@@ -33,6 +33,7 @@ export class Batches {
                     throw new ConflictException('ID batch sudah dipakai.');
                 return old;
             }
+            if (b.grades.length !== 1) throw new BadRequestException('Batch baru harus memiliki satu grade.');
             const scope = [access.tenantId, access.factoryId, b.lotId, b.synthetic];
             const source = await tx.query('SELECT occurred_at FROM sobatnira.milling_records WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3 AND is_synthetic=$4', scope);
             if (!source.rows.length || new Date(source.rows[0].occurred_at).getTime() > Date.parse(b.occurredAt))
@@ -105,9 +106,60 @@ export class Batches {
             return snapshot;
         });
     }
+    async detail(access: FactoryAccess, id: string) {
+        const { rows: [row] } = await this.db.query<{ lot_id: string; grades: Grade[] | null }>(`WITH ${FACTORY_SCOPE_CTE}
+          SELECT b.*,
+            (SELECT jsonb_agg(jsonb_build_object('code',g.code,'weightKg',g.weight_kg::text,
+              'pricePerKgRupiah',g.price_per_kg_rupiah::text) ORDER BY g.code)
+             FROM sobatnira.batch_grade_results g WHERE g.batch_id=b.id) AS grades,
+            EXISTS(SELECT 1 FROM sobatnira.lot_production_costs c
+              WHERE (c.tenant_id,c.factory_id,c.lot_id)=(b.tenant_id,b.factory_id,b.lot_id)) AS "costSaved",
+            (SELECT trim_scale(b.quantity_ml-COALESCE(sum(r.quantity_ml),0))::text FROM sobatnira.juice_reservations r
+               WHERE (r.tenant_id,r.factory_id,r.batch_id)=(b.tenant_id,b.factory_id,b.id)
+                 AND r.lot_id=b.lot_id AND r.origin_lot_id=b.lot_id
+                 AND r.is_synthetic=b.is_synthetic AND r.state<>'released') AS "remainingMl"
+          FROM sobatnira.production_batches b JOIN authorized_scope s
+            ON s."tenantId"=b.tenant_id AND s."factoryId"=b.factory_id WHERE b.id=$4`, [...scopeValues(access), id]);
+        const batch = found(row);
+        return { ...batch, ...batchGradeTotals(batch.grades ?? []) };
+    }
+
+    async cancel(access: FactoryAccess, id: string) {
+        const initial = await this.detail(access, id);
+        return this.juice.mutate(access, async (tx) => {
+            await this.juice.lockLots(tx, access, [initial.lot_id]);
+            const keys = [access.tenantId, access.factoryId, id];
+            const row = found((await tx.query(`SELECT * FROM sobatnira.production_batches
+              WHERE tenant_id=$1 AND factory_id=$2 AND id=$3 FOR UPDATE`, keys)).rows[0]);
+            if (row.status === 'cancelled') return row;
+            if (row.status !== 'draft') throw new ConflictException('Hanya draf batch yang dapat dibatalkan.');
+            const reservations = (await tx.query(`SELECT lot_id, state FROM sobatnira.juice_reservations
+              WHERE tenant_id=$1 AND factory_id=$2 AND batch_id=$3 AND state<>'released' FOR UPDATE`, keys)).rows;
+            if (reservations.some(r => r.state === 'consumed' || r.lot_id !== row.lot_id)) {
+                throw new ConflictException('Nira sudah dikonsumsi atau reservasi berada di kloter lain.');
+            }
+            await tx.query(`UPDATE sobatnira.juice_reservations SET state='released',finalized_by=$4,finalized_at=clock_timestamp()
+              WHERE tenant_id=$1 AND factory_id=$2 AND batch_id=$3 AND state='reserved'`, [...keys, access.userId]);
+            const updated = (await tx.query(`UPDATE sobatnira.production_batches SET status='cancelled'
+              WHERE tenant_id=$1 AND factory_id=$2 AND id=$3 RETURNING *`, keys)).rows[0];
+            await tx.query("INSERT INTO sobatnira.production_batch_events(batch_id,action,actor_id) VALUES($1,'cancelled',$2)", [id, access.userId]);
+            return updated;
+        });
+    }
+
     async list(access: FactoryAccess, query: unknown) {
-        const page = parsePage(query);
-        const rows = await this.db.query(`WITH ${FACTORY_SCOPE_CTE} SELECT b.* FROM sobatnira.production_batches b JOIN authorized_scope s ON s."tenantId"=b.tenant_id AND s."factoryId"=b.factory_id ORDER BY b.occurred_at DESC,b.id LIMIT $4 OFFSET $5`, [...scopeValues(access), page.limit, page.offset]);
+        const q = object(query, ['limit','offset','lotId','synthetic']);
+        const page = parsePage({ limit: q.limit, offset: q.offset });
+        const lotId = q.lotId === undefined ? null : uuid(q.lotId);
+        const synthetic = q.synthetic === undefined ? null : String(q.synthetic);
+        if (synthetic !== null && synthetic !== 'true' && synthetic !== 'false') {
+            throw new BadRequestException('synthetic tidak valid.');
+        }
+        const rows = await this.db.query(`WITH ${FACTORY_SCOPE_CTE} SELECT b.* FROM sobatnira.production_batches b
+          JOIN authorized_scope s ON s."tenantId"=b.tenant_id AND s."factoryId"=b.factory_id
+          WHERE ($6::uuid IS NULL OR b.lot_id=$6) AND ($7::boolean IS NULL OR b.is_synthetic=$7)
+          ORDER BY b.occurred_at DESC,b.id LIMIT $4 OFFSET $5`,
+          [...scopeValues(access), page.limit, page.offset, lotId, synthetic]);
         return { items: rows.rows, ...page };
     }
     async productionReport(access: FactoryAccess, query: unknown) {
@@ -123,7 +175,10 @@ export class Batches {
           SELECT l.id AS "lotId", COALESCE(l.display_code,l.id::text) AS code,
             s.name AS supplier,l.received_at AS "receivedAt",i.net_weight_kg::text AS "caneNetKg",
             i.cane_type_code AS "caneType",trim_scale(COALESCE(mc.quantity_after,m.juice_produced_liters))::text AS "juiceLiters",
-            p.output_snapshot AS calculation,COALESCE(b.items,'[]'::jsonb) AS batches
+            p.output_snapshot AS calculation,COALESCE(b.items,'[]'::jsonb) AS batches,
+            EXISTS(SELECT 1 FROM sobatnira.lot_closures c
+              WHERE (c.tenant_id,c.factory_id,c.lot_id,c.is_synthetic)=(l.tenant_id,l.factory_id,l.id,i.is_synthetic)
+              AND c.reopened_at IS NULL) AS closed
           FROM sobatnira.lots l
           JOIN authorized_scope a ON a."tenantId"=l.tenant_id AND a."factoryId"=l.factory_id
           JOIN sobatnira.suppliers s ON s.id=l.supplier_id AND s.tenant_id=l.tenant_id
@@ -145,7 +200,9 @@ export class Batches {
         return { factory: access.factoryName, from, before, synthetic: q.synthetic === 'true',
           periodBasis: 'lot_received_at', ...productionReport(rows.rows) };
     }
-    async report(access: FactoryAccess, query: unknown) {
+
+    async report(access: FactoryAccess, query: unknown, includeBatches = false) {
+
         const q = object(query, ['from', 'before', 'synthetic']);
         if (q.synthetic !== undefined && !['true', 'false'].includes(String(q.synthetic)))
             throw new BadRequestException('synthetic tidak valid.');
@@ -156,11 +213,22 @@ export class Batches {
         const rows = (await this.db.query(`WITH ${FACTORY_SCOPE_CTE}, latest AS (
    SELECT DISTINCT ON(p.lot_id) p.* FROM sobatnira.production_calculation_snapshots p JOIN authorized_scope s ON s."tenantId"=p.tenant_id AND s."factoryId"=p.factory_id
    WHERE p.is_synthetic=$4 ORDER BY p.lot_id,p.approved_at DESC,p.id DESC)
-   SELECT l.id AS "lotId",l.display_code AS code,s.name AS supplier,l.received_at AS "receivedAt",p.id AS "snapshotId",p.output_snapshot AS calculation
+   SELECT l.id AS "lotId",l.display_code AS code,s.name AS supplier,l.received_at AS "receivedAt",p.id AS "snapshotId",p.output_snapshot AS calculation,
+    EXISTS(SELECT 1 FROM sobatnira.lot_closures c WHERE (c.tenant_id,c.factory_id,c.lot_id,c.is_synthetic)=
+      (p.tenant_id,p.factory_id,p.lot_id,p.is_synthetic) AND c.reopened_at IS NULL) AS closed
+    ${includeBatches ? `, (SELECT jsonb_agg(jsonb_build_object('id',b.id,'code',b.code,'wokNumber',b.wok_number,
+       'occurredAt',b.occurred_at,'volumeMl',b.quantity_ml::text,'physicalWeightKg',b.physical_weight_kg::text,
+       'grades',(SELECT jsonb_agg(jsonb_build_object('code',g.code,'weightKg',g.weight_kg::text) ORDER BY g.code)
+         FROM sobatnira.batch_grade_results g WHERE g.batch_id=b.id)) ORDER BY b.occurred_at,b.id)
+       FROM sobatnira.production_batches b JOIN sobatnira.production_calculation_snapshots bs ON bs.batch_id=b.id
+       WHERE (b.tenant_id,b.factory_id,b.lot_id,b.is_synthetic)=(p.tenant_id,p.factory_id,p.lot_id,p.is_synthetic)
+         AND b.status='approved' AND (bs.approved_at,bs.id)<=(p.approved_at,p.id)) AS batches` : ''}
    FROM latest p JOIN sobatnira.lots l ON l.id=p.lot_id JOIN sobatnira.suppliers s ON s.id=l.supplier_id
    WHERE ($5::timestamptz IS NULL OR l.received_at >= $5) AND ($6::timestamptz IS NULL OR l.received_at < $6)
    ORDER BY l.received_at DESC,l.id`, [...scopeValues(access), q.synthetic === 'true', from, before])).rows;
-        return { factory: access.factoryName, from, before, synthetic: q.synthetic === 'true', items: rows, total: rows.length, totalMarginRupiah: rows.reduce((v, r) => v + BigInt(r.calculation.productionMarginRupiah), 0n).toString() };
+        return { factory: access.factoryName, from, before, synthetic: q.synthetic === 'true', items: rows,
+            total: rows.length, totalSugarKg: sumDecimals(rows.map(r => r.calculation.finalSugarKg)),
+            totalMarginRupiah: rows.reduce((v, r) => v + BigInt(r.calculation.productionMarginRupiah), 0n).toString() };
     }
 }
 @Controller('tenants/:tenantId/factories/:factoryId/production')
@@ -173,13 +241,29 @@ export class BatchesController {
     a: FactoryAccess, 
     @Query()
     q: unknown) { return this.batches.list(a, q); }
+    @Get('batches/:id')
+    detail(@CurrentFactory() a: FactoryAccess, @Param('id') id: string) {
+        return this.batches.detail(a, uuid(id));
+    }
+    @Post('batches/:id/cancel')
+    @FactoryRoles('admin')
+    @HttpCode(200)
+    cancel(@CurrentFactory() a: FactoryAccess, @Param('id') id: string) {
+        return this.batches.cancel(a, uuid(id));
+    }
+    @Get('recap')
+    recap(@CurrentFactory() a: FactoryAccess, @Query() q: unknown) {
+        return this.batches.report(a, q, true);
+    }
     @Post('batches')
+    @FactoryRoles('admin')
     create(
     @CurrentFactory()
     a: FactoryAccess, 
     @Body()
     b: unknown) { return this.batches.create(a, b); }
     @Post('batches/:id/approve')
+    @FactoryRoles('admin')
     @HttpCode(200)
     approve(
     @CurrentFactory()
@@ -187,6 +271,7 @@ export class BatchesController {
     @Param('id')
     id: string) { return this.batches.approve(a, uuid(id)); }
     @Post('lots/:id/costs')
+    @FactoryRoles('admin')
     @HttpCode(200)
     costs(
     @CurrentFactory()

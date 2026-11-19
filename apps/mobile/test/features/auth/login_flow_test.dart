@@ -20,12 +20,21 @@ void main() {
     expect(logo.lengthInBytes, greaterThan(0));
   });
 
-  testWidgets('aplikasi langsung membuka Beranda tanpa onboarding atau login', (
+  testWidgets('entri utama meminta konfigurasi saat API belum disiapkan', (
     tester,
   ) async {
+    await tester.pumpWidget(
+      const SobatNiraApp(configurationErrors: ['SUPABASE_URL']),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Layanan masuk belum dikonfigurasi.'), findsOneWidget);
+    expect(find.text('Tebu diterima'), findsNothing);
+  });
+
+  testWidgets('demo offline langsung membuka Beranda', (tester) async {
     await tester.binding.setSurfaceSize(const Size(393, 853));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(const SobatNiraApp());
+    await tester.pumpWidget(const SobatNiraApp(connected: false));
     await tester.pumpAndSettle();
     final caneSummary = find.text('Tebu diterima');
     expect(caneSummary, findsOneWidget);
@@ -33,7 +42,9 @@ void main() {
     expect(find.byType(LoginWelcomePage), findsNothing);
     expect(find.byType(LoginFormPage), findsNothing);
     expect(Navigator.of(tester.element(caneSummary)).canPop(), isFalse);
-    await tester.pumpWidget(const SobatNiraApp(key: ValueKey('restart')));
+    await tester.pumpWidget(
+      const SobatNiraApp(key: ValueKey('restart'), connected: false),
+    );
     await tester.pumpAndSettle();
     expect(caneSummary, findsOneWidget);
     expect(find.byType(LoginWelcomePage), findsNothing);

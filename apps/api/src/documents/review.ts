@@ -38,7 +38,7 @@ export class Review {
     return id;
   }
 
-  async list(user: string, status: string, page: number, limit: number, factory?: string) {
+  async list(user: string, status: string, page: number, limit: number, factory?: string, revision?: string) {
     if (!['PENDING_VALIDATION', 'VALIDATED', 'RETURNED_FOR_CORRECTION', 'MANUAL_REVIEW_REQUIRED'].includes(status) ||
         !Number.isSafeInteger(page) || page < 1 || page > 10000 || !Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
       throw new BadRequestException('Filter antrean tidak valid');
@@ -49,9 +49,10 @@ export class Review {
       JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1 AND a.active AND ${ACTIVE_REVIEW_ACCESS_SQL}
       JOIN document_revisions r ON r.id=t.revision_id JOIN document_submissions s ON s.id=r.submission_id
       JOIN whatsapp_inbound_messages m ON m.id=s.inbound_message_id JOIN operator_contacts o ON o.id=m.operator_id
-      WHERE t.status=$2 AND ($5::uuid IS NULL OR d.factory_id=$5)
+      WHERE t.status=$2 AND ($5::uuid IS NULL OR d.factory_id=$5) AND ($6::uuid IS NULL OR t.revision_id=$6)
       ORDER BY t.created_at DESC,t.id LIMIT $3 OFFSET $4`,
-      [user, status, limit, (page - 1) * limit, factory === undefined ? null : requireUuid(factory)]);
+      [user, status, limit, (page - 1) * limit, factory === undefined ? null : requireUuid(factory),
+        revision === undefined ? null : requireUuid(revision)]);
     return { items: rows, page, page_size: limit };
   }
 

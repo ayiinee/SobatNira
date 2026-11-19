@@ -154,7 +154,7 @@ void main() {
       final printing = _TestPrinting();
       PrintingPlatform.instance = printing;
       addTearDown(() => PrintingPlatform.instance = original);
-      await tester.pumpWidget(const SobatNiraApp());
+      await tester.pumpWidget(const SobatNiraApp(connected: false));
       await tester.pumpAndSettle();
       final labels = ['Laba', 'Rekap', 'Biaya Ops', 'Bantuan'];
       for (var i = 1; i < labels.length; i++) {
@@ -198,7 +198,7 @@ void main() {
     final printing = _TestPrinting()..fail = true;
     PrintingPlatform.instance = printing;
     addTearDown(() => PrintingPlatform.instance = original);
-    await tester.pumpWidget(const SobatNiraApp());
+    await tester.pumpWidget(const SobatNiraApp(connected: false));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Laba'));
     await tester.pumpAndSettle();

@@ -27,7 +27,7 @@ void main() {
   }) async {
     await tester.binding.setSurfaceSize(size);
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(const SobatNiraApp());
+    await tester.pumpWidget(const SobatNiraApp(connected: false));
     await tester.pumpAndSettle();
   }
 
@@ -526,7 +526,7 @@ void main() {
           size: Size(360, 720),
           textScaler: TextScaler.linear(2),
         ),
-        child: SobatNiraApp(),
+        child: SobatNiraApp(connected: false),
       ),
     );
     await tester.pumpAndSettle();

@@ -5,7 +5,10 @@ import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
 import '../../widgets/chart_growth.dart';
+import '../kloter/demo_lot_fixture.dart';
 import '../kloter/demo_production.dart';
+import '../pekerjaan/review_api.dart';
+import 'connected_reports.dart';
 import 'demo_analytics.dart';
 import 'report_date_button.dart';
 
@@ -13,61 +16,25 @@ const _barColor = niraGreen;
 const _gradeB = Color(0xFFD3A734);
 const _gradeC = Color(0xFFDCE6DE);
 
-Color _gradeColor(String code, int index) => switch (code) {
-  'A' => niraGreen,
-  'B' => _gradeB,
-  'C' => _gradeC,
-  _ => index.isEven ? niraLeaf : niraOchre,
-};
-
-/// Chart coordinates are approximate. Monetary totals use the API strings.
-typedef ProductionChartLot = ({
-  DateTime date,
-  double sugarKg,
-  double caneKg,
-  Map<String, double> grades,
-});
-
-typedef _ChartDay = ({
-  DateTime date,
-  double kg,
-  double rendemen,
-  Map<String, double> grades,
-});
+class _ChartDay {
+  const _ChartDay(this.date, this.kg, this.rendemen, this.a, this.b, this.c);
+  final DateTime date;
+  final double kg;
+  final double rendemen;
+  final double a;
+  final double b;
+  final double c;
+}
 
 class ProductionChart extends StatefulWidget {
-  ProductionChart({required DemoAnalytics analytics, this.onFilter, super.key})
-    : lots = [
-        for (final lot in analytics.visibleLots)
-          (
-            date: DateTime(2026, 10, lot.day),
-            sugarKg: lot.sugarKg.toDouble(),
-            caneKg: lot.caneKg.toDouble(),
-            grades: {
-              for (final (index, code) in const ['A', 'B', 'C'].indexed)
-                code: lot.batchWeights.indexed
-                    .where((weight) => weight.$1 % 3 == index)
-                    .fold(0.0, (sum, weight) => sum + weight.$2),
-            },
-          ),
-      ],
-      variant = analytics.variant,
-      onVariant = analytics.setVariant,
-      period = analytics.dateFilter;
-
-  const ProductionChart.report({
-    required this.lots,
-    required this.variant,
-    required this.onVariant,
-    required this.period,
+  const ProductionChart({
+    required this.analytics,
+    this.reports,
     this.onFilter,
     super.key,
   });
-
-  final List<ProductionChartLot> lots;
-  final ProductionVariant variant;
-  final ValueChanged<ProductionVariant> onVariant;
-  final Object? period;
+  final DemoAnalytics analytics;
+  final ConnectedReports? reports;
   final VoidCallback? onFilter;
 
   @override
@@ -77,41 +44,84 @@ class ProductionChart extends StatefulWidget {
 class _ProductionChartState extends State<ProductionChart> {
   DateTime? _selectedDay;
 
-  List<_ChartDay> _days() {
-    final byDate = <DateTime, List<ProductionChartLot>>{};
-    for (final lot in widget.lots) {
-      byDate.putIfAbsent(DateUtils.dateOnly(lot.date), () => []).add(lot);
+  _ChartDay _chartDay(DateTime date) {
+    final lots = widget.analytics.visibleLots.where(
+      (lot) => lot.day == date.day,
+    );
+    final sugar = lots.fold(0, (sum, lot) => sum + lot.sugarKg);
+    final cane = lots.fold(0, (sum, lot) => sum + lot.caneKg);
+    double grade(String code) {
+      var total = 0;
+      for (final lot in lots) {
+        for (final (i, weight) in lot.batchWeights.indexed) {
+          if (['A', 'B', 'C'][i % 3] == code) total += weight;
+        }
+      }
+      return total.toDouble();
     }
-    final dates = byDate.keys.toList()..sort();
-    return dates.map((date) {
-      var sugar = 0.0;
-      var cane = 0.0;
-      final grades = <String, double>{};
-      for (final lot in byDate[date]!) {
-        sugar += lot.sugarKg;
-        cane += lot.caneKg;
-        for (final entry in lot.grades.entries) {
+
+    return _ChartDay(
+      date,
+      sugar.toDouble(),
+      cane == 0 ? 0 : sugar / cane * 100,
+      grade('A'),
+      grade('B'),
+      grade('C'),
+    );
+  }
+
+  List<_ChartDay> _officialDays(ConnectedReports reports) {
+    final byDate = <DateTime, List<Json>>{};
+    for (final lot in reports.lots) {
+      if (lot['calculation'] == null) continue;
+      final local = DateTime.parse(lot['receivedAt'] as String).toLocal();
+      final date = DateTime(local.year, local.month, local.day);
+      (byDate[date] ??= []).add(lot);
+    }
+    return [
+      for (final date in byDate.keys.toList()..sort())
+        _officialDay(date, byDate[date]!),
+    ];
+  }
+
+  _ChartDay _officialDay(DateTime date, List<Json> lots) {
+    double sugar = 0, cane = 0;
+    final grades = <String, double>{};
+    double quantity(Object? value) => double.tryParse('$value') ?? 0;
+    for (final lot in lots) {
+      cane += quantity(lot['caneNetKg']);
+      sugar += quantity((lot['calculation'] as Json)['finalSugarKg']);
+      for (final batch in (lot['batches'] as List).cast<Json>()) {
+        for (final grade in (batch['grades'] as List).cast<Json>()) {
+          final code = grade['code'] as String;
           grades.update(
-            entry.key,
-            (weight) => weight + entry.value,
-            ifAbsent: () => entry.value,
+            code,
+            (total) => total + quantity(grade['weightKg']),
+            ifAbsent: () => quantity(grade['weightKg']),
           );
         }
       }
-      return (
-        date: date,
-        kg: sugar,
-        rendemen: cane == 0 ? 0.0 : sugar / cane * 100,
-        grades: grades,
-      );
-    }).toList();
+    }
+    return _ChartDay(
+      date,
+      sugar,
+      cane == 0 ? 0 : sugar / cane * 100,
+      grades['A'] ?? 0,
+      grades['B'] ?? 0,
+      grades['C'] ?? 0,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final grade = widget.variant == ProductionVariant.grade;
-    final days = _days();
-    final codes = {for (final day in days) ...day.grades.keys}.toList()..sort();
+    final grade = widget.analytics.variant == ProductionVariant.grade;
+    final dates =
+        widget.analytics.visibleLots.map((lot) => lot.day).toSet().toList()
+          ..sort();
+    final reports = widget.reports;
+    final days = reports == null
+        ? [for (final day in dates) _chartDay(DateTime(2026, 10, day))]
+        : _officialDays(reports);
     final selected = days.indexWhere((day) => day.date == _selectedDay);
     return NiraOutline(
       Padding(
@@ -134,7 +144,7 @@ class _ProductionChartState extends State<ProductionChart> {
                       tooltip: 'Jenis grafik',
                       onSelected: (variant) {
                         setState(() => _selectedDay = null);
-                        widget.onVariant(variant);
+                        widget.analytics.setVariant(variant);
                       },
                       color: niraPaper,
                       position: PopupMenuPosition.under,
@@ -149,7 +159,7 @@ class _ProductionChartState extends State<ProductionChart> {
                       ),
                       itemBuilder: (_) => [
                         for (final variant in [
-                          widget.variant,
+                          widget.analytics.variant,
                           if (grade)
                             ProductionVariant.rendemen
                           else
@@ -162,7 +172,7 @@ class _ProductionChartState extends State<ProductionChart> {
                             padding: EdgeInsets.zero,
                             child: Container(
                               constraints: const BoxConstraints(minHeight: 44),
-                              color: variant == widget.variant
+                              color: variant == widget.analytics.variant
                                   ? niraGreen
                                   : niraPaper,
                               padding: const EdgeInsets.symmetric(
@@ -178,16 +188,18 @@ class _ProductionChartState extends State<ProductionChart> {
                                           : 'Rendemen',
                                       style: niraText(
                                         NiraType.caption,
-                                        color: variant == widget.variant
+                                        color:
+                                            variant == widget.analytics.variant
                                             ? Colors.white
                                             : niraGreen,
-                                        weight: variant == widget.variant
+                                        weight:
+                                            variant == widget.analytics.variant
                                             ? FontWeight.w600
                                             : FontWeight.w400,
                                       ),
                                     ),
                                   ),
-                                  if (variant == widget.variant)
+                                  if (variant == widget.analytics.variant)
                                     const Icon(
                                       Icons.check,
                                       size: 16,
@@ -265,8 +277,9 @@ class _ProductionChartState extends State<ProductionChart> {
               runSpacing: NiraSpace.sm,
               children: grade
                   ? [
-                      for (final (index, code) in codes.indexed)
-                        _legend('Grade $code', _gradeColor(code, index)),
+                      _legend('Grade A', niraGreen),
+                      _legend('Grade B', _gradeB),
+                      _legend('Grade C', _gradeC),
                     ]
                   : [_legend('Gula final (kg)', _barColor)],
             ),
@@ -304,7 +317,7 @@ class _ProductionChartState extends State<ProductionChart> {
 
                   return Semantics(
                     label: grade
-                        ? 'Grafik batang per grade dalam kilogram.'
+                        ? 'Grafik batang grade A, B, C dalam kilogram.'
                         : 'Grafik batang gula dalam kilogram. Ketuk untuk detail gula dan rendemen.',
                     child: MouseRegion(
                       cursor: SystemMouseCursors.precise,
@@ -322,12 +335,15 @@ class _ProductionChartState extends State<ProductionChart> {
                             children: [
                               Positioned.fill(
                                 child: ChartGrowth(
-                                  replayKey: (widget.variant, widget.period),
+                                  replayKey: (
+                                    widget.analytics.variant,
+                                    reports?.filter ??
+                                        widget.analytics.dateFilter,
+                                  ),
                                   builder: (context, progress) => CustomPaint(
                                     painter: _ProductionPainter(
                                       days: days,
                                       grade: grade,
-                                      codes: codes,
                                       selected: selected,
                                       plot: plot,
                                       textDirection: Directionality.of(context),
@@ -388,11 +404,14 @@ class _ProductionChartState extends State<ProductionChart> {
 
   List<String> _detailLines(_ChartDay day, bool grade) => [
     formatDate(day.date),
-    'Gula final: ${formatQuantity(day.kg, 'kg')}',
+    'Gula final: ${demoNumber(day.kg, decimals: day.kg % 1 == 0 ? 0 : 3)} kg',
     grade
-        ? '${day.grades.entries.map((entry) => '${entry.key}: ${formatQuantity(entry.value)}').join(' · ')} kg'
+        ? 'A: ${_chartAmount(day.a)} · B: ${_chartAmount(day.b)} · C: ${_chartAmount(day.c)} kg'
         : 'Rendemen: ${day.rendemen.toStringAsFixed(1).replaceAll('.', ',')}%',
   ];
+
+  String _chartAmount(double value) =>
+      demoNumber(value, decimals: value % 1 == 0 ? 0 : 3);
 
   TextStyle _detailStyle(int index) => niraText(
     NiraType.caption,
@@ -439,7 +458,6 @@ class _ProductionPainter extends CustomPainter {
   const _ProductionPainter({
     required this.days,
     required this.grade,
-    required this.codes,
     required this.selected,
     required this.plot,
     required this.textDirection,
@@ -447,7 +465,6 @@ class _ProductionPainter extends CustomPainter {
   });
   final List<_ChartDay> days;
   final bool grade;
-  final List<String> codes;
   final int selected;
   final Rect plot;
   final TextDirection textDirection;
@@ -497,9 +514,11 @@ class _ProductionPainter extends CustomPainter {
       final x = plot.left + slot * (i + .5);
       if (grade) {
         var bottom = plot.bottom;
-        for (final (index, code) in codes.indexed.toList().reversed) {
-          final value = day.grades[code] ?? 0;
-          final color = _gradeColor(code, index);
+        for (final (value, color) in [
+          (day.c, _gradeC),
+          (day.b, _gradeB),
+          (day.a, niraGreen),
+        ]) {
           final h = value / maximum * plot.height * progress;
           canvas.drawRect(
             Rect.fromLTWH(x - barWidth / 2, bottom - h, barWidth, h),
@@ -520,15 +539,13 @@ class _ProductionPainter extends CustomPainter {
           Paint()..color = i == selected ? niraGreenHover : _barColor,
         );
       }
-      final labelStep = (38 / slot).ceil().clamp(1, days.length);
-      if (i % labelStep == 0) {
-        final label =
-            days.first.date.month == days.last.date.month &&
-                days.first.date.year == days.last.date.year
-            ? '${day.date.day}'
-            : '${day.date.day}/${day.date.month}';
-        _text(canvas, label, Offset(x, plot.bottom + 16));
-      }
+      final multiMonth =
+          days.first.date.month != days.last.date.month ||
+          days.first.date.year != days.last.date.year;
+      final label = multiMonth
+          ? '${day.date.day}/${day.date.month}'
+          : '${day.date.day}';
+      _text(canvas, label, Offset(x, plot.bottom + 16));
     }
   }
 

@@ -1,34 +1,12 @@
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
-const { once } = require('node:events');
-const { createServer } = require('node:http');
 const { TruckIntake } = require('../../dist/documents/truck-intake');
 const { MillingRepository } = require('../../dist/milling/milling.repository');
 const { intakeFixture } = require('./intake-fixture.cjs');
 
 async function mobileClosureFixture({ consume = true } = {}) {
-  const batches = createServer((request, response) => {
-    response.setHeader('Content-Type', 'application/json');
-    const url = new URL(request.url, 'http://127.0.0.1');
-    if (request.method !== 'GET' || !url.pathname.startsWith('/batches/closure-check/')
-      || request.headers.authorization !== 'Bearer fixture-admin') {
-      response.writeHead(403).end('{}');
-      return;
-    }
-    response.end(JSON.stringify({ canClose: true }));
-  });
-  batches.listen(0, '127.0.0.1');
-  await once(batches, 'listening');
-  let fixture;
-  const close = async () => {
-    try { await fixture?.close(); }
-    finally {
-      batches.closeAllConnections();
-      await new Promise((resolve) => batches.close(resolve));
-    }
-  };
+  const fixture = await intakeFixture(false, { BATCH_API_BASE_URL: '' });
   try {
-    fixture = await intakeFixture(false, { BATCH_API_BASE_URL: 'http://127.0.0.1:' + batches.address().port });
     const { ids, app } = fixture;
     const access = { userId: ids.admin, tenantId: ids.tenant, factoryId: ids.factory, role: 'admin' };
     const milling = app.get(MillingRepository);
@@ -50,18 +28,27 @@ async function mobileClosureFixture({ consume = true } = {}) {
       }, intake, { synthetic: false, ocrDocumentId: randomUUID(), ocrRevisionId: randomUUID(), caneLabel: 'DEMO' });
     });
     if (consume) {
+      const root = fixture.root + '/production';
+      const id = randomUUID();
+      assert.equal((await fixture.request(root + '/batches', 'POST', {
+        id, lotId: ids.lot, code: 'CLOSURE-FIXTURE', wokNumber: 1, occurredAt: '2026-11-16T03:00:00Z',
+        quantityMl: '250000', physicalWeightKg: '30',
+        grades: [{ code: 'A', weightKg: '30', pricePerKgRupiah: '20000' }],
+      })).status, 201);
+      assert.equal((await fixture.request(root + '/lots/' + ids.lot + '/costs', 'POST', {
+        caneCostRupiah: '100000', operationalCostRupiah: '20000', ingredientCostRupiah: '5000', otherCostRupiah: '0',
+      })).status, 200);
       const path = fixture.root + '/lots/' + ids.lot + '/juice/reservations';
-      const requestId = randomUUID();
-      assert.equal((await fixture.request(path, 'POST', { requestId, batchId: randomUUID(), quantityMl: '250000' })).status, 201);
-      assert.equal((await fixture.request(path + '/' + requestId + '/consume', 'POST')).status, 200);
-      return { ...fixture, close, closureLotId: ids.lot };
+      assert.equal((await fixture.request(path, 'POST', { requestId: id, batchId: id, quantityMl: '250000' })).status, 201);
+      assert.equal((await fixture.request(root + '/batches/' + id + '/approve', 'POST')).status, 200);
+      return { ...fixture, closureLotId: ids.lot };
     }
     for (const [id, code] of [[ids.lot, 'TRANSFER-A'], [ids.secondLot, 'TRANSFER-B'], [ids.thirdLot, 'TRANSFER-C']]) {
       await fixture.client.query('UPDATE sobatnira.lots SET display_code=$2 WHERE id=$1', [id, code]);
     }
-    return { ...fixture, close, transferLotId: ids.lot };
+    return { ...fixture, transferLotId: ids.lot };
   } catch (error) {
-    await close();
+    await fixture.close();
     throw error;
   }
 }

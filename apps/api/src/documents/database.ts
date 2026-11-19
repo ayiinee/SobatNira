@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, ServiceUnavailableException } from '@nestjs/common';
 import { readFile, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
@@ -10,6 +10,7 @@ const migrationFiles = async () => (await readdir(directory)).filter((name) => /
 
 @Injectable()
 export class Database implements OnModuleDestroy {
+  private readonly logger = new Logger(Database.name);
   private pool?: Pool;
 
   private connection() {
@@ -18,7 +19,11 @@ export class Database implements OnModuleDestroy {
     if (!config.postgres) {
       throw new ServiceUnavailableException('Database dokumen belum dikonfigurasi');
     }
-    return this.pool = new Pool(postgresClientOptions(config));
+    const pool = new Pool(postgresClientOptions(config));
+    // pg discards failed idle connections and opens replacements on demand.
+    pool.on('error', () => this.logger.warn('Koneksi idle database dokumen terputus.'));
+    this.pool = pool;
+    return pool;
   }
 
   query<T extends QueryResultRow = QueryResultRow>(sql: string, args?: unknown[]): Promise<QueryResult<T>> {

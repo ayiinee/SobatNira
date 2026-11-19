@@ -72,7 +72,7 @@ Future<Uint8List> buildReportPdf(
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
             pw.Text(
-              '${report.synthetic ? 'Data sintetis' : 'Data disahkan'} · SobatNira',
+              '${report.synthetic ? 'Data sintetis' : 'Data disahkan'} · SobatNira${report.provisional ? ' · Margin sementara pada kloter terbuka' : ''}',
               style: const pw.TextStyle(fontSize: 9, color: muted),
             ),
             pw.Text(

@@ -186,6 +186,13 @@ class DemoKloter {
   num? get brix => record == null ? demoLotFor(code).brix : _number('brix');
   num? get juiceLiters => _number('juiceProducedLiters');
 
+  String? noteRevision({required bool intake}) {
+    final posting =
+        record?[intake ? 'intake' : 'milling'] as Map<String, Object?>?;
+    final document = posting?['document'] as Map<String, Object?>?;
+    return document?['revisionId'] as String?;
+  }
+
   num? get batchJuiceLiters {
     if (batches.isEmpty) return null;
     num total = 0;

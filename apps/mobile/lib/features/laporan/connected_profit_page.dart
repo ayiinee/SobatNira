@@ -5,7 +5,6 @@ import '../pekerjaan/review_api.dart';
 import 'demo_analytics.dart';
 import 'printable_report.dart';
 import 'report_export_page.dart';
-import 'report_overview.dart';
 
 class ConnectedProfitPage extends StatefulWidget {
   const ConnectedProfitPage({
@@ -81,40 +80,52 @@ class _ConnectedProfitPageState extends State<ConnectedProfitPage> {
   }
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<PrintableReport>(
-    future: _report,
-    builder: (context, snapshot) => ReportExportPage(
-      kind: PrintableReportKind.profit,
-      analytics: _analytics,
-      factory: widget.scope.factoryName,
-      report:
-          snapshot.data ??
-          PrintableReport(
-            kind: PrintableReportKind.profit,
-            factory: widget.scope.factoryName,
-            period: 'Memuat periode',
-            rows: const [],
-            connected: true,
-            synthetic: _synthetic,
-            totalDisplayOverride: '—',
+  Widget build(BuildContext context) => Column(
+    children: [
+      Material(
+        child: SafeArea(
+          bottom: false,
+          child: CheckboxListTile(
+            title: const Text('Tampilkan data contoh'),
+            value: _synthetic,
+            onChanged: (v) => setState(() {
+              _synthetic = v ?? false;
+              _report = _load();
+            }),
           ),
-      reportOptions: ReportDataOptions(
-        synthetic: _synthetic,
-        onChanged: (value) => setState(() {
-          _synthetic = value;
-          _report = _load();
-        }),
+        ),
       ),
-      statusMessage: snapshot.connectionState != ConnectionState.done
-          ? const LinearProgressIndicator()
-          : snapshot.hasError
-          ? TextButton(
-              onPressed: () => setState(() => _report = _load()),
-              child: const Text('Coba lagi memuat laporan'),
-            )
-          : null,
-      onFilter: _filter,
-      onNavigate: (_) => Navigator.of(context).pop(),
-    ),
+      Expanded(
+        child: FutureBuilder<PrintableReport>(
+          future: _report,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snapshot.hasError) {
+              return Scaffold(
+                appBar: AppBar(title: const Text('Laporan laba')),
+                body: Center(
+                  child: FilledButton(
+                    onPressed: () => setState(() => _report = _load()),
+                    child: const Text('Coba lagi memuat laporan'),
+                  ),
+                ),
+              );
+            }
+            return ReportExportPage(
+              kind: PrintableReportKind.profit,
+              analytics: _analytics,
+              factory: widget.scope.factoryName,
+              report: snapshot.data!,
+              onFilter: _filter,
+              onNavigate: (_) => Navigator.of(context).pop(),
+            );
+          },
+        ),
+      ),
+    ],
   );
 }
