@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
@@ -10,6 +12,7 @@ class KloterProcessPage extends StatefulWidget {
     required this.kloter,
     required this.onNavigate,
     this.onOpenPekerjaan,
+    this.approvedPhoto,
     super.key,
   });
 
@@ -17,6 +20,7 @@ class KloterProcessPage extends StatefulWidget {
   final DemoKloter kloter;
   final ValueChanged<NiraTab> onNavigate;
   final VoidCallback? onOpenPekerjaan;
+  final Future<Uint8List?> Function(String)? approvedPhoto;
 
   @override
   State<KloterProcessPage> createState() => _KloterProcessPageState();
@@ -24,6 +28,17 @@ class KloterProcessPage extends StatefulWidget {
 
 class _KloterProcessPageState extends State<KloterProcessPage> {
   int _selected = 0;
+  final _photos = <String, Future<Uint8List?>?>{};
+
+  Future<Uint8List?>? _photo(bool intake) {
+    final revision = widget.kloter.noteRevision(intake: intake);
+    return revision == null
+        ? null
+        : _photos.putIfAbsent(
+            revision,
+            () => widget.approvedPhoto?.call(revision),
+          );
+  }
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -79,9 +94,13 @@ class _KloterProcessPageState extends State<KloterProcessPage> {
                 ),
                 children: [
                   if (connected)
-                    DocumentLink(
-                      'Foto, bukti, dan revisi di Pekerjaan',
-                      widget.onOpenPekerjaan!,
+                    ApprovedDocumentPreview(
+                      batch: false,
+                      photo: _photo(intake),
+                      fallback: DocumentLink(
+                        'Foto, bukti, dan revisi di Pekerjaan',
+                        widget.onOpenPekerjaan!,
+                      ),
                     )
                   else
                     const DocumentPreview(batch: false),

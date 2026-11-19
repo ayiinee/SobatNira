@@ -463,6 +463,7 @@ class _LotDetailState extends State<_LotDetail> {
         demo: widget.demo,
         onNavigate: widget.onNavigate,
         onOpenPekerjaan: widget.onOpenPekerjaan,
+        approvedPhoto: (revision) => _api.approvedPhoto(_scope, revision),
         onEdit: snapshot.hasError || _scope.role != 'admin'
             ? null
             : () async {
@@ -483,6 +484,7 @@ class _LotDetailState extends State<_LotDetail> {
           kloterCode: _lot.code,
           caneWeight: _lot.weight,
           onOpenPekerjaan: widget.onOpenPekerjaan,
+          millingRevision: _lot.noteRevision(intake: false),
           canCreate:
               _scope.role == 'admin' &&
               _lot.milling.verified &&

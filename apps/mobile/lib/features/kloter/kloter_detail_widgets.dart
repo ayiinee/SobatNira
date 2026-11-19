@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
@@ -221,18 +223,22 @@ class DocumentLink extends StatelessWidget {
 }
 
 class DocumentPreview extends StatelessWidget {
-  const DocumentPreview({required this.batch, super.key});
+  const DocumentPreview({required this.batch, this.photo, super.key});
 
   final bool batch;
+  final ImageProvider? photo;
 
   static String asset(bool batch) =>
       'assets/sobatnira/art/nota-${batch ? 'batch' : 'tebu'}.jpg';
 
-  static Future<void> open(BuildContext context, {required bool batch}) =>
-      showDialog<void>(
-        context: context,
-        builder: (context) => _DocumentViewer(batch: batch),
-      );
+  static Future<void> open(
+    BuildContext context, {
+    required bool batch,
+    ImageProvider? photo,
+  }) => showDialog<void>(
+    context: context,
+    builder: (context) => _DocumentViewer(batch: batch, photo: photo),
+  );
 
   @override
   Widget build(BuildContext context) => Column(
@@ -242,15 +248,17 @@ class DocumentPreview extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         borderRadius: BorderRadius.circular(niraRadius),
         child: InkWell(
-          onTap: () => open(context, batch: batch),
+          onTap: () => open(context, batch: batch, photo: photo),
           child: Stack(
             children: [
               AspectRatio(
                 aspectRatio: 2.4,
-                child: Image.asset(
-                  asset(batch),
+                child: Image(
+                  image: photo ?? AssetImage(asset(batch)),
                   fit: BoxFit.cover,
-                  semanticLabel: 'Buka pratinjau nota sintetis',
+                  semanticLabel: photo == null
+                      ? 'Buka pratinjau nota sintetis'
+                      : 'Buka pratinjau nota sah',
                 ),
               ),
               Positioned(
@@ -258,7 +266,7 @@ class DocumentPreview extends StatelessWidget {
                 right: NiraSpace.xs,
                 child: IconButton(
                   tooltip: 'Perbesar foto',
-                  onPressed: () => open(context, batch: batch),
+                  onPressed: () => open(context, batch: batch, photo: photo),
                   style: IconButton.styleFrom(foregroundColor: Colors.white),
                   icon: const Icon(Icons.open_in_full, size: 20),
                 ),
@@ -271,9 +279,39 @@ class DocumentPreview extends StatelessWidget {
   );
 }
 
-class _DocumentViewer extends StatefulWidget {
-  const _DocumentViewer({required this.batch});
+class ApprovedDocumentPreview extends StatelessWidget {
+  const ApprovedDocumentPreview({
+    required this.photo,
+    required this.batch,
+    required this.fallback,
+    super.key,
+  });
+
+  final Future<Uint8List?>? photo;
   final bool batch;
+  final Widget fallback;
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Uint8List?>(
+    future: photo,
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return const AspectRatio(
+          aspectRatio: 2.4,
+          child: Center(child: LinearProgressIndicator()),
+        );
+      }
+      final bytes = snapshot.data;
+      if (bytes == null) return fallback;
+      return DocumentPreview(batch: batch, photo: MemoryImage(bytes));
+    },
+  );
+}
+
+class _DocumentViewer extends StatefulWidget {
+  const _DocumentViewer({required this.batch, this.photo});
+  final bool batch;
+  final ImageProvider? photo;
 
   @override
   State<_DocumentViewer> createState() => _DocumentViewerState();
@@ -325,10 +363,14 @@ class _DocumentViewerState extends State<_DocumentViewer> {
               maxScale: 6,
               trackpadScrollCausesScale: true,
               child: Center(
-                child: Image.asset(
-                  DocumentPreview.asset(widget.batch),
+                child: Image(
+                  image:
+                      widget.photo ??
+                      AssetImage(DocumentPreview.asset(widget.batch)),
                   fit: BoxFit.contain,
-                  semanticLabel: 'Contoh nota sintetis',
+                  semanticLabel: widget.photo == null
+                      ? 'Contoh nota sintetis'
+                      : 'Foto nota sah',
                 ),
               ),
             ),

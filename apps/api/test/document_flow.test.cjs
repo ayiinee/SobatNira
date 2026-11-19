@@ -701,6 +701,11 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     assert.equal((await change(detail, 'validate', decision, randomUUID())).status, 409);
     assert.deepEqual(await stock(), [{ quantity_delta_kg: '1252', is_synthetic: false }]);
     assert.deepEqual((await mobile(`review-tasks/${taskId}`).then((response) => response.json())).intake, booked.intake);
+    const evidencePath = `review-tasks?status=VALIDATED&factory_id=${factory}&revision_id=${detail.revision_id}`;
+    const evidence = await mobile(evidencePath).then(response => response.json());
+    assert.deepEqual(evidence.items.map(item => item.id), [taskId]);
+    assert.deepEqual((await mobile(evidencePath, 'other-user').then(response => response.json())).items, []);
+    assert.equal((await mobile('review-tasks?revision_id=bogus')).status, 400);
     assert.equal((await db.query('SELECT count(*)::int AS count FROM document_approvals')).rows[0].count, 1);
 
     const caneCorrection = { revision_id: detail.revision_id, expected_version: detail.version, lot_id: lot,

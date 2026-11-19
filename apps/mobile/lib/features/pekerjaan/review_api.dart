@@ -506,7 +506,12 @@ class ReviewApi {
     return _json(_client.send(request).then(http.Response.fromStream));
   }
 
-  Future<List<Json>> list(String status, int page, {String? factoryId}) async {
+  Future<List<Json>> list(
+    String status,
+    int page, {
+    String? factoryId,
+    String? revisionId,
+  }) async {
     final response = await _json(
       _client.get(
         _url('review-tasks', {
@@ -514,6 +519,7 @@ class ReviewApi {
           'page': '$page',
           'page_size': '20',
           'factory_id': ?factoryId,
+          'revision_id': ?revisionId,
         }),
         headers: _headers,
       ),
@@ -562,6 +568,21 @@ class ReviewApi {
         .timeout(const Duration(seconds: 12));
     _requireStatus(response, 200);
     return response.bodyBytes;
+  }
+
+  Future<Uint8List?> approvedPhoto(
+    FactoryScope scope,
+    String revisionId,
+  ) async {
+    final tasks = await list(
+      'VALIDATED',
+      1,
+      factoryId: scope.factoryId,
+      revisionId: revisionId,
+    );
+    final task = tasks.firstOrNull;
+    if (task == null) return null;
+    return photo(task['id'] as String, task['media_asset_id'] as String);
   }
 
   Future<Json> change(

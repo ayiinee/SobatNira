@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
@@ -19,6 +21,7 @@ class KloterDetailPage extends StatelessWidget {
     this.onTransfer,
     this.onClosure,
     this.onOpenPekerjaan,
+    this.approvedPhoto,
     super.key,
   });
 
@@ -31,6 +34,7 @@ class KloterDetailPage extends StatelessWidget {
   final VoidCallback? onTransfer;
   final VoidCallback? onClosure;
   final VoidCallback? onOpenPekerjaan;
+  final Future<Uint8List?> Function(String)? approvedPhoto;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -87,6 +91,7 @@ class KloterDetailPage extends StatelessWidget {
                             kloter: kloter,
                             onNavigate: onNavigate,
                             onOpenPekerjaan: onOpenPekerjaan,
+                            approvedPhoto: approvedPhoto,
                           ),
                         ),
                       );

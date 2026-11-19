@@ -32,6 +32,7 @@ class BatchDetailPage extends StatefulWidget {
        officialData = null,
        officialStatus = null,
        officialDocument = null,
+       officialPreview = null,
        officialActions = const [],
        officialNumber = null;
 
@@ -43,6 +44,7 @@ class BatchDetailPage extends StatefulWidget {
     required this.officialNumber,
     this.officialStatus,
     this.officialDocument,
+    this.officialPreview,
     this.officialActions = const [],
     this.officialAction,
     required this.kloterCode,
@@ -61,6 +63,7 @@ class BatchDetailPage extends StatefulWidget {
   final BatchDetailData? officialData;
   final Widget? officialStatus;
   final VoidCallback? officialDocument;
+  final Widget? officialPreview;
   final List<Widget> officialActions;
   final int? officialNumber;
   final Widget? officialAction;
@@ -281,8 +284,8 @@ class _BatchDetailPageState extends State<BatchDetailPage>
   List<Widget> _summary() => [
     if (!_official)
       const DocumentPreview(batch: true)
-    else if (widget.officialDocument case final open?)
-      DocumentLink('Foto nota produksi di Pekerjaan', open),
+    else
+      ?widget.officialPreview,
     const SizedBox(height: NiraSpace.md),
     const DetailSectionTitle('Ringkasan proses'),
     const SizedBox(height: NiraSpace.sm),

@@ -151,8 +151,9 @@ class MobileReviewController {
   @Get('review-tasks')
   @Header('Cache-Control', 'private, no-store')
   async list(@Headers('authorization') token: string, @Query('status') status = 'PENDING_VALIDATION',
-    @Query('page') page = '1', @Query('page_size') limit = '20', @Query('factory_id') factory?: string) {
-    return this.review.list(await this.review.user(token), status, Number(page), Number(limit), factory);
+    @Query('page') page = '1', @Query('page_size') limit = '20', @Query('factory_id') factory?: string,
+    @Query('revision_id') revision?: string) {
+    return this.review.list(await this.review.user(token), status, Number(page), Number(limit), factory, revision);
   }
 
   @Get('review-tasks/:id')

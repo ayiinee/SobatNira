@@ -185,6 +185,13 @@ class DemoKloter {
   num? get brix => _number('brix');
   num? get juiceLiters => _number('juiceProducedLiters');
 
+  String? noteRevision({required bool intake}) {
+    final posting =
+        record?[intake ? 'intake' : 'milling'] as Map<String, Object?>?;
+    final document = posting?['document'] as Map<String, Object?>?;
+    return document?['revisionId'] as String?;
+  }
+
   num? _number(String field, {int divisor = 1}) {
     final value = num.tryParse(record?[field]?.toString() ?? '');
     return value == null ? null : value / divisor;

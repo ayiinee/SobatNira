@@ -20,6 +20,7 @@ class OfficialLotBatches extends StatefulWidget {
     required this.kloterCode,
     required this.caneWeight,
     required this.onOpenPekerjaan,
+    required this.millingRevision,
     required this.canCreate,
     required this.onNavigate,
     required this.onChanged,
@@ -33,6 +34,7 @@ class OfficialLotBatches extends StatefulWidget {
   final String kloterCode;
   final String caneWeight;
   final VoidCallback onOpenPekerjaan;
+  final String? millingRevision;
   final bool canCreate;
   final ValueChanged<NiraTab> onNavigate;
   final VoidCallback onChanged;
@@ -99,6 +101,7 @@ class _OfficialLotBatchesState extends State<OfficialLotBatches> {
           kloterCode: widget.kloterCode,
           caneWeight: widget.caneWeight,
           onOpenPekerjaan: widget.onOpenPekerjaan,
+          millingRevision: widget.millingRevision,
           onNavigate: widget.onNavigate,
           reportLink: widget.reportLink,
         ),
@@ -190,6 +193,7 @@ class _OfficialBatchDetail extends StatefulWidget {
     required this.kloterCode,
     required this.caneWeight,
     required this.onOpenPekerjaan,
+    required this.millingRevision,
     required this.onNavigate,
     required this.reportLink,
   });
@@ -200,6 +204,7 @@ class _OfficialBatchDetail extends StatefulWidget {
   final String kloterCode;
   final String caneWeight;
   final VoidCallback onOpenPekerjaan;
+  final String? millingRevision;
   final ValueChanged<NiraTab> onNavigate;
   final Future<void> Function([String? batchId]) reportLink;
 
@@ -211,6 +216,11 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
   late final String _id = widget.initial['id'] as String;
   late final String _lot = widget.initial['lot_id'] as String;
   late Future<Json> _detail = _load();
+  late final _photo = widget.millingRevision == null
+      ? null
+      : widget.api
+            .approvedPhoto(widget.scope, widget.millingRevision!)
+            .then((photo) => photo, onError: (Object _) => null);
   bool _busy = false;
   String? _error;
 
@@ -381,6 +391,14 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
         officialData: current == null ? null : _data(current),
         officialNumber: widget.initial['wok_number'] as int,
         officialDocument: widget.onOpenPekerjaan,
+        officialPreview: ApprovedDocumentPreview(
+          batch: true,
+          photo: _photo,
+          fallback: DocumentLink(
+            'Foto nota produksi di Pekerjaan',
+            widget.onOpenPekerjaan,
+          ),
+        ),
         officialActions: current == null ? const [] : _actions(current),
         officialStatus: snapshot.hasError
             ? Column(
