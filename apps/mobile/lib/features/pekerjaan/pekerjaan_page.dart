@@ -24,6 +24,7 @@ class PekerjaanPage extends StatefulWidget {
 
 class _PekerjaanPageState extends State<PekerjaanPage>
     with WidgetsBindingObserver {
+  final _pageHeight = NiraPageHeight();
   final _email = TextEditingController();
   final _password = TextEditingController();
   ReviewApi? _session;
@@ -216,8 +217,10 @@ class _PekerjaanPageState extends State<PekerjaanPage>
             _load();
           }),
         ),
-        FutureBuilder<List<Json>>(
+        NiraPagedFutureBuilder<List<Json>>(
           future: _tasks,
+          page: _page,
+          dataset: (_api, widget.factoryId, _status),
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
               return const LinearProgressIndicator();
@@ -247,19 +250,28 @@ class _PekerjaanPageState extends State<PekerjaanPage>
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (tasks.isEmpty)
-                  const Text('Belum ada laporan pada status ini.'),
-                for (final task in tasks)
-                  Card(
-                    child: ListTile(
-                      title: Text(documentType(task['document_type'])),
-                      subtitle: Text(
-                        '${task['sender_name']} · Revisi ${task['version']} · ${task['issue_count']} temuan',
-                      ),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => _open(task),
-                    ),
+                NiraPageBody(
+                  height: _pageHeight,
+                  firstPage: _page == 1,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (tasks.isEmpty)
+                        const Text('Belum ada laporan pada status ini.'),
+                      for (final task in tasks)
+                        Card(
+                          child: ListTile(
+                            title: Text(documentType(task['document_type'])),
+                            subtitle: Text(
+                              '${task['sender_name']} · Revisi ${task['version']} · ${task['issue_count']} temuan',
+                            ),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () => _open(task),
+                          ),
+                        ),
+                    ],
                   ),
+                ),
                 if (_page > 1 || tasks.length == 20)
                   NiraPagination(
                     page: _page,

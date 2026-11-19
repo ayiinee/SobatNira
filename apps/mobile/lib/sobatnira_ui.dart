@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 const niraGreen = Color(0xFF174B35);
@@ -582,6 +583,132 @@ class NiraTabs extends StatelessWidget {
   }
 }
 
+class NiraPageHeight {
+  double? _width;
+  double _height = 0;
+
+  void reset() {
+    _width = null;
+    _height = 0;
+  }
+}
+
+class NiraPageBody extends SingleChildRenderObjectWidget {
+  const NiraPageBody({
+    super.key,
+    required this.height,
+    required this.firstPage,
+    required Widget child,
+  }) : super(child: child);
+
+  final NiraPageHeight height;
+  final bool firstPage;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _PageBodyBox(height, firstPage);
+
+  @override
+  void updateRenderObject(BuildContext context, covariant _PageBodyBox box) {
+    box.height = height;
+    box.firstPage = firstPage;
+    box.markNeedsLayout();
+  }
+}
+
+class _PageBodyBox extends RenderProxyBox {
+  _PageBodyBox(this.height, this.firstPage);
+
+  NiraPageHeight height;
+  bool firstPage;
+
+  @override
+  Size computeDryLayout(BoxConstraints constraints) {
+    final content = child!.getDryLayout(constraints);
+    final reserved = !firstPage && height._width == constraints.maxWidth
+        ? height._height
+        : 0.0;
+    return constraints.constrain(
+      Size(content.width, math.max(content.height, reserved)),
+    );
+  }
+
+  @override
+  void performLayout() {
+    child!.layout(constraints, parentUsesSize: true);
+    final content = child!.size;
+    if (firstPage || height._width != constraints.maxWidth) height.reset();
+    height._width = constraints.maxWidth;
+    height._height = math.max(content.height, height._height);
+    size = constraints.constrain(Size(content.width, height._height));
+  }
+}
+
+/// Retains the previous page layout while a different page is loading.
+class NiraPagedFutureBuilder<T> extends StatefulWidget {
+  const NiraPagedFutureBuilder({
+    required this.future,
+    required this.page,
+    required this.builder,
+    this.dataset,
+    super.key,
+  });
+
+  final Future<T>? future;
+  final int page;
+  final Object? dataset;
+  final AsyncWidgetBuilder<T> builder;
+
+  @override
+  State<NiraPagedFutureBuilder<T>> createState() =>
+      _NiraPagedFutureBuilderState<T>();
+}
+
+class _NiraPagedFutureBuilderState<T> extends State<NiraPagedFutureBuilder<T>> {
+  Widget? _lastPage;
+  bool _changingPage = false;
+
+  @override
+  void didUpdateWidget(covariant NiraPagedFutureBuilder<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.dataset != oldWidget.dataset) _lastPage = null;
+    if (widget.future != oldWidget.future) {
+      _changingPage = widget.page != oldWidget.page && _lastPage != null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<T>(
+    future: widget.future,
+    builder: (context, snapshot) {
+      final waiting = snapshot.connectionState == ConnectionState.waiting;
+      final holdingPage = waiting && _changingPage && _lastPage != null;
+      final content = holdingPage
+          ? _lastPage!
+          : widget.builder(context, snapshot);
+      if (snapshot.connectionState == ConnectionState.done) {
+        _lastPage = snapshot.hasData ? content : null;
+      }
+      return Stack(
+        fit: StackFit.passthrough,
+        children: [
+          ExcludeFocus(
+            excluding: holdingPage,
+            child: IgnorePointer(ignoring: holdingPage, child: content),
+          ),
+          if (holdingPage)
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: LinearProgressIndicator(),
+            ),
+        ],
+      );
+    },
+  );
+}
+
 class NiraPagination extends StatelessWidget {
   const NiraPagination({
     required this.page,
@@ -598,7 +725,19 @@ class NiraPagination extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = pageCount == null ? 'Halaman $page' : '$page dari $pageCount';
+    final totalPages = pageCount;
+    final label = totalPages == null
+        ? 'Halaman $page'
+        : '$page dari $totalPages';
+    final showPrevious = page > 1;
+    final showNext = totalPages == null ? onNext != null : page < totalPages;
+    final arrowStyle = IconButton.styleFrom(
+      backgroundColor: niraGreen,
+      foregroundColor: Colors.white,
+      disabledBackgroundColor: const Color(0xFFE6EFE5),
+      disabledForegroundColor: niraGreen.withValues(alpha: .45),
+      shape: const RoundedRectangleBorder(),
+    ).copyWith(overlayColor: niraGreenOverlay);
     return Align(
       alignment: Alignment.center,
       child: Padding(
@@ -610,16 +749,18 @@ class NiraPagination extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              IconButton(
-                tooltip: 'Sebelumnya',
-                onPressed: onPrevious,
-                color: niraGreen,
-                icon: const Icon(Icons.chevron_left),
-              ),
-              const SizedBox(
-                height: 24,
-                child: VerticalDivider(width: 1, color: niraLine),
-              ),
+              if (showPrevious) ...[
+                IconButton.filled(
+                  tooltip: 'Sebelumnya',
+                  onPressed: onPrevious,
+                  style: arrowStyle,
+                  icon: const Icon(Icons.chevron_left),
+                ),
+                const SizedBox(
+                  height: 24,
+                  child: VerticalDivider(width: 1, color: niraLine),
+                ),
+              ],
               Flexible(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: NiraSpace.lg),
@@ -635,16 +776,18 @@ class NiraPagination extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(
-                height: 24,
-                child: VerticalDivider(width: 1, color: niraLine),
-              ),
-              IconButton(
-                tooltip: 'Berikutnya',
-                onPressed: onNext,
-                color: niraGreen,
-                icon: const Icon(Icons.chevron_right),
-              ),
+              if (showNext) ...[
+                const SizedBox(
+                  height: 24,
+                  child: VerticalDivider(width: 1, color: niraLine),
+                ),
+                IconButton.filled(
+                  tooltip: 'Berikutnya',
+                  onPressed: onNext,
+                  style: arrowStyle,
+                  icon: const Icon(Icons.chevron_right),
+                ),
+              ],
             ],
           ),
         ),
@@ -654,11 +797,20 @@ class NiraPagination extends StatelessWidget {
 }
 
 class NiraButton extends StatelessWidget {
-  const NiraButton(this.label, this.onPressed, {super.key, this.shadow = true});
+  const NiraButton(
+    this.label,
+    this.onPressed, {
+    super.key,
+    this.shadow = true,
+    this.visualDensity,
+    this.minimumHeight = 48,
+  });
 
   final String label;
   final VoidCallback? onPressed;
   final bool shadow;
+  final VisualDensity? visualDensity;
+  final double minimumHeight;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -670,7 +822,8 @@ class NiraButton extends StatelessWidget {
         foregroundColor: Colors.white,
         disabledBackgroundColor: const Color(0xFFE6EFE5),
         disabledForegroundColor: niraGreen,
-        minimumSize: const Size(0, 48),
+        minimumSize: Size(0, minimumHeight),
+        visualDensity: visualDensity,
         padding: const EdgeInsets.symmetric(
           vertical: NiraSpace.md,
           horizontal: NiraSpace.lg,

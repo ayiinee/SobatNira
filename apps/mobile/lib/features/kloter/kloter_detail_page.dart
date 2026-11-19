@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/kloter_cane_overlay.dart';
 import '../../widgets/review_status_label.dart';
 import 'batch_detail_page.dart';
 import 'demo_production.dart';
-import 'kloter_card.dart';
 import 'kloter_detail_widgets.dart';
 import 'kloter_process_page.dart';
 
@@ -180,21 +180,7 @@ class _BatchTile extends StatelessWidget {
         overlayColor: niraGreenOverlay,
         child: Stack(
           children: [
-            Positioned(
-              right: 0,
-              bottom: -20,
-              child: IgnorePointer(
-                child: Opacity(
-                  opacity: caneOverlayOpacity(pending),
-                  child: Image.asset(
-                    'assets/sobatnira/art/cane.png',
-                    width: 104,
-                    height: 63,
-                    excludeFromSemantics: true,
-                  ),
-                ),
-              ),
-            ),
+            KloterCaneOverlay(pending: pending, batch: true),
             ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 63),
               child: Padding(

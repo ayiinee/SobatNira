@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/kloter_cane_overlay.dart';
 import '../../widgets/review_status_label.dart';
 import 'demo_production.dart';
-
-double caneOverlayOpacity(bool pending) => pending ? .82 : .55;
 
 class KloterCard extends StatelessWidget {
   const KloterCard({required this.kloter, required this.onTap, super.key});
@@ -23,7 +22,7 @@ class KloterCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(niraRadius),
       ),
       child: Material(
-        color: pending ? niraGold : niraGreen,
+        color: pending ? const Color(0xFFCFA331) : niraGreen,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(niraRadius),
           side: BorderSide(
@@ -37,21 +36,7 @@ class KloterCard extends StatelessWidget {
           overlayColor: niraGreenOverlay,
           child: Stack(
             children: [
-              Positioned(
-                right: 0,
-                bottom: -28,
-                child: IgnorePointer(
-                  child: Opacity(
-                    opacity: caneOverlayOpacity(pending),
-                    child: Image.asset(
-                      'assets/sobatnira/art/cane.png',
-                      width: 120,
-                      height: 73,
-                      excludeFromSemantics: true,
-                    ),
-                  ),
-                ),
-              ),
+              KloterCaneOverlay(pending: pending),
               ConstrainedBox(
                 constraints: const BoxConstraints(minHeight: 83),
                 child: Padding(

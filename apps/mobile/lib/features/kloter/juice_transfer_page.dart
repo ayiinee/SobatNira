@@ -374,6 +374,7 @@ class _TransferDestination extends StatefulWidget {
 }
 
 class _TransferDestinationState extends State<_TransferDestination> {
+  final _pageHeight = NiraPageHeight();
   final _search = TextEditingController();
   String _query = '';
   int _offset = 0;
@@ -427,8 +428,10 @@ class _TransferDestinationState extends State<_TransferDestination> {
               _reload();
             },
           ),
-          FutureBuilder<Json>(
+          NiraPagedFutureBuilder<Json>(
             future: _page,
+            page: _offset,
+            dataset: (widget.scope.factoryId, _query),
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
                 return const LinearProgressIndicator();
@@ -457,16 +460,25 @@ class _TransferDestinationState extends State<_TransferDestination> {
               final total = page['total'] as int;
               return Column(
                 children: [
-                  if (rows.isEmpty)
-                    const ListTile(
-                      title: Text('Tidak ada kloter tujuan pada halaman ini.'),
+                  NiraPageBody(
+                    height: _pageHeight,
+                    firstPage: _offset == 0,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (rows.isEmpty)
+                          const ListTile(
+                            title: Text('Tidak ada kloter tujuan pada halaman ini.'),
+                          ),
+                        for (final lot in rows)
+                          ListTile(
+                            title: Text('${lot['displayCode'] ?? lot['id']}'),
+                            subtitle: Text('${lot['supplierName']}'),
+                            onTap: () => Navigator.pop(context, lot),
+                          ),
+                      ],
                     ),
-                  for (final lot in rows)
-                    ListTile(
-                      title: Text('${lot['displayCode'] ?? lot['id']}'),
-                      subtitle: Text('${lot['supplierName']}'),
-                      onTap: () => Navigator.pop(context, lot),
-                    ),
+                  ),
                   if (_offset > 0 || total > limit)
                     NiraPagination(
                       page: _offset ~/ limit + 1,
