@@ -167,7 +167,7 @@ async function waitFor(check, message, timeout = 35_000) {
   throw new Error(message);
 }
 
-async function smoke() {
+async function smoke(ocrOnly = false) {
   const body = (id, text, meta = {}) => ({ MessageSid: id, BodyForCommands: text, Timestamp: Date.now(), SenderE164: phone(101), ...meta });
   const receive = async (ctx) => {
     let reply;
@@ -181,7 +181,7 @@ async function smoke() {
   };
   const photo = (file, caption = '', meta = {}) => body(randomUUID(), caption, { media: [{ path: resolve(staging, file), contentType: 'image/png' }], ...meta });
   const submitPhoto = async (event) => {
-    assert.match(await receive(event), /sudah diterima|sudah tercatat/);
+    assert.match(await receive(event), /Foto diterima\. Sedang membaca nota|sudah tercatat/);
     const { rows: [message] } = await db.query('SELECT outcome FROM whatsapp_inbound_messages WHERE provider_message_id=$1', [event.MessageSid]);
     return { document: message.outcome.document_id, revision: message.outcome.revision_id };
   };
@@ -202,6 +202,7 @@ async function smoke() {
   }, 'OCR belum menyelesaikan nota', 750_000);
   const truck = await ready(first);
   assert.equal(truck.extraction.header.net_weight_kg.normalized_value,1250);
+  assert.equal(truck.can_confirm, true);
   assert.match(await receive(body(randomUUID(),'STATUS')), /Nota Kedatangan Truk/);
   const truckReceipt = await receiptFor(first);
   assert.match(await receive(body(randomUUID(),'KONFIRMASI', { ReplyToId: truckReceipt.id })),/masuk antrean/);
@@ -212,17 +213,28 @@ async function smoke() {
   const updated = await submitPhoto(photo('update.png', '', { ReplyToId: botReceipt.id }));
   assert.equal(updated.document,initial.document);
   assert.notEqual(updated.revision,initial.revision);
-  assert.equal((await ready(updated)).extraction.cane_blocks[0].batches[0].output.hasil_kg.normalized_value,26);
+  const updatedDraft = await ready(updated);
+  assert.ok(updatedDraft.extraction, `OCR foto lanjutan berakhir dengan status ${updatedDraft.processing_status}`);
+  assert.equal(updatedDraft.extraction.cane_blocks[0].batches[0].output.hasil_kg.normalized_value,26);
+  const updatedReceipt = await receiptFor(updated);
+  assert.match(updatedReceipt.text, /Perubahan pada revisi ini/);
   assert.doesNotMatch(await receive(body(randomUUID(),`KONFIRMASI ${initial.document} ${initial.revision}`)),/masuk antrean/);
-  assert.match(await receive(body(randomUUID(),`KONFIRMASI ${updated.document} ${updated.revision}`)),/masuk antrean/);
+  assert.match(await receive(body(randomUUID(),'KONFIRMASI', { ReplyToId: updatedReceipt.id })),/masuk antrean/);
+  const repeatedTruck = photo('truck.png');
+  assert.deepEqual(await submitPhoto(repeatedTruck), first);
+  assert.match(await receive(body(randomUUID(),'STATUS', { ReplyToId: repeatedTruck.MessageSid })), /Nota Kedatangan Truk/);
   const ambiguous = await submitPhoto(photo('ambiguous.png', 'BARU'));
   const ambiguousDraft = await ready(ambiguous);
   const question = ambiguousDraft.pending_question;
   assert.ok(question, `Nota ambigu tidak menghasilkan pertanyaan (${ambiguousDraft.processing_status})`);
   assert.equal(question.field_path,'header.net_weight_kg');
-  const answer = `JAWAB ${ambiguous.document} ${ambiguous.revision} ${question.id} 1250`;
-  assert.match(await receive(body(randomUUID(), answer)), /1\.250 kg/);
-  assert.match(await receive(body(randomUUID(), answer)), /revisi berubah/);
+  const ambiguousReceipt = await receiptFor(ambiguous);
+  assert.match(ambiguousReceipt.text, /Perlu dicek/);
+  assert.doesNotMatch(ambiguousReceipt.text, /KONFIRMASI/);
+  assert.match(await receive(body(randomUUID(),'KONFIRMASI', { ReplyToId: ambiguousReceipt.id })), /data yang perlu diperiksa/);
+  assert.match(await receive(body(randomUUID(),'JAWAB 1.250', { ReplyToId: ambiguousReceipt.id })), /tanpa pemisah ribuan/);
+  assert.match(await receive(body(randomUUID(),'JAWAB 1250', { ReplyToId: ambiguousReceipt.id })), /Jawaban tersimpan/);
+  assert.match(await receive(body(randomUUID(),'JAWAB 1250', { ReplyToId: ambiguousReceipt.id })), /ringkasan otomatis yang terbaru/);
   const invalid = await submitPhoto(photo('unreadable.png', 'BARU'));
   const failed = await ready(invalid);
   assert.equal(failed.processing_status,'MANUAL_REVIEW_REQUIRED');
@@ -242,6 +254,10 @@ async function smoke() {
     Authorization: `Bearer ${userTokens['other@example.invalid']}`,
   } });
   assert.equal(forbidden.status,404);
+  if (ocrOnly) {
+    console.log('Smoke adapter WhatsApp dan PaddleOCR lulus sampai antrean Pekerjaan.');
+    return;
+  }
   const [lotA, lotB] = lotFixtures;
   console.log('Smoke adapter + OCR lulus. Selesaikan tiga tugas di Flutter.');
   console.log(`1. Nota Kedatangan Truk ${truckTask} → ${lotA.code}`);
@@ -342,5 +358,10 @@ async function stop() {
 }
 
 for (const signal of ['SIGINT','SIGTERM']) process.on(signal, () => { void stop().then(() => process.exit(0)); });
-try { await boot(); if (process.argv.includes('--smoke')) await smoke(); }
+try {
+  const ocrOnly = process.argv.includes('--ocr-smoke');
+  await boot();
+  if (ocrOnly || process.argv.includes('--smoke')) await smoke(ocrOnly);
+  if (ocrOnly) await stop();
+}
 catch (error) { console.error(error.message); await stop(); process.exitCode = 1; }

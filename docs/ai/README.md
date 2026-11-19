@@ -42,6 +42,21 @@ Jika port 8080 sedang dipakai, set `LOCAL_WEB_PORT` ke port alternatif sebelum m
 
 Uji memeriksa dua tipe nota, kutipan pesan bot pada foto produksi lanjutan, kiriman duplikat, operator nonaktif, revisi lama, akses lintas pabrik dan foto ulang. Tes PostgreSQL komponen juga memeriksa lease kedaluwarsa akibat restart dan kegagalan provider yang menuju antrean **Perlu tinjauan manual**. Untuk menjalankan layanan tanpa memasukkan kiriman uji, hilangkan `--smoke`. Gunakan tugas baru dengan status menunggu validasi pada setiap percobaan.
 
+Untuk menguji sampai antrean **Pekerjaan** dengan PaddleOCR CPU lokal tanpa membuka Flutter, jalankan `npm run local:stack -- --ocr-smoke` dari `apps/api` memakai database pengembangan sintetis. Perintah memeriksa foto truk, dua revisi produksi, penolakan konfirmasi saat klarifikasi masih terbuka, penolakan format angka ambigu, foto ulang, dan tinjauan manual. Layanan yang dimulai oleh perintah ini ditutup setelah tes selesai.
+
+### Percakapan operator
+
+- Balasan **“Foto diterima. Sedang membaca nota…”** dikirim setelah API menyimpan foto dan pekerjaan OCR. Gunakan **STATUS** untuk cek progres. Jika ada beberapa nota dalam satu chat, balas foto atau ringkasan nota yang dimaksud dengan **STATUS**.
+- Balas pesan otomatis yang memuat pertanyaan dengan **JAWAB** diikuti nilai pada nota. Gunakan `1250` untuk berat 1.250 kg dan `12,5` untuk desimal. Bot mengirim ringkasan revisi terbaru setelah koreksi. Balas **KONFIRMASI** hanya ketika data pada ringkasan terbaru sudah sesuai.
+- `workflow_status` dan `can_confirm` pada status internal menunjukkan tahap dan kesiapan operator. `pending_question` merujuk pada pertanyaan aktif. Tanda terima pengiriman mengikat pertanyaan ke pesan WhatsApp yang menampilkannya. **STATUS** dapat meminta pengiriman ulang jika pengiriman gagal atau ringkasan lama belum menyimpan ikatan pertanyaan.
+- Jalankan `npm run db:migrate:ocr` sebelum memperbarui API dan plugin OpenClaw bersama-sama. Migrasi tambahan mempertahankan tanda terima lama. Untuk draf yang dibuat sebelumnya, pertanyaan wajib dilengkapi sewaktu operator memeriksa status.
+
+### Pengukuran
+
+Ambil median dan p95 per tipe nota. `whatsapp_photo_reply_dispatch` mengukur waktu dari event masuk hingga balasan masuk antrean pengiriman gateway. Bandingkan dengan waktu balasan terlihat pada perangkat operator saat smoke WhatsApp live. Untuk hasil awal setiap foto, `whatsapp_notice_delivery` dengan hasil `SENT` mencatat `photoRecordedToProviderAckMs` dari pencatatan foto sampai tanda terima provider. Gunakan `ocr_attempt` untuk memisahkan waktu antrean dan inferensi. Koreksi operator serta foto ulang dapat dihitung dari `OPERATOR_CORRECTED`, `CLARIFICATION_ANSWERED`, dan `PHOTO_RETAKE_QUEUED` pada audit.
+
+Dari `apps/ai`, jalankan `uv run --locked --extra paddle python benchmark_ocr.py <manifest-privat.json>` terhadap sampel anonim berlabel. Statistik agregat membedakan kolom yang kosong, salah baca, serta nilai salah yang diterima sebagai `READ`. Bagian kalibrasi membandingkan bacaan yang akan lolos pada beberapa ambang untuk berat bersih dan berat hasil. Hasil ini belum menerapkan ambang baru pada OCR. Gunakan baseline nota lapangan sebelum menetapkan ambang atau target waktu.
+
 ## Mode terhubung
 
 Jalankan gateway, NestJS dan FastAPI pada host yang sama untuk memakai alamat loopback di contoh. Gunakan HTTPS dan origin Flutter yang eksplisit bila diakses lewat jaringan. Untuk OpenClaw 2026.11.4 gunakan Node 24.16+ pada seri 24 atau Node 26.1+.

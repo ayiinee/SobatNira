@@ -1,7 +1,7 @@
 import { open, realpath } from 'node:fs/promises';
 import { isAbsolute, relative } from 'node:path';
 import { createOperatorAgent } from './operator-agent.mjs';
-import { operatorHelp, operatorInstructions, summary, terminal } from './operator-copy.mjs';
+import { answerExample, operatorHelp, operatorInstructions, reference, summary, terminal } from './operator-copy.mjs';
 
 const uuid = '[a-f0-9-]{36}';
 const command = new RegExp(`^(STATUS|KONFIRMASI|KOREKSI|JAWAB)\\s+(${uuid})\\s+(${uuid})(?:\\s+(.+))?$`, 'i');
@@ -43,6 +43,10 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
         result.status === 429 ? 'Terlalu banyak kiriman. Tunggu sebentar dan coba lagi.' :
         reason === 'DOCUMENT_REFERENCE_REQUIRED' || reason === 'DOCUMENT_REFERENCE_CONFLICT' ? 'Untuk lanjutan, balas ringkasan nota sebelumnya dengan foto. Untuk nota baru, kirim terpisah dengan caption BARU.' :
         reason === 'OCR_RETRY_UNAVAILABLE' ? 'Foto ini sudah diproses atau belum bisa dicoba ulang. Ketik STATUS untuk melihat hasil terbaru.' :
+        reason === 'OPERATOR_CLARIFICATION_REQUIRED' ? 'Masih ada data yang perlu diperiksa. Balas ringkasan nota dengan STATUS untuk melihat pertanyaan yang aktif.' :
+        reason === 'OPERATOR_DOCUMENT_BLOCKED' ? 'Draf perlu diperiksa sebelum dikonfirmasi. Balas ringkasan nota dengan STATUS untuk melihat langkah berikutnya.' :
+        reason === 'OPERATOR_ANSWER_INVALID' || reason === 'Field atau nilai koreksi tidak valid' ?
+          'Nilainya belum sesuai. Balas ringkasan nota dengan STATUS untuk melihat contoh jawaban.' :
         result.status === 409 ? 'Pilihan atau revisi berubah. Ketik STATUS atau balas ringkasan terbaru.' :
         result.status < 500 ? 'Metadata, foto, atau perintah tidak dapat diterima. Periksa kembali.' : 'SobatNira sementara tidak tersedia. Coba lagi.';
       throw new BridgeError(response, result.status);
@@ -59,6 +63,19 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
     throw error;
   });
 
+  async function showStatus(phone, chat, document, revisionId, page) {
+    const revision = await status(phone, document, revisionId);
+    let retryQueued = false;
+    if (revision.notice_retry_available && !['PENDING_VALIDATION','VALIDATED'].includes(revision.workflow_status)) {
+      const result = await call(`documents/${document}/revisions/${revision.id}/retry-notice`, {
+        method: 'POST', headers: { 'X-Operator-Phone': phone, 'X-Chat-Id': chat, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question_id: revision.pending_question?.id }),
+      }).catch(() => null);
+      retryQueued = result?.queued === true;
+    }
+    return summary(revision, page, { fromStatus: true, retryQueued });
+  }
+
   async function help(phone, chat, quote, content) {
     if (!quote || !classifyIntent) return operatorHelp;
     const target = await contextFor(phone, chat, quote);
@@ -70,13 +87,13 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
     switch (intent) {
       case 'SHOW_DRAFT':
       case 'EXPLAIN_ISSUE':
-        return summary(revision);
+        return summary(revision, 1, { fromStatus: true });
       case 'GUIDE_CORRECTION':
-        return revision.pending_question ? summary(revision) :
+        return revision.pending_question ? summary(revision, 1, { fromStatus: true }) :
           'Jika ada data yang perlu dikoreksi, beri tahu admin sebelum validasi. Ketik STATUS untuk memeriksa draf.';
       case 'GUIDE_CONFIRMATION':
-        if (revision.operator_status === 'PENDING') return 'Ketik STATUS untuk memeriksa draf. Jika datanya sesuai, balas ringkasan otomatis dengan KONFIRMASI.';
-        return summary(revision);
+        if (revision.can_confirm) return 'Ketik STATUS untuk memeriksa draf. Jika datanya sesuai, balas ringkasan otomatis dengan KONFIRMASI.';
+        return summary(revision, 1, { fromStatus: true });
       case 'RETAKE_PHOTO':
         return revision.photo_retake_allowed ? 'Balas ringkasan otomatis dengan satu foto baru dan caption FOTO ULANG.' :
           'Foto ulang tidak tersedia untuk revisi ini. Periksa status draf.';
@@ -121,8 +138,12 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
         const accepted = await call('inbound', { method: 'POST', body: form }, messageId);
         observe({ event: 'whatsapp_photo_accepted', revisionId: accepted.revision_id,
           duplicate: accepted.duplicate, elapsedMs: Math.round(performance.now() - started) });
-        return { text: accepted.duplicate ? 'Foto ini sudah tercatat. Ketik STATUS untuk melihat nota terakhir.' :
-          'Foto nota sudah diterima. Saya akan mengirim hasil bacaan di sini. Ketik STATUS untuk cek progres.' };
+        const label = reference(accepted.document_id);
+        return { text: accepted.duplicate
+          ? `Foto ini sudah tercatat ${label}. Balas foto yang Anda kirim dengan *STATUS* untuk melihat nota ini.`
+          : `Foto diterima. Sedang membaca nota… ${label}\nSaya akan kirim hasilnya di chat ini. Ketik *STATUS* untuk cek progres.`,
+        photoReceipt: { revisionId: accepted.revision_id, duplicate: accepted.duplicate,
+          adapterStarted: started, eventTimestamp: timestamp.valueOf() } };
       }
       const quote = metadata.quoted_message_id;
       const shortStatus = /^STATUS(?:\s+(\d+))?$/i.exec(content);
@@ -130,7 +151,7 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
         const target = await contextFor(phone, chatId, quote);
         if (!target) return { text: quote ? 'Ringkasan ini sudah berubah atau tidak ditemukan. Ketik STATUS sebagai pesan baru.' :
           'Belum ada nota di chat ini. Kirim satu foto untuk mulai.' };
-        return { text: summary(await status(phone, target.document_id, target.revision_id), Number(shortStatus[1] ?? 1)) };
+        return { text: await showStatus(phone, chatId, target.document_id, target.revision_id, Number(shortStatus[1] ?? 1)) };
       }
       if (/^(BANTUAN|HELP|MENU)$/i.test(content)) return { text: operatorInstructions };
       if (/^(OK[EY]?|SIAP|TERIMA KASIH|MAKASIH)[.!]*$/i.test(content)) {
@@ -148,20 +169,27 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
           if (!value || !active.pending_question || active.id !== target.revision_id) {
             return { text: 'Periksa pertanyaan pada ringkasan terbaru. Balas dengan JAWAB diikuti nilainya.' };
           }
-          if (/(?:^|\.)(?:net_weight_kg|isi_kg|hasil_kg|brix)$/.test(active.pending_question.field_path) &&
-              /^\d{1,3}(?:\.\d{3})+(?:,\d+)?$/.test(value.trim())) {
-            return { text: 'Tulis angka tanpa pemisah ribuan. Contoh JAWAB 5050. Untuk desimal, gunakan koma.' };
+          if (target.question_id !== active.pending_question.id) {
+            return { text: 'Pesan ini tidak memuat pertanyaan yang aktif. Balas pesan ini dengan STATUS untuk meminta ringkasan terbaru.' };
           }
-          let normalized;
-          try { normalized = JSON.parse(value); }
-          catch { normalized = /^\d+,\d+$/.test(value) ? Number(value.replace(',', '.')) : value; }
+          const path = active.pending_question.field_path;
+          const input = value.trim();
+          const numeric = /(?:^|\.)(?:net_weight_kg|isi_kg|hasil_kg|brix)$/.test(path);
+          if (numeric && (!/^\d+(?:,\d+|\.\d{1,2})?$/.test(input) ||
+              /^\d{1,3}(?:\.\d{3})+(?:,\d+)?$/.test(input))) {
+            return { text: `Tulis angka tanpa pemisah ribuan. Contoh JAWAB ${answerExample(path)}. Untuk desimal, gunakan koma.` };
+          }
+          const normalized = numeric ? Number(input.replace(',', '.')) : input;
+          if (numeric && (!Number.isFinite(normalized) || (path === 'header.net_weight_kg' && normalized <= 0))) {
+            return { text: `Periksa kembali nilainya pada nota. Contoh JAWAB ${answerExample(path)}.` };
+          }
           tail = `${active.pending_question.id} ${JSON.stringify(normalized)}`;
         } else if (value) return { text: `Balas ringkasan hanya dengan ${verb.toUpperCase()}.` };
         parsed = [null, verb, target.document_id, target.revision_id, tail];
       }
       if (!parsed) return { text: await help(phone, chatId, quote, content) };
       const [, verb, document, revision, tail] = parsed;
-      if (verb.toUpperCase() === 'STATUS') return { text: summary(await status(phone, document, revision), Number(tail ?? 1)) };
+      if (verb.toUpperCase() === 'STATUS') return { text: await showStatus(phone, chatId, document, revision, Number(tail ?? 1)) };
       const action = { action: verb.toUpperCase() === 'COBA LAGI' ? 'RETRY_OCR' : 'CONFIRM',
         document_id: document.toLowerCase(), revision_id: revision.toLowerCase() };
       if (verb.toUpperCase() === 'KOREKSI') {
@@ -180,8 +208,12 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
         body: JSON.stringify({ event: { ...metadata, message_type: 'TEXT' }, action }) }, messageId);
       if (action.action === 'RETRY_OCR') return { text: 'Foto asli masuk antrean pembacaan ulang. Saya akan mengirim ringkasannya di sini.' };
       return { text: action.action === 'CONFIRM' ? 'Draf dikonfirmasi dan masuk antrean admin.' :
-        shortAction ? 'Jawaban tersimpan. Saya akan mengirim ringkasan terbaru.' : summary(await status(phone, document, result.revision_id)) };
+        shortAction ? 'Jawaban tersimpan. Saya akan mengirim ringkasan terbaru.' :
+          summary(await status(phone, document, result.revision_id), 1, { fromStatus: true }) };
     } catch (error) {
+      if (event.media?.length && (!(error instanceof BridgeError) || error.status >= 500)) {
+        return { text: 'Saya belum bisa memastikan foto masuk. Balas foto itu dengan STATUS untuk memeriksa kiriman.' };
+      }
       return { text: error instanceof BridgeError ? error.message : 'SobatNira sementara tidak tersedia. Coba lagi.' };
     }
   }
@@ -191,22 +223,33 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
     const started = performance.now();
     let outcome = 'RETRY';
     let receipt;
+    let createdAt;
+    let photoRecordedAt;
+    let questionId;
     try {
       const revision = await status(notice.phone_e164, notice.document_id, notice.revision_id);
-      if (revision.id !== notice.revision_id || (notice.kind === 'OCR_RESULT' && revision.operator_status === 'CONFIRMED')) {
+      createdAt = Date.parse(revision.created_at);
+      photoRecordedAt = Date.parse(revision.photo_recorded_at);
+      if (revision.id !== notice.revision_id || ['PENDING_VALIDATION','VALIDATED'].includes(revision.workflow_status) ||
+          (notice.kind === 'OCR_RESULT' && (revision.operator_status === 'CONFIRMED' ||
+            revision.workflow_status === 'RETURNED_FOR_CORRECTION'))) {
         outcome = 'CANCELLED';
       } else {
         const text = summary(revision);
         receipt = await send({ to: notice.phone_e164, text, replyToId: notice.reply_to_id });
+        questionId = revision.pending_question?.id;
         outcome = 'SENT';
       }
     } catch (error) {
       if (error instanceof BridgeError && error.status === 404) outcome = 'CANCELLED';
     }
     await call(`notices/${notice.id}/result`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ claim_token: notice.claim_token, outcome, provider_message_id: receipt }) });
+      body: JSON.stringify({ claim_token: notice.claim_token, outcome, provider_message_id: receipt, question_id: questionId }) });
     observe({ event: 'whatsapp_notice_delivery', revisionId: notice.revision_id,
-      kind: notice.kind, outcome, elapsedMs: Math.round(performance.now() - started) });
+      kind: notice.kind, outcome, elapsedMs: Math.round(performance.now() - started),
+      ...(outcome === 'SENT' && Number.isFinite(createdAt) ? { revisionToProviderAckMs: Math.max(0, Date.now() - createdAt) } : {}),
+      ...(outcome === 'SENT' && Number.isFinite(photoRecordedAt)
+        ? { photoRecordedToProviderAckMs: Math.max(0, Date.now() - photoRecordedAt) } : {}) });
     return true;
   }
   return { handle, status, deliverNotice };
@@ -249,8 +292,8 @@ export default {
     if (!api.runtime.channel?.outbound?.loadAdapter || !api.registerService) {
       throw new Error('OpenClaw: SDK outbound dan registerService wajib');
     }
-    const bridge = createBridge({ apiUrl, token, mediaDir, classifyIntent,
-      observe: (event) => api.logger.info?.(JSON.stringify(event)) });
+    const observe = (event) => api.logger.info?.(JSON.stringify(event));
+    const bridge = createBridge({ apiUrl, token, mediaDir, classifyIntent, observe });
     let timer;
     let inFlight;
     const send = async ({ to, text, replyToId }) => {
@@ -288,6 +331,12 @@ export default {
           mediaStagingPending: inbound.mediaStagingPending,
         }, {});
         queuedFinal = !event.suppressUserDelivery && context.dispatcher.sendFinalReply({ text: result.text });
+        if (result.photoReceipt) {
+          const { revisionId, duplicate, adapterStarted, eventTimestamp } = result.photoReceipt;
+          observe({ event: 'whatsapp_photo_reply_dispatch', revisionId, duplicate, queued: Boolean(queuedFinal),
+            adapterToDispatchMs: Math.round(performance.now() - adapterStarted),
+            messageToDispatchMs: Math.max(0, Date.now() - eventTimestamp) });
+        }
       }
       context.recordProcessed('completed', { reason: 'sobatnira_intake' });
       return { handled: true, queuedFinal, counts: context.dispatcher.getQueuedCounts() };

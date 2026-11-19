@@ -1,4 +1,5 @@
 import base64
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from functools import lru_cache
 from io import BytesIO
@@ -7,7 +8,6 @@ import math
 import os
 from pathlib import Path
 import re
-from threading import Lock
 from time import monotonic
 from typing import Literal
 from urllib.parse import urlsplit
@@ -31,7 +31,7 @@ SCHEMAS = {
 }
 MAX_BYTES = 10 * 1024 * 1024
 MAX_PIXELS = 20_000_000
-PADDLE_LOCK = Lock()
+PADDLE_WORKER = ThreadPoolExecutor(max_workers=1, thread_name_prefix="sobatnira-paddle")
 router = APIRouter()
 
 
@@ -137,7 +137,16 @@ def paddle_engine():
     )
 
 
+def warm_paddle():
+    PADDLE_WORKER.submit(paddle_engine).result()
+
+
 def recognize(image, preprocess):
+    # Keep the cached native predictor on the thread that initialized it.
+    return PADDLE_WORKER.submit(_recognize, image, preprocess).result()
+
+
+def _recognize(image, preprocess):
     import numpy as np
 
     if preprocess:
@@ -146,15 +155,14 @@ def recognize(image, preprocess):
         image = ImageOps.autocontrast(image, cutoff=1)
     width, height = image.size
     tokens = []
-    with PADDLE_LOCK:
-        for result in paddle_engine().predict(np.asarray(image)[:, :, ::-1].copy()):
-            for text, score, polygon in zip(result["rec_texts"], result["rec_scores"], result["rec_polys"], strict=True):
-                if not text.strip() or not math.isfinite(score) or not 0 <= score <= 1:
-                    continue
-                x1, y1 = max(0, min(polygon[:, 0])), max(0, min(polygon[:, 1]))
-                x2, y2 = min(width, max(polygon[:, 0])), min(height, max(polygon[:, 1]))
-                if x2 > x1 and y2 > y1:
-                    tokens.append(Token(text, float(score), (x1 / width, y1 / height, (x2 - x1) / width, (y2 - y1) / height)))
+    for result in paddle_engine().predict(np.asarray(image)[:, :, ::-1].copy()):
+        for text, score, polygon in zip(result["rec_texts"], result["rec_scores"], result["rec_polys"], strict=True):
+            if not text.strip() or not math.isfinite(score) or not 0 <= score <= 1:
+                continue
+            x1, y1 = max(0, min(polygon[:, 0])), max(0, min(polygon[:, 1]))
+            x2, y2 = min(width, max(polygon[:, 0])), min(height, max(polygon[:, 1]))
+            if x2 > x1 and y2 > y1:
+                tokens.append(Token(text, float(score), (x1 / width, y1 / height, (x2 - x1) / width, (y2 - y1) / height)))
     return tokens
 
 
@@ -239,8 +247,7 @@ def require_token(provided):
 def ready(x_internal_service_token: str = Header(default="")):
     require_token(x_internal_service_token)
     try:
-        with PADDLE_LOCK:
-            paddle_engine()
+        warm_paddle()
     except Exception:
         raise HTTPException(503, "PaddleOCR: jalankan instalasi extra paddle dan periksa cache model") from None
     return {"status": "ok", "engine": "PADDLEOCR", "mode": os.getenv("SOBATNIRA_MODE", "legacy")}

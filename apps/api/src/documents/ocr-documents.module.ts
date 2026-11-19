@@ -74,6 +74,18 @@ class WhatsAppController {
     return this.intake.status(sender, requireUuid(id), requireUuid(revision));
   }
 
+  @Post('documents/:documentId/revisions/:revisionId/retry-notice')
+  @HttpCode(200)
+  retryNotice(@Param('documentId') id: string, @Param('revisionId') revision: string,
+    @Headers('x-operator-phone') phone: string, @Headers('x-chat-id') chat: string,
+    @Body() body?: { question_id?: string }) {
+    if (!/^\+[1-9][0-9]{7,14}$/.test(phone) || !chat || chat.length > 255) {
+      throw new BadRequestException('Percakapan tidak valid');
+    }
+    return this.notices.retry(phone, chat, requireUuid(id), requireUuid(revision),
+      body?.question_id == null ? null : requireUuid(body.question_id));
+  }
+
   @Get('quoted-context')
   @Header('Cache-Control', 'private, no-store')
   quotedContext(@Headers('x-operator-phone') phone: string, @Headers('x-chat-id') chat: string,

@@ -5,6 +5,7 @@ import { Database } from './database';
 import { audit, Revision } from './intake';
 import { mergeProduction } from './revisions';
 import { openClarifications } from './clarifications';
+import { operatorChecks } from './operator-readiness';
 import { enqueueNotice } from './notices';
 
 type Job = { id: string; revision_id: string; attempts: number; claim_token: string };
@@ -113,8 +114,9 @@ export class DocumentProcessor implements OnModuleInit, OnModuleDestroy {
             message: 'Tentukan apakah foto ini dokumen baru atau revisi dari dokumen yang sudah ada.' });
         }
       }
-      if (extraction && issues.some(({ severity }) => severity === 'BLOCKER')) status = 'NEEDS_CLARIFICATION';
-      const operatorStatus = extraction && !issues.some(({ severity }) => severity === 'BLOCKER') ? 'PENDING' : 'NOT_REQUESTED';
+      const checks = extraction && operatorChecks(extraction, issues);
+      if (checks && (checks.questions.size || checks.documentBlocked)) status = 'NEEDS_CLARIFICATION';
+      const operatorStatus = checks && !checks.documentBlocked ? 'PENDING' : 'NOT_REQUESTED';
       if (extraction) await db.query('UPDATE source_documents SET document_type=$2 WHERE id=$1 AND current_revision_id=$3',
         [work.document_id, extraction.document_type, work.id]);
       await db.query(`UPDATE document_revisions SET extraction=$2,issues=$3,processing_status=$4,operator_status=$5 WHERE id=$1`,

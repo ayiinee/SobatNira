@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const { Logger } = require('@nestjs/common');
 const { once } = require('node:events');
-const { mkdtemp, readFile, rm } = require('node:fs/promises');
+const { mkdtemp, readFile, rm, writeFile } = require('node:fs/promises');
 const { createServer } = require('node:http');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
@@ -139,6 +139,7 @@ test('operator management scopes contacts and gates new WhatsApp photos', {
 });
 
 test('progressive merge preserves evidence and distinct runs with reused wajan', async () => {
+  const { summary } = await import('../integrations/openclaw/operator-copy.mjs');
   const original = await fixture('production-note-progressive-update');
   const block = original.cane_blocks[0];
   block.cane_label.normalized_value = 'SYNTHETIC-A';
@@ -158,7 +159,22 @@ test('progressive merge preserves evidence and distinct runs with reused wajan',
   assert.equal(first.output.hasil_kg.normalized_value, 25);
   assert.equal(first.pan_number.normalized_value, second.pan_number.normalized_value);
   assert.notEqual(first.row_reference, second.row_reference);
-  assert.deepEqual(issues, []);
+  assert.deepEqual(issues.map(({ code, field_path }) => [code, field_path]), [
+    ['REVISION_FIELD_ADDED', 'cane_blocks.0.batches.0.output.hasil_kg'],
+    ['REVISION_FIELD_ADDED', 'cane_blocks.0.batches.1.pan_number'],
+  ]);
+  const review = summary({ extraction: note, processing_status: 'NEEDS_CLARIFICATION', can_confirm: false,
+    pending_question: { field_path: 'cane_blocks.0.batches.1.output.hasil_kg', candidates: [25, 26] },
+    changed_fields: ['cane_blocks.0.batches.0.output.hasil_kg'] });
+  assert.match(review, /Blok SYNTHETIC-A · Wajan .* · Berat hasil/);
+  assert.match(review, /Perubahan pada revisi ini/);
+  assert.match(review, /Belum dicatat/);
+  assert.doesNotMatch(review, /KONFIRMASI/);
+  const lengthy = structuredClone(note);
+  lengthy.cane_blocks[0].batches = Array(7).fill(first);
+  const ready = { extraction: lengthy, processing_status: 'EXTRACTED', can_confirm: true };
+  assert.match(summary(ready), /STATUS 2/);
+  assert.match(summary(ready, 2, { fromStatus: true }), /ringkasan otomatis nota ini dengan \*KONFIRMASI\*/);
   incoming.cane_blocks[0].batches.push(structuredClone(repeatedPan));
   assert.equal(mergeProduction(original, incoming).issues[0].code, 'ROW_MATCH_REQUIRED');
 });
@@ -246,7 +262,9 @@ test('short WhatsApp commands keep status readable and bind writes to a quoted r
     request(url, options) {
       calls.push([url, options]);
       if (url.pathname.endsWith('latest-context') || url.pathname.endsWith('quoted-context')) {
-        return Response.json({ document_id, revision_id });
+        return Response.json({ document_id, revision_id, ...(url.searchParams.get('action') === 'true' && {
+          question_id: options.headers['X-Quoted-Message-Id'] === 'old-receipt' ? null : question_id,
+        }) });
       }
       if (url.pathname.endsWith('text-events')) return Response.json({ revision_id });
       return Response.json({ id: revision_id, version: 2, processing_status: 'NEEDS_CLARIFICATION', operator_status: 'PENDING',
@@ -256,6 +274,7 @@ test('short WhatsApp commands keep status readable and bind writes to a quoted r
   const event = { senderId: phone(101), conversationId: 'SYNTHETIC', messageId: 'synthetic-short', timestamp: Date.now() };
   const draft = await bridge.handle({ ...event, body: 'STATUS' }, {});
   assert.match(draft.text, /Berat bersih — 5\.050 kg/);
+  assert.doesNotMatch(draft.text, /KONFIRMASI/);
   assert.doesNotMatch(draft.text, new RegExp(document_id));
   assert.equal(calls[0][1].headers['X-Chat-Id'], 'SYNTHETIC');
   assert.match((await bridge.handle({ ...event, body: 'KONFIRMASI' }, {})).text, /Balas ringkasan/);
@@ -263,10 +282,41 @@ test('short WhatsApp commands keep status readable and bind writes to a quoted r
   assert.match((await bridge.handle({ ...event, body: 'KONFIRMASI', replyToId: 'receipt' }, {})).text, /antrean admin/);
   assert.equal(calls[2][0].searchParams.get('action'), 'true');
   assert.deepEqual(JSON.parse(calls[3][1].body).action, { action: 'CONFIRM', document_id, revision_id });
+  assert.match((await bridge.handle({ ...event, body: 'JAWAB 1.250', replyToId: 'receipt' }, {})).text, /tanpa pemisah ribuan/);
+  assert.match((await bridge.handle({ ...event, body: 'JAWAB 5050', replyToId: 'old-receipt' }, {})).text, /tidak memuat pertanyaan/);
   assert.match((await bridge.handle({ ...event, body: 'JAWAB 5050', replyToId: 'receipt' }, {})).text, /Jawaban tersimpan/);
   assert.deepEqual(JSON.parse(calls.at(-1)[1].body).action, { action: 'ANSWER', document_id, revision_id, question_id, value: 5050 });
   assert.match((await bridge.handle({ ...event, body: 'COBA LAGI', replyToId: 'receipt' }, {})).text, /pembacaan ulang/);
   assert.deepEqual(JSON.parse(calls.at(-1)[1].body).action, { action: 'RETRY_OCR', document_id, revision_id });
+});
+
+test('WhatsApp acknowledges a recorded photo without waiting for OCR', async (t) => {
+  const { createBridge } = await import('../integrations/openclaw/index.mjs');
+  const mediaDir = await mkdtemp(join(tmpdir(), 'sobatnira-ack-'));
+  t.after(() => rm(mediaDir, { recursive: true, force: true }));
+  const path = join(mediaDir, 'nota.png');
+  await writeFile(path, png);
+  const document_id = randomUUID();
+  const revision_id = randomUUID();
+  const accepted = Promise.withResolvers();
+  const calls = [];
+  const bridge = createBridge({ apiUrl: 'http://127.0.0.1', token: 'synthetic', mediaDir,
+    request(url) {
+      calls.push(url.pathname);
+      return accepted.promise;
+    },
+  });
+  const event = { senderId: phone(101), conversationId: 'SYNTHETIC', messageId: 'photo-ack',
+    timestamp: Date.now(), media: [{ path, contentType: 'image/png' }] };
+  let replied = false;
+  const handle = bridge.handle(event, {}).then(reply => { replied = true; return reply; });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(replied, false);
+  accepted.resolve(Response.json({ accepted: true, document_id, revision_id, processing_status: 'QUEUED' }, { status: 202 }));
+  const reply = await handle;
+  assert.match(reply.text, /Foto diterima\. Sedang membaca nota/);
+  assert.ok(reply.text.includes(document_id.slice(0, 8).toUpperCase()));
+  assert.deepEqual(calls, ['/internal/v1/whatsapp/inbound']);
 });
 
 test('OpenRouter gives read-only guidance on verified quotes and uses bounded fallback', async () => {
@@ -301,7 +351,7 @@ test('OpenRouter gives read-only guidance on verified quotes and uses bounded fa
         assert.equal(options.headers['X-Chat-Id'], 'SYNTHETIC');
         return Response.json({ document_id: document, revision_id: revision });
       }
-      return Response.json({ id: revision, processing_status: 'EXTRACTED', operator_status: 'PENDING',
+      return Response.json({ id: revision, processing_status: 'EXTRACTED', operator_status: 'PENDING', can_confirm: true,
         extraction: { header: { supplier_name: 'PII-DARI-NOTA' } } });
     } });
   const metadata = { senderId: phone(101), conversationId: 'SYNTHETIC', messageId: 'provider-help', timestamp: 1794799800000 };
@@ -449,8 +499,8 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     const change = (target, path, body, key, method = 'POST') => mobile(`documents/${target.document_id}/${path}`, 'reviewer', {
       method, headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key }, body: JSON.stringify(body),
     });
-    const status = (target) => fetch(`${base}/internal/v1/whatsapp/documents/${target.document_id}/revisions/${target.revision_id}`,
-      { headers: { ...tokenHeaders, 'X-Operator-Phone': phone(101) } }).then((response) => response.json());
+    const status = (target, sender = phone(101)) => fetch(`${base}/internal/v1/whatsapp/documents/${target.document_id}/revisions/${target.revision_id}`,
+      { headers: { ...tokenHeaders, 'X-Operator-Phone': sender } }).then((response) => response.json());
     const notice = (path, body = {}) => fetch(`${base}/internal/v1/whatsapp/notices/${path}`, {
       method: 'POST', headers: { ...tokenHeaders, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     }).then(async (response) => {
@@ -466,7 +516,7 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     process.env.DOCUMENT_WORKER_ENABLED = 'true';
     assert.deepEqual(await fetch(readyUrl, { headers: tokenHeaders }).then((response) => response.json()),
       { status: 'ok', component: 'sobatnira-whatsapp-intake', mode: 'legacy' });
-    const latest = '005_duplicate_photo_lookup.sql';
+    const latest = '007_notice_question_reference.sql';
     await db.query('DELETE FROM sobatnira_migrations WHERE name=$1', [latest]);
     assert.equal((await fetch(readyUrl, { headers: tokenHeaders })).status, 503);
     await db.query('INSERT INTO sobatnira_migrations (name) VALUES ($1)', [latest]);
@@ -479,7 +529,10 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     assert.deepEqual(results.map((result) => result.status), [202, 202]);
     const [a, b] = await Promise.all(results.map((result) => result.json()));
     assert.equal(a.revision_id, b.revision_id);
+    assert.equal(a.recorded_at, b.recorded_at);
+    assert.ok(Number.isFinite(Date.parse(a.recorded_at)));
     assert.equal(Number(a.duplicate) + Number(b.duplicate), 1);
+    assert.equal((await status(a)).workflow_status, 'QUEUED');
     assert.equal((await photo({ ...first, caption: 'conflicting' })).status, 409);
     const resent = await photo(event('truck-resent'), imageFor('truck-01')).then((response) => response.json());
     assert.equal(resent.duplicate, true);
@@ -497,8 +550,16 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
       claim_token=$2 WHERE revision_id=$1`, [a.revision_id, randomUUID()]);
     assert.equal(await new DocumentProcessor(db).processOne(), true);
     assert.equal((await db.query('SELECT attempts FROM document_jobs WHERE revision_id=$1', [a.revision_id])).rows[0].attempts, 2);
-    const { pending_question: question } = await status(a);
+    const draft = await status(a);
+    const { pending_question: question } = draft;
+    assert.equal(draft.photo_recorded_at, a.recorded_at);
+    assert.equal(draft.workflow_status, 'NEEDS_CLARIFICATION');
+    assert.equal(draft.can_confirm, false);
     assert.equal(question.field_path, 'header.net_weight_kg');
+    const tooEarly = await action(event('truck-early-confirm', 'TEXT'), a);
+    assert.equal(tooEarly.status, 409);
+    assert.equal((await tooEarly.json()).message, 'OPERATOR_CLARIFICATION_REQUIRED');
+    assert.equal((await action(event('truck-zero-answer', 'TEXT'), a, 'ANSWER', { question_id: question.id, value: 0 })).status, 400);
     const { notice: delivery } = await notice('claim');
     assert.equal(delivery.revision_id, a.revision_id);
     await db.query("UPDATE whatsapp_notices SET lease_until=now()-interval '1 second' WHERE id=$1", [delivery.id]);
@@ -507,14 +568,32 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     assert.notEqual(reclaimed.claim_token, delivery.claim_token);
     assert.deepEqual(await notice(`${delivery.id}/result`, { claim_token: delivery.claim_token, outcome: 'SENT', provider_message_id: 'old-receipt' }),
       { acknowledged: false });
-    assert.deepEqual(await notice(`${delivery.id}/result`, { claim_token: reclaimed.claim_token, outcome: 'SENT', provider_message_id: 'gateway-receipt' }),
+    assert.deepEqual(await notice(`${delivery.id}/result`, { claim_token: reclaimed.claim_token, outcome: 'SENT', provider_message_id: 'legacy-receipt' }),
       { acknowledged: true });
+    assert.equal((await status(a)).notice_retry_available, true);
+    const retryNotice = (chat = 'SYNTHETIC-CHAT') => fetch(`${base}/internal/v1/whatsapp/documents/${a.document_id}/revisions/${a.revision_id}/retry-notice`, {
+      method: 'POST', headers: { ...tokenHeaders, 'X-Operator-Phone': phone(101), 'X-Chat-Id': chat, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question_id: question.id }),
+    }).then(response => response.json());
+    assert.deepEqual(await retryNotice('OTHER-CHAT'), { queued: false });
+    const retries = await Promise.all([retryNotice(), retryNotice()]);
+    assert.equal(retries.filter(({ queued }) => queued).length, 1);
+    const { notice: refreshed } = await notice('claim');
+    await db.query('UPDATE whatsapp_notices SET attempts=5 WHERE id=$1', [refreshed.id]);
+    assert.deepEqual(await notice(`${refreshed.id}/result`, { claim_token: refreshed.claim_token, outcome: 'RETRY' }), { acknowledged: true });
+    assert.equal((await status(a)).notice_retry_available, true);
+    assert.deepEqual(await retryNotice(), { queued: true });
+    const { notice: recovered } = await notice('claim');
+    assert.deepEqual(await notice(`${recovered.id}/result`, { claim_token: recovered.claim_token, outcome: 'SENT',
+      provider_message_id: 'gateway-receipt', question_id: question.id }), { acknowledged: true });
+    assert.equal((await status(a)).notice_retry_available, false);
     const quotedWrite = (sender, chat) => fetch(`${base}/internal/v1/whatsapp/quoted-context?action=true`, {
       headers: { ...tokenHeaders, 'X-Operator-Phone': sender, 'X-Chat-Id': chat, 'X-Quoted-Message-Id': 'gateway-receipt' },
     });
     assert.equal((await quotedWrite(phone(101), 'OTHER-CHAT')).status, 404);
     assert.equal((await quotedWrite(phone(102), 'SYNTHETIC-CHAT')).status, 404);
-    assert.equal((await quotedWrite(phone(101), 'SYNTHETIC-CHAT').then((response) => response.json())).revision_id, a.revision_id);
+    assert.deepEqual(await quotedWrite(phone(101), 'SYNTHETIC-CHAT').then((response) => response.json()),
+      { document_id: a.document_id, revision_id: a.revision_id, question_id: question.id });
     assert.equal((await mobile('review-tasks').then((response) => response.json())).items.length, 0);
     const answer = { question_id: question.id, value: 1251 };
     assert.equal((await action({ ...event('bad-chat', 'TEXT'), chat_id: 'OTHER-CHAT' }, a, 'ANSWER', answer)).status, 404);
@@ -524,6 +603,7 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     assert.equal(correction.status, 200, await correction.clone().text());
     const corrected = await correction.json();
     assert.notEqual(corrected.revision_id, a.revision_id);
+    assert.equal((await status(corrected)).can_confirm, true);
     assert.equal((await quotedWrite(phone(101), 'SYNTHETIC-CHAT')).status, 404);
     const latestInChat = (chat) => fetch(`${base}/internal/v1/whatsapp/latest-context`, {
       headers: { ...tokenHeaders, 'X-Operator-Phone': phone(101), 'X-Chat-Id': chat },
@@ -551,6 +631,7 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     assert.equal(confirmation.status, 200, await confirmation.clone().text());
     const { task_id: taskId } = await confirmation.json();
     assert.equal((await action(operatorMessage, corrected).then((response) => response.json())).duplicate, true);
+    assert.equal((await status(corrected)).workflow_status, 'PENDING_VALIDATION');
     assert.deepEqual(await unread('reviewer'), { unread_count: 1 });
     assert.deepEqual(await unread('colleague'), { unread_count: 0 });
     assert.deepEqual(await unread('owner'), { unread_count: 0 });
@@ -698,6 +779,7 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     }).then((response) => response.json());
     assert.notEqual(followUp.id, stage2.revision_id);
     assert.equal(followUp.operator_status, 'PENDING');
+    assert.equal(followUp.workflow_status, 'RETURNED_FOR_CORRECTION');
     assert.equal(followUp.follow_up.comment, 'Periksa hasil timbang.');
     assert.equal((await action(event('returned-stale-confirm', 'TEXT', phone(102)), stage2)).status, 409);
     const followUpConfirmation = await action(event('follow-up-confirm', 'TEXT', phone(102)),
@@ -710,6 +792,7 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
       randomUUID())).status, 409);
     const latestApproval = await change(followUpDetail, 'validate', { ...followUpDecision, milling: [] }, randomUUID());
     assert.equal(latestApproval.status, 200, await latestApproval.clone().text());
+    assert.equal((await status({ ...stage2, revision_id: followUp.id }, phone(102))).workflow_status, 'VALIDATED');
     assert.deepEqual((await latestApproval.json()).milling, posted);
     assert.equal((await millingStock()).length, 1);
 
@@ -797,4 +880,18 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     assert.deepEqual(retried, { submission_id: retryPhoto.submission_id, parent_revision_id: retryPhoto.revision_id, processing_status: 'QUEUED' });
     assert.equal((await action(retryEvent, retryPhoto, 'RETRY_OCR').then((response) => response.json())).duplicate, true);
     assert.equal((await action(event('retry-stale', 'TEXT'), retryPhoto, 'RETRY_OCR')).status, 409);
+
+    await db.query("UPDATE document_jobs SET available_at=now()+interval '1 hour' WHERE revision_id=$1", [replay.revision_id]);
+    const incomplete = await photo(event('legacy-missing-date')).then((response) => response.json());
+    const missing = structuredClone(truck);
+    Object.assign(missing.header.arrival_date, { status: 'NOT_PRESENT', raw_value: null, normalized_value: null });
+    Object.assign(missing.header.net_weight_kg, { status: 'READ', raw_value: '1250', normalized_value: 1250 });
+    notes.push(missing);
+    assert.equal(await processor.processOne(), true);
+    await db.query('DELETE FROM clarification_requests WHERE revision_id=$1', [incomplete.revision_id]);
+    const state = await status(incomplete);
+    assert.equal(state.pending_question.field_path, 'header.arrival_date');
+    assert.equal(state.pending_question.issue_code, 'REQUIRED_FIELD');
+    assert.equal((await status(incomplete)).pending_question.id, state.pending_question.id);
+    assert.equal((await action(event('missing-date-confirm', 'TEXT'), incomplete)).status, 409);
   });

@@ -3,6 +3,7 @@ import base64
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from threading import get_ident
 from unittest import TestCase
 from unittest.mock import patch
 from uuid import uuid4
@@ -14,7 +15,7 @@ from PIL import Image, ImageDraw
 from benchmark_ocr import evaluate, load_cases
 from main import app
 from ocr_parser import Token, extract
-from ocr_service import SCHEMAS, validate_runtime
+from ocr_service import SCHEMAS, recognize, validate_runtime, warm_paddle
 
 
 def token(text, x, y):
@@ -35,6 +36,15 @@ class OcrTest(TestCase):
 
     def post(self):
         return self.client.post("/internal/v1/ocr/extract", json=self.request, headers=self.headers)
+
+    def test_cached_predictor_warmup_and_inference_share_a_thread(self):
+        initialized = []
+        with (patch("ocr_service.paddle_engine", side_effect=lambda: initialized.append(get_ident())),
+              patch("ocr_service._recognize", side_effect=lambda image, preprocess: get_ident())):
+            warm_paddle()
+            inference = recognize(self.image, False)
+        self.assertEqual(initialized, [inference])
+        self.assertNotEqual(inference, get_ident())
 
     def test_whatsapp_jpeg_reaches_extraction(self):
         self.request["image"]["mime_type"] = "image/jpeg"
@@ -260,12 +270,20 @@ class OcrTest(TestCase):
                 "header.net_weight_kg": {"normalized_value": 1250, "unit": "kg"},
                 "header.supplier_name": {"normalized_value": "Pemasok Berbeda"},
                 "header.unknown": {"status": "READ"},
+            }}, {"image": "synthetic.png", "document_type": "TRUCK_ARRIVAL_NOTE", "fields": {
+                "header.net_weight_kg": {"normalized_value": 1280, "unit": "kg"},
             }}]), encoding="utf-8")
             tokens = [token(line, .1, .1 + index * .1) for index, line in enumerate([
                 "TANGGAL: 16-11-2026", "PENGIRIM: PEMASOK DEMO", "NO. KENDARAAN: TEST-001", "BERAT BERSIH: 1250",
             ])]
             report = evaluate(list(load_cases(manifest)), lambda *_: tokens)
-        self.assertEqual(report["classification"], {"TRUCK_ARRIVAL_NOTE": {"TRUCK_ARRIVAL_NOTE": 1}})
+        self.assertEqual(report["classification"], {"TRUCK_ARRIVAL_NOTE": {"TRUCK_ARRIVAL_NOTE": 2}})
         self.assertEqual(report["fields"]["TRUCK_ARRIVAL_NOTE.header.net_weight_kg"]["correct"], 1)
         self.assertEqual(report["fields"]["TRUCK_ARRIVAL_NOTE.header.supplier_name"]["incorrect"], 1)
         self.assertEqual(report["fields"]["TRUCK_ARRIVAL_NOTE.header.unknown"]["missing"], 1)
+        metric = "TRUCK_ARRIVAL_NOTE.header.net_weight_kg"
+        self.assertEqual(report["fields"][metric]["wrong_read"], 1)
+        scores = report["critical_read_calibration"][metric]["thresholds"]
+        self.assertEqual(scores["0.9"], {"read_kept": 2, "wrong_read_kept": 1})
+        self.assertEqual(scores["0.95"], {"read_kept": 0, "wrong_read_kept": 0})
+        self.assertGreaterEqual(report["p95_processing_ms"], report["median_processing_ms"])
