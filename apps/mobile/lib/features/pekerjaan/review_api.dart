@@ -308,6 +308,29 @@ class ReviewApi {
     },
   );
 
+  Future<List<Json>> lotBatches(
+    FactoryScope scope,
+    String id,
+    bool synthetic,
+  ) async {
+    const limit = 100;
+    final batches = <Json>[];
+    for (var offset = 0; ; offset += limit) {
+      final page = await _productionGet(
+        [...scope._base, 'production', 'batches'],
+        query: {'limit': '$limit', 'offset': '$offset'},
+      );
+      final rows = (page['items'] as List).cast<Json>();
+      batches.addAll(
+        rows.where(
+          (row) => row['lot_id'] == id && row['is_synthetic'] == synthetic,
+        ),
+      );
+      if (rows.length < limit) break;
+    }
+    return batches.reversed.toList();
+  }
+
   Future<Json> lots(
     FactoryScope scope, {
     required int offset,
@@ -324,11 +347,17 @@ class ReviewApi {
     },
   );
 
-  Future<Json> lot(FactoryScope scope, String id) =>
-      _productionGet([...scope._lots, id]);
+  Future<Json> lot(FactoryScope scope, String id, {bool synthetic = false}) =>
+      _productionGet(
+        [...scope._lots, id],
+        query: {if (synthetic) 'synthetic': 'true'},
+      );
 
-  Future<Json> juice(FactoryScope scope, String id) =>
-      _productionGet([...scope._lots, id, 'juice', 'availability']);
+  Future<Json> juice(FactoryScope scope, String id, {bool synthetic = false}) =>
+      _productionGet(
+        [...scope._lots, id, 'juice', 'availability'],
+        query: {if (synthetic) 'synthetic': 'true'},
+      );
 
   Future<Json> catalog(
     FactoryScope scope,

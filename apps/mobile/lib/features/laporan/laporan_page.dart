@@ -8,7 +8,7 @@ import '../kloter/demo_lot_fixture.dart';
 import 'margin_chart.dart';
 import 'production_chart.dart';
 import 'report_detail_page.dart';
-import 'report_paginated_list.dart';
+import 'report_table.dart';
 import '../kloter/demo_production.dart';
 import 'production_recap.dart';
 import 'production_recap_section.dart';
@@ -176,7 +176,6 @@ class _LaporanPageState extends State<LaporanPage> {
   Widget _rendemenTable(Widget header) => _tableSection(
     title: 'Rendemen',
     scrollHeader: header,
-    plain: true,
     columns: const ['Pemasok', 'Gula final', 'Rendemen'],
     rows: widget.analytics.visibleRows,
     onTap: (row) {
@@ -188,7 +187,6 @@ class _LaporanPageState extends State<LaporanPage> {
   Widget _gradeTable(Widget header) => _tableSection(
     title: 'Komposisi Grade',
     scrollHeader: header,
-    plain: true,
     columns: const ['Grade', 'Berat', 'Porsi'],
     rows: [
       for (final grade in ['A', 'B', 'C'])
@@ -210,7 +208,6 @@ class _LaporanPageState extends State<LaporanPage> {
   Widget _margin() => _tableSection(
     title: 'Detail margin kloter',
     scrollHeader: _marginHeader(),
-    plain: true,
     columns: const ['Pemasok', 'Margin'],
     rows: widget.analytics.visibleRows,
     onTap: (row) {
@@ -219,188 +216,21 @@ class _LaporanPageState extends State<LaporanPage> {
     },
   );
 
-  Widget _plainTable(
-    String title,
-    List<String> columns,
-    List<AnalyticsRow> rows,
-    ValueChanged<AnalyticsRow> onTap,
-  ) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Text(title, style: niraText(NiraType.section, weight: FontWeight.w700)),
-      const SizedBox(height: NiraSpace.sm),
-      Row(
-        children: [
-          for (var index = 0; index < columns.length; index++)
-            Expanded(
-              flex: index == 0 ? 4 : 3,
-              child: Text(
-                columns[index],
-                textAlign: index == 0 ? TextAlign.start : TextAlign.center,
-                style: niraText(
-                  NiraType.caption,
-                  color: const Color(0xFF858B87),
-                  weight: FontWeight.w600,
-                ),
-              ),
-            ),
-          const SizedBox(width: 20),
-        ],
-      ),
-      const SizedBox(height: NiraSpace.xs),
-      const Divider(height: 1, thickness: 1, color: niraLine),
-      if (rows.isEmpty)
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: NiraSpace.lg),
-          child: Text(
-            'Data tidak ditemukan',
-            textAlign: TextAlign.center,
-            style: niraText(NiraType.caption, color: niraLeaf),
-          ),
-        )
-      else
-        for (final row in rows) ...[
-          InkWell(
-            onTap: () => onTap(row),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 40),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 4,
-                      child: Text(row.supplier, style: niraText(NiraType.body)),
-                    ),
-                    Expanded(
-                      flex: 3,
-                      child: Text(
-                        row.value,
-                        textAlign: TextAlign.center,
-                        style: niraText(NiraType.body),
-                      ),
-                    ),
-                    if (columns.length > 2)
-                      Expanded(
-                        flex: 3,
-                        child: Text(
-                          row.secondary,
-                          textAlign: TextAlign.center,
-                          style: niraText(NiraType.body),
-                        ),
-                      ),
-                    const Icon(Icons.chevron_right, color: niraGreen, size: 20),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const Divider(height: 1, thickness: 1, color: niraLine),
-        ],
-    ],
-  );
-
   Widget _tableSection({
     required String title,
     required Widget scrollHeader,
     required List<String> columns,
     required List<AnalyticsRow> rows,
     required ValueChanged<AnalyticsRow> onTap,
-    bool plain = false,
-  }) => ReportPaginatedList<AnalyticsRow>(
-    items: rows,
+  }) => ReportTable<AnalyticsRow>(
+    title: title,
+    columns: columns,
+    rows: rows,
     scrollHeader: scrollHeader,
     resetToken: (title, widget.analytics.dateFilter, widget.analytics.query),
-    builder: (visibleRows) => plain
-        ? _plainTable(title, columns, visibleRows, onTap)
-        : Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                title,
-                style: niraText(NiraType.section, weight: FontWeight.w600),
-              ),
-              const SizedBox(height: NiraSpace.xs),
-              NiraOutline(
-                Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        NiraSpace.sm,
-                        NiraSpace.sm,
-                        NiraSpace.sm,
-                        NiraSpace.xs,
-                      ),
-                      child: Row(
-                        children: [
-                          for (final column in columns)
-                            Expanded(
-                              child: Text(
-                                column,
-                                style: niraText(
-                                  NiraType.caption,
-                                  color: niraLeaf,
-                                  weight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    if (visibleRows.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.all(NiraSpace.lg),
-                        child: Text(
-                          'Data tidak ditemukan',
-                          textAlign: TextAlign.center,
-                          style: niraText(NiraType.caption, color: niraLeaf),
-                        ),
-                      )
-                    else
-                      for (final row in visibleRows)
-                        InkWell(
-                          onTap: () => onTap(row),
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(
-                              NiraSpace.sm,
-                              NiraSpace.sm,
-                              NiraSpace.sm,
-                              NiraSpace.sm,
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    row.supplier,
-                                    style: niraText(NiraType.body),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Text(
-                                    row.value,
-                                    style: niraText(NiraType.body),
-                                  ),
-                                ),
-                                if (columns.length > 2)
-                                  Expanded(
-                                    child: Text(
-                                      row.secondary,
-                                      style: niraText(NiraType.body),
-                                    ),
-                                  ),
-                                const Icon(
-                                  Icons.chevron_right,
-                                  size: 15,
-                                  color: niraGreen,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+    leading: (row) => Text(row.supplier, style: niraText(NiraType.body)),
+    value: (row) => row.value,
+    secondary: columns.length > 2 ? (row) => row.secondary : null,
+    onTap: onTap,
   );
 }

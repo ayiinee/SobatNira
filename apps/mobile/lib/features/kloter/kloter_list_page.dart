@@ -10,6 +10,7 @@ class KloterListPage extends StatefulWidget {
     required this.kloter,
     required this.onOpenKloter,
     this.onCreate,
+    this.synthetic = false,
     this.statusMessage,
     super.key,
   });
@@ -17,6 +18,7 @@ class KloterListPage extends StatefulWidget {
   final List<DemoKloter> kloter;
   final ValueChanged<DemoKloter> onOpenKloter;
   final VoidCallback? onCreate;
+  final bool synthetic;
   final Widget? statusMessage;
 
   @override
@@ -56,7 +58,9 @@ class _KloterListPageState extends State<KloterListPage> {
     final result = await showKloterDateFilter(
       context,
       _dateFilter,
-      today: widget.onCreate == null ? null : DateTime.now(),
+      today: widget.onCreate != null || widget.synthetic
+          ? DateTime.now()
+          : null,
     );
     if (!mounted || result == null) return;
     _scrollToTop();
@@ -114,6 +118,11 @@ class _KloterListPageState extends State<KloterListPage> {
         final short = constraints.maxHeight < 180;
         return Column(
           children: [
+            if (widget.synthetic && !short)
+              Text(
+                'Data sintetis',
+                style: niraText(NiraType.caption, color: niraLeaf),
+              ),
             Padding(
               padding: EdgeInsets.fromLTRB(
                 inset,

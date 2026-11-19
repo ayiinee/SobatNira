@@ -19,6 +19,8 @@ typedef FactoryHomeBuilder =
       FactoryScope scope,
       ValueChanged<FactoryScope> selectFactory,
       VoidCallback signOut,
+      bool synthetic,
+      ValueChanged<bool> onSyntheticChanged,
     );
 
 class ConnectedKloterPage extends StatefulWidget {
@@ -39,6 +41,7 @@ class ConnectedKloterPage extends StatefulWidget {
 class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
   final _pageHeight = NiraPageHeight();
   final _searchInput = TextEditingController();
+  final _syntheticTenants = <String>{};
   ReviewApi? _api;
   List<FactoryScope>? _factories;
   FactoryScope? _scope;
@@ -104,6 +107,13 @@ class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
       final factories = await api.factories();
       if (!mounted || !identical(_api, api)) return;
       setState(() {
+        if (_factories == null) {
+          _syntheticTenants.addAll(
+            factories
+                .where((scope) => scope.tenantName == 'SobatNira Uji')
+                .map((scope) => scope.tenantId),
+          );
+        }
         _factories = factories;
         _scope = factories.firstOrNull;
         if (widget.homeBuilder == null) _load();
@@ -119,6 +129,7 @@ class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
   }
 
   void _endSession({bool expired = false}) {
+    _syntheticTenants.clear();
     Navigator.of(context).popUntil((route) => route.isFirst);
     _api?.close();
     _searchInput.clear();
@@ -244,11 +255,25 @@ class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
     final scope = _scope;
     final buildHome = widget.homeBuilder;
     if (scope != null && buildHome != null) {
-      return buildHome(api, _factories!, scope, (selected) {
-        if (selected != _scope && _factories!.contains(selected)) {
-          setState(() => _scope = selected);
-        }
-      }, _endSession);
+      return buildHome(
+        api,
+        _factories!,
+        scope,
+        (selected) {
+          if (selected != _scope && _factories!.contains(selected)) {
+            setState(() => _scope = selected);
+          }
+        },
+        _endSession,
+        _syntheticTenants.contains(scope.tenantId),
+        (synthetic) {
+          if (synthetic) {
+            _syntheticTenants.add(scope.tenantId);
+          } else {
+            _syntheticTenants.remove(scope.tenantId);
+          }
+        },
+      );
     }
     return Scaffold(
       appBar: AppBar(
@@ -404,7 +429,9 @@ class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
                 Card(
                   child: ListTile(
                     title: Text(_lotCode(lot)),
-                    subtitle: Text('${lot['supplierName']} · ${_receivedAt(lot)}'),
+                    subtitle: Text(
+                      '${lot['supplierName']} · ${_receivedAt(lot)}',
+                    ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => _openLot(scope, lot),
                   ),

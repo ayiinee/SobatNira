@@ -18,7 +18,7 @@ export interface BackendConfig {
   aiBaseUrl: string;
   batchClosure?: { baseUrl: string; timeoutMs: number };
   supabase?: { url: string; publishableKey: string; secretKey?: string };
-  postgres?: { url: string; caFile?: string };
+  postgres?: { url: string; caFile?: string; caPem?: string };
   redis?: { url: string };
   r2?: {
     endpoint: string;
@@ -137,8 +137,12 @@ export function loadConfiguration(options: ConfigOptions = {}): BackendConfig {
     const databaseUrl = value('DATABASE_URL');
     const parsed = url('DATABASE_URL', databaseUrl, ['postgres:', 'postgresql:']);
     if (parsed && (!parsed.username || !parsed.pathname.slice(1))) invalid.push('DATABASE_URL');
-    config.postgres = { url: databaseUrl, caFile: value('DATABASE_SSL_CA_FILE') || undefined };
-  } else if (value('DATABASE_SSL_CA_FILE')) invalid.push('DATABASE_URL');
+    config.postgres = {
+      url: databaseUrl,
+      caFile: value('DATABASE_SSL_CA_FILE') || undefined,
+      caPem: value('DATABASE_SSL_CA_PEM') || undefined,
+    };
+  } else if (value('DATABASE_SSL_CA_FILE') || value('DATABASE_SSL_CA_PEM')) invalid.push('DATABASE_URL');
 
   if (value('REDIS_URL')) {
     const redisUrl = value('REDIS_URL');

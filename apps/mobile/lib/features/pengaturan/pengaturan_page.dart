@@ -13,6 +13,7 @@ class PengaturanPage extends StatelessWidget {
     required this.onNavigate,
     this.connectedProfile,
     this.onConnectedEntry,
+    this.onOpenPekerjaan,
     this.onSignOut,
     this.catalogLinks = const {},
     super.key,
@@ -22,6 +23,7 @@ class PengaturanPage extends StatelessWidget {
   final ValueChanged<NiraTab> onNavigate;
   final String? connectedProfile;
   final Map<SettingSection, VoidCallback>? onConnectedEntry;
+  final VoidCallback? onOpenPekerjaan;
   final VoidCallback? onSignOut;
   final Map<String, VoidCallback> catalogLinks;
 
@@ -40,14 +42,16 @@ class PengaturanPage extends StatelessWidget {
         _profile(),
         const SizedBox(height: NiraSpace.xl),
         _section('PABRIK & TIM', factoryEntries, context),
+        if (onOpenPekerjaan case final open?)
+          _menuRow('Pekerjaan', 'Tinjau nota dari pabrik aktif', 'form', open),
         const SizedBox(height: NiraSpace.xl),
         _section('PRODUKSI & PERHITUNGAN', productionEntries, context),
         for (final entry in catalogLinks.entries)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(entry.key),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: entry.value,
+          _menuRow(
+            entry.key,
+            'Kelola daftar ${entry.key.toLowerCase()}',
+            entry.key == 'Pemasok' ? 'people' : 'science',
+            entry.value,
           ),
         if (onSignOut != null)
           TextButton(onPressed: onSignOut, child: const Text('Keluar')),
@@ -98,8 +102,17 @@ class PengaturanPage extends StatelessWidget {
     final VoidCallback? open = callbacks == null
         ? () => _open(context, entry)
         : callbacks[entry.section];
+    return _menuRow(entry.title, entry.subtitle, entry.icon, open);
+  }
+
+  Widget _menuRow(
+    String title,
+    String subtitle,
+    String icon,
+    VoidCallback? open,
+  ) {
     return Semantics(
-      label: entry.title,
+      label: title,
       button: open != null,
       enabled: open != null,
       onTap: open,
@@ -110,25 +123,26 @@ class PengaturanPage extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: NiraSpace.md),
           child: Row(
             children: [
-              _SettingIcon(entry.icon),
+              _SettingIcon(icon),
               const SizedBox(width: NiraSpace.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      entry.title,
+                      title,
                       style: niraText(NiraType.body, weight: FontWeight.w600),
                     ),
                     const SizedBox(height: NiraSpace.xs),
                     Text(
-                      open == null ? 'Belum tersedia' : entry.subtitle,
+                      open == null ? 'Belum tersedia' : subtitle,
                       style: niraText(NiraType.caption, color: niraLeaf),
                     ),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, color: niraGreen, size: 20),
+              if (open != null)
+                const Icon(Icons.chevron_right, color: niraGreen, size: 20),
             ],
           ),
         ),

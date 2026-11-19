@@ -208,10 +208,20 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('30,5 kg'), findsWidgets);
+      final productionPlot = find.byKey(
+        const ValueKey('production-chart-plot'),
+      );
+      expect(productionPlot, findsOneWidget);
+      final plot = tester.getRect(productionPlot);
+      await tester.tapAt(plot.topLeft + Offset(plot.width / 2, 110));
+      await tester.pumpAndSettle();
+      expect(find.text('19 November 2026'), findsOneWidget);
+      expect(find.text('Gula final: 30,5 kg'), findsOneWidget);
       await tester.tap(find.text('Margin').first);
       await tester.pumpAndSettle();
       expect(find.text('-Rp1'), findsWidgets);
       expect(find.text('Rp9.007.199.254.740.993'), findsOneWidget);
+      expect(find.byKey(const ValueKey('margin-chart-plot')), findsOneWidget);
       await tester.tap(find.text('DUPLICATE').first);
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(find.text('BATCH-REAL'), 400);
@@ -229,19 +239,28 @@ void main() {
         300,
       );
       expect(find.text('-Rp1'), findsWidgets);
+      await tester.tap(find.text('Masak'));
+      await tester.pumpAndSettle();
+      expect(find.text('Wajan 2'), findsOneWidget);
+      await tester.tap(find.text('Grade'));
+      await tester.pumpAndSettle();
+      expect(find.text('Grade A'), findsOneWidget);
       tester.state<NavigatorState>(find.byType(Navigator).first).pop();
       await tester.pumpAndSettle();
       tester.state<NavigatorState>(find.byType(Navigator).first).pop();
       await tester.pumpAndSettle();
       await tester.tap(find.text('Produksi').first);
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('Grade A'), 300);
-      await Scrollable.ensureVisible(
-        tester.element(find.text('Grade A')),
-        alignment: .4,
-      );
+      await tester.ensureVisible(find.byTooltip('Jenis grafik'));
+      await tester.tap(find.byTooltip('Jenis grafik'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Grade A'));
+      await tester.tap(find.byKey(const ValueKey('chart-option-grade')));
+      await tester.pumpAndSettle();
+      final gradeRow = find.widgetWithText(InkWell, 'Grade A').last;
+      await tester.scrollUntilVisible(gradeRow, 300);
+      await Scrollable.ensureVisible(tester.element(gradeRow), alignment: .4);
+      await tester.pumpAndSettle();
+      await tester.tap(gradeRow);
       await tester.pumpAndSettle();
       expect(find.text('Detail Grade'), findsOneWidget);
       expect(find.textContaining('Rp20.001/kg'), findsOneWidget);

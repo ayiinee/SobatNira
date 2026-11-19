@@ -45,7 +45,7 @@ Untuk membuka layar draf sintetis secara mandiri, tambahkan `-t lib/main_demo.da
 
 ## Flutter dengan Supabase dan backend dari .env
 
-Pastikan `.env` di akar repo sudah berisi `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, dan koneksi PostgreSQL sesuai [konfigurasi backend](backend-configuration.md). Jalankan NestJS di terminal terpisah dari `apps/api` dengan `npm run dev`.
+Pastikan `.env` di akar repo sudah berisi `SUPABASE_URL` dan `SUPABASE_PUBLISHABLE_KEY`. Isi `API_BASE_URL` dengan URL dasar layanan Railway untuk memakai backend yang sudah di-deploy. Untuk pengembangan backend lokal, ikuti [konfigurasi backend](backend-configuration.md) dan jalankan `npm run dev` dari `apps/api`.
 
 Dari akar repo jalankan:
 
@@ -57,7 +57,18 @@ Perintah ini membuka Chrome di `http://127.0.0.1:8080` dengan layar login Supaba
 
 Launcher membaca `.env` menggunakan Node.js 24 dan membuat `.tmp/mobile/public-defines.json` yang diabaikan Git. Hanya `SOBATNIRA_MODE`, `API_BASE_URL`, `SUPABASE_URL`, dan publishable/anon key yang disertakan. Jangan memberikan `.env` backend langsung ke `--dart-define-from-file` karena semua nilainya dapat masuk ke aplikasi klien.
 
-Alamat API mengikuti `API_BASE_URL` bila diisi, atau `API_HOST` dan `API_PORT` (bawaan `http://127.0.0.1:3000`). Port tampilan dapat diganti dengan `--port 8086`; tambahkan origin `http://127.0.0.1:8086` ke `CORS_ORIGINS` dan mulai ulang NestJS. Perubahan `.env` memerlukan menjalankan ulang launcher. Tanpa `--connected`, launcher tetap membuka demo lokal pada port 8085.
+Alamat API mengikuti `API_BASE_URL` bila diisi, atau `API_HOST` dan `API_PORT` (bawaan `http://127.0.0.1:3000`). Port tampilan dapat diganti dengan `--port 8086`; tambahkan origin `http://127.0.0.1:8086` ke `CORS_ORIGINS` dan mulai ulang NestJS. Perubahan `.env` memerlukan menjalankan ulang launcher. Perintah tanpa flag mode dan perintah dengan `--demo` sama-sama membuka demo lokal pada port 8085.
+
+Untuk membuat APK Android terhubung, buat konfigurasi publik dari akar repo, lalu build dari `apps/mobile`:
+
+```powershell
+node .\tools\mobile_config.mjs
+cd apps/mobile
+flutter build apk --release --dart-define-from-file=../../.tmp/mobile/public-defines.json
+```
+
+APK dihasilkan di `apps/mobile/build/app/outputs/flutter-apk/app-release.apk`. Konfigurasi Android pada repo menggunakan tanda tangan debug untuk build release lokal.
+
 
 Untuk mengisi database development dengan data sintetis, jalankan dari `apps/api`:
 

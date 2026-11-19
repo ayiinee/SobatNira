@@ -167,7 +167,7 @@ class _BatchDetailPageState extends State<BatchDetailPage>
                     ),
                   ),
                   const SizedBox(width: NiraSpace.sm),
-                  _ReviewBadge(reviewed: reviewed),
+                  BatchReviewBadge(reviewed: reviewed),
                 ],
               ),
             ),
@@ -400,54 +400,6 @@ class _BatchValidationNotice extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _ReviewBadge extends StatelessWidget {
-  const _ReviewBadge({required this.reviewed});
-
-  final bool reviewed;
-
-  @override
-  Widget build(BuildContext context) {
-    final foregroundColor = reviewed ? niraGreen : Colors.white;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(
-        NiraSpace.sm,
-        NiraSpace.xs,
-        NiraSpace.sm,
-        NiraSpace.xs,
-      ),
-      constraints: const BoxConstraints(maxWidth: 153),
-      decoration: BoxDecoration(
-        color: reviewed ? const Color(0xFFE6EFE5) : const Color(0xFFDCB95B),
-        borderRadius: BorderRadius.circular(niraRadius),
-        border: Border.all(
-          color: reviewed ? niraLeaf : const Color(0xFFB79845),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            reviewed ? Icons.check_circle : Icons.error,
-            size: 14,
-            color: foregroundColor,
-          ),
-          const SizedBox(width: NiraSpace.xs),
-          Flexible(
-            child: Text(
-              reviewed ? 'Tervalidasi' : 'Perlu ditinjau',
-              style: niraText(
-                NiraType.body,
-                color: foregroundColor,
-                weight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

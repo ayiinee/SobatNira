@@ -17,6 +17,7 @@ import 'features/kloter/kloter_detail_widgets.dart';
 import 'features/kloter/kloter_list_page.dart';
 import 'features/laporan/demo_analytics.dart';
 import 'features/laporan/connected_reports.dart';
+import 'features/laporan/connected_batch_detail.dart';
 import 'features/laporan/laporan_page.dart';
 import 'features/laporan/connected_report_view.dart';
 import 'features/laporan/report_detail_page.dart';
@@ -61,14 +62,24 @@ class SobatNiraApp extends StatelessWidget {
             invalidConfiguration:
                 configurationErrors ?? ReviewApi.invalidConfiguration,
             signIn: signIn,
-            homeBuilder: (api, factories, scope, selectFactory, signOut) =>
-                _Home(
+            homeBuilder:
+                (
+                  api,
+                  factories,
+                  scope,
+                  selectFactory,
+                  signOut,
+                  synthetic,
+                  onSyntheticChanged,
+                ) => _Home(
                   key: ValueKey((api, scope.tenantId, scope.factoryId)),
                   api: api,
                   factories: factories,
                   scope: scope,
                   selectFactory: selectFactory,
                   signOut: signOut,
+                  synthetic: synthetic,
+                  onSyntheticChanged: onSyntheticChanged,
                 ),
           )
         : const _Home(),
@@ -83,6 +94,8 @@ class _Home extends StatefulWidget {
     this.scope,
     this.selectFactory,
     this.signOut,
+    this.synthetic = false,
+    this.onSyntheticChanged,
   });
 
   final ReviewApi? api;
@@ -90,6 +103,8 @@ class _Home extends StatefulWidget {
   final FactoryScope? scope;
   final ValueChanged<FactoryScope>? selectFactory;
   final VoidCallback? signOut;
+  final bool synthetic;
+  final ValueChanged<bool>? onSyntheticChanged;
 
   @override
   State<_Home> createState() => _HomeState();
@@ -102,7 +117,12 @@ class _HomeState extends State<_Home> {
       : DemoProduction.empty();
   late final _live = widget.api == null
       ? null
-      : ConnectedProduction(widget.api!, widget.scope!);
+      : ConnectedProduction(
+          widget.api!,
+          widget.scope!,
+          synthetic: widget.synthetic,
+          onSyntheticChanged: widget.onSyntheticChanged,
+        );
   final _storage = PageStorageBucket();
   final _analytics = DemoAnalytics();
   final _settings = SettingsDemo();
@@ -152,7 +172,6 @@ class _HomeState extends State<_Home> {
           kloter: _lots,
           onOpenKloter: _openKloter,
           onQuickAction: _openQuickAction,
-          onOpenPekerjaan: _live == null ? null : _openPekerjaan,
           factoryId: widget.scope?.factoryId,
           factories: {
             for (final factory in widget.factories)
@@ -173,16 +192,15 @@ class _HomeState extends State<_Home> {
           reportStatus: _live == null
               ? null
               : ConnectedReportStatus(reports: _live.reports),
-          statusMessage:
-              _loadStatus() ??
-              (_live != null && _lots.isEmpty
-                  ? const Text('Belum ada kloter di pabrik ini.')
-                  : null),
+          statusMessage: _loadStatus(),
         ),
         NiraTab.kloter => KloterListPage(
           kloter: _lots,
           onOpenKloter: _openKloter,
-          onCreate: _live == null ? null : () => _editLot(),
+          synthetic: _live?.reports.synthetic ?? false,
+          onCreate: _live == null || _live.reports.synthetic
+              ? null
+              : () => _editLot(),
           statusMessage: _loadStatus(),
         ),
         NiraTab.laporan =>
@@ -203,6 +221,7 @@ class _HomeState extends State<_Home> {
           connectedProfile: _live == null
               ? null
               : '$_role · ${widget.scope!.factoryName}',
+          onOpenPekerjaan: _live == null ? null : _openPekerjaan,
           onConnectedEntry: _live == null
               ? null
               : {
@@ -246,6 +265,7 @@ class _HomeState extends State<_Home> {
           api: widget.api!,
           scope: widget.scope!,
           kind: kind,
+          onNavigate: _navigate,
         ),
       ),
     );
@@ -443,19 +463,43 @@ class _LotDetailState extends State<_LotDetail> {
   ReviewApi get _api => widget.live.api;
   FactoryScope get _scope => widget.live.scope;
   String get _id => widget.initial.id!;
+  bool get _synthetic => _lot.record?['synthetic'] == true;
   late DemoKloter _lot = widget.initial;
-  late Future<(Json, Json, Json)> _request = _load();
+  late Future<(Json, Json, Json, List<Json>?)> _request = _load();
 
-  Future<(Json, Json, Json)> _load() async {
+  Future<(Json, Json, Json, List<Json>?)> _load() async {
+    var synthetic = _synthetic;
+    var lot = await _api.lot(_scope, _id, synthetic: synthetic);
+    if (!synthetic && lot['intake'] == null && lot['milling'] == null) {
+      final example = await _api.lot(_scope, _id, synthetic: true);
+      if (example['intake'] != null || example['milling'] != null) {
+        synthetic = true;
+        lot = {...example, 'synthetic': true};
+      }
+    }
     final results = await Future.wait([
-      _api.lot(_scope, _id),
-      _api.juice(_scope, _id),
-      _api.productionReport(_scope),
+      _api.juice(_scope, _id, synthetic: synthetic),
+      _api.productionReport(_scope, synthetic: synthetic),
     ]);
-    return (results[0], results[1], results[2]);
+    List<Json>? batches;
+    try {
+      batches = await _api.lotBatches(_scope, _id, synthetic);
+    } on ReviewApiError {
+      // The approved report remains usable if the batch list is unavailable.
+    }
+    return (lot, results[0], results[1], batches);
   }
 
   void _reload() => setState(() => _request = _load());
+
+  String _batchTitle(String code) {
+    if (!_synthetic) return code;
+    final prefix = '${_lot.code}-B';
+    final number = code.startsWith(prefix)
+        ? int.tryParse(code.substring(prefix.length))
+        : null;
+    return number == null ? code : 'Batch $number';
+  }
 
   Future<void> _open(Widget page) async {
     await Navigator.of(
@@ -465,7 +509,9 @@ class _LotDetailState extends State<_LotDetail> {
   }
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<(Json, Json, Json)>(
+  Widget build(
+    BuildContext context,
+  ) => FutureBuilder<(Json, Json, Json, List<Json>?)>(
     future: _request,
     builder: (context, snapshot) {
       if (snapshot.connectionState == ConnectionState.done &&
@@ -477,22 +523,22 @@ class _LotDetailState extends State<_LotDetail> {
         kloter: _lot,
         demo: widget.demo,
         onNavigate: widget.onNavigate,
-        onOpenPekerjaan: widget.onOpenPekerjaan,
-        onEdit: snapshot.hasError
+        onOpenPekerjaan: _synthetic ? null : widget.onOpenPekerjaan,
+        onEdit: _synthetic || !snapshot.hasData || snapshot.hasError
             ? null
             : () async {
                 if (await widget.onEdit(_lot.record!) && mounted) _reload();
               },
-        onTransfer: stock == null || snapshot.hasError
+        onTransfer: _synthetic || stock == null || snapshot.hasError
             ? null
             : () => _open(
                 JuiceTransferPage(api: _api, scope: _scope, lotId: _id),
               ),
-        onClosure: snapshot.hasError
+        onClosure: _synthetic || !snapshot.hasData || snapshot.hasError
             ? null
             : () => _open(LotClosurePage(api: _api, scope: _scope, lotId: _id)),
         production: snapshot.hasData
-            ? _production(snapshot.requireData.$3)
+            ? _production(snapshot.requireData.$3, snapshot.requireData.$4)
             : Text(
                 snapshot.hasError ? 'Batch gagal dimuat.' : 'Memuat batch sah…',
               ),
@@ -500,6 +546,7 @@ class _LotDetailState extends State<_LotDetail> {
           AsyncSnapshot(connectionState: ConnectionState.waiting) =>
             const LinearProgressIndicator(),
           AsyncSnapshot(:final error?) => _LoadFailed(error, _reload),
+          _ when _synthetic => null,
           _ => DetailMetrics([
             (
               'Stok fisik nira',
@@ -519,40 +566,95 @@ class _LotDetailState extends State<_LotDetail> {
     },
   );
 
-  Widget _production(Json report) {
+  Widget _production(Json report, List<Json>? records) {
     final lots = (report['items'] as List).cast<Json>().where(
       (lot) => lot['lotId'] == _id,
     );
-    if (lots.isEmpty) return const Text('Belum ada penerimaan sah.');
-    final lot = lots.first;
-    final batches = (lot['batches'] as List).cast<Json>();
+    final lot = lots.firstOrNull;
+    final approved = {
+      for (final row in (lot?['batches'] as List? ?? []).cast<Json>())
+        row['code']: row,
+    };
+    final batches = records == null || records.isEmpty
+        ? approved.values.toList()
+        : records;
+    bool needsReview(Json row) =>
+        row.containsKey('status') && row['status'] != 'approved';
+    final pending = batches.where(needsReview).length;
     void open([Json? batch]) => Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => ConnectedReportDetail(
           data: report,
-          lot: lot,
+          lot: lot!,
           batch: batch,
+          navigationTab: NiraTab.kloter,
           onNavigate: widget.onNavigate,
         ),
       ),
     );
-    return Column(
-      children: [
-        TextButton(
-          onPressed: () => open(),
-          child: const Text('Produksi dan margin kloter'),
+    void openBatch(Json batch) {
+      if (approved[batch['code']] case final official?) {
+        open(official);
+        return;
+      }
+      Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => ConnectedBatchDetail(
+            batch: {
+              'code': batch['code'],
+              'physicalWeightKg': batch['physical_weight_kg'],
+              'quantityMl': batch['quantity_ml'],
+              'wokNumber': batch['wok_number'],
+              'occurredAt': batch['occurred_at'],
+            },
+            lotCode: _lot.code,
+            source: _synthetic ? 'Data sintetis' : 'Data produksi',
+            reviewed: !needsReview(batch),
+            hasReport: false,
+            marginDetails: const [],
+            onNavigate: widget.onNavigate,
+            navigationTab: NiraTab.kloter,
+          ),
         ),
-        if (batches.isEmpty) const Text('Belum ada batch sah.'),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (batches.isEmpty)
+          Text(
+            lot == null ? 'Belum ada penerimaan sah.' : 'Belum ada batch sah.',
+          ),
+        if (pending > 0)
+          Padding(
+            padding: const EdgeInsets.only(bottom: NiraSpace.sm),
+            child: Text(
+              '$pending Batch perlu ditinjau',
+              style: niraText(NiraType.caption, color: niraOchre),
+            ),
+          ),
+        if (records == null && approved.isNotEmpty)
+          const Text('Daftar batch lengkap gagal dimuat.'),
         for (final batch in batches)
           Padding(
             padding: const EdgeInsets.only(bottom: NiraSpace.md),
             child: KloterBatchTile(
-              title: batch['code'] as String,
-              juice: '${reportNumber(batch['quantityMl'])} ml',
-              physicalWeight: '${reportNumber(batch['physicalWeightKg'])} kg',
-              pending: false,
-              onTap: () => open(batch),
+              title: _batchTitle(batch['code'] as String),
+              juice: formatQuantity(
+                _liters(batch['quantity_ml'] ?? batch['quantityMl']),
+                'L',
+              ),
+              physicalWeight:
+                  '${reportNumber(batch['physical_weight_kg'] ?? batch['physicalWeightKg'])} kg',
+              pending: needsReview(batch),
+              onTap: () => openBatch(batch),
             ),
+          ),
+        if (lot != null)
+          TextButton(
+            onPressed: () => open(),
+            child: const Text('Produksi dan margin kloter'),
           ),
       ],
     );

@@ -47,6 +47,183 @@ http.Response _json(Object result) => http.Response(
 
 void main() {
   testWidgets(
+    'tenant uji menampilkan status kloter contoh sejak login dan saat pindah pabrik',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 853));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final api = ReviewApi(
+        'test',
+        client: MockClient((request) async {
+          final segments = request.url.pathSegments;
+          final synthetic = request.url.queryParameters['synthetic'] == 'true';
+          if (request.url.path == '/auth/me') {
+            return _json({
+              'access': [
+                for (final factory in ['A', 'B'])
+                  {..._factory(factory), 'tenantName': 'SobatNira Uji'},
+              ],
+            });
+          }
+          final factory = segments[3];
+          final id = 'synthetic-$factory';
+          if (segments.last == 'production-report') {
+            return _json({
+              'synthetic': synthetic,
+              'items': synthetic
+                  ? [
+                      {
+                        'lotId': id,
+                        'code': 'SYN-$factory',
+                        'supplier': 'Pemasok $id',
+                        'batches': [],
+                      },
+                    ]
+                  : [],
+              'grades': [],
+              'totals': {'lotCount': synthetic ? 1 : 0},
+            });
+          }
+          if (segments.last == 'lots') {
+            return _json({
+              'items': [
+                _lot('official-$factory'),
+                {
+                  ..._lot(id),
+                  'intake': null,
+                  'milling': null,
+                  'netWeightGrams': null,
+                },
+              ],
+              'total': 2,
+            });
+          }
+          if (segments.last == 'batches') {
+            return _json({
+              'items': [
+                {
+                  'lot_id': id,
+                  'is_synthetic': true,
+                  'code': 'BATCH-DRAF',
+                  'status': factory == 'A' ? 'draft' : 'approved',
+                  'quantity_ml': '81000',
+                  'physical_weight_kg': '27',
+                  'wok_number': 2,
+                  'occurred_at': '2026-11-10T06:00:00.000Z',
+                },
+              ],
+            });
+          }
+          if (segments.last == 'availability') {
+            expect(synthetic, isTrue);
+            return _json({
+              'onHandMl': '90000',
+              'reservedMl': '0',
+              'availableMl': '90000',
+            });
+          }
+          expect(segments.last, id);
+          return _json(
+            synthetic
+                ? {
+                    ..._lot(id),
+                    'synthetic': true,
+                    'status': factory == 'A' ? 'open' : 'closed',
+                  }
+                : {
+                    ..._lot(id),
+                    'intake': null,
+                    'milling': null,
+                    'netWeightGrams': null,
+                  },
+          );
+        }),
+      );
+      await tester.pumpWidget(
+        SobatNiraApp(
+          connected: true,
+          configurationErrors: const [],
+          signIn: (_, _) async => api,
+        ),
+      );
+      await openDemoLogin(tester);
+      final fields = find.byType(TextFormField);
+      await tester.enterText(fields.at(0), 'admin@example.invalid');
+      await tester.enterText(fields.at(1), 'synthetic-password');
+      final submit = find.widgetWithText(FilledButton, 'Masuk');
+      await tester.ensureVisible(submit);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Kloter'));
+      await tester.pumpAndSettle();
+      expect(find.text('OCR-synthetic-A'), findsOneWidget);
+      expect(find.text('OCR-official-A'), findsNothing);
+      await tester.tap(find.text('Perlu Ditinjau'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OCR-synthetic-A'));
+      await tester.pumpAndSettle();
+      expect(find.text('1.250,01 kg'), findsOneWidget);
+      expect(find.text('1 Batch perlu ditinjau'), findsOneWidget);
+      expect(find.text('81 L'), findsOneWidget);
+      expect(find.text('Edit kloter'), findsNothing);
+      final draftBatch = find.text('BATCH-DRAF');
+      await tester.scrollUntilVisible(draftBatch, 140);
+      await tester.tap(draftBatch);
+      await tester.pumpAndSettle();
+      expect(find.text('Detail batch'), findsOneWidget);
+      expect(find.text('27 kg'), findsOneWidget);
+      await tester.tap(find.text('Masak'));
+      await tester.pumpAndSettle();
+      expect(find.text('Wajan 2'), findsOneWidget);
+      await tester.tap(find.bySemanticsLabel('Laporan'));
+      await tester.pumpAndSettle();
+      final examples = find.text('Tampilkan data contoh');
+      await tester.ensureVisible(examples);
+      await tester.tap(examples);
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Kloter'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Semua'));
+      await tester.pumpAndSettle();
+      expect(find.text('OCR-official-A'), findsOneWidget);
+      await tester.tap(find.bySemanticsLabel('Laporan'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(examples);
+      await tester.tap(examples);
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Kloter'));
+      await tester.pumpAndSettle();
+      expect(find.text('OCR-synthetic-A'), findsOneWidget);
+      expect(find.text('OCR-official-A'), findsNothing);
+      expect(find.byTooltip('Tambah kloter'), findsNothing);
+
+      await tester.tap(find.text('OCR-synthetic-A'));
+      await tester.pumpAndSettle();
+      final intake = find.text('Data tebu dan penggilingan');
+      await tester.scrollUntilVisible(intake, 240);
+      await tester.tap(intake);
+      await tester.pumpAndSettle();
+      expect(find.text('Ringkasan proses'), findsOneWidget);
+      expect(find.text('Buka Pekerjaan'), findsNothing);
+
+      await tester.tap(find.bySemanticsLabel('Beranda'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Pilih pabrik'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Pabrik B'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Tuntas'));
+      await tester.pumpAndSettle();
+      expect(find.text('OCR-synthetic-B'), findsOneWidget);
+      expect(find.text('OCR-synthetic-A'), findsNothing);
+      await tester.tap(find.bySemanticsLabel('Kloter'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Tuntas'));
+      await tester.pumpAndSettle();
+      expect(find.text('OCR-synthetic-B'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'login opens the team home and isolates data when switching factory',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(430, 950));
@@ -69,6 +246,16 @@ void main() {
           }
           if (request.url.path.endsWith('/factories/B/lots')) {
             return nextFactory.future;
+          }
+          if (request.url.path.endsWith('/factories/A/suppliers')) {
+            return _json({
+              'items': [
+                {'id': 'supplier', 'name': 'Pemasok uji A', 'isActive': true},
+              ],
+              'offset': 0,
+              'limit': 20,
+              'total': 1,
+            });
           }
           if (request.url.path.endsWith('/review-notifications') ||
               request.url.path.endsWith('/review-tasks')) {
@@ -99,6 +286,16 @@ void main() {
       }
       expect(find.text('OCR-A'), findsOneWidget);
       expect(find.text('Rp15.745.000'), findsNothing);
+      await tester.tap(find.bySemanticsLabel('Pengaturan'));
+      await tester.pumpAndSettle();
+      final suppliers = find.bySemanticsLabel('Pemasok');
+      await tester.scrollUntilVisible(suppliers, 240);
+      await tester.tap(suppliers);
+      await tester.pumpAndSettle();
+      expect(find.text('Pemasok uji A'), findsOneWidget);
+
+      await tester.tap(find.bySemanticsLabel('Beranda'));
+      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Pilih pabrik'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Pabrik B'));
@@ -113,8 +310,11 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('OCR-B'), findsOneWidget);
+      expect(find.text('Pekerjaan'), findsNothing);
+      await tester.tap(find.bySemanticsLabel('Pengaturan'));
+      await tester.pumpAndSettle();
       final pekerjaan = find.text('Pekerjaan');
-      await tester.ensureVisible(pekerjaan);
+      await tester.scrollUntilVisible(pekerjaan, 150);
       await tester.tap(pekerjaan);
       await tester.pumpAndSettle();
       expect(find.text('Sesi berakhir. Masuk kembali.'), findsOneWidget);
@@ -219,13 +419,14 @@ void main() {
       expect(find.text('1.250,01 kg'), findsOneWidget);
       expect(find.text('19,5 °Bx'), findsOneWidget);
       expect(find.text('90 L'), findsOneWidget);
-      expect(find.text('83.500 ml'), findsOneWidget);
+      expect(find.text('83,5 L'), findsOneWidget);
       expect(find.text('29,25 kg'), findsOneWidget);
       await tap(find.text('BATCH-UJI-1'));
       expect(find.text('Detail batch'), findsOneWidget);
       expect(find.text('83.500 ml'), findsOneWidget);
       expect(find.text('29,25 kg'), findsOneWidget);
       await tap(find.byTooltip('Kembali'));
+      await tester.scrollUntilVisible(find.byTooltip('Kembali'), -150);
       await tap(find.byTooltip('Kembali'));
 
       await tap(find.text('Pemasok second'));

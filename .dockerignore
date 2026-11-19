@@ -1,0 +1,15 @@
+**
+!apps/
+!apps/api/
+!apps/api/package.json
+!apps/api/package-lock.json
+!apps/api/tsconfig.json
+!apps/api/src/
+!apps/api/src/**
+!apps/api/migrations/
+!apps/api/migrations/**
+!Dockerfile
+!docs/
+!docs/ai/
+!docs/ai/schemas/
+!docs/ai/schemas/**

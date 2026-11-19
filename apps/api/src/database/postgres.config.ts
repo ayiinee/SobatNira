@@ -6,7 +6,10 @@ import { BackendConfig, DEFAULT_ENV_FILE, isLoopback } from '../config/backend.c
 export function postgresClientOptions(config: BackendConfig): ClientConfig {
   const settings = config.postgres!;
   const url = new URL(settings.url);
-  const useTls = !isLoopback(url.hostname) || settings.caFile !== undefined ||
+  const ca = settings.caPem ?? (settings.caFile
+    ? readFileSync(resolve(dirname(DEFAULT_ENV_FILE), settings.caFile), 'utf8')
+    : undefined);
+  const useTls = !isLoopback(url.hostname) || ca !== undefined ||
     ['require', 'verify-ca', 'verify-full'].includes(url.searchParams.get('sslmode') ?? '');
   // URL parameters must not replace the verified TLS configuration.
   for (const key of ['ssl', 'sslmode', 'sslcert', 'sslkey', 'sslrootcert', 'uselibpqcompat']) {
@@ -16,9 +19,7 @@ export function postgresClientOptions(config: BackendConfig): ClientConfig {
     connectionString: url.toString(),
     ssl: useTls ? {
       rejectUnauthorized: true,
-      ...(settings.caFile ? {
-        ca: readFileSync(resolve(dirname(DEFAULT_ENV_FILE), settings.caFile), 'utf8'),
-      } : {}),
+      ...(ca === undefined ? {} : { ca }),
     } : false,
     connectionTimeoutMillis: config.timeoutMs,
     query_timeout: config.timeoutMs,

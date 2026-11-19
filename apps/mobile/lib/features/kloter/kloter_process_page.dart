@@ -32,13 +32,16 @@ class _KloterProcessPageState extends State<KloterProcessPage> {
       final kloter = widget.kloter;
       final intake = _selected == 0;
       final connected = kloter.id != null;
+      final openReview = widget.onOpenPekerjaan;
       final review = intake ? kloter.intake : kloter.milling;
       final inset = niraPageInset(context);
       return NiraScaffold(
         tab: NiraTab.kloter,
         onNavigate: widget.onNavigate,
         bottomAction: connected
-            ? NiraButton('Buka Pekerjaan', widget.onOpenPekerjaan)
+            ? openReview == null
+                  ? null
+                  : NiraButton('Buka Pekerjaan', openReview)
             : NiraButton(
                 review.verified
                     ? (intake
@@ -78,12 +81,9 @@ class _KloterProcessPageState extends State<KloterProcessPage> {
             ),
           ],
           children: [
-            if (connected)
-              DocumentLink(
-                'Foto, bukti, dan revisi di Pekerjaan',
-                widget.onOpenPekerjaan!,
-              )
-            else
+            if (connected && openReview != null)
+              DocumentLink('Foto, bukti, dan revisi di Pekerjaan', openReview)
+            else if (!connected)
               const DocumentPreview(batch: false),
             const SizedBox(height: NiraSpace.xl),
             const DetailSectionTitle('Ringkasan proses'),

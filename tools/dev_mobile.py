@@ -39,7 +39,12 @@ def send(process, request_id, method, app_id, **params):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int)
-    parser.add_argument("--connected", action="store_true", help="Gunakan Supabase dan API dari .env akar repo.")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--connected", dest="connected", action="store_true",
+                      help="Gunakan Supabase dan API dari .env akar repo.")
+    mode.add_argument("--demo", dest="connected", action="store_false",
+                      help="Gunakan data demo lokal tanpa koneksi backend (bawaan).")
+    parser.set_defaults(connected=False)
     args = parser.parse_args()
     if args.port is None:
         args.port = 8080 if args.connected else 8085

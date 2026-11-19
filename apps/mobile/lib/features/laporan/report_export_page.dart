@@ -23,6 +23,7 @@ class ReportExportPage extends StatefulWidget {
     this.onFilter,
     this.approvedLots,
     this.statusMessage,
+    this.reportOptions,
     super.key,
   });
 
@@ -35,6 +36,7 @@ class ReportExportPage extends StatefulWidget {
   final VoidCallback? onFilter;
   final List<DemoKloter>? approvedLots;
   final Widget? statusMessage;
+  final Widget? reportOptions;
 
   @override
   State<ReportExportPage> createState() => _ReportExportPageState();
@@ -193,6 +195,7 @@ class _ReportExportPageState extends State<ReportExportPage> {
                       ),
                     ),
                   ),
+                  if (widget.reportOptions case final options?) options,
                   const SizedBox(height: NiraSpace.md),
                   NiraSummaryCard(report.totalLabel, report.totalDisplay),
                   if (widget.statusMessage case final status?) ...[

@@ -32,6 +32,10 @@ class KloterDetailPage extends StatelessWidget {
   final VoidCallback? onClosure;
   final VoidCallback? onOpenPekerjaan;
 
+  Widget _batchSection(Widget child) => stock != null
+      ? SliverToBoxAdapter(child: child)
+      : SliverFillRemaining(hasScrollBody: false, child: child);
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: demo,
@@ -67,15 +71,6 @@ class KloterDetailPage extends StatelessWidget {
                           formatQuantity(kloter.juiceLiters, 'L'),
                         ),
                     ]),
-                    if (stock != null) ...[
-                      const SizedBox(height: NiraSpace.md),
-                      stock!,
-                    ],
-                    if (onEdit != null) DocumentLink('Edit kloter', onEdit!),
-                    if (onTransfer != null)
-                      DocumentLink('Transfer nira', onTransfer!),
-                    if (onClosure != null)
-                      DocumentLink('Penutupan dan riwayat', onClosure!),
                     const SizedBox(height: NiraSpace.lg),
                     DocumentLink('Data tebu dan penggilingan', () {
                       Navigator.of(context).push(
@@ -94,9 +89,8 @@ class KloterDetailPage extends StatelessWidget {
               ),
             ],
           ),
-          SliverFillRemaining(
-            hasScrollBody: false,
-            child: DecoratedBox(
+          _batchSection(
+            DecoratedBox(
               decoration: const BoxDecoration(
                 borderRadius: BorderRadius.vertical(top: Radius.circular(7)),
                 border: Border(
@@ -133,6 +127,29 @@ class KloterDetailPage extends StatelessWidget {
                               : niraOchre,
                         ),
                       ),
+                    if (stock != null ||
+                        onEdit != null ||
+                        onTransfer != null ||
+                        onClosure != null) ...[
+                      const SizedBox(height: NiraSpace.md),
+                      const DetailSectionTitle('Pengelolaan kloter'),
+                      if (stock != null) ...[
+                        const SizedBox(height: NiraSpace.sm),
+                        stock!,
+                      ],
+                      if (onEdit != null) ...[
+                        const SizedBox(height: NiraSpace.sm),
+                        DocumentLink('Edit kloter', onEdit!),
+                      ],
+                      if (onTransfer != null) ...[
+                        const SizedBox(height: NiraSpace.sm),
+                        DocumentLink('Transfer nira', onTransfer!),
+                      ],
+                      if (onClosure != null) ...[
+                        const SizedBox(height: NiraSpace.sm),
+                        DocumentLink('Penutupan dan riwayat', onClosure!),
+                      ],
+                    ],
                     const SizedBox(height: NiraSpace.md),
                     for (final batch in kloter.batches)
                       Padding(

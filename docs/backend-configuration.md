@@ -26,6 +26,7 @@ Untuk setup baru, salin `.env.example` menjadi `.env` tanpa menimpa file lokal y
 | `SUPABASE_SECRET_KEY` | Opsional; bila diisi, diperiksa juga melalui Auth settings |
 | `DATABASE_URL` | Connection string PostgreSQL, termasuk username, password yang di-URL-encode dan nama database |
 | `DATABASE_SSL_CA_FILE` | Opsional; file CA PEM untuk PostgreSQL, absolut atau relatif terhadap akar repo |
+| `DATABASE_SSL_CA_PEM` | Opsional; isi lengkap sertifikat CA dalam format PEM untuk deployment. Dipakai jika diisi, sebelum `DATABASE_SSL_CA_FILE`. |
 | `REDIS_URL` | URL `redis://` untuk lokal atau `rediss://` untuk TLS; Upstash wajib memakai `rediss://` |
 | `R2_ENDPOINT` | Endpoint S3 R2; suffix bucket yang sama dengan `R2_BUCKET_NAME` dinormalisasi otomatis |
 | `R2_ACCOUNT_ID` | Opsional; membentuk endpoint R2 bila `R2_ENDPOINT` kosong |
