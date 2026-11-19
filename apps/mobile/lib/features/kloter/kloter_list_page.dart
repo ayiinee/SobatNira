@@ -31,6 +31,7 @@ class _KloterListPageState extends State<KloterListPage> {
   int _activeTab = 0;
 
   static const _statuses = [null, KloterStatus.review, KloterStatus.done];
+  static const _searchControlSize = 48.0;
 
   @override
   void dispose() {
@@ -93,12 +94,7 @@ class _KloterListPageState extends State<KloterListPage> {
           child: Row(
             spacing: 8,
             children: [
-              Expanded(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 44),
-                  child: _searchBox(),
-                ),
-              ),
+              Expanded(child: _searchBox()),
               _filterButton(context),
               if (widget.onCreate case final create?)
                 IconButton(
@@ -253,7 +249,7 @@ class _KloterListPageState extends State<KloterListPage> {
             overlayColor: niraGreenOverlay,
             borderRadius: BorderRadius.circular(niraRadius),
             child: const SizedBox.square(
-              dimension: 48,
+              dimension: _searchControlSize,
               child: Center(
                 child: NiraIcon('calendar', 26, color: Colors.white),
               ),
@@ -272,6 +268,7 @@ class _KloterListPageState extends State<KloterListPage> {
     return TextField(
       controller: _search,
       textInputAction: TextInputAction.search,
+      textAlignVertical: TextAlignVertical.center,
       style: niraText(NiraType.body),
       cursorColor: niraGreen,
       onChanged: (_) {
@@ -284,10 +281,7 @@ class _KloterListPageState extends State<KloterListPage> {
         isDense: true,
         filled: true,
         fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: NiraSpace.sm,
-          vertical: NiraSpace.lg,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: NiraSpace.sm),
         enabledBorder: border,
         focusedBorder: border.copyWith(
           borderSide: const BorderSide(color: niraGreen, width: 2),
@@ -295,7 +289,13 @@ class _KloterListPageState extends State<KloterListPage> {
         prefixIconConstraints: const BoxConstraints(minWidth: 42),
         prefixIcon: const Padding(
           padding: EdgeInsets.symmetric(horizontal: NiraSpace.md),
-          child: NiraIcon('search', 21, color: niraGreen),
+          child: SizedBox(
+            height: _searchControlSize,
+            child: Center(
+              widthFactor: 1,
+              child: NiraIcon('search', 21, color: niraGreen),
+            ),
+          ),
         ),
         suffixIconConstraints: const BoxConstraints(minWidth: 40),
         suffixIcon: _search.text.isEmpty

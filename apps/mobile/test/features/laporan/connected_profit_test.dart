@@ -59,9 +59,9 @@ void main() {
       expect(find.text('Pemasok 0'), findsOneWidget);
       expect(find.text('Pemasok 5'), findsNothing);
       expect(find.text('19 November 2026'), findsNWidgets(5));
-      await tester.ensureVisible(find.text('Berikutnya'));
+      await tester.ensureVisible(find.byTooltip('Berikutnya'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Berikutnya'));
+      await tester.tap(find.byTooltip('Berikutnya'));
       await tester.pumpAndSettle();
       expect(find.text('Pemasok 6'), findsOneWidget);
       expect(find.text('-Rp100.000'), findsOneWidget);

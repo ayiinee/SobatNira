@@ -147,7 +147,7 @@ void main() {
     expect(find.text('Operator Uji → Operator Uji B'), findsOneWidget);
     expect(find.text('Aktif → Nonaktif'), findsOneWidget);
     expect(find.text('ID akun fixture-actor'), findsOneWidget);
-    await tap(tester, find.text('Berikutnya'));
+    await tap(tester, find.byTooltip('Berikutnya'));
     expect(requests.last.url.queryParameters, containsPair('offset', '20'));
     expect(find.text('Operator ditambahkan'), findsOneWidget);
     await tester.pageBack();

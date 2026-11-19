@@ -24,34 +24,35 @@ void main() {
       await tester.pumpAndSettle();
 
       Future<void> next() async {
-        await tester.ensureVisible(find.text('Berikutnya'));
-        await tester.tap(find.text('Berikutnya'));
+        await tester.ensureVisible(find.byTooltip('Berikutnya'));
+        await tester.tap(find.byTooltip('Berikutnya'));
         await tester.pumpAndSettle();
       }
 
       expect(find.text('Sugeng'), findsOneWidget);
       expect(find.text('Masud'), findsOneWidget);
       expect(find.text('Salim'), findsNothing);
-      expect(find.text('1–5 dari 12'), findsOneWidget);
+      expect(find.text('1–5 dari 12'), findsNothing);
+      expect(find.text('1 dari 3'), findsOneWidget);
+      expect(find.byTooltip('Sebelumnya'), findsNothing);
       await next();
+      expect(find.byTooltip('Sebelumnya'), findsOneWidget);
+      expect(find.byTooltip('Berikutnya'), findsOneWidget);
       expect(find.text('Sugeng'), findsNothing);
       expect(find.text('Salim'), findsOneWidget);
       expect(find.text('Wahyu'), findsOneWidget);
       await next();
       expect(find.text('Budi'), findsOneWidget);
       expect(find.text('Rini'), findsOneWidget);
-      expect(find.text('11–12 dari 12'), findsOneWidget);
-      expect(
-        tester
-            .widget<TextButton>(find.widgetWithText(TextButton, 'Berikutnya'))
-            .onPressed,
-        isNull,
-      );
+      expect(find.text('11–12 dari 12'), findsNothing);
+      expect(find.text('3 dari 3'), findsOneWidget);
+      expect(find.byTooltip('Sebelumnya'), findsOneWidget);
+      expect(find.byTooltip('Berikutnya'), findsNothing);
 
       analytics.setQuery('Sugeng');
       await tester.pumpAndSettle();
       expect(find.text('Sugeng'), findsOneWidget);
-      expect(find.text('Berikutnya'), findsNothing);
+      expect(find.byTooltip('Berikutnya'), findsNothing);
       analytics.setQuery('tidak-ada');
       await tester.pumpAndSettle();
       expect(find.text('Data tidak ditemukan'), findsOneWidget);
@@ -59,7 +60,7 @@ void main() {
       analytics.setQuery('');
       analytics.setTab(ReportTab.margin);
       await tester.pumpAndSettle();
-      expect(find.text('1–5 dari 10'), findsOneWidget);
+      expect(find.text('1–5 dari 10'), findsNothing);
       await next();
       expect(find.text('Hadi'), findsOneWidget);
       expect(find.text('Rini'), findsOneWidget);
@@ -86,15 +87,15 @@ void main() {
         ),
       );
       await tester.pumpWidget(page(12));
-      await tester.tap(find.text('Berikutnya'));
+      await tester.tap(find.byTooltip('Berikutnya'));
       await tester.pump();
-      await tester.tap(find.text('Berikutnya'));
+      await tester.tap(find.byTooltip('Berikutnya'));
       await tester.pump();
       expect(find.text('Item 10'), findsOneWidget);
       await tester.pumpWidget(page(2));
       expect(find.text('Item 0'), findsOneWidget);
       expect(find.text('Item 1'), findsOneWidget);
-      expect(find.text('Berikutnya'), findsNothing);
+      expect(find.byTooltip('Berikutnya'), findsNothing);
       await tester.pumpWidget(page(0));
       expect(find.textContaining('Item '), findsNothing);
       expect(tester.takeException(), isNull);

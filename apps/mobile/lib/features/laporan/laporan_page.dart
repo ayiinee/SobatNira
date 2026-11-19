@@ -92,23 +92,20 @@ class _LaporanPageState extends State<LaporanPage> {
           },
         ),
         Expanded(
-          child: ListView(
-            key: const PageStorageKey('laporan-scroll'),
-            padding: const EdgeInsets.fromLTRB(
-              niraInset,
-              NiraSpace.md,
-              niraInset,
-              NiraSpace.lg,
-            ),
-            children: [
-              if (widget.approvedLots != null)
-                _connectedReport()
-              else if (widget.analytics.tab == ReportTab.production)
-                _production()
-              else
-                _margin(),
-            ],
-          ),
+          child: widget.approvedLots != null
+              ? ListView(
+                  key: const PageStorageKey('laporan-connected-scroll'),
+                  padding: const EdgeInsets.fromLTRB(
+                    niraInset,
+                    NiraSpace.md,
+                    niraInset,
+                    NiraSpace.lg,
+                  ),
+                  children: [_connectedReport()],
+                )
+              : widget.analytics.tab == ReportTab.production
+              ? _production()
+              : _margin(),
         ),
       ],
     ),
@@ -193,7 +190,14 @@ class _LaporanPageState extends State<LaporanPage> {
     );
   }
 
-  Widget _production() => Column(
+  Widget _production() {
+    final header = _productionHeader();
+    return widget.analytics.variant == ProductionVariant.grade
+        ? _gradeTable(header)
+        : _rendemenTable(header);
+  }
+
+  Widget _productionHeader() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       NiraSummaryPair(
@@ -210,37 +214,35 @@ class _LaporanPageState extends State<LaporanPage> {
       const SizedBox(height: NiraSpace.md),
       _chartCard(),
       const SizedBox(height: NiraSpace.md),
-      if (widget.analytics.variant == ProductionVariant.grade)
-        _gradeTable()
-      else
-        _rendemenTable(),
     ],
   );
 
-  Widget _margin() => Column(
+  Widget _marginHeader() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       NiraSummaryCard(
         'Margin Produksi',
         demoMoney(widget.analytics.marginTotal),
         cane: true,
+        compactValue: true,
       ),
       const SizedBox(height: NiraSpace.sm),
       NiraSummaryPair(
         first: NiraSummaryCard(
           'Nilai produksi',
           demoMoney(widget.analytics.valueTotal),
+          compactValue: true,
         ),
         second: NiraSummaryCard(
           'Total biaya',
           demoMoney(widget.analytics.costTotal),
           boxes: true,
+          compactValue: true,
         ),
       ),
       const SizedBox(height: NiraSpace.md),
       _chartCard(margin: true),
       const SizedBox(height: NiraSpace.md),
-      _marginTable(),
     ],
   );
 
@@ -248,8 +250,9 @@ class _LaporanPageState extends State<LaporanPage> {
       ? MarginChart(rows: widget.analytics.visibleRows, onFilter: _dateFilter)
       : ProductionChart(analytics: widget.analytics, onFilter: _dateFilter);
 
-  Widget _rendemenTable() => _tableSection(
+  Widget _rendemenTable(Widget header) => _tableSection(
     title: 'Rendemen',
+    scrollHeader: header,
     plain: true,
     columns: const ['Pemasok', 'Gula final', 'Rendemen'],
     rows: widget.analytics.visibleRows,
@@ -259,8 +262,9 @@ class _LaporanPageState extends State<LaporanPage> {
     },
   );
 
-  Widget _gradeTable() => _tableSection(
+  Widget _gradeTable(Widget header) => _tableSection(
     title: 'Komposisi Grade',
+    scrollHeader: header,
     plain: true,
     columns: const ['Grade', 'Berat', 'Porsi'],
     rows: [
@@ -280,8 +284,9 @@ class _LaporanPageState extends State<LaporanPage> {
     },
   );
 
-  Widget _marginTable() => _tableSection(
+  Widget _margin() => _tableSection(
     title: 'Detail margin kloter',
+    scrollHeader: _marginHeader(),
     plain: true,
     columns: const ['Pemasok', 'Margin'],
     rows: widget.analytics.visibleRows,
@@ -374,12 +379,14 @@ class _LaporanPageState extends State<LaporanPage> {
 
   Widget _tableSection({
     required String title,
+    required Widget scrollHeader,
     required List<String> columns,
     required List<AnalyticsRow> rows,
     required ValueChanged<AnalyticsRow> onTap,
     bool plain = false,
   }) => ReportPaginatedList<AnalyticsRow>(
     items: rows,
+    scrollHeader: scrollHeader,
     resetToken: (title, widget.analytics.dateFilter, widget.analytics.query),
     builder: (visibleRows) => plain
         ? _plainTable(title, columns, visibleRows, onTap)

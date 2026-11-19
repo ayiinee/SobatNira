@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../sobatnira_ui.dart';
 import '../pekerjaan/review_api.dart';
 import '../pekerjaan/production_api.dart';
 
@@ -19,6 +20,7 @@ class LotClosurePage extends StatefulWidget {
 }
 
 class _LotClosurePageState extends State<LotClosurePage> {
+  final _pageHeight = NiraPageHeight();
   int _offset = 0;
   bool _working = false;
   bool _submitting = false;
@@ -155,8 +157,10 @@ class _LotClosurePageState extends State<LotClosurePage> {
                 child: Text(_notice!),
               ),
             if (_submitting) const LinearProgressIndicator(),
-            FutureBuilder<List<Json>>(
+            NiraPagedFutureBuilder<List<Json>>(
               future: _data,
+              page: _offset,
+              dataset: (widget.scope.factoryId, widget.lotId),
               builder: (context, snapshot) {
                 if (snapshot.connectionState != ConnectionState.done) {
                   return const LinearProgressIndicator();
@@ -185,6 +189,7 @@ class _LotClosurePageState extends State<LotClosurePage> {
                 final closed = status['status'] == 'closed';
                 final rows = (page['items'] as List).cast<Json>();
                 final limit = page['limit'] as int;
+                final total = page['total'] as int;
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -213,67 +218,68 @@ class _LotClosurePageState extends State<LotClosurePage> {
                     const Text(
                       'Waktu ditampilkan sesuai zona waktu perangkat.',
                     ),
-                    if (rows.isEmpty)
-                      const ListTile(
-                        title: Text('Belum ada riwayat pada halaman ini.'),
-                      ),
-                    for (final entry in rows)
-                      ExpansionTile(
-                        key: ValueKey(entry['id']),
-                        title: Text(
-                          'Ditutup · ${_time(entry['closedAt'] as String)}',
-                        ),
-                        subtitle: Text(
-                          entry['reopenedAt'] == null
-                              ? 'Penutupan aktif'
-                              : 'Sudah dibuka kembali',
-                        ),
+                    NiraPageBody(
+                      height: _pageHeight,
+                      firstPage: _offset == 0,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _person('ID penutupan', entry['id'] as String),
-                          _person('Ditutup oleh', entry['closedBy'] as String),
-                          if (entry['reopenedAt'] != null) ...[
-                            ListTile(
-                              title: const Text('Dibuka kembali pada'),
-                              subtitle: Text(
-                                _time(entry['reopenedAt'] as String),
+                          if (rows.isEmpty)
+                            const ListTile(
+                              title: Text('Belum ada riwayat pada halaman ini.'),
+                            ),
+                          for (final entry in rows)
+                            ExpansionTile(
+                              key: ValueKey(entry['id']),
+                              title: Text(
+                                'Ditutup · ${_time(entry['closedAt'] as String)}',
                               ),
+                              subtitle: Text(
+                                entry['reopenedAt'] == null
+                                    ? 'Penutupan aktif'
+                                    : 'Sudah dibuka kembali',
+                              ),
+                              children: [
+                                _person('ID penutupan', entry['id'] as String),
+                                _person('Ditutup oleh', entry['closedBy'] as String),
+                                if (entry['reopenedAt'] != null) ...[
+                                  ListTile(
+                                    title: const Text('Dibuka kembali pada'),
+                                    subtitle: Text(
+                                      _time(entry['reopenedAt'] as String),
+                                    ),
+                                  ),
+                                  _person(
+                                    'Dibuka kembali oleh',
+                                    entry['reopenedBy'] as String,
+                                  ),
+                                  ListTile(
+                                    title: const Text('Alasan buka kembali'),
+                                    subtitle: Text(entry['reason'] as String),
+                                  ),
+                                ],
+                              ],
                             ),
-                            _person(
-                              'Dibuka kembali oleh',
-                              entry['reopenedBy'] as String,
-                            ),
-                            ListTile(
-                              title: const Text('Alasan buka kembali'),
-                              subtitle: Text(entry['reason'] as String),
-                            ),
-                          ],
                         ],
                       ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        TextButton(
-                          onPressed: !_working && _offset > 0
-                              ? () {
-                                  _offset -= limit;
-                                  _reload();
-                                }
-                              : null,
-                          child: const Text('Sebelumnya'),
-                        ),
-                        TextButton(
-                          onPressed:
-                              !_working &&
-                                  _offset + limit < (page['total'] as int)
-                              ? () {
-                                  _offset += limit;
-                                  _reload();
-                                }
-                              : null,
-                          child: const Text('Berikutnya'),
-                        ),
-                      ],
                     ),
+                    if (_offset > 0 || total > limit)
+                      NiraPagination(
+                        page: _offset ~/ limit + 1,
+                        pageCount: (total / limit).ceil(),
+                        onPrevious: !_working && _offset > 0
+                            ? () {
+                                _offset -= limit;
+                                _reload();
+                              }
+                            : null,
+                        onNext: !_working && _offset + limit < total
+                            ? () {
+                                _offset += limit;
+                                _reload();
+                              }
+                            : null,
+                      ),
                   ],
                 );
               },

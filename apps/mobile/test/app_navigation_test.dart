@@ -17,6 +17,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(BerandaPage), findsOneWidget);
+    expect(find.text('Pabrik A'), findsOneWidget);
     expect(find.byType(KloterListPage, skipOffstage: false), findsNothing);
     expect(find.byType(LaporanPage, skipOffstage: false), findsNothing);
     expect(find.byType(PengaturanPage, skipOffstage: false), findsNothing);

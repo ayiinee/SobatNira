@@ -32,8 +32,12 @@ Json lot({bool closed = false}) => {
 http.Response jsonResponse(Json data, [int status = 200]) =>
     http.Response(jsonEncode(data), status);
 
-Future<void> press(WidgetTester tester, String text) async {
-  final finder = find.text(text).last;
+Future<void> press(
+  WidgetTester tester,
+  String text, {
+  bool tooltip = false,
+}) async {
+  final finder = (tooltip ? find.byTooltip(text) : find.text(text)).last;
   await tester.ensureVisible(finder);
   await tester.pumpAndSettle();
   await tester.tap(finder);
@@ -182,14 +186,14 @@ void main() {
       expect(writes, isEmpty);
       await press(tester, 'Kloter tujuan');
       expect(find.text('SUMBER'), findsNothing);
-      await press(tester, 'Berikutnya');
+      await press(tester, 'Berikutnya', tooltip: true);
       expect(pages.last.queryParameters['offset'], '20');
       await tester.enterText(find.byType(TextField), 'TUJUAN & B');
       await tester.tap(find.byTooltip('Cari kloter tujuan'));
       await tester.pumpAndSettle();
       expect(pages.last.queryParameters['q'], 'TUJUAN & B');
       expect(pages.last.queryParameters['offset'], '0');
-      await press(tester, 'Berikutnya');
+      await press(tester, 'Berikutnya', tooltip: true);
       await press(tester, 'TUJUAN');
       await tester.enterText(find.byType(TextFormField), '20,000000000000001');
       await press(tester, 'Kirim transfer');

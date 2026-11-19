@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
@@ -8,9 +6,26 @@ import '../kloter/kloter_detail_widgets.dart';
 import 'production_recap.dart';
 import 'report_paginated_list.dart';
 
-class ProductionRecapSection extends StatelessWidget {
+class ProductionRecapSection extends StatefulWidget {
   const ProductionRecapSection({required this.recap, super.key});
   final ProductionRecap recap;
+
+  @override
+  State<ProductionRecapSection> createState() => _ProductionRecapSectionState();
+}
+
+class _ProductionRecapSectionState extends State<ProductionRecapSection> {
+  late final _expanded = ValueNotifier<String?>(
+    widget.recap.kloter.firstOrNull?.identity,
+  );
+
+  @override
+  void dispose() {
+    _expanded.dispose();
+    super.dispose();
+  }
+
+  ProductionRecap get recap => widget.recap;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -43,7 +58,7 @@ class ProductionRecapSection extends StatelessWidget {
               _KloterRecap(
                 key: ValueKey(lot.identity),
                 lot: lot,
-                initiallyExpanded: lot.identity == recap.kloter.first.identity,
+                expanded: _expanded,
               ),
           ],
         ),
@@ -53,13 +68,9 @@ class ProductionRecapSection extends StatelessWidget {
 }
 
 class _KloterRecap extends StatefulWidget {
-  const _KloterRecap({
-    required this.lot,
-    required this.initiallyExpanded,
-    super.key,
-  });
+  const _KloterRecap({required this.lot, required this.expanded, super.key});
   final RecapKloter lot;
-  final bool initiallyExpanded;
+  final ValueNotifier<String?> expanded;
 
   @override
   State<_KloterRecap> createState() => _KloterRecapState();
@@ -67,9 +78,24 @@ class _KloterRecap extends StatefulWidget {
 
 class _KloterRecapState extends State<_KloterRecap> {
   final _horizontal = ScrollController();
+  final _tile = ExpansibleController();
+
+  @override
+  void initState() {
+    super.initState();
+    widget.expanded.addListener(_closeIfUnselected);
+  }
+
+  void _closeIfUnselected() {
+    if (widget.expanded.value != widget.lot.identity && _tile.isExpanded) {
+      _tile.collapse();
+    }
+  }
 
   @override
   void dispose() {
+    widget.expanded.removeListener(_closeIfUnselected);
+    _tile.dispose();
     _horizontal.dispose();
     super.dispose();
   }
@@ -78,8 +104,15 @@ class _KloterRecapState extends State<_KloterRecap> {
   Widget build(BuildContext context) {
     final lot = widget.lot;
     return ExpansionTile(
-      key: PageStorageKey('rekap-${lot.identity}'),
-      initiallyExpanded: widget.initiallyExpanded,
+      controller: _tile,
+      initiallyExpanded: widget.expanded.value == lot.identity,
+      onExpansionChanged: (open) {
+        if (open) {
+          widget.expanded.value = lot.identity;
+        } else if (widget.expanded.value == lot.identity) {
+          widget.expanded.value = null;
+        }
+      },
       tilePadding: const EdgeInsets.symmetric(vertical: NiraSpace.xs),
       childrenPadding: const EdgeInsets.only(bottom: NiraSpace.lg),
       shape: const Border(bottom: BorderSide(color: niraLine)),
@@ -134,38 +167,27 @@ class _KloterRecapState extends State<_KloterRecap> {
           ReportPaginatedList<RecapBatch>(
             items: lot.batches,
             resetToken: lot.identity,
-            builder: (batches) => LayoutBuilder(
-              builder: (context, constraints) => Scrollbar(
+            builder: (batches) => Scrollbar(
+              controller: _horizontal,
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                key: PageStorageKey('batch-table-${lot.identity}'),
                 controller: _horizontal,
-                thumbVisibility: true,
-                child: SingleChildScrollView(
-                  key: PageStorageKey('batch-table-${lot.identity}'),
-                  controller: _horizontal,
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.only(bottom: NiraSpace.md),
-                  child: SizedBox(
-                    width: math.max(
-                      constraints.maxWidth,
-                      MediaQuery.textScalerOf(context).scale(760),
-                    ),
-                    child: Column(
-                      children: [
-                        _row(RecapBatch.columns, header: true),
-                        for (final batch in batches)
-                          _row(batch.cells, pending: !batch.verified),
-                      ],
-                    ),
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.only(bottom: NiraSpace.md),
+                child: Table(
+                  defaultColumnWidth: const IntrinsicColumnWidth(),
+                  border: const TableBorder(
+                    horizontalInside: BorderSide(color: niraLine),
+                    bottom: BorderSide(color: niraLine),
                   ),
+                  children: [
+                    _row(RecapBatch.columns, header: true),
+                    for (final batch in batches)
+                      _row(batch.cells, pending: !batch.verified),
+                  ],
                 ),
               ),
-            ),
-          ),
-          const SizedBox(height: NiraSpace.xs),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Geser tabel untuk melihat semua kolom.',
-              style: niraText(NiraType.caption, color: niraLeaf),
             ),
           ),
         ],
@@ -173,38 +195,36 @@ class _KloterRecapState extends State<_KloterRecap> {
     );
   }
 
-  Widget _row(
+  TableRow _row(
     List<String> cells, {
     bool header = false,
     bool pending = false,
-  }) => Container(
-    padding: const EdgeInsets.symmetric(vertical: NiraSpace.sm),
-    decoration: const BoxDecoration(
-      border: Border(bottom: BorderSide(color: niraLine)),
-    ),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final (index, cell) in cells.indexed)
-          Expanded(
-            flex: index == cells.length - 1 ? 14 : 10,
-            child: Padding(
-              padding: const EdgeInsets.only(right: NiraSpace.sm),
-              child: Text(
-                cell,
-                style: niraText(
-                  header ? NiraType.caption : NiraType.body,
-                  color: header
-                      ? niraLeaf
-                      : pending && index == cells.length - 1
-                      ? niraOchre
-                      : niraGreen,
-                  weight: header ? FontWeight.w600 : FontWeight.w400,
-                ),
+  }) => TableRow(
+    children: [
+      for (final (index, cell) in cells.indexed)
+        ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 76),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              0,
+              NiraSpace.sm,
+              NiraSpace.sm,
+              NiraSpace.sm,
+            ),
+            child: Text(
+              cell.replaceAll(RegExp(r'\s+'), ' '),
+              style: niraText(
+                header ? NiraType.caption : NiraType.body,
+                color: header
+                    ? niraLeaf
+                    : pending && index == cells.length - 1
+                    ? niraOchre
+                    : niraGreen,
+                weight: header ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
           ),
-      ],
-    ),
+        ),
+    ],
   );
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../sobatnira_ui.dart';
 import '../pekerjaan/review_api.dart';
 
 class OperatorHistoryPage extends StatefulWidget {
@@ -21,6 +22,7 @@ class OperatorHistoryPage extends StatefulWidget {
 }
 
 class _OperatorHistoryPageState extends State<OperatorHistoryPage> {
+  final _pageHeight = NiraPageHeight();
   int _offset = 0;
   late Future<Json> _page = _fetch();
 
@@ -48,8 +50,10 @@ class _OperatorHistoryPageState extends State<OperatorHistoryPage> {
       ],
     ),
     body: SafeArea(
-      child: FutureBuilder<Json>(
+      child: NiraPagedFutureBuilder<Json>(
         future: _page,
+        page: _offset,
+        dataset: (widget.scope.factoryId, widget.operatorId),
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Align(
@@ -79,30 +83,31 @@ class _OperatorHistoryPageState extends State<OperatorHistoryPage> {
           final page = snapshot.requireData;
           final entries = (page['items'] as List).cast<Json>();
           final limit = page['limit'] as int;
-          final hasNext = _offset + limit < (page['total'] as int);
+          final total = page['total'] as int;
+          final hasNext = _offset + limit < total;
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
               Text(widget.scope.factoryName),
               Text(widget.phone),
-              if (entries.isEmpty)
-                const ListTile(title: Text('Belum ada riwayat operator.')),
-              for (final entry in entries) _event(context, entry),
-              if (_offset > 0 || hasNext)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              NiraPageBody(
+                height: _pageHeight,
+                firstPage: _offset == 0,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    TextButton(
-                      onPressed: _offset > 0
-                          ? () => _load(_offset - limit)
-                          : null,
-                      child: const Text('Sebelumnya'),
-                    ),
-                    TextButton(
-                      onPressed: hasNext ? () => _load(_offset + limit) : null,
-                      child: const Text('Berikutnya'),
-                    ),
+                    if (entries.isEmpty)
+                      const ListTile(title: Text('Belum ada riwayat operator.')),
+                    for (final entry in entries) _event(context, entry),
                   ],
+                ),
+              ),
+              if (_offset > 0 || hasNext)
+                NiraPagination(
+                  page: _offset ~/ limit + 1,
+                  pageCount: (total / limit).ceil(),
+                  onPrevious: _offset > 0 ? () => _load(_offset - limit) : null,
+                  onNext: hasNext ? () => _load(_offset + limit) : null,
                 ),
             ],
           );

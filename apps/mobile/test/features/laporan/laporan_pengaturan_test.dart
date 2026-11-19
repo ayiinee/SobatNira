@@ -78,6 +78,36 @@ void main() {
     expect(find.text('Rincian perhitungan'), findsOneWidget);
   });
 
+  testWidgets('Pagination Rendemen tetap terlihat saat digulir dan berpindah', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(370, 760));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const SobatNiraApp());
+    await tester.pumpAndSettle();
+    await tap(tester, find.bySemanticsLabel('Laporan'));
+
+    final next = find.byTooltip('Berikutnya');
+    final previous = find.byTooltip('Sebelumnya');
+    final initialTop = tester.getTopLeft(next).dy;
+    expect(next.hitTestable(), findsOneWidget);
+    await tester.drag(find.byType(ListView), const Offset(0, -280));
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(next).dy, initialTop);
+
+    for (final page in [2, 3]) {
+      await tester.tap(next);
+      await tester.pumpAndSettle();
+      expect(find.text('$page dari 3'), findsOneWidget);
+      expect(tester.getTopLeft(previous).dy, initialTop);
+    }
+    expect(find.text('11–12 dari 12'), findsNothing);
+    expect(previous.hitTestable(), findsOneWidget);
+    await tester.tap(previous);
+    await tester.pumpAndSettle();
+    expect(find.text('2 dari 3'), findsOneWidget);
+  });
+
   testWidgets('Semua menu Pengaturan membuka layar dengan konten', (
     tester,
   ) async {
