@@ -12,7 +12,11 @@ class PrintableReport {
     required this.period,
     required List<AnalyticsRow> rows,
     ProductionRecap? recap,
-  }) : rows = List.unmodifiable({for (final row in rows) row.code: row}.values),
+    this.synthetic = true,
+    this.totalDisplayOverride,
+  }) : rows = List.unmodifiable(
+         {for (final row in rows) (row.id ?? row.code): row}.values,
+       ),
        recap = kind == PrintableReportKind.production
            ? recap ?? ProductionRecap.fromRows(rows)
            : null;
@@ -66,6 +70,8 @@ class PrintableReport {
   final String period;
   final List<AnalyticsRow> rows;
   final ProductionRecap? recap;
+  final bool synthetic;
+  final String? totalDisplayOverride;
 
   bool get isProfit => kind == PrintableReportKind.profit;
   String get title => isProfit ? 'Laporan laba' : 'Rekap produksi';
@@ -86,6 +92,7 @@ class PrintableReport {
         ),
   );
   String get totalDisplay {
+    if (totalDisplayOverride != null) return totalDisplayOverride!;
     if (!isProfit && rows.isEmpty && recap!.kloter.isNotEmpty) return '-';
     final amount = formatRecapNumber(total);
     return isProfit ? 'Rp$amount' : '${amount}Kg';

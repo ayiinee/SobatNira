@@ -10,7 +10,7 @@ import { enqueueNotice } from './notices';
 import { supabaseKey } from './config';
 import { PostedIntake, TruckIntake } from './truck-intake';
 import { ProductionMilling } from './production-milling';
-import { requireProductionAccess } from './production-access';
+import { ACTIVE_REVIEW_ACCESS_SQL, requireProductionAccess } from './production-access';
 import { parseStockReconciliation, StockReconciliation } from './stock-reconciliation';
 
 @Injectable()
@@ -46,7 +46,7 @@ export class Review {
     const { rows } = await this.db.query(`SELECT t.id,t.document_id,t.status,d.document_type,r.id AS revision_id,r.version,
       m.received_at,o.display_name AS sender_name,jsonb_array_length(r.issues) AS issue_count,s.media_asset_id
       FROM admin_review_tasks t JOIN source_documents d ON d.id=t.document_id
-      JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1 AND a.active
+      JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1 AND a.active AND ${ACTIVE_REVIEW_ACCESS_SQL}
       JOIN document_revisions r ON r.id=t.revision_id JOIN document_submissions s ON s.id=r.submission_id
       JOIN whatsapp_inbound_messages m ON m.id=s.inbound_message_id JOIN operator_contacts o ON o.id=m.operator_id
       WHERE t.status=$2 AND ($5::uuid IS NULL OR d.factory_id=$5)
@@ -61,7 +61,7 @@ export class Review {
       const { rows: [task] } = await db.query(`SELECT t.*,d.factory_id,d.document_type,r.version,r.extraction,r.issues,r.operator_status,
         r.processing_status,s.media_asset_id,d.current_revision_id,m.received_at,o.display_name AS sender_name,a.role
         FROM admin_review_tasks t JOIN source_documents d ON d.id=t.document_id
-        JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1 AND a.active
+        JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1 AND a.active AND ${ACTIVE_REVIEW_ACCESS_SQL}
         JOIN document_revisions r ON r.id=t.revision_id JOIN document_submissions s ON s.id=r.submission_id
         JOIN whatsapp_inbound_messages m ON m.id=s.inbound_message_id JOIN operator_contacts o ON o.id=m.operator_id
         WHERE t.id=$2`, [user, id]);
@@ -106,7 +106,7 @@ export class Review {
     return this.db.transaction(async (db) => {
       const { rows: [task] } = await db.query<{ factory_id: string }>(`SELECT d.factory_id
         FROM admin_review_tasks t JOIN source_documents d ON d.id=t.document_id
-        JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1 AND a.active
+        JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1 AND a.active AND ${ACTIVE_REVIEW_ACCESS_SQL}
         WHERE t.id=$2 AND d.document_type=$3 AND t.status='PENDING_VALIDATION'
           AND d.current_revision_id=t.revision_id FOR SHARE OF a`, [user, id, documentType]);
       if (!task) throw new NotFoundException('Pekerjaan produksi tidak ditemukan.');
@@ -119,7 +119,7 @@ export class Review {
     const { rows: [result] } = await this.db.query<{ unread_count: number }>(`SELECT count(*)::int AS unread_count
       FROM admin_review_notifications n JOIN admin_review_tasks t ON t.id=n.task_id AND t.status='PENDING_VALIDATION'
       JOIN source_documents d ON d.id=t.document_id
-      JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=n.user_id AND a.active AND a.role='ADMIN'
+      JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=n.user_id AND a.active AND ${ACTIVE_REVIEW_ACCESS_SQL} AND a.role='ADMIN'
       WHERE n.user_id=$1 AND n.read_at IS NULL AND ($2::uuid IS NULL OR d.factory_id=$2)`,
       [user, factory === undefined ? null : requireUuid(factory)]);
     return result;
@@ -128,14 +128,14 @@ export class Review {
   async markNotificationRead(user: string, id: string) {
     await this.db.query(`UPDATE admin_review_notifications n SET read_at=now()
       FROM admin_review_tasks t JOIN source_documents d ON d.id=t.document_id JOIN review_memberships a ON a.factory_id=d.factory_id
-      WHERE n.task_id=t.id AND n.task_id=$2 AND n.user_id=$1 AND a.user_id=n.user_id AND a.active AND a.role='ADMIN'
+      WHERE n.task_id=t.id AND n.task_id=$2 AND n.user_id=$1 AND a.user_id=n.user_id AND a.active AND ${ACTIVE_REVIEW_ACCESS_SQL} AND a.role='ADMIN'
         AND n.read_at IS NULL`, [user, id]);
     return { acknowledged: true };
   }
 
   async asset(user: string, task: string, asset: string) {
     const { rows: [record] } = await this.db.query(`SELECT m.object_key,m.mime_type FROM admin_review_tasks t
-      JOIN source_documents d ON d.id=t.document_id JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1 AND a.active
+      JOIN source_documents d ON d.id=t.document_id JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1 AND a.active AND ${ACTIVE_REVIEW_ACCESS_SQL}
       JOIN document_revisions tr ON tr.id=t.revision_id
       JOIN document_revisions r ON r.document_id=d.id AND r.version<=tr.version
       JOIN document_submissions s ON s.id=r.submission_id JOIN media_assets m ON m.id=s.media_asset_id AND m.factory_id=d.factory_id
@@ -158,7 +158,7 @@ export class Review {
       ...(body.milling === undefined ? [] : [body.milling]), ...(reconciliation ? [reconciliation] : [])])).digest('hex');
     return this.db.transaction(async (db) => {
       const { rows: [doc] } = await db.query(`SELECT d.* FROM source_documents d
-        JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1 AND a.active
+        JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1 AND a.active AND ${ACTIVE_REVIEW_ACCESS_SQL}
         WHERE d.id=$2 FOR UPDATE OF d FOR SHARE OF a`, [user, document]);
       if (!doc) throw new NotFoundException('Dokumen tidak ditemukan');
       const productionAccess = reconciliation ? await requireProductionAccess(db, user, doc.factory_id) : null;

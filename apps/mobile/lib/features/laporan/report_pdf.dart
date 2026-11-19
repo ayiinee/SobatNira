@@ -72,7 +72,7 @@ Future<Uint8List> buildReportPdf(
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
             pw.Text(
-              'Data sintetis · SobatNira',
+              '${report.synthetic ? 'Data sintetis' : 'Data disahkan'} · SobatNira',
               style: const pw.TextStyle(fontSize: 9, color: muted),
             ),
             pw.Text(
@@ -183,7 +183,7 @@ Future<Uint8List> buildReportPdf(
                     ),
                   ),
                   for (final (index, value) in [
-                    formatDate(DateTime(2026, 10, row.day), short: true),
+                    formatDate(row.occurredDate, short: true),
                     row.value,
                     if (!report.isProfit) row.secondary,
                   ].indexed)

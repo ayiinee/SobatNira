@@ -141,3 +141,5 @@ Untuk intake WhatsApp, OCR, dan antrean Pekerjaan, ikuti [panduan setup dan smok
 - Jika ekstensi Gradle VS Code memakai Java 8, tutup VS Code, set `JAVA_HOME` ke folder JDK 21, lalu buka ulang VS Code dari PowerShell yang sama. Untuk instalasi Android Studio di lokasi default, folder JDK 21 yang terpasang di mesin audit adalah `C:\Program Files\Android\Android Studio\jbr`.
 - Health NestJS dapat sukses ketika FastAPI mati. Periksa `/demo/draft` untuk mengecek transaksi antarservice.
 - API lokal mendengarkan loopback. Android emulator menggunakan host khusus `10.0.2.2`. Panduan ini mengasumsikan API dan Flutter berjalan pada mesin yang sama.
+
+Pada Bantuan versi web, tautan WhatsApp dibuka melalui navigasi browser pada tab yang sama agar tidak bergantung pada pop-up atau registrasi plugin setelah hot reload. Navbar Bantuan disembunyikan saat kolom pesan aktif dan muncul kembali setelah fokus dilepas; keyboard dengan inset juga menyembunyikan navbar pada halaman lain.

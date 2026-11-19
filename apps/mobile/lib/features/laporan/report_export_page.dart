@@ -8,8 +8,9 @@ import '../kloter/kloter_date_filter.dart';
 import '../kloter/kloter_detail_widgets.dart';
 import 'demo_analytics.dart';
 import 'printable_report.dart';
-import 'report_pdf.dart';
 import 'production_recap_section.dart';
+import 'report_paginated_list.dart';
+import 'report_pdf.dart';
 
 class ReportExportPage extends StatefulWidget {
   const ReportExportPage({
@@ -18,6 +19,8 @@ class ReportExportPage extends StatefulWidget {
     required this.factory,
     required this.onNavigate,
     this.production,
+    this.report,
+    this.onFilter,
     super.key,
   });
 
@@ -26,6 +29,8 @@ class ReportExportPage extends StatefulWidget {
   final String factory;
   final ValueChanged<NiraTab> onNavigate;
   final DemoProduction? production;
+  final PrintableReport? report;
+  final VoidCallback? onFilter;
 
   @override
   State<ReportExportPage> createState() => _ReportExportPageState();
@@ -35,6 +40,10 @@ class _ReportExportPageState extends State<ReportExportPage> {
   bool _busy = false;
 
   Future<void> _filter() async {
+    if (widget.onFilter != null) {
+      widget.onFilter!();
+      return;
+    }
     final result = await showKloterDateFilter(
       context,
       widget.analytics.dateFilter,
@@ -81,12 +90,14 @@ class _ReportExportPageState extends State<ReportExportPage> {
       if (widget.production != null) widget.production!,
     ]),
     builder: (context, _) {
-      final report = PrintableReport.fromAnalytics(
-        widget.kind,
-        widget.analytics,
-        factory: widget.factory,
-        production: widget.production,
-      );
+      final report =
+          widget.report ??
+          PrintableReport.fromAnalytics(
+            widget.kind,
+            widget.analytics,
+            factory: widget.factory,
+            production: widget.production,
+          );
       final enabled =
           !_busy && (report.recap?.kloter.isNotEmpty ?? report.rows.isNotEmpty);
       return NiraScaffold(
@@ -179,7 +190,10 @@ class _ReportExportPageState extends State<ReportExportPage> {
                       style: niraText(NiraType.caption, color: niraLeaf),
                     ),
                     const SizedBox(height: NiraSpace.lg),
-                    ProductionRecapSection(recap: recap),
+                    ProductionRecapSection(
+                      key: ValueKey((report.period, widget.analytics.query)),
+                      recap: recap,
+                    ),
                   ] else ...[
                     const SizedBox(height: NiraSpace.lg),
                     Text(
@@ -191,7 +205,7 @@ class _ReportExportPageState extends State<ReportExportPage> {
                     ),
                     const SizedBox(height: NiraSpace.xs),
                     Text(
-                      'Data demo · ${report.rows.length} kloter',
+                      '${report.synthetic ? 'Data demo' : 'Data disahkan'} · ${report.rows.length} kloter',
                       style: niraText(NiraType.caption, color: niraLeaf),
                     ),
                     const SizedBox(height: NiraSpace.sm),
@@ -221,8 +235,20 @@ class _ReportExportPageState extends State<ReportExportPage> {
                           style: niraText(NiraType.body, color: niraLeaf),
                         ),
                       ),
-                    for (final row in report.rows)
-                      _reportRow(row, report.isProfit),
+                    ReportPaginatedList<AnalyticsRow>(
+                      items: report.rows,
+                      resetToken: (
+                        report.kind,
+                        report.period,
+                        widget.analytics.query,
+                      ),
+                      builder: (rows) => Column(
+                        children: [
+                          for (final row in rows)
+                            _reportRow(row, report.isProfit),
+                        ],
+                      ),
+                    ),
                   ],
                 ],
               ),
@@ -238,42 +264,47 @@ class _ReportExportPageState extends State<ReportExportPage> {
     decoration: const BoxDecoration(
       border: Border(bottom: BorderSide(color: niraLine)),
     ),
-    child: Wrap(
-      alignment: WrapAlignment.spaceBetween,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: NiraSpace.md,
-      runSpacing: NiraSpace.sm,
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              row.supplier,
-              style: niraText(NiraType.body, weight: FontWeight.w600),
-            ),
-            const SizedBox(height: NiraSpace.xs),
-            Text(row.code, style: niraText(NiraType.caption, color: niraLeaf)),
-            Text(
-              formatDate(DateTime(2026, 10, row.day)),
-              style: niraText(NiraType.caption, color: niraLeaf),
-            ),
-          ],
-        ),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              row.value,
-              style: niraText(NiraType.body, weight: FontWeight.w600),
-            ),
-            if (!profit) ...[
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                row.supplier,
+                style: niraText(NiraType.body, weight: FontWeight.w600),
+              ),
               const SizedBox(height: NiraSpace.xs),
               Text(
-                'Rendemen ${row.secondary}',
+                row.code,
+                style: niraText(NiraType.caption, color: niraLeaf),
+              ),
+              Text(
+                formatDate(row.occurredDate),
                 style: niraText(NiraType.caption, color: niraLeaf),
               ),
             ],
-          ],
+          ),
+        ),
+        const SizedBox(width: NiraSpace.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                row.value,
+                style: niraText(NiraType.body, weight: FontWeight.w600),
+              ),
+              if (!profit) ...[
+                const SizedBox(height: NiraSpace.xs),
+                Text(
+                  'Rendemen ${row.secondary}',
+                  style: niraText(NiraType.caption, color: niraLeaf),
+                ),
+              ],
+            ],
+          ),
         ),
       ],
     ),

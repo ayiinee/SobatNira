@@ -1,0 +1,4 @@
+const test=require('node:test'),assert=require('node:assert/strict');
+const {parseBatch}=require('../dist/production/batches');
+const input=()=>({id:'11111111-1111-4111-a111-111111111111',lotId:'22222222-2222-4222-a222-222222222222',code:'B1',wokNumber:1,occurredAt:'2026-11-19T01:00:00Z',quantityMl:'100000',physicalWeightKg:'30',grades:[{code:'A',weightKg:'25',pricePerKgRupiah:'20000'}]});
+test('batch validation rejects invalid scope, units, time, prices and duplicate grades',()=>{for(const change of [{tenantId:'forged'},{quantityMl:'0'},{quantityMl:'1e3'},{physicalWeightKg:'-1'},{wokNumber:0},{synthetic:'true'},{occurredAt:'yesterday'},{grades:[input().grades[0],input().grades[0]]}])assert.throws(()=>parseBatch({...input(),...change}),e=>e.getStatus()===400);assert.equal(parseBatch(input()).grades[0].weightKg,'25');});

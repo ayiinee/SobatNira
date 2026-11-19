@@ -4,9 +4,10 @@ import '../../sobatnira_ui.dart';
 import '../../widgets/summary_card.dart';
 import '../kloter/kloter_date_filter.dart';
 import 'demo_analytics.dart';
-import 'report_detail_page.dart';
-import 'production_chart.dart';
 import 'margin_chart.dart';
+import 'production_chart.dart';
+import 'report_detail_page.dart';
+import 'report_paginated_list.dart';
 
 class LaporanPage extends StatefulWidget {
   const LaporanPage({
@@ -219,95 +220,99 @@ class _LaporanPageState extends State<LaporanPage> {
     required List<AnalyticsRow> rows,
     required VoidCallback onTap,
     bool plain = false,
-  }) => plain
-      ? _plainTable(title, columns, rows, onTap)
-      : Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              title,
-              style: niraText(NiraType.section, weight: FontWeight.w600),
-            ),
-            const SizedBox(height: NiraSpace.xs),
-            NiraOutline(
-              Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      NiraSpace.sm,
-                      NiraSpace.sm,
-                      NiraSpace.sm,
-                      NiraSpace.xs,
-                    ),
-                    child: Row(
-                      children: [
-                        for (final column in columns)
-                          Expanded(
-                            child: Text(
-                              column,
-                              style: niraText(
-                                NiraType.caption,
-                                color: niraLeaf,
-                                weight: FontWeight.w600,
+  }) => ReportPaginatedList<AnalyticsRow>(
+    items: rows,
+    resetToken: (title, widget.analytics.dateFilter, widget.analytics.query),
+    builder: (visibleRows) => plain
+        ? _plainTable(title, columns, visibleRows, onTap)
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                title,
+                style: niraText(NiraType.section, weight: FontWeight.w600),
+              ),
+              const SizedBox(height: NiraSpace.xs),
+              NiraOutline(
+                Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        NiraSpace.sm,
+                        NiraSpace.sm,
+                        NiraSpace.sm,
+                        NiraSpace.xs,
+                      ),
+                      child: Row(
+                        children: [
+                          for (final column in columns)
+                            Expanded(
+                              child: Text(
+                                column,
+                                style: niraText(
+                                  NiraType.caption,
+                                  color: niraLeaf,
+                                  weight: FontWeight.w600,
+                                ),
                               ),
                             ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  if (rows.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.all(NiraSpace.lg),
-                      child: Text(
-                        'Data tidak ditemukan',
-                        textAlign: TextAlign.center,
-                        style: niraText(NiraType.caption, color: niraLeaf),
+                        ],
                       ),
-                    )
-                  else
-                    for (final row in rows.take(7))
-                      InkWell(
-                        onTap: onTap,
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(
-                            NiraSpace.sm,
-                            NiraSpace.sm,
-                            NiraSpace.sm,
-                            NiraSpace.sm,
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  row.supplier,
-                                  style: niraText(NiraType.body),
-                                ),
-                              ),
-                              Expanded(
-                                child: Text(
-                                  row.value,
-                                  style: niraText(NiraType.body),
-                                ),
-                              ),
-                              if (columns.length > 2)
+                    ),
+                    if (visibleRows.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.all(NiraSpace.lg),
+                        child: Text(
+                          'Data tidak ditemukan',
+                          textAlign: TextAlign.center,
+                          style: niraText(NiraType.caption, color: niraLeaf),
+                        ),
+                      )
+                    else
+                      for (final row in visibleRows)
+                        InkWell(
+                          onTap: onTap,
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              NiraSpace.sm,
+                              NiraSpace.sm,
+                              NiraSpace.sm,
+                              NiraSpace.sm,
+                            ),
+                            child: Row(
+                              children: [
                                 Expanded(
                                   child: Text(
-                                    row.secondary,
+                                    row.supplier,
                                     style: niraText(NiraType.body),
                                   ),
                                 ),
-                              const Icon(
-                                Icons.chevron_right,
-                                size: 15,
-                                color: niraGreen,
-                              ),
-                            ],
+                                Expanded(
+                                  child: Text(
+                                    row.value,
+                                    style: niraText(NiraType.body),
+                                  ),
+                                ),
+                                if (columns.length > 2)
+                                  Expanded(
+                                    child: Text(
+                                      row.secondary,
+                                      style: niraText(NiraType.body),
+                                    ),
+                                  ),
+                                const Icon(
+                                  Icons.chevron_right,
+                                  size: 15,
+                                  color: niraGreen,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
-        );
+            ],
+          ),
+  );
 }

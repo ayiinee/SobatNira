@@ -157,6 +157,7 @@ class NiraScaffold extends StatelessWidget {
     this.floatingNavigation = false,
     this.extendBehindNavigation = false,
     this.topGap = 12,
+    this.hideNavigationWhileEditing = false,
     super.key,
   });
 
@@ -168,11 +169,25 @@ class NiraScaffold extends StatelessWidget {
   final bool floatingNavigation;
   final bool extendBehindNavigation;
   final double topGap;
+  final bool hideNavigationWhileEditing;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: FocusManager.instance,
+    builder: (context, _) => _buildLayout(context),
+  );
+
+  Widget _buildLayout(BuildContext context) {
     final padding = MediaQuery.viewPaddingOf(context);
+    final focusContext = FocusManager.instance.primaryFocus?.context;
+    final editing =
+        hideNavigationWhileEditing &&
+        focusContext != null &&
+        focusContext.mounted &&
+        (focusContext.widget is EditableText ||
+            focusContext.findAncestorStateOfType<EditableTextState>() != null);
     final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final hideNavigation = keyboard || (hideNavigationWhileEditing && editing);
     const navigationHeight = 58.0;
     final navigationBottom = math.max(padding.bottom, 16.0);
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -197,7 +212,7 @@ class NiraScaffold extends StatelessWidget {
                       padding: EdgeInsets.only(
                         bottom:
                             floatingNavigation &&
-                                !keyboard &&
+                                !hideNavigation &&
                                 !extendBehindNavigation
                             ? navigationHeight + navigationBottom + NiraSpace.md
                             : 0,
@@ -215,7 +230,7 @@ class NiraScaffold extends StatelessWidget {
                       ),
                       child: bottomAction,
                     ),
-                  if (!keyboard && !floatingNavigation)
+                  if (!hideNavigation && !floatingNavigation)
                     Padding(
                       padding: EdgeInsets.fromLTRB(
                         niraInset,
@@ -230,7 +245,7 @@ class NiraScaffold extends StatelessWidget {
                     ),
                 ],
               ),
-              if (!keyboard && floatingNavigation)
+              if (!hideNavigation && floatingNavigation)
                 Positioned(
                   left: niraInset,
                   right: niraInset,

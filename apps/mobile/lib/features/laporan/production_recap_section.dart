@@ -6,6 +6,7 @@ import '../../sobatnira_ui.dart';
 import '../kloter/demo_production.dart';
 import '../kloter/kloter_detail_widgets.dart';
 import 'production_recap.dart';
+import 'report_paginated_list.dart';
 
 class ProductionRecapSection extends StatelessWidget {
   const ProductionRecapSection({required this.recap, super.key});
@@ -33,12 +34,20 @@ class ProductionRecapSection extends StatelessWidget {
             style: niraText(NiraType.body, color: niraLeaf),
           ),
         ),
-      for (final (index, lot) in recap.kloter.indexed)
-        _KloterRecap(
-          key: ValueKey(lot.code),
-          lot: lot,
-          initiallyExpanded: index == 0,
+      ReportPaginatedList<RecapKloter>(
+        items: recap.kloter,
+        resetToken: recap.kloter.map((lot) => lot.code).join('|'),
+        builder: (lots) => Column(
+          children: [
+            for (final lot in lots)
+              _KloterRecap(
+                key: ValueKey(lot.code),
+                lot: lot,
+                initiallyExpanded: lot.code == recap.kloter.first.code,
+              ),
+          ],
         ),
+      ),
     ],
   );
 }
@@ -121,26 +130,30 @@ class _KloterRecapState extends State<_KloterRecap> {
             ),
           )
         else ...[
-          LayoutBuilder(
-            builder: (context, constraints) => Scrollbar(
-              controller: _horizontal,
-              thumbVisibility: true,
-              child: SingleChildScrollView(
-                key: PageStorageKey('batch-table-${lot.code}'),
+          ReportPaginatedList<RecapBatch>(
+            items: lot.batches,
+            resetToken: lot.code,
+            builder: (batches) => LayoutBuilder(
+              builder: (context, constraints) => Scrollbar(
                 controller: _horizontal,
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.only(bottom: NiraSpace.md),
-                child: SizedBox(
-                  width: math.max(
-                    constraints.maxWidth,
-                    MediaQuery.textScalerOf(context).scale(760),
-                  ),
-                  child: Column(
-                    children: [
-                      _row(RecapBatch.columns, header: true),
-                      for (final batch in lot.batches)
-                        _row(batch.cells, pending: !batch.verified),
-                    ],
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  key: PageStorageKey('batch-table-${lot.code}'),
+                  controller: _horizontal,
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.only(bottom: NiraSpace.md),
+                  child: SizedBox(
+                    width: math.max(
+                      constraints.maxWidth,
+                      MediaQuery.textScalerOf(context).scale(760),
+                    ),
+                    child: Column(
+                      children: [
+                        _row(RecapBatch.columns, header: true),
+                        for (final batch in batches)
+                          _row(batch.cells, pending: !batch.verified),
+                      ],
+                    ),
                   ),
                 ),
               ),

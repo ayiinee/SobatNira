@@ -1,3 +1,4 @@
+import '../laporan/connected_profit_page.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -298,6 +299,15 @@ class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
         }),
       ),
       const SizedBox(height: NiraSpace.md),
+      OutlinedButton.icon(
+        onPressed: () => Navigator.of(context).push<void>(
+          MaterialPageRoute(
+            builder: (_) => ConnectedProfitPage(api: _api!, scope: scope),
+          ),
+        ),
+        icon: const Icon(Icons.assessment_outlined),
+        label: const Text('Laporan laba'),
+      ),
       OutlinedButton.icon(
         onPressed: () => _openReview(scope),
         icon: const Icon(Icons.fact_check_outlined),

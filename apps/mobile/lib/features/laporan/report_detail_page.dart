@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../sobatnira_ui.dart';
 import '../../widgets/summary_card.dart';
 import '../kloter/kloter_detail_widgets.dart';
+import 'report_paginated_list.dart';
 
 enum ReportDetailKind { rendemen, grade, margin }
 
@@ -146,7 +147,14 @@ class ReportDetailPage extends StatelessWidget {
           child: Column(
             children: [
               _moneyRow('Batch', 'Nilai', bold: true),
-              for (var i = 1; i <= 4; i++) _moneyRow('Wajan $i', 'Rp600.000'),
+              ReportPaginatedList<int>(
+                items: const [1, 2, 3, 4],
+                builder: (rows) => Column(
+                  children: [
+                    for (final i in rows) _moneyRow('Wajan $i', 'Rp600.000'),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -184,13 +192,20 @@ class ReportDetailPage extends StatelessWidget {
       child: Column(
         children: [
           _tableRow('Batch', 'Berat', 'Porsi', header: true),
-          for (final row in const [
-            ('Sugeng', '90Kg', '25,0%'),
-            ('Slamet', '90Kg', '25,0%'),
-            ('Darto', '90Kg', '25,0%'),
-            ('Mulyanto', '90Kg', '25,0%'),
-          ])
-            _tableRow(row.$1, row.$2, row.$3),
+          ReportPaginatedList<(String, String, String)>(
+            items: const [
+              ('Sugeng', '90Kg', '25,0%'),
+              ('Slamet', '90Kg', '25,0%'),
+              ('Darto', '90Kg', '25,0%'),
+              ('Mulyanto', '90Kg', '25,0%'),
+            ],
+            resetToken: kind,
+            builder: (rows) => Column(
+              children: [
+                for (final row in rows) _tableRow(row.$1, row.$2, row.$3),
+              ],
+            ),
+          ),
           const Divider(height: 10),
           _tableRow('Total', '180Kg', '100%', header: true),
         ],

@@ -1,0 +1,168 @@
+import { BadRequestException, Body, ConflictException, Controller, Get, HttpCode, Injectable, Param, Post, Query } from '@nestjs/common';
+import { createHash } from 'node:crypto';
+import { CurrentFactory, FactoryRoles } from '../auth/auth.decorators';
+import { FactoryAccess } from '../auth/auth.types';
+import { FACTORY_SCOPE_CTE } from '../auth/access.sql';
+import { DatabaseService } from '../database/database.service';
+import { JuiceRepository } from '../juice/juice.repository';
+import { object, uuid, text, timestamp, scopeValues, found, parsePage } from './production.dto';
+import { decimal, sumDecimals, compareDecimals } from './decimal';
+import { calculateProductionPreview } from './calculation';
+export function parseBatch(input: unknown) {
+    const b = object(input, ['id', 'lotId', 'code', 'wokNumber', 'occurredAt', 'quantityMl', 'physicalWeightKg', 'grades', 'synthetic']);
+    if (!Number.isSafeInteger(b.wokNumber) || Number(b.wokNumber) < 1 || Number(b.wokNumber) > 10000)
+        throw new BadRequestException('Nomor wajan tidak valid.');
+    if (b.synthetic !== undefined && typeof b.synthetic !== 'boolean')
+        throw new BadRequestException('synthetic harus boolean.');
+    // Reuse exact calculator validation for weights, prices and duplicate grade codes.
+    const calculation = calculateProductionPreview({ caneNetKg: '1', caneCostRupiah: '0', operationalCostRupiah: '0', ingredientCostRupiah: '0', otherCostRupiah: '0', rounding: 'HALF_UP', grades: b.grades });
+    return { id: uuid(b.id), lotId: uuid(b.lotId), code: text(b.code, 'code', 100), wokNumber: Number(b.wokNumber), occurredAt: timestamp(b.occurredAt, 'occurredAt'), quantityMl: decimal(b.quantityMl, 'quantityMl'), physicalWeightKg: decimal(b.physicalWeightKg, 'physicalWeightKg'), grades: calculation.grades.map(g => ({ code: g.code, weightKg: g.weightKg, pricePerKgRupiah: g.pricePerKgRupiah })), synthetic: b.synthetic === true };
+}
+@Injectable()
+export class Batches {
+    constructor(private readonly db: DatabaseService, private readonly juice: JuiceRepository) { }
+    async create(access: FactoryAccess, input: unknown) {
+        const b = parseBatch(input);
+        const hash = createHash('sha256').update(JSON.stringify(b)).digest('hex');
+        return this.juice.mutate(access, async (tx) => {
+            await this.juice.lockLots(tx, access, [b.lotId]);
+            const old = (await tx.query('SELECT * FROM sobatnira.production_batches WHERE id=$1', [b.id])).rows[0];
+            if (old) {
+                if (old.tenant_id !== access.tenantId || old.factory_id !== access.factoryId || old.input_hash !== hash)
+                    throw new ConflictException('ID batch sudah dipakai.');
+                return old;
+            }
+            const scope = [access.tenantId, access.factoryId, b.lotId, b.synthetic];
+            const source = await tx.query('SELECT occurred_at FROM sobatnira.milling_records WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3 AND is_synthetic=$4', scope);
+            if (!source.rows.length || new Date(source.rows[0].occurred_at).getTime() > Date.parse(b.occurredAt))
+                throw new ConflictException('Batch memerlukan penggilingan sah sebelum waktu memasak.');
+            const closed = await tx.query('SELECT 1 FROM sobatnira.lot_closures WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3 AND is_synthetic=$4 AND reopened_at IS NULL', scope);
+            if (closed.rows.length)
+                throw new ConflictException('Kloter sudah ditutup.');
+            const result = await tx.query(`INSERT INTO sobatnira.production_batches(id,tenant_id,factory_id,lot_id,code,wok_number,occurred_at,quantity_ml,physical_weight_kg,is_synthetic,input_hash,created_by)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`, [b.id, access.tenantId, access.factoryId, b.lotId, b.code, b.wokNumber, b.occurredAt, b.quantityMl, b.physicalWeightKg, b.synthetic, hash, access.userId]);
+            for (const g of b.grades)
+                await tx.query('INSERT INTO sobatnira.batch_grade_results(batch_id,code,weight_kg,price_per_kg_rupiah) VALUES($1,$2,$3,$4)', [b.id, g.code, g.weightKg, g.pricePerKgRupiah]);
+            await tx.query("INSERT INTO sobatnira.production_batch_events(batch_id,action,actor_id) VALUES($1,'created',$2)", [b.id, access.userId]);
+            return result.rows[0];
+        });
+    }
+    async costs(access: FactoryAccess, lotId: string, input: unknown) {
+        const b = object(input, ['caneCostRupiah', 'operationalCostRupiah', 'ingredientCostRupiah', 'otherCostRupiah']);
+        const c = calculateProductionPreview({ ...b, caneNetKg: '1', rounding: 'HALF_UP', grades: [{ code: 'CHECK', weightKg: '1', pricePerKgRupiah: '0' }] }).costs;
+        return this.juice.mutate(access, async (tx) => {
+            await this.juice.lockLots(tx, access, [lotId]);
+            const approved = await tx.query('SELECT 1 FROM sobatnira.production_calculation_snapshots WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3', [access.tenantId, access.factoryId, lotId]);
+            if (approved.rows.length)
+                throw new ConflictException('Biaya historis sudah dibekukan.');
+            return (await tx.query(`INSERT INTO sobatnira.lot_production_costs(tenant_id,factory_id,lot_id,cane_rupiah,operational_rupiah,ingredient_rupiah,other_rupiah,created_by)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(tenant_id,factory_id,lot_id) DO UPDATE SET cane_rupiah=$4,operational_rupiah=$5,ingredient_rupiah=$6,other_rupiah=$7 RETURNING *`, [access.tenantId, access.factoryId, lotId, c.caneRupiah, c.operationalRupiah, c.ingredientRupiah, c.otherRupiah, access.userId])).rows[0];
+        });
+    }
+    async approve(access: FactoryAccess, id: string) {
+        // Read identity only; lock order is lot, then batch, matching stock operations.
+        const initial = found((await this.db.query(`WITH ${FACTORY_SCOPE_CTE} SELECT b.* FROM sobatnira.production_batches b JOIN authorized_scope s ON s."tenantId"=b.tenant_id AND s."factoryId"=b.factory_id WHERE b.id=$4`, [...scopeValues(access), id])).rows[0]);
+        return this.juice.mutate(access, async (tx) => {
+            await this.juice.lockLots(tx, access, [initial.lot_id]);
+            const b = found((await tx.query('SELECT * FROM sobatnira.production_batches WHERE id=$1 FOR UPDATE', [id])).rows[0]);
+            if (b.status === 'approved')
+                return found((await tx.query('SELECT * FROM sobatnira.production_calculation_snapshots WHERE batch_id=$1', [id])).rows[0]);
+            if (b.status !== 'draft')
+                throw new ConflictException('Batch tidak dapat disahkan.');
+            const scope = [access.tenantId, access.factoryId, b.lot_id, b.is_synthetic];
+            if ((await tx.query('SELECT 1 FROM sobatnira.lot_closures WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3 AND is_synthetic=$4 AND reopened_at IS NULL', scope)).rows.length)
+                throw new ConflictException('Kloter sudah ditutup.');
+            // Single-origin approval only until mixed-result allocation policy is agreed.
+            const reservations = (await tx.query(`SELECT * FROM sobatnira.juice_reservations WHERE tenant_id=$1 AND factory_id=$2 AND batch_id=$3 AND state<>'released' ORDER BY request_id FOR UPDATE`, [access.tenantId, access.factoryId, id])).rows;
+            if (!reservations.length || reservations.some(r => r.lot_id !== b.lot_id || r.origin_lot_id !== b.lot_id || r.is_synthetic !== b.is_synthetic || !['reserved', 'consumed'].includes(r.state)) || compareDecimals(sumDecimals(reservations.map(r => String(r.quantity_ml))), String(b.quantity_ml)) !== 0)
+                throw new ConflictException('Reservasi harus sesuai volume dan satu asal kloter. Batch campuran belum boleh disahkan.');
+            const cost = found((await tx.query('SELECT * FROM sobatnira.lot_production_costs WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3', scope.slice(0, 3))).rows[0]);
+            const receipt = found((await tx.query('SELECT net_weight_kg::text AS weight FROM sobatnira.intake_records WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3 AND is_synthetic=$4', scope)).rows[0]);
+            const grades = (await tx.query(`SELECT g.code,g.weight_kg::text AS "weightKg",g.price_per_kg_rupiah::text AS "pricePerKgRupiah"
+    FROM sobatnira.batch_grade_results g JOIN sobatnira.production_batches pb ON pb.id=g.batch_id WHERE pb.tenant_id=$1 AND pb.factory_id=$2 AND pb.lot_id=$3 AND pb.is_synthetic=$4 AND (pb.status='approved' OR pb.id=$5)`, [...scope, id])).rows;
+            const combined = new Map<string, {
+                code: string;
+                weightKg: string;
+                pricePerKgRupiah: string;
+            }>();
+            for (const grade of grades) {
+                const key = grade.code + ':' + grade.pricePerKgRupiah;
+                const previous = combined.get(key);
+                if (previous)
+                    previous.weightKg = sumDecimals([previous.weightKg, grade.weightKg]);
+                else
+                    combined.set(key, { code: 'G_' + combined.size, weightKg: grade.weightKg, pricePerKgRupiah: grade.pricePerKgRupiah });
+            }
+            const input = { caneNetKg: receipt.weight, caneCostRupiah: String(cost.cane_rupiah), operationalCostRupiah: String(cost.operational_rupiah), ingredientCostRupiah: String(cost.ingredient_rupiah), otherCostRupiah: String(cost.other_rupiah), rounding: 'HALF_UP', grades: [...combined.values()] };
+            const preview = calculateProductionPreview(input);
+            const output = { ...preview, mode: 'approved', persisted: true, calculationVersion: 'production-v1' };
+            await tx.query("UPDATE sobatnira.juice_reservations SET state='consumed',finalized_by=$4,finalized_at=clock_timestamp() WHERE tenant_id=$1 AND factory_id=$2 AND batch_id=$3 AND state='reserved'", [access.tenantId, access.factoryId, id, access.userId]);
+            await tx.query("UPDATE sobatnira.production_batches SET status='approved',approved_by=$2,approved_at=clock_timestamp() WHERE id=$1", [id, access.userId]);
+            const snapshot = (await tx.query(`INSERT INTO sobatnira.production_calculation_snapshots(tenant_id,factory_id,lot_id,batch_id,calculation_version,input_snapshot,output_snapshot,is_synthetic,approved_by)
+    VALUES($1,$2,$3,$4,'production-v1',$5,$6,$7,$8) RETURNING *`, [access.tenantId, access.factoryId, b.lot_id, id, JSON.stringify(input), JSON.stringify(output), b.is_synthetic, access.userId])).rows[0];
+            await tx.query("INSERT INTO sobatnira.production_batch_events(batch_id,action,actor_id) VALUES($1,'approved',$2)", [id, access.userId]);
+            return snapshot;
+        });
+    }
+    async list(access: FactoryAccess, query: unknown) {
+        const page = parsePage(query);
+        const rows = await this.db.query(`WITH ${FACTORY_SCOPE_CTE} SELECT b.* FROM sobatnira.production_batches b JOIN authorized_scope s ON s."tenantId"=b.tenant_id AND s."factoryId"=b.factory_id ORDER BY b.occurred_at DESC,b.id LIMIT $4 OFFSET $5`, [...scopeValues(access), page.limit, page.offset]);
+        return { items: rows.rows, ...page };
+    }
+    async report(access: FactoryAccess, query: unknown) {
+        const q = object(query, ['from', 'before', 'synthetic']);
+        if (q.synthetic !== undefined && !['true', 'false'].includes(String(q.synthetic)))
+            throw new BadRequestException('synthetic tidak valid.');
+        const from = q.from === undefined ? null : timestamp(q.from, 'from'), before = q.before === undefined ? null : timestamp(q.before, 'before');
+        if (from && before && from >= before)
+            throw new BadRequestException('Periode tidak valid.');
+        // Latest cumulative snapshot per lot; report period follows lot receipt time.
+        const rows = (await this.db.query(`WITH ${FACTORY_SCOPE_CTE}, latest AS (
+   SELECT DISTINCT ON(p.lot_id) p.* FROM sobatnira.production_calculation_snapshots p JOIN authorized_scope s ON s."tenantId"=p.tenant_id AND s."factoryId"=p.factory_id
+   WHERE p.is_synthetic=$4 ORDER BY p.lot_id,p.approved_at DESC,p.id DESC)
+   SELECT l.id AS "lotId",l.display_code AS code,s.name AS supplier,l.received_at AS "receivedAt",p.id AS "snapshotId",p.output_snapshot AS calculation
+   FROM latest p JOIN sobatnira.lots l ON l.id=p.lot_id JOIN sobatnira.suppliers s ON s.id=l.supplier_id
+   WHERE ($5::timestamptz IS NULL OR l.received_at >= $5) AND ($6::timestamptz IS NULL OR l.received_at < $6)
+   ORDER BY l.received_at DESC,l.id`, [...scopeValues(access), q.synthetic === 'true', from, before])).rows;
+        return { factory: access.factoryName, from, before, synthetic: q.synthetic === 'true', items: rows, total: rows.length, totalMarginRupiah: rows.reduce((v, r) => v + BigInt(r.calculation.productionMarginRupiah), 0n).toString() };
+    }
+}
+@Controller('tenants/:tenantId/factories/:factoryId/production')
+@FactoryRoles('admin', 'owner')
+export class BatchesController {
+    constructor(private readonly batches: Batches) { }
+    @Get('batches')
+    list(
+    @CurrentFactory()
+    a: FactoryAccess, 
+    @Query()
+    q: unknown) { return this.batches.list(a, q); }
+    @Post('batches')
+    create(
+    @CurrentFactory()
+    a: FactoryAccess, 
+    @Body()
+    b: unknown) { return this.batches.create(a, b); }
+    @Post('batches/:id/approve')
+    @HttpCode(200)
+    approve(
+    @CurrentFactory()
+    a: FactoryAccess, 
+    @Param('id')
+    id: string) { return this.batches.approve(a, uuid(id)); }
+    @Post('lots/:id/costs')
+    @HttpCode(200)
+    costs(
+    @CurrentFactory()
+    a: FactoryAccess, 
+    @Param('id')
+    id: string, 
+    @Body()
+    b: unknown) { return this.batches.costs(a, uuid(id), b); }
+    @Get('profit-report')
+    report(
+    @CurrentFactory()
+    a: FactoryAccess, 
+    @Query()
+    q: unknown) { return this.batches.report(a, q); }
+}

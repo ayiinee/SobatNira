@@ -11,6 +11,7 @@ class SettingsPageFrame extends StatelessWidget {
     this.subtitle,
     this.bottomAction,
     this.tab = NiraTab.pengaturan,
+    this.hideNavigationWhileEditing = false,
     super.key,
   });
 
@@ -20,11 +21,13 @@ class SettingsPageFrame extends StatelessWidget {
   final List<Widget> children;
   final Widget? bottomAction;
   final NiraTab tab;
+  final bool hideNavigationWhileEditing;
 
   @override
   Widget build(BuildContext context) {
     return NiraScaffold(
       tab: tab,
+      hideNavigationWhileEditing: hideNavigationWhileEditing,
       onNavigate: onNavigate,
       bottomAction: bottomAction,
       body: ListView(

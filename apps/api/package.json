@@ -6,6 +6,7 @@
     "node": ">=24 <25"
   },
   "scripts": {
+    "seed:calculations": "npm run build --silent && node scripts/seed-calculations.cjs",
     "build": "tsc -p tsconfig.json",
     "dev": "npm run build && node dist/main.js",
     "test": "npm run build && node --test test/*.test.cjs",
@@ -19,7 +20,9 @@
     "test:evidence-db": "npm run build && node --test test/integration/evidence-database.test.cjs",
     "test:evidence-r2": "npm run build && node --test test/integration/evidence-r2.test.cjs",
     "db:migrate:ocr": "npm run build && node dist/documents/migrate.js",
-    "local:stack": "npm run build && node scripts/local-stack.mjs"
+    "local:stack": "npm run build && node scripts/local-stack.mjs",
+    "seed:production": "npm run build --silent && node scripts/seed-production.cjs",
+    "test:batches-db": "npm run build && node --test test/integration/batches-database.test.cjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1169.0",

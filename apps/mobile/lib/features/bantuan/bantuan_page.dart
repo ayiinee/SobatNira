@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'open_support_url.dart';
 
 import '../../sobatnira_ui.dart';
 import '../pengaturan/settings_widgets.dart';
@@ -37,11 +37,7 @@ class _BantuanPageState extends State<BantuanPage> {
     });
     try {
       // Launch immediately from the user's gesture so web popup blockers allow it.
-      final opened = await launchUrl(
-        supportWhatsAppUri(_message.text),
-        mode: LaunchMode.externalApplication,
-        webOnlyWindowName: '_blank',
-      );
+      final opened = await openSupportUrl(supportWhatsAppUri(_message.text));
       if (!opened && mounted) {
         setState(
           () => _error =
@@ -64,6 +60,7 @@ class _BantuanPageState extends State<BantuanPage> {
   Widget build(BuildContext context) => SettingsPageFrame(
     title: 'Bantuan',
     tab: NiraTab.beranda,
+    hideNavigationWhileEditing: true,
     onNavigate: widget.onNavigate,
     subtitle: 'Ceritakan kendala atau pertanyaanmu.',
     children: [
@@ -81,6 +78,7 @@ class _BantuanPageState extends State<BantuanPage> {
         key: _form,
         child: TextFormField(
           controller: _message,
+          onTapOutside: (_) => FocusScope.of(context).unfocus(),
           minLines: 5,
           maxLines: 10,
           maxLength: 1500,
@@ -91,7 +89,7 @@ class _BantuanPageState extends State<BantuanPage> {
           decoration: settingsInputDecoration(
             'Pesan bantuan',
             hint: 'Tulis pertanyaan atau kendala yang kamu alami…',
-        ).copyWith(alignLabelWithHint: true),
+          ).copyWith(alignLabelWithHint: true),
           validator: (value) => value == null || value.trim().isEmpty
               ? 'Tulis pesan terlebih dahulu.'
               : null,

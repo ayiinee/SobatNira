@@ -109,4 +109,19 @@ void main() {
       expect(uri.queryParameters['text'], 'Halo & bantuan');
     },
   );
+
+  testWidgets(
+    'navigation hides while typing even when web reports no keyboard inset',
+    (tester) async {
+      await open(tester);
+      await tap(tester, find.text('Bantuan'));
+      expect(find.bySemanticsLabel('Beranda'), findsOneWidget);
+      await tester.tap(find.byType(TextFormField));
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel('Beranda'), findsNothing);
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel('Beranda'), findsOneWidget);
+    },
+  );
 }

@@ -83,6 +83,8 @@ class AnalyticsRow {
     this.value,
     this.secondary, {
     this.day = 20,
+    this.date,
+    this.id,
   });
 
   final String supplier;
@@ -90,4 +92,7 @@ class AnalyticsRow {
   final String value;
   final String secondary;
   final int day;
+  final DateTime? date;
+  final String? id;
+  DateTime get occurredDate => date ?? DateTime(2026, 10, day);
 }
