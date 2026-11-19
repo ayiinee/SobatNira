@@ -13,6 +13,10 @@ import 'package:sobatnira/features/kloter/kloter_date_filter.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
 import 'package:sobatnira/sobatnira_ui.dart';
 import 'package:sobatnira/main.dart';
+import 'package:sobatnira/features/laporan/demo_analytics.dart';
+import 'package:sobatnira/features/laporan/laporan_page.dart';
+import 'package:sobatnira/features/laporan/report_overview.dart';
+import 'package:sobatnira/widgets/summary_card.dart';
 import '../../support/demo_login.dart';
 
 final scope = FactoryScope.fromJson({
@@ -331,6 +335,114 @@ void main() {
       expect(find.text('Total gula final'), findsOneWidget);
       expect(find.text('30,5 kg'), findsWidgets);
       expect(find.textContaining('1 batch'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'demo and Supabase reports keep identical summary and chart geometry',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(430, 950));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final demo = DemoAnalytics();
+      final reports = ConnectedReports(
+        ReviewApi(
+          'token',
+          client: MockClient((_) async => response(fixture())),
+        ),
+        scope,
+      );
+      addTearDown(demo.dispose);
+      addTearDown(reports.dispose);
+      await reports.refresh();
+      Future<List<Rect>> geometry(Widget page) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: niraTheme(),
+            home: Scaffold(body: page),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byType(ReportDataOptions), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('production-chart-plot')),
+          findsOneWidget,
+        );
+        return [
+          tester.getRect(find.byType(NiraSummaryPair)),
+          tester.getRect(find.byKey(const ValueKey('production-chart-plot'))),
+        ];
+      }
+
+      final offline = await geometry(
+        LaporanPage(analytics: demo, onOpenDetail: (_) {}),
+      );
+      final connected = await geometry(
+        ConnectedReportView(reports: reports, onNavigate: (_) {}),
+      );
+      expect(connected, offline);
+      expect(find.text('30,5 kg'), findsWidgets);
+      expect(find.text('90Kg'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'empty and failed backend reports retain the demo layout without sample values',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 853));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      var fail = false;
+      final reports = ConnectedReports(
+        ReviewApi(
+          'token',
+          client: MockClient(
+            (_) async => fail
+                ? http.Response('{}', 503)
+                : response({
+                    'items': [],
+                    'grades': [],
+                    'totals': {
+                      'lotCount': 0,
+                      'producedLotCount': 0,
+                      'batchCount': 0,
+                      'caneNetKg': '0',
+                      'finalSugarKg': '0',
+                      'productionValueRupiah': '0',
+                      'totalCostRupiah': '0',
+                      'productionMarginRupiah': '0',
+                    },
+                  }),
+          ),
+        ),
+        scope,
+      );
+      addTearDown(reports.dispose);
+      await reports.refresh();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: niraTheme(),
+          home: Scaffold(
+            body: ConnectedReportView(reports: reports, onNavigate: (_) {}),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Belum ada data grafik pada periode ini.'),
+        findsOneWidget,
+      );
+      expect(find.text('0 kg'), findsNWidgets(2));
+      expect(find.text('Sugeng'), findsNothing);
+      fail = true;
+      await reports.refresh();
+      await tester.pumpAndSettle();
+      expect(find.text('0 kg'), findsNothing);
+      expect(find.text('—'), findsNWidgets(2));
+      await tester.scrollUntilVisible(
+        find.text('Coba lagi memuat laporan'),
+        200,
+      );
+      expect(find.text('Coba lagi memuat laporan'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

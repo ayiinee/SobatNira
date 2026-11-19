@@ -8,6 +8,7 @@ import 'package:http/testing.dart';
 import 'package:sobatnira/features/kloter/juice_transfer_page.dart';
 import 'package:sobatnira/features/kloter/juice_volume.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
+import 'package:sobatnira/sobatnira_ui.dart';
 
 final scope = FactoryScope.fromJson({
   'tenantId': 'tenant',
@@ -44,11 +45,20 @@ Future<void> press(
   await tester.pumpAndSettle();
 }
 
-Future<void> mount(WidgetTester tester, ReviewApi api) async {
+Future<void> mount(
+  WidgetTester tester,
+  ReviewApi api, {
+  ValueChanged<NiraTab>? onNavigate,
+}) async {
   await tester.pumpWidget(
     MaterialApp(
       key: UniqueKey(),
-      home: JuiceTransferPage(api: api, scope: scope, lotId: 'source'),
+      home: JuiceTransferPage(
+        api: api,
+        scope: scope,
+        lotId: 'source',
+        onNavigate: onNavigate,
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -301,6 +311,7 @@ void main() {
     (tester) async {
       final pending = Completer<http.Response>();
       var posts = 0;
+      var navigations = 0;
       final api = ReviewApi(
         'fixture',
         client: MockClient((request) async {
@@ -311,7 +322,7 @@ void main() {
           return read(request);
         }),
       );
-      await mount(tester, api);
+      await mount(tester, api, onNavigate: (_) => navigations++);
       await choose(tester);
       await tester.enterText(find.byType(TextFormField), '1');
       await tester.ensureVisible(find.text('Kirim transfer'));
@@ -328,6 +339,9 @@ void main() {
         isNull,
       );
       expect(tester.widget<PopScope>(find.byType(PopScope)).canPop, isFalse);
+      await tester.tap(find.bySemanticsLabel('Laporan'));
+      await tester.pump();
+      expect(navigations, 0);
       final draft = api.pendingTransfer(scope, 'source')!;
       pending.complete(
         jsonResponse({...draft.body, 'createdBy': 'admin'}, 201),
@@ -335,6 +349,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(posts, 1);
       expect(find.text('Transfer tercatat'), findsOneWidget);
+      await tester.tap(find.bySemanticsLabel('Beranda'));
+      await tester.pump();
+      expect(navigations, 1);
       await tester.pumpWidget(const SizedBox.shrink());
       api.close();
     },

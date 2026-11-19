@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/page_frame.dart';
 import '../pekerjaan/review_api.dart';
 import '../pekerjaan/production_api.dart';
 
@@ -9,8 +10,10 @@ class LotClosurePage extends StatefulWidget {
     super.key,
     required this.api,
     required this.scope,
+    this.onNavigate,
     required this.lotId,
   });
+  final ValueChanged<NiraTab>? onNavigate;
   final ReviewApi api;
   final FactoryScope scope;
   final String lotId;
@@ -82,7 +85,12 @@ class _LotClosurePageState extends State<LotClosurePage> {
       setState(() => _submitting = true);
       final closure = ClosureApi(widget.api);
       if (reopen) {
-        await closure.reopen(widget.scope, widget.lotId, status['closureId'] as String, reason!);
+        await closure.reopen(
+          widget.scope,
+          widget.lotId,
+          status['closureId'] as String,
+          reason!,
+        );
       } else {
         await closure.close(widget.scope, widget.lotId);
       }
@@ -135,17 +143,20 @@ class _LotClosurePageState extends State<LotClosurePage> {
   @override
   Widget build(BuildContext context) => PopScope(
     canPop: !_working,
-    child: Scaffold(
-      appBar: AppBar(
-        title: const Text('Penutupan dan riwayat'),
-        actions: [
-          IconButton(
-            tooltip: 'Muat ulang penutupan',
-            onPressed: _working ? null : _reload,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
+    child: NiraPageScaffold(
+      onNavigate: widget.onNavigate == null
+          ? null
+          : (tab) {
+              if (!_working) widget.onNavigate!(tab);
+            },
+      title: const Text('Penutupan dan riwayat'),
+      actions: [
+        IconButton(
+          tooltip: 'Muat ulang penutupan',
+          onPressed: _working ? null : _reload,
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -226,7 +237,9 @@ class _LotClosurePageState extends State<LotClosurePage> {
                         children: [
                           if (rows.isEmpty)
                             const ListTile(
-                              title: Text('Belum ada riwayat pada halaman ini.'),
+                              title: Text(
+                                'Belum ada riwayat pada halaman ini.',
+                              ),
                             ),
                           for (final entry in rows)
                             ExpansionTile(
@@ -241,7 +254,10 @@ class _LotClosurePageState extends State<LotClosurePage> {
                               ),
                               children: [
                                 _person('ID penutupan', entry['id'] as String),
-                                _person('Ditutup oleh', entry['closedBy'] as String),
+                                _person(
+                                  'Ditutup oleh',
+                                  entry['closedBy'] as String,
+                                ),
                                 if (entry['reopenedAt'] != null) ...[
                                   ListTile(
                                     title: const Text('Dibuka kembali pada'),

@@ -13,8 +13,9 @@ import 'printable_report.dart';
 import 'report_export_page.dart';
 import 'margin_chart.dart';
 import 'production_chart.dart';
-import 'report_table.dart';
-import 'report_paginated_list.dart';
+import 'report_overview.dart';
+import 'report_detail_page.dart';
+import 'report_detail_layout.dart';
 
 Future<void> filterConnectedReport(
   BuildContext context,
@@ -33,12 +34,9 @@ class _ReportSourceControl extends StatelessWidget {
   final ConnectedReports reports;
 
   @override
-  Widget build(BuildContext context) => CheckboxListTile(
-    contentPadding: EdgeInsets.zero,
-    dense: true,
-    title: const Text('Tampilkan data contoh'),
-    value: reports.synthetic,
-    onChanged: (value) => reports.setSynthetic(value ?? false),
+  Widget build(BuildContext context) => ReportDataOptions(
+    synthetic: reports.synthetic,
+    onChanged: reports.setSynthetic,
   );
 }
 
@@ -89,6 +87,7 @@ class _ConnectedReportViewState extends State<ConnectedReportView> {
         data: widget.reports.data!,
         lot: lot,
         grade: grade,
+        kind: _tab == 1 ? ReportDetailKind.margin : ReportDetailKind.rendemen,
         onNavigate: widget.onNavigate,
       ),
     ),
@@ -128,146 +127,91 @@ class _ConnectedReportViewState extends State<ConnectedReportView> {
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: widget.reports,
-    builder: (context, _) => Column(
-      children: [
-        NiraTabs(
-          labels: const ['Produksi', 'Margin'],
-          selected: _tab,
-          onSelected: (value) => setState(() => _tab = value),
-          height: 43,
-          inset: 20,
-        ),
-        Expanded(child: _report(context)),
-      ],
-    ),
-  );
-
-  Widget _report(BuildContext context) {
-    final reports = widget.reports;
-    void filter() => filterConnectedReport(context, reports);
-    final produced = [
-      for (final lot in reports.lots)
-        if (lot['calculation'] case final Json calculation) (lot, calculation),
-    ];
-    final margin = _tab == 1;
-    final grade = !margin && _variant == ProductionVariant.grade;
-    final header = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (margin) ...[
-          NiraSummaryCard(
-            'Margin Produksi',
-            reports.amount('productionMarginRupiah', money: true),
-            cane: true,
-            compactValue: true,
-          ),
-          const SizedBox(height: NiraSpace.sm),
-          NiraSummaryPair(
-            first: NiraSummaryCard(
-              'Nilai produksi',
-              reports.amount('productionValueRupiah', money: true),
-              compactValue: true,
-            ),
-            second: NiraSummaryCard(
-              'Total biaya',
-              reports.amount('totalCostRupiah', money: true),
-              boxes: true,
-              compactValue: true,
-            ),
-          ),
-        ] else
-          NiraSummaryPair(
-            first: NiraSummaryCard(
-              'Gula final',
-              reports.amount('finalSugarKg', unit: ' kg'),
-            ),
-            second: NiraSummaryCard(
-              'Tebu diterima',
-              reports.amount('caneNetKg', unit: ' kg'),
-              boxes: true,
-            ),
-          ),
-        const SizedBox(height: NiraSpace.md),
-        if (margin)
-          MarginChart(
-            rows: [
-              for (final (lot, calculation) in produced)
-                AnalyticsRow(
-                  lot['supplier'] as String,
-                  lot['code'] as String,
-                  reportMoney(calculation['productionMarginRupiah']),
-                  '',
-                ),
-            ],
-            onFilter: filter,
-          )
-        else
-          ProductionChart.report(
-            lots: [
-              for (final (lot, calculation) in produced)
-                _chartLot(lot, calculation),
-            ],
-            variant: _variant,
-            onVariant: (variant) => setState(() => _variant = variant),
-            period: (reports.filter, reports.synthetic),
-            onFilter: filter,
-          ),
-        _ReportSourceControl(reports),
-        Text(
-          '${reports.period} · ${reports.synthetic ? 'Data sintetis' : 'Data disahkan'}',
-          style: niraText(NiraType.caption, color: niraLeaf),
-        ),
-        ConnectedReportStatus(reports: reports),
-        const SizedBox(height: NiraSpace.md),
-      ],
-    );
-
-    if (grade) {
-      final total = reports.data == null
+    builder: (context, _) {
+      final reports = widget.reports;
+      final margin = _tab == 1;
+      final grade = !margin && _variant == ProductionVariant.grade;
+      final produced = [
+        for (final lot in reports.lots)
+          if (lot['calculation'] case final Json calculation)
+            (lot, calculation),
+      ];
+      void filter() => filterConnectedReport(context, reports);
+      final total = !grade || reports.data == null
           ? 0.0
           : _number(reports.totals['finalSugarKg']);
-      return ReportTable<Json>(
-        title: 'Komposisi Grade',
-        columns: const ['Grade', 'Berat', 'Porsi'],
-        rows: reports.grades,
-        scrollHeader: header,
-        resetToken: ('grade', reports.data),
-        leading: (row) =>
-            Text('Grade ${row['code']}', style: niraText(NiraType.body)),
-        value: (row) => '${reportNumber(row['weightKg'])} kg',
-        secondary: (row) => total == 0
-            ? '—'
-            : '${(_number(row['weightKg']) / total * 100).toStringAsFixed(1).replaceAll('.', ',')}%',
-        onTap: (row) => _detail(null, grade: row['code'] as String),
+      return ReportOverview<Json>(
+        tab: ReportTab.values[_tab],
+        onTab: (tab) => setState(() => _tab = tab.index),
+        grade: grade,
+        sugar: reports.amount('finalSugarKg', unit: ' kg'),
+        cane: reports.amount('caneNetKg', unit: ' kg'),
+        margin: reports.amount('productionMarginRupiah', money: true),
+        productionValue: reports.amount('productionValueRupiah', money: true),
+        cost: reports.amount('totalCostRupiah', money: true),
+        chart: margin
+            ? MarginChart(
+                rows: [
+                  for (final (lot, calculation) in produced)
+                    AnalyticsRow(
+                      lot['supplier'] as String,
+                      lot['code'] as String,
+                      reportMoney(calculation['productionMarginRupiah']),
+                      '',
+                      id: lot['lotId'] as String,
+                      date: DateTime.parse(
+                        lot['receivedAt'] as String,
+                      ).toLocal(),
+                    ),
+                ],
+                onFilter: filter,
+              )
+            : ProductionChart.report(
+                lots: [
+                  for (final (lot, calculation) in produced)
+                    _chartLot(lot, calculation),
+                ],
+                variant: _variant,
+                onVariant: (variant) => setState(() => _variant = variant),
+                period: (reports.filter, reports.synthetic),
+                onFilter: filter,
+              ),
+        options: _ReportSourceControl(reports),
+        status: ConnectedReportStatus(reports: reports),
+        rows: grade ? reports.grades : reports.lots,
+        resetToken: (_tab, _variant, reports.data),
+        leading: grade
+            ? (row) =>
+                  Text('Grade ${row['code']}', style: niraText(NiraType.body))
+            : _lotLabel,
+        value: (row) {
+          if (grade) return '${reportNumber(row['weightKg'])} kg';
+          final calculation = row['calculation'] as Json?;
+          if (calculation == null) return '—';
+          return margin
+              ? reportMoney(calculation['productionMarginRupiah'])
+              : '${reportNumber(calculation['finalSugarKg'])} kg';
+        },
+        secondary: margin
+            ? null
+            : (row) {
+                if (grade) {
+                  return total == 0
+                      ? '—'
+                      : '${(_number(row['weightKg']) / total * 100).toStringAsFixed(1).replaceAll('.', ',')}%';
+                }
+                final calculation = row['calculation'] as Json?;
+                return calculation == null
+                    ? '—'
+                    : '${reportNumber(calculation['rendemenPercent'])}%';
+              },
+        onOpen: (row) => _detail(
+          grade ? null : row,
+          grade: grade ? row['code'] as String : null,
+        ),
       );
-    }
-    return ReportTable<Json>(
-      title: margin ? 'Detail margin kloter' : 'Rendemen',
-      columns: margin
-          ? const ['Pemasok', 'Margin']
-          : const ['Pemasok', 'Gula final', 'Rendemen'],
-      rows: reports.lots,
-      scrollHeader: header,
-      resetToken: (_tab, reports.data),
-      leading: _lotLabel,
-      value: (lot) {
-        final calculation = lot['calculation'] as Json?;
-        if (calculation == null) return '—';
-        return margin
-            ? reportMoney(calculation['productionMarginRupiah'])
-            : '${reportNumber(calculation['finalSugarKg'])} kg';
-      },
-      secondary: margin
-          ? null
-          : (lot) {
-              final calculation = lot['calculation'] as Json?;
-              return calculation == null
-                  ? '—'
-                  : '${reportNumber(calculation['rendemenPercent'])}%';
-            },
-      onTap: _detail,
-    );
-  }
+    },
+  );
 }
 
 class ConnectedReportExport extends StatefulWidget {
@@ -318,33 +262,33 @@ class ConnectedReportDetail extends StatelessWidget {
     this.grade,
     this.batch,
     this.navigationTab = NiraTab.laporan,
+    this.kind = ReportDetailKind.margin,
     super.key,
   });
   final Json data;
   final Json? lot, batch;
   final String? grade;
   final NiraTab navigationTab;
+  final ReportDetailKind kind;
   final ValueChanged<NiraTab> onNavigate;
   List<Widget> _marginDetails(Json calculation, String label) {
     final costs = calculation['costs'] as Json;
     return [
       const SizedBox(height: NiraSpace.md),
-      NiraSummaryCard(
-        label,
-        reportMoney(calculation['productionMarginRupiah']),
+      const DetailSectionTitle('Rincian perhitungan'),
+      const SizedBox(height: NiraSpace.sm),
+      ReportMoneyTable(
+        rows: [
+          ('Nilai produksi', reportMoney(calculation['productionValueRupiah'])),
+          ('Total biaya', reportMoney(calculation['totalCostRupiah'])),
+          ('Biaya tebu', reportMoney(costs['caneRupiah'])),
+          ('Operasional', reportMoney(costs['operationalRupiah'])),
+          ('Bahan', reportMoney(costs['ingredientRupiah'])),
+          ('Biaya lain', reportMoney(costs['otherRupiah'])),
+        ],
+        total: (label, reportMoney(calculation['productionMarginRupiah'])),
       ),
-      const Text('Margin kumulatif batch sah dengan seluruh biaya kloter.'),
-      DetailMetrics([
-        (
-          'Nilai produksi kloter',
-          reportMoney(calculation['productionValueRupiah']),
-        ),
-        ('Total biaya kloter', reportMoney(calculation['totalCostRupiah'])),
-        ('Biaya tebu', reportMoney(costs['caneRupiah'])),
-        ('Operasional', reportMoney(costs['operationalRupiah'])),
-        ('Bahan', reportMoney(costs['ingredientRupiah'])),
-        ('Biaya lain', reportMoney(costs['otherRupiah'])),
-      ]),
+      const SizedBox(height: NiraSpace.md),
     ];
   }
 
@@ -358,7 +302,15 @@ class ConnectedReportDetail extends StatelessWidget {
         source: data['synthetic'] == true ? 'Data sintetis' : 'Data disahkan',
         marginDetails: calculation == null
             ? const []
-            : _marginDetails(calculation, 'Margin kumulatif kloter'),
+            : [
+                const SizedBox(height: NiraSpace.sm),
+                DetailMetrics([
+                  (
+                    'Margin kumulatif kloter',
+                    reportMoney(calculation['productionMarginRupiah']),
+                  ),
+                ]),
+              ],
         onNavigate: onNavigate,
         navigationTab: navigationTab,
       );
@@ -369,110 +321,109 @@ class ConnectedReportDetail extends StatelessWidget {
         : (data['grades'] as List).cast<Json>().firstWhere(
             (g) => g['code'] == grade,
           );
-    return NiraScaffold(
+    return ReportDetailLayout(
+      title: grade != null
+          ? 'Detail Grade'
+          : kind == ReportDetailKind.margin
+          ? 'Margin kloter'
+          : 'Detail Rendemen',
       tab: navigationTab,
       onNavigate: onNavigate,
-      body: ListView(
-        padding: EdgeInsets.fromLTRB(
-          niraPageInset(context),
-          niraPageInset(context),
-          niraPageInset(context),
-          NiraSpace.lg,
-        ),
-        children: [
-          DetailTitle(
-            grade != null ? 'Detail Grade' : 'Produksi dan margin kloter',
-            inset: 0,
+      children: [
+        if (gradeRow != null) ...[
+          NiraSummaryCard(
+            'Nilai produksi',
+            reportMoney(gradeRow['exactValueRupiah']),
           ),
-          Text(data['synthetic'] == true ? 'Data sintetis' : 'Data disahkan'),
+          DetailMetrics([
+            ('Grade $grade', '${reportNumber(gradeRow['weightKg'])} kg'),
+          ]),
+          const Text('Nilai grade sebelum pembulatan per kloter.'),
+          const DetailSectionTitle('Kontribusi per kloter'),
+          const SizedBox(height: NiraSpace.sm),
+          ReportContributionTable(
+            columns: const ['Kloter / Batch', 'Berat', 'Nilai'],
+            rows: [
+              for (final source in (data['items'] as List).cast<Json>())
+                for (final b in (source['batches'] as List).cast<Json>())
+                  for (final g in (b['grades'] as List).cast<Json>())
+                    if (g['code'] == grade)
+                      ReportContribution(
+                        '${source['code']} · ${b['code']}',
+                        '${reportNumber(g['weightKg'])} kg',
+                        reportMoney(g['exactValueRupiah']),
+                        note: '${reportMoney(g['pricePerKgRupiah'])}/kg',
+                        onOpen: () => Navigator.of(context).push<void>(
+                          MaterialPageRoute(
+                            builder: (_) => ConnectedReportDetail(
+                              data: data,
+                              lot: source,
+                              batch: b,
+                              onNavigate: onNavigate,
+                              navigationTab: navigationTab,
+                            ),
+                          ),
+                        ),
+                      ),
+            ],
+          ),
+        ] else ...[
+          ReportEntityCard(
+            code: lot!['code'] as String,
+            supplier: lot!['supplier'] as String,
+            date: formatDate(
+              DateTime.parse(lot!['receivedAt'] as String).toLocal(),
+            ),
+          ),
           const SizedBox(height: NiraSpace.md),
-          if (gradeRow != null) ...[
-            NiraSummaryCard(
-              'Nilai produksi',
-              reportMoney(gradeRow['exactValueRupiah']),
+          DetailMetrics([
+            ('Tebu diterima', '${reportNumber(lot!['caneNetKg'])} kg'),
+            (
+              'Gula final',
+              calculation == null
+                  ? 'Belum ada hasil sah'
+                  : '${reportNumber(calculation['finalSugarKg'])} kg',
             ),
-            DetailMetrics([
-              ('Grade $grade', '${reportNumber(gradeRow['weightKg'])} kg'),
-            ]),
-            const Text('Nilai grade sebelum pembulatan per kloter.'),
-            const DetailSectionTitle('Kontribusi per kloter'),
-            for (final source in (data['items'] as List).cast<Json>())
-              for (final b in (source['batches'] as List).cast<Json>())
-                for (final g in (b['grades'] as List).cast<Json>())
-                  if (g['code'] == grade)
-                    ListTile(
-                      title: Text('${source['code']} · ${b['code']}'),
-                      subtitle: Text(
-                        '${reportNumber(g['weightKg'])} kg · ${reportMoney(g['pricePerKgRupiah'])}/kg',
-                      ),
-                      trailing: Text(reportMoney(g['exactValueRupiah'])),
-                      onTap: () => Navigator.of(context).push<void>(
-                        MaterialPageRoute(
-                          builder: (_) => ConnectedReportDetail(
-                            data: data,
-                            lot: source,
-                            batch: b,
-                            onNavigate: onNavigate,
-                            navigationTab: navigationTab,
-                          ),
-                        ),
-                      ),
-                    ),
-          ] else ...[
-            Text(
-              '${lot!['code']} · ${lot!['supplier']}',
-              style: niraText(NiraType.title),
+            (
+              'Rendemen',
+              calculation == null
+                  ? '—'
+                  : '${reportNumber(calculation['rendemenPercent'])}%',
             ),
-            Text(
-              formatDate(
-                DateTime.parse(lot!['receivedAt'] as String).toLocal(),
-              ),
-            ),
-            DetailMetrics([
-              ('Tebu diterima', '${reportNumber(lot!['caneNetKg'])} kg'),
-              (
-                'Gula final',
-                calculation == null
-                    ? 'Belum ada hasil sah'
-                    : '${reportNumber(calculation['finalSugarKg'])} kg',
-              ),
-              (
-                'Rendemen',
-                calculation == null
-                    ? '—'
-                    : '${reportNumber(calculation['rendemenPercent'])}%',
-              ),
-            ]),
-            if (calculation != null)
-              ..._marginDetails(calculation, 'Margin Produksi'),
-            const DetailSectionTitle('Batch sah'),
-            ReportPaginatedList<Json>(
-              items: batches,
-              builder: (rows) => Column(
-                children: [
-                  for (final b in rows)
-                    ListTile(
-                      title: Text(b['code'] as String),
-                      subtitle: Text('${reportNumber(b['finalSugarKg'])} kg'),
-                      trailing: Text(reportMoney(b['exactValueRupiah'])),
-                      onTap: () => Navigator.of(context).push<void>(
-                        MaterialPageRoute(
-                          builder: (_) => ConnectedReportDetail(
-                            data: data,
-                            lot: lot,
-                            batch: b,
-                            onNavigate: onNavigate,
-                            navigationTab: navigationTab,
-                          ),
-                        ),
+          ]),
+          if (calculation != null && kind == ReportDetailKind.margin)
+            ..._marginDetails(calculation, 'Margin Produksi'),
+          const SizedBox(height: NiraSpace.lg),
+          DetailSectionTitle(
+            kind == ReportDetailKind.margin
+                ? 'Kontribusi Batch'
+                : 'Kontribusi hasil per batch',
+          ),
+          const SizedBox(height: NiraSpace.sm),
+          ReportContributionTable(
+            columns: const ['Batch', 'Berat', 'Nilai'],
+            rows: [
+              for (final b in batches)
+                ReportContribution(
+                  b['code'] as String,
+                  '${reportNumber(b['finalSugarKg'])} kg',
+                  reportMoney(b['exactValueRupiah']),
+                  onOpen: () => Navigator.of(context).push<void>(
+                    MaterialPageRoute(
+                      builder: (_) => ConnectedReportDetail(
+                        data: data,
+                        lot: lot,
+                        batch: b,
+                        onNavigate: onNavigate,
+                        navigationTab: navigationTab,
                       ),
                     ),
-                ],
-              ),
-            ),
-          ],
+                  ),
+                ),
+            ],
+          ),
         ],
-      ),
+      ],
     );
   }
 }

@@ -81,7 +81,7 @@ class _ReportPaginatedListState<T> extends State<ReportPaginatedList<T>> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         NiraPageBody(height: _pageHeight, firstPage: _page == 0, child: body),
-        if (footer != null) footer,
+        ?footer,
       ],
     );
   }

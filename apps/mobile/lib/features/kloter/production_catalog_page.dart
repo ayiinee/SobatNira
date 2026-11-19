@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/page_frame.dart';
 import '../pekerjaan/review_api.dart';
 import '../pekerjaan/production_api.dart';
 import '../pengaturan/operator_history_page.dart';
@@ -62,6 +63,7 @@ class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
           scope: widget.scope,
           operatorId: item['id'] as String,
           phone: item['phoneE164'] as String,
+          onNavigate: widget.onNavigate,
         ),
       ),
     );
@@ -133,10 +135,13 @@ class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
           },
         ),
       if (!widget.selectSupplier)
-        FilledButton.icon(
-          onPressed: () => _edit(),
-          icon: const Icon(Icons.add),
-          label: Text('Tambah ${widget.kind.itemLabel}'),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: () => _edit(),
+            icon: const Icon(Icons.add, size: 18),
+            label: Text('Tambah ${widget.kind.itemLabel}'),
+          ),
         ),
       NiraPagedFutureBuilder<Json>(
         future: _page,
@@ -172,10 +177,15 @@ class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
                   children: [
                     if (items.isEmpty)
                       const ListTile(title: Text('Data tidak ditemukan.')),
-                    for (final item in items)
+                    for (final item in items) ...[
                       ListTile(
+                        contentPadding: EdgeInsets.zero,
                         title: Text(
                           item[_isOperator ? 'displayName' : 'name'] as String,
+                          style: niraText(
+                            NiraType.section,
+                            weight: FontWeight.w700,
+                          ),
                         ),
                         subtitle: Text(
                           [
@@ -183,6 +193,7 @@ class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
                             if (item['code'] != null) '${item['code']}',
                             item['isActive'] == true ? 'Aktif' : 'Nonaktif',
                           ].join(' · '),
+                          style: niraText(NiraType.caption, color: niraLeaf),
                         ),
                         trailing: _isOperator
                             ? Row(
@@ -213,6 +224,8 @@ class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
                           }
                         },
                       ),
+                      const Divider(height: 1, color: niraLine),
+                    ],
                   ],
                 ),
               ),
@@ -251,8 +264,8 @@ class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
         children: children,
       );
     }
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
+    return NiraPageScaffold(
+      title: Text(title),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),

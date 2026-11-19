@@ -1,6 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 
-import '../../sobatnira_ui.dart';
+import '../../widgets/page_frame.dart';
 import 'batch_api.dart';
 import 'production_dashboard_page.dart';
 
@@ -17,8 +17,22 @@ class _BatchListPageState extends State<BatchListPage> {
   void _retry() => setState(() => _future = widget.api.list());
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Batch produksi'), backgroundColor: niraGreen, foregroundColor: Colors.white, actions: [IconButton(onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ProductionDashboardPage())), icon: const Icon(Icons.insights), tooltip: 'Dashboard'), IconButton(onPressed: _create, icon: const Icon(Icons.add), tooltip: 'Buat batch')]),
+  Widget build(BuildContext context) => NiraPageScaffold(
+    title: const Text('Batch produksi'),
+    actions: [
+      IconButton(
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => ProductionDashboardPage()),
+        ),
+        icon: const Icon(Icons.insights),
+        tooltip: 'Dashboard',
+      ),
+      IconButton(
+        onPressed: _create,
+        icon: const Icon(Icons.add),
+        tooltip: 'Buat batch',
+      ),
+    ],
     body: FutureBuilder<List<BatchSummary>>(
       future: _future,
       builder: (context, snapshot) {
@@ -118,8 +132,8 @@ class _BatchDetailPageState extends State<BatchDetailPage> {
     a.dispose(); b.dispose(); return result;
   }
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(widget.id), backgroundColor: const Color(0xFF174B35), foregroundColor: Colors.white),
+  Widget build(BuildContext context) => NiraPageScaffold(
+    title: Text(widget.id),
     body: FutureBuilder<BatchDetail>(
       future: _future,
       builder: (context, snapshot) {

@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
-import '../../sobatnira_ui.dart';
+import '../../widgets/page_frame.dart';
 
 const _dashboardApiUrl = String.fromEnvironment('API_BASE_URL');
 
@@ -72,8 +72,8 @@ class _ProductionDashboardPageState extends State<ProductionDashboardPage> {
   void _retry() => setState(() => _future = _load());
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Dashboard produksi'), backgroundColor: niraGreen, foregroundColor: Colors.white),
+  Widget build(BuildContext context) => NiraPageScaffold(
+    title: const Text('Dashboard produksi'),
     body: FutureBuilder<(ProductionDashboard, List<AnalyticsPoint>)>(
       future: _future,
       builder: (context, snapshot) {

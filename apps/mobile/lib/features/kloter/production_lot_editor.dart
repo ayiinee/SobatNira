@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/page_frame.dart';
+import '../../sobatnira_ui.dart';
+
 import '../pekerjaan/review_api.dart';
 import 'production_catalog_page.dart';
 
@@ -8,8 +11,10 @@ class ProductionLotEditor extends StatefulWidget {
     super.key,
     required this.api,
     required this.scope,
+    this.onNavigate,
     this.lot,
   });
+  final ValueChanged<NiraTab>? onNavigate;
   final ReviewApi api;
   final FactoryScope scope;
   final Json? lot;
@@ -144,10 +149,13 @@ class _ProductionLotEditorState extends State<ProductionLotEditor> {
     final labels = MaterialLocalizations.of(context);
     return PopScope(
       canPop: !_saving,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(widget.lot == null ? 'Tambah kloter' : 'Edit kloter'),
-        ),
+      child: NiraPageScaffold(
+        onNavigate: widget.onNavigate == null
+            ? null
+            : (tab) {
+                if (!_saving) widget.onNavigate!(tab);
+              },
+        title: Text(widget.lot == null ? 'Tambah kloter' : 'Edit kloter'),
         body: SafeArea(
           child: ListView(
             padding: const EdgeInsets.all(16),

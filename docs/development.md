@@ -55,6 +55,8 @@ Dari akar repo jalankan:
 
 Perintah ini membuka Chrome di `http://127.0.0.1:8080` dengan layar login Supabase. Setelah masuk memakai akun Supabase yang memiliki membership pabrik, Kloter dan Pekerjaan mengambil data dari NestJS. [Panduan akses backend](backend-authentication.md) menjelaskan migrasi dan pemberian akses pabrik. Beranda, Laporan, Laba dan Rekap pada mode connected memakai [laporan produksi terhubung](mobile-production-reports.md); mode demo tetap memakai fixture sintetis lokal.
 
+Kedua mode membuka `NiraHome` dengan komponen halaman yang sama. Ringkasan, grafik dan tabel laporan memakai `ReportOverview`, detail laporan memakai `ReportDetailLayout`, dan detail batch memakai `BatchDetailLayout`. Editor kloter, transfer, penutupan, riwayat operator serta detail nota mengikuti kerangka judul dan navigasi demo. Login, izin aksi, status layanan dan isi data mengikuti sumber yang dipilih. Pengaturan yang API-nya belum tersedia tetap ditandai **Belum tersedia**.
+
 Launcher membaca `.env` menggunakan Node.js 24 dan membuat `.tmp/mobile/public-defines.json` yang diabaikan Git. Hanya `SOBATNIRA_MODE`, `API_BASE_URL`, `SUPABASE_URL`, dan publishable/anon key yang disertakan. Jangan memberikan `.env` backend langsung ke `--dart-define-from-file` karena semua nilainya dapat masuk ke aplikasi klien.
 
 Alamat API mengikuti `API_BASE_URL` bila diisi, atau `API_HOST` dan `API_PORT` (bawaan `http://127.0.0.1:3000`). Port tampilan dapat diganti dengan `--port 8086`; tambahkan origin `http://127.0.0.1:8086` ke `CORS_ORIGINS` dan mulai ulang NestJS. Perubahan `.env` memerlukan menjalankan ulang launcher. Perintah tanpa flag mode dan perintah dengan `--demo` sama-sama membuka demo lokal pada port 8085.

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
-import '../../widgets/summary_card.dart';
 import '../kloter/demo_production.dart';
 import '../kloter/kloter_detail_widgets.dart';
+import '../kloter/batch_detail_layout.dart';
+import '../kloter/juice_volume.dart';
 import '../pekerjaan/review_api.dart';
 import 'connected_reports.dart';
 
@@ -37,96 +38,114 @@ class _ConnectedBatchDetailState extends State<ConnectedBatchDetail> {
   @override
   Widget build(BuildContext context) {
     final batch = widget.batch;
-    final inset = niraPageInset(context);
     final physical = '${reportNumber(batch['physicalWeightKg'])} kg';
-    final juice = '${reportNumber(batch['quantityMl'])} ml';
+    final juice =
+        '${reportNumber(millilitersToLiters(batch['quantityMl'].toString()))} L';
     final wok = 'Wajan ${batch['wokNumber']}';
     final occurred = DateTime.parse(batch['occurredAt'] as String).toLocal();
     final date =
         '${formatDate(occurred)} ${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(occurred), alwaysUse24HourFormat: true)}';
-    return NiraScaffold(
+    return BatchDetailLayout(
+      code: batch['code'] as String,
+      reviewed: widget.reviewed,
+      section: _section,
+      onSection: (value) => setState(() => _section = value),
       tab: widget.navigationTab,
       onNavigate: widget.onNavigate,
-      body: KloterDetailBody(
-        section: _section,
-        padding: EdgeInsets.fromLTRB(inset, NiraSpace.md, inset, NiraSpace.lg),
-        header: [
-          const DetailTitle('Detail batch'),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: inset),
-            child: Row(
-              spacing: NiraSpace.sm,
-              children: [
-                Expanded(
-                  child: Text(
-                    batch['code'] as String,
-                    style: niraText(NiraType.title, weight: FontWeight.w700),
-                  ),
-                ),
-                BatchReviewBadge(reviewed: widget.reviewed),
-              ],
-            ),
+      children: switch (_section) {
+        0 => [
+          Text(
+            '${widget.lotCode} · ${widget.source}',
+            style: niraText(NiraType.caption, color: niraLeaf),
           ),
-          NiraTabs(
-            labels: const ['Ringkasan', 'Masak', 'Grade'],
-            selected: _section,
-            onSelected: (value) => setState(() => _section = value),
-            height: 44,
-            inset: 12,
+          const SizedBox(height: NiraSpace.sm),
+          BatchSummarySection(
+            fields: EditableFields(
+              fields: [
+                DemoField('Nira yang dimasak', juice),
+                DemoField('Wajan', wok),
+                DemoField('Waktu masak', date),
+                DemoField('Hasil timbang', physical),
+                if (widget.hasReport)
+                  DemoField(
+                    'Gula grade sah',
+                    '${reportNumber(batch['finalSugarKg'])} kg',
+                  ),
+              ],
+              onEdit: null,
+            ),
+            prices: [
+              if (!widget.hasReport)
+                const Text('Rincian grade belum tersedia di laporan.'),
+              for (final grade in (batch['grades'] as List? ?? []).cast<Json>())
+                BatchPriceRow(
+                  grade: Text(
+                    'Grade ${grade['code']}',
+                    style: niraText(NiraType.body),
+                  ),
+                  weight: Text(
+                    '${reportNumber(grade['weightKg'])} kg',
+                    style: niraText(NiraType.body),
+                  ),
+                  price: Text(
+                    reportMoney(grade['pricePerKgRupiah']),
+                    style: niraText(NiraType.body),
+                  ),
+                  height: 30,
+                ),
+            ],
+            total: BatchPriceRow(
+              grade: Text(
+                'Nilai produksi batch',
+                style: niraText(NiraType.caption, weight: FontWeight.w700),
+              ),
+              weight: Text(
+                widget.hasReport
+                    ? '${reportNumber(batch['finalSugarKg'])} kg'
+                    : '—',
+                style: niraText(NiraType.body),
+              ),
+              price: Text(
+                widget.hasReport ? reportMoney(batch['exactValueRupiah']) : '—',
+                style: niraText(NiraType.section, weight: FontWeight.w700),
+              ),
+              height: 32,
+              line: niraGold,
+            ),
+            footer: widget.marginDetails,
           ),
         ],
-        children: switch (_section) {
-          0 => [
-            Text(
-              '${widget.lotCode} · ${widget.source}',
-              style: niraText(NiraType.caption, color: niraLeaf),
+        1 => [
+          const DetailSectionTitle('Data pemasakan'),
+          const SizedBox(height: NiraSpace.sm),
+          DetailMetrics([('Wajan', wok), ('Nira dimasak', juice)]),
+          const SizedBox(height: NiraSpace.sm),
+          Text('Waktu masak: $date'),
+        ],
+        _ => [
+          const DetailSectionTitle('Hasil dan Grade'),
+          const SizedBox(height: NiraSpace.sm),
+          DetailMetrics([('Hasil fisik', physical)]),
+          if (!widget.hasReport)
+            const Text('Rincian grade belum tersedia di laporan.'),
+          const BatchPriceHeader(),
+          for (final grade in (batch['grades'] as List? ?? []).cast<Json>())
+            BatchPriceRow(
+              grade: Text(
+                'Grade ${grade['code']}',
+                style: niraText(NiraType.body),
+              ),
+              weight: Text(
+                '${reportNumber(grade['weightKg'])} kg',
+                style: niraText(NiraType.body),
+              ),
+              price: Text(
+                '${reportMoney(grade['pricePerKgRupiah'])}/kg',
+                style: niraText(NiraType.body),
+              ),
             ),
-            const SizedBox(height: NiraSpace.sm),
-            if (widget.hasReport) ...[
-              NiraSummaryCard(
-                'Nilai produksi batch',
-                reportMoney(batch['exactValueRupiah']),
-              ),
-              const SizedBox(height: NiraSpace.sm),
-              Text(
-                'Nilai batch sebelum pembulatan per kloter.',
-                style: niraText(NiraType.caption, color: niraLeaf),
-              ),
-            ],
-            const SizedBox(height: NiraSpace.md),
-            DetailMetrics([
-              if (widget.hasReport)
-                ('Gula grade sah', '${reportNumber(batch['finalSugarKg'])} kg'),
-              ('Hasil fisik', physical),
-              ('Nira dimasak', juice),
-            ]),
-            ...widget.marginDetails,
-          ],
-          1 => [
-            const DetailSectionTitle('Data pemasakan'),
-            const SizedBox(height: NiraSpace.sm),
-            DetailMetrics([('Wajan', wok), ('Nira dimasak', juice)]),
-            const SizedBox(height: NiraSpace.sm),
-            Text('Waktu masak: $date'),
-          ],
-          _ => [
-            const DetailSectionTitle('Hasil dan Grade'),
-            const SizedBox(height: NiraSpace.sm),
-            DetailMetrics([('Hasil fisik', physical)]),
-            if (!widget.hasReport)
-              const Text('Rincian grade belum tersedia di laporan.'),
-            for (final grade in (batch['grades'] as List? ?? []).cast<Json>())
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text('Grade ${grade['code']}'),
-                subtitle: Text(
-                  '${reportNumber(grade['weightKg'])} kg · ${reportMoney(grade['pricePerKgRupiah'])}/kg',
-                ),
-                trailing: Text(reportMoney(grade['exactValueRupiah'])),
-              ),
-          ],
-        },
-      ),
+        ],
+      },
     );
   }
 }

@@ -369,6 +369,8 @@ void main() {
   testWidgets(
     'connected home opens master data with the same factory and reloads lots',
     (tester) async {
+      await tester.binding.setSurfaceSize(const Size(430, 950));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       final paths = <String>[];
       final api = ReviewApi(
         'fixture',
@@ -389,6 +391,25 @@ void main() {
               200,
             );
           }
+          if (request.url.path.endsWith('/production-report')) {
+            return http.Response(
+              jsonEncode({
+                'items': [],
+                'grades': [],
+                'totals': {
+                  'lotCount': 0,
+                  'producedLotCount': 0,
+                  'batchCount': 0,
+                  'caneNetKg': '0',
+                  'finalSugarKg': '0',
+                  'productionValueRupiah': '0',
+                  'totalCostRupiah': '0',
+                  'productionMarginRupiah': '0',
+                },
+              }),
+              200,
+            );
+          }
           return http.Response(
             jsonEncode({'items': [], 'total': 0, 'offset': 0, 'limit': 20}),
             200,
@@ -405,17 +426,23 @@ void main() {
       );
       await tester.enterText(find.byType(TextField).last, 'fixture');
       await press(tester, 'Masuk');
+      await tester.tap(find.bySemanticsLabel('Pengaturan'));
+      await tester.pumpAndSettle();
       for (final label in ['Pemasok', 'Jenis tebu']) {
-        await press(tester, label);
+        await tester.scrollUntilVisible(find.bySemanticsLabel(label), 200);
+        await tester.tap(find.bySemanticsLabel(label));
+        await tester.pumpAndSettle();
         expect(
           paths.last,
           endsWith(label == 'Pemasok' ? '/suppliers' : '/cane-types'),
         );
-        await tester.pageBack();
+        await tester.tap(find.byTooltip('Kembali'));
         await tester.pumpAndSettle();
         expect(paths.last, '/tenants/tenant/factories/factory/lots');
       }
-      await press(tester, 'Tambah kloter');
+      await tester.tap(find.bySemanticsLabel('Kloter'));
+      await tester.pumpAndSettle();
+      await press(tester, 'Tambah kloter', tooltip: true);
       expect(find.byType(ProductionLotEditor), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
     },

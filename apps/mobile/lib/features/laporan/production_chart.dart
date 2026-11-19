@@ -390,12 +390,7 @@ class _ProductionChartState extends State<ProductionChart> {
     formatDate(day.date),
     'Gula final: ${formatQuantity(day.kg, 'kg')}',
     grade
-        ? day.grades.entries
-                  .map(
-                    (entry) => '${entry.key}: ${formatQuantity(entry.value)}',
-                  )
-                  .join(' ? ') +
-              ' kg'
+        ? '${day.grades.entries.map((entry) => '${entry.key}: ${formatQuantity(entry.value)}').join(' · ')} kg'
         : 'Rendemen: ${day.rendemen.toStringAsFixed(1).replaceAll('.', ',')}%',
   ];
 

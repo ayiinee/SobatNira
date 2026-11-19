@@ -11,6 +11,7 @@ import 'printable_report.dart';
 import 'production_recap_section.dart';
 import 'report_paginated_list.dart';
 import 'report_pdf.dart';
+import 'report_overview.dart';
 
 class ReportExportPage extends StatefulWidget {
   const ReportExportPage({
@@ -195,7 +196,8 @@ class _ReportExportPageState extends State<ReportExportPage> {
                       ),
                     ),
                   ),
-                  if (widget.reportOptions case final options?) options,
+                  widget.reportOptions ??
+                      ReportDataOptions(synthetic: report.synthetic),
                   const SizedBox(height: NiraSpace.md),
                   NiraSummaryCard(report.totalLabel, report.totalDisplay),
                   if (widget.statusMessage case final status?) ...[

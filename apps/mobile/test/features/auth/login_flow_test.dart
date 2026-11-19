@@ -32,10 +32,7 @@ void main() {
     expect(find.text('17.990 kg'), findsOneWidget);
     expect(find.byType(LoginWelcomePage), findsNothing);
     expect(find.byType(LoginFormPage), findsNothing);
-    expect(
-      Navigator.of(tester.element(caneSummary)).canPop(),
-      isFalse,
-    );
+    expect(Navigator.of(tester.element(caneSummary)).canPop(), isFalse);
     await tester.pumpWidget(const SobatNiraApp(key: ValueKey('restart')));
     await tester.pumpAndSettle();
     expect(caneSummary, findsOneWidget);
@@ -244,6 +241,8 @@ void main() {
   testWidgets(
     '403 mempertahankan sesi dan 401 dari Pekerjaan kembali ke form masuk',
     (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 853));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       final api = ReviewApi(
         'fixture',
         client: MockClient((request) async {
@@ -258,6 +257,21 @@ void main() {
                 },
               ],
             }),
+            '/tenants/tenant/factories/factory/production/production-report' =>
+              _json({
+                'items': [],
+                'grades': [],
+                'totals': {
+                  'lotCount': 0,
+                  'producedLotCount': 0,
+                  'batchCount': 0,
+                  'caneNetKg': '0',
+                  'finalSugarKg': '0',
+                  'productionValueRupiah': '0',
+                  'totalCostRupiah': '0',
+                  'productionMarginRupiah': '0',
+                },
+              }),
             '/tenants/tenant/factories/factory/lots' => http.Response(
               '{}',
               403,
@@ -276,7 +290,9 @@ void main() {
       await tester.tap(find.text('Masuk'));
       await tester.pumpAndSettle();
       expect(find.text('Data tidak tersedia untuk akun ini.'), findsOneWidget);
-      expect(find.text('Keluar'), findsOneWidget);
+      await tester.tap(find.bySemanticsLabel('Pengaturan'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('Pekerjaan'), 200);
       await tester.tap(find.text('Pekerjaan'));
       await tester.pumpAndSettle();
       expect(find.text('Sesi berakhir. Masuk kembali.'), findsOneWidget);
