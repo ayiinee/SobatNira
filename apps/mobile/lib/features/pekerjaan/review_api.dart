@@ -794,8 +794,9 @@ class ReviewApi {
 
   Future<Uint8List?> approvedPhoto(
     FactoryScope scope,
-    String revisionId,
-  ) async {
+    String revisionId, {
+    String variant = 'original',
+  }) async {
     final tasks = await list(
       'VALIDATED',
       1,
@@ -804,7 +805,11 @@ class ReviewApi {
     );
     final task = tasks.firstOrNull;
     if (task == null) return null;
-    return photo(task['id'] as String, task['media_asset_id'] as String);
+    return photo(
+      task['id'] as String,
+      task['media_asset_id'] as String,
+      variant: variant,
+    );
   }
 
   Future<Json> change(

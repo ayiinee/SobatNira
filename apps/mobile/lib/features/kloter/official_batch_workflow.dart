@@ -266,7 +266,11 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
   late final _photo = widget.millingRevision == null
       ? null
       : widget.api
-            .approvedPhoto(widget.scope, widget.millingRevision!)
+            .approvedPhoto(
+              widget.scope,
+              widget.millingRevision!,
+              variant: 'preview',
+            )
             .then((photo) => photo, onError: (Object _) => null);
   bool _busy = false;
   String? _openCorrectionId;
@@ -721,6 +725,12 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
         officialPreview: ApprovedDocumentPreview(
           batch: true,
           photo: _photo,
+          loadOriginal: widget.millingRevision == null
+              ? null
+              : () => widget.api.approvedPhoto(
+                  widget.scope,
+                  widget.millingRevision!,
+                ),
           fallback: DocumentLink(
             'Foto nota produksi di Pekerjaan',
             widget.onOpenPekerjaan,

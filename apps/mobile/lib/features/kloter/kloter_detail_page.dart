@@ -24,6 +24,7 @@ class KloterDetailPage extends StatelessWidget {
     this.onOpenPekerjaan,
     this.onReturnFromProcess,
     this.approvedPhoto,
+    this.approvedPhotoOriginal,
     this.statusMessage,
     super.key,
   });
@@ -39,6 +40,7 @@ class KloterDetailPage extends StatelessWidget {
   final VoidCallback? onOpenPekerjaan;
   final VoidCallback? onReturnFromProcess;
   final Future<Uint8List?> Function(String)? approvedPhoto;
+  final Future<Uint8List?> Function(String)? approvedPhotoOriginal;
   final Widget? statusMessage;
 
   @override
@@ -107,6 +109,7 @@ class KloterDetailPage extends StatelessWidget {
                             onNavigate: onNavigate,
                             onOpenPekerjaan: onOpenPekerjaan,
                             approvedPhoto: approvedPhoto,
+                            approvedPhotoOriginal: approvedPhotoOriginal,
                             loadStock: loadStock,
                             onEdit: onEdit,
                             onTransfer: onTransfer,

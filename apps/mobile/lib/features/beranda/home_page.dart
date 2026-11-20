@@ -458,7 +458,10 @@ class _LotDetailState extends State<_LotDetail> {
         demo: widget.demo,
         onNavigate: widget.onNavigate,
         onOpenPekerjaan: widget.onOpenPekerjaan,
-        approvedPhoto: (revision) => _api.approvedPhoto(_scope, revision),
+        approvedPhoto: (revision) =>
+            _api.approvedPhoto(_scope, revision, variant: 'preview'),
+        approvedPhotoOriginal: (revision) =>
+            _api.approvedPhoto(_scope, revision),
         onReturnFromProcess: () {
           if (mounted) _reload();
         },

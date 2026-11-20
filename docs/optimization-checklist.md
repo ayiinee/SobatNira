@@ -27,7 +27,7 @@ berarti perubahan sudah di-commit, digabung, atau diterapkan ke database tim/pro
 | 4. Optimisasi foto | Validasi bersama, preview/thumbnail dan unduh asli sesuai kebutuhan tersedia | Metadata turunan persisten, kualitas tulisan tangan/foto besar, peak RAM dan latensi perangkat |
 | 5. Database dan kapasitas | Pool terkonfigurasi, metrik akuisisi/transaksi dan diagnostik tersedia; indeks lama dimanfaatkan | Profil antrean/review/pencarian, sizing produksi, beban/staging |
 | 6. Caching | Cache katalog opt-in, generasi PostgreSQL, isolasi, penggabungan request dan fallback selesai lokal | Server Redis nyata, beban/staging; laporan belum dicache |
-| 7. Verifikasi dan rilis | API 120 tes lulus, Flutter 138 lulus/3 skip; belum deployment | Regresi ringkasan setelah detail gagal, beban, layanan nyata, staging dan rilis |
+| 7. Verifikasi dan rilis | API 120 tes lulus, Flutter 138 lulus/3 skip dan regresi lanjutan lulus; belum deployment | CI pada revisi akhir, beban, layanan nyata, staging dan rilis |
 
 ## A. Baseline dan observabilitas
 
@@ -193,6 +193,7 @@ memerlukan keputusan aplikasi, bukan hanya umur objek.
 - [ ] **IMG-04** Hilangkan metadata lokasi pada varian tampilan dan simpan hash, ukuran, dimensi serta versi transformasinya.
 - [x] **IMG-05** Pertahankan hubungan koordinat evidence dengan gambar asli saat resize/rotasi; uji overlay dan orientasi.
 - [x] **IMG-06** Layani thumbnail/preview melalui otorisasi tenant/pabrik yang sama dan unduh asli hanya ketika dibutuhkan.
+- [x] **IMG-06A** Hubungkan preview ke Pekerjaan, proses Kloter dan Detail Batch; foto asli baru diunduh saat dibuka/diperbesar, dengan loading/error/retry serta filter pabrik/revisi tetap sama.
 - [x] **IMG-07** Batasi concurrency transformasi dan penggunaan memori pada upload/baca; evaluasi streaming tanpa melemahkan verifikasi integritas.
 - [ ] **IMG-08** Ukur byte asli/turunan, waktu transformasi, RAM, latensi tampilan dan penghematan transfer/storage.
 - [ ] **IMG-09** Uji angka kecil, tulisan tangan, tanggal, foto buram/terpotong, JPEG/PNG/WebP yang didukung dan file rusak.
@@ -271,6 +272,7 @@ pengganti pembacaan resmi pada transaksi stok/pengesahan.
 - [x] **QA-05F** Observabilitas: build dan 120 tes backend/integrasi lulus tanpa skip; 19 tes HTTP/Auth/pool terarah juga lulus. Sesudah perbaikan nomor migrasi, 11 tes migrasi/alur OCR kembali lulus dan migrator dua kali tanpa perubahan pada tiga database sintetis.
 - [x] **QA-05G** Suite Flutter penuh sesudah preview: 138 tes lulus, 3 fixture skip; analyzer sebelumnya bersih. Hasil ini sebelum perbaikan RPT-08, yang memerlukan regresi tersendiri.
 - [x] **QA-05H** RPT-08: analyzer bersih dan 29 tes state/widget login–Beranda–laporan–PDF lulus. Meliputi kembali ke Beranda setelah detail 101 kloter gagal, navigasi laporan yang sudah tersimpan, penggabungan request dan pembatalan hasil lama sesudah refresh.
+- [x] **QA-05I** Preview nota sah: 19 tes Pekerjaan/Detail Kloter/Batch/Beranda lulus setelah perbaikan retry. Uji memastikan asli tidak dimuat sebelum zoom, error berulang dapat dicoba lagi dan filter pabrik/revisi tetap dikirim.
 - [ ] **QA-06** Jalankan tes FastAPI dari `apps/ai` dengan `uv run --locked python -m unittest` bila kontrak/pemrosesan AI berubah.
 - [ ] **QA-07** Uji satu skenario sintetis dari foto → OCR → revisi → pengesahan → stok → laporan/PDF; pastikan angka dan status konsisten.
 - [ ] **QA-08** Uji R2 nyata dengan fixture sintetis terpisah; catat dan bersihkan hanya objek fixture yang dibuat tes.
@@ -309,6 +311,7 @@ Branch kerja: `perf/api-staged-photo-upload`.
 | 21 November 2026 | `f894172` | Cache katalog dengan generasi transaksi, profil pencarian dan pengujian outage |
 | 21 November 2026 | `6650bbd` | Nomor migrasi cache 025, rekonsiliasi lokal dan penjagaan tabrakan baru |
 | 21 November 2026 | `a3436d8` | Histogram HTTP/query/pool, penghitung error/byte dan dokumentasi terpadu |
+| 21 November 2026 | `c0e1de2` | State ringkasan Beranda terpisah, pembatalan respons detail lama dan regresi navigasi |
 
 Riwayat ini mencatat commit lokal. Status sinkronisasi remote dapat diperiksa dengan
 `git status -sb`; commit tidak berarti perubahan sudah digabung ke main atau dirilis.

@@ -52,6 +52,13 @@ tetap tersedia bila preview gagal. Sumber asli tidak ditampilkan otomatis sebaga
 pengganti preview; review dapat membukanya untuk angka kecil atau bukti yang kabur.
 Endpoint internal OCR selalu memakai sumber asli; tidak menerima parameter varian.
 
+Foto nota sah pada tab proses Kloter dan Detail Batch juga meminta preview. Menekan
+foto/tombol perbesar baru menjalankan loader asli dengan scope pabrik/revisi yang
+sama. Dialog menampilkan loading, error dan retry; retry gagal berulang tidak
+menghasilkan exception yang tidak ditangani. Jalur demo dan pemanggil helper lama
+tetap tersedia tanpa loader tambahan. Pengujian memeriksa tidak ada unduh asli saat
+preview pertama tampil dan filter pabrik/revisi tetap dikirim.
+
 ## Resource dan storage
 
 Satu limiter per proses NestJS digunakan bersama oleh decode upload, pembacaan foto
