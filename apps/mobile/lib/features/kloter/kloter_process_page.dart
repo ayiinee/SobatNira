@@ -2,6 +2,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../widgets/nira_loading.dart';
+
 import '../../sobatnira_ui.dart';
 import '../laporan/connected_reports.dart' show reportNumber;
 import '../pekerjaan/review_api.dart';
@@ -63,7 +65,7 @@ class _KloterProcessPageState extends State<KloterProcessPage> {
     future: _stock,
     builder: (context, snapshot) {
       if (snapshot.connectionState == ConnectionState.waiting) {
-        return const LinearProgressIndicator();
+        return const NiraLoading(label: 'Memuat proses kloter…');
       }
       final stock = snapshot.data;
       if (stock == null) {

@@ -5,6 +5,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import '../../widgets/nira_loading.dart';
+
 import '../../sobatnira_ui.dart';
 import '../../widgets/page_frame.dart';
 
@@ -265,7 +267,7 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
       future: _task,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
+          return const NiraLoading(label: 'Memuat detail nota…');
         }
         if (!snapshot.hasData) {
           final error = snapshot.error;
@@ -392,7 +394,8 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
                     ),
                 ],
               ),
-            if (_saving) const LinearProgressIndicator(),
+            if (_saving)
+              const NiraLoading(label: 'Menyimpan nota…', compact: true),
             if (actions.contains('VALIDATE'))
               FilledButton(
                 onPressed: _saving ? null : () => _validate(task),
@@ -478,7 +481,8 @@ class _PhotoState extends State<_Photo> {
     future: _image,
     builder: (context, snapshot) {
       if (snapshot.hasError) return const Text('Foto asli belum dapat dimuat.');
-      if (!snapshot.hasData) return const LinearProgressIndicator();
+      if (!snapshot.hasData)
+        return const NiraLoading(label: 'Memuat foto nota…');
       final (bytes, ratio) = snapshot.requireData;
       return AspectRatio(
         aspectRatio: ratio,

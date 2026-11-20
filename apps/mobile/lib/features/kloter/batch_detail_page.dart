@@ -36,6 +36,7 @@ class BatchDetailPage extends StatefulWidget {
        officialStatus = null,
        officialDocument = null,
        officialPreview = null,
+       officialNotice = null,
        officialActions = const [];
 
   const BatchDetailPage.official({
@@ -48,6 +49,7 @@ class BatchDetailPage extends StatefulWidget {
     this.officialPreview,
     this.officialActions = const [],
     this.officialAction,
+    this.officialNotice,
     required this.kloterCode,
     required this.onNavigate,
     super.key,
@@ -67,6 +69,7 @@ class BatchDetailPage extends StatefulWidget {
   final Widget? officialPreview;
   final List<Widget> officialActions;
   final Widget? officialAction;
+  final String? officialNotice;
 
   @override
   State<BatchDetailPage> createState() => _BatchDetailPageState();
@@ -130,7 +133,13 @@ class _BatchDetailPageState extends State<BatchDetailPage>
   @override
   void didUpdateWidget(covariant BatchDetailPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_official && !oldWidget.officialReviewed && widget.officialReviewed) {
+    if (widget.officialNotice != null &&
+        widget.officialNotice != oldWidget.officialNotice) {
+      _tab = 0;
+      _showValidation(true);
+    } else if (_official &&
+        !oldWidget.officialReviewed &&
+        widget.officialReviewed) {
       _showValidation(true);
     }
   }
@@ -191,6 +200,7 @@ class _BatchDetailPageState extends State<BatchDetailPage>
                           widget.officialTitle ?? 'Batch ${_batch.number}',
                       kloterCode: widget.kloterCode,
                       validated: validated,
+                      officialTitle: widget.officialNotice,
                     ),
                   ),
                 ),
@@ -414,7 +424,6 @@ class _BatchDetailPageState extends State<BatchDetailPage>
           grade.price == '—' ? '—' : '${grade.price}/Kg',
           label: 'Harga grade ${grade.code}',
           abbreviate: false,
-          alignment: Alignment.centerRight,
           style: niraText(NiraType.body),
         ),
         height: 35,
@@ -484,7 +493,7 @@ class _PriceRow extends StatelessWidget {
         ),
         Expanded(
           flex: 33,
-          child: Align(alignment: Alignment.centerRight, child: price),
+          child: Align(alignment: Alignment.centerLeft, child: price),
         ),
       ],
     ),
@@ -496,17 +505,21 @@ class _BatchValidationNotice extends StatelessWidget {
     required this.batchTitle,
     required this.kloterCode,
     required this.validated,
+    this.officialTitle,
   });
 
   final String batchTitle;
   final String kloterCode;
   final bool validated;
+  final String? officialTitle;
 
   @override
   Widget build(BuildContext context) {
-    final title = validated
-        ? '$batchTitle berhasil divalidasi'
-        : 'Validasi $batchTitle dibatalkan';
+    final title =
+        officialTitle ??
+        (validated
+            ? '$batchTitle berhasil divalidasi'
+            : 'Validasi $batchTitle dibatalkan');
     final detail = 'Kloter $kloterCode';
     final accent = validated ? niraGreen : niraOchre;
     return Semantics(

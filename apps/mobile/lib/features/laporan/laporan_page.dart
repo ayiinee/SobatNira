@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
 import '../../widgets/adaptive_value.dart';
+import '../../widgets/nira_loading.dart';
 import '../../widgets/summary_card.dart';
 import '../kloter/kloter_date_filter.dart';
 import 'connected_report_controls.dart'
@@ -62,9 +63,14 @@ class _LaporanPageState extends State<LaporanPage> {
               widget.analytics.setTab(ReportTab.values[index]),
         ),
         Expanded(
-          child: widget.analytics.tab == ReportTab.production
-              ? _production()
-              : _margin(),
+          child: NiraLoading(
+            busy: _reports?.loading ?? false,
+            finish: _reports?.error == null,
+            label: 'Memuat laporan…',
+            child: widget.analytics.tab == ReportTab.production
+                ? _production()
+                : _margin(),
+          ),
         ),
       ],
     ),

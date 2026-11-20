@@ -226,6 +226,8 @@ void main() {
     testWidgets('legacy API opens $status batch detail without write actions', (
       tester,
     ) async {
+      await tester.binding.setSurfaceSize(const Size(430, 950));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       final demo = DemoProduction.empty();
       addTearDown(demo.dispose);
       final batch = detailBatchRecord(status: status)
@@ -273,7 +275,23 @@ void main() {
       expect(find.text('83,500125 L'), findsOneWidget);
       expect(find.text('29,25 kg'), findsOneWidget);
       expect(find.text('Muat ulang batch'), findsNothing);
-      expect(find.text('Validasi'), findsNothing);
+      expect(find.byTooltip('Buka koreksi batch'), findsNothing);
+      if (status == 'draft') {
+        expect(
+          tester
+              .widget<FilledButton>(
+                find.widgetWithText(FilledButton, 'Validasi'),
+              )
+              .onPressed,
+          isNull,
+        );
+        expect(
+          find.text('Validasi belum tersedia pada versi API ini.'),
+          findsOneWidget,
+        );
+      } else {
+        expect(find.text('Validasi'), findsNothing);
+      }
       expect(find.text('Isi biaya kloter'), findsNothing);
       await tester.tap(find.text('Masak'));
       await tester.pumpAndSettle();
@@ -295,13 +313,50 @@ void main() {
       final demo = DemoProduction.empty();
       addTearDown(demo.dispose);
       var status = 'draft';
+      Json? correction;
+      var physicalWeight = '29.25';
       final writes = <String>[];
       final api = ReviewApi(
         'fixture',
         client: MockClient((request) async {
-          if (request.method == 'POST') {
-            writes.add(request.url.path);
+          final path = request.url.path;
+          if (request.method != 'GET') {
+            writes.add(path);
             expect(request.headers['Authorization'], 'Bearer fixture');
+            if (path.contains('/corrections/')) {
+              final values = jsonDecode(request.body) as Json;
+              if (request.method == 'PATCH') {
+                expect(values['version'], 1);
+                correction = {
+                  ...correction!,
+                  'version': 2,
+                  'proposed_data': {
+                    'physicalWeightKg': values['physicalWeightKg'],
+                    'grades': values['grades'],
+                  },
+                };
+                return detailResponse(correction!);
+              }
+              if (path.endsWith('/approve')) {
+                expect(values['version'], 2);
+                physicalWeight =
+                    (correction!['proposed_data'] as Json)['physicalWeightKg']
+                        as String;
+                correction = null;
+                return detailResponse({});
+              }
+              expect(values['reason'], 'Koreksi hasil timbang');
+              correction = {
+                'id': path.split('/').last,
+                'version': 1,
+                'reason': values['reason'],
+                'proposed_data': {
+                  'physicalWeightKg': physicalWeight,
+                  'grades': detailBatchRecord(status: 'approved')['grades'],
+                },
+              };
+              return http.Response(jsonEncode(correction), 201);
+            }
             status = 'approved';
             return detailResponse({});
           }
@@ -313,7 +368,12 @@ void main() {
                 ? {
                     'items': [detailBatchRecord(status: status)],
                   }
-                : detailBatchRecord(status: status),
+                : {
+                    ...detailBatchRecord(status: status),
+                    'physical_weight_kg': physicalWeight,
+                    'canCorrect': status == 'approved',
+                    'correction': correction,
+                  },
           );
         }),
       );
@@ -334,11 +394,35 @@ void main() {
       ]);
       expect(find.text('Batch tervalidasi'), findsOneWidget);
       expect(find.text('BATCH-UJI berhasil divalidasi'), findsOneWidget);
-      await tester.tap(find.byTooltip('Batalkan validasi batch'));
+      await tester.tap(find.byTooltip('Buka koreksi batch'));
       await tester.pumpAndSettle();
-      expect(find.text('Batalkan validasi BATCH-UJI?'), findsOneWidget);
-      expect(find.text('Konfirmasi'), findsNothing);
+      expect(find.text('Buka koreksi batch?'), findsOneWidget);
       expect(writes, hasLength(1));
+      await tester.enterText(
+        find.byType(TextFormField),
+        'Koreksi hasil timbang',
+      );
+      await tester.tap(find.text('Buka koreksi'));
+      await tester.pumpAndSettle();
+      expect(find.text('Draf koreksi dibuka'), findsOneWidget);
+      expect(find.text('Validasi ulang'), findsOneWidget);
+      final weight = find.text('Berat hasil: 29,25 kg');
+      await tester.scrollUntilVisible(weight, 150);
+      await tester.tap(weight);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextFormField), '28,5');
+      await tester.tap(find.text('Simpan'));
+      await tester.pumpAndSettle();
+      expect(physicalWeight, '29.25');
+      await tester.tap(find.text('Validasi ulang'));
+      await tester.pumpAndSettle();
+      expect(find.text('Validasi ulang BATCH-UJI?'), findsOneWidget);
+      await tester.tap(find.text('Konfirmasi'));
+      await tester.pumpAndSettle();
+      expect(find.text('Koreksi batch berhasil divalidasi'), findsOneWidget);
+      expect(find.text('Batch tervalidasi'), findsOneWidget);
+      expect(physicalWeight, '28.5');
+      expect(writes, hasLength(4));
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );

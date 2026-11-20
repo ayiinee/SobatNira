@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+
+import 'widgets/nira_loading.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
@@ -775,11 +777,8 @@ class _NiraPagedFutureBuilderState<T> extends State<NiraPagedFutureBuilder<T>> {
             child: IgnorePointer(ignoring: holdingPage, child: content),
           ),
           if (holdingPage)
-            const Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: LinearProgressIndicator(),
+            const Positioned.fill(
+              child: IgnorePointer(child: NiraLoading(compact: true)),
             ),
         ],
       );

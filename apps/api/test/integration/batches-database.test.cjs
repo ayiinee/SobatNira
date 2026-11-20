@@ -90,6 +90,53 @@ test('batch approval freezes costs, consumes once, isolates scope and produces a
   const session=f.app.get(DatabaseService);
   const access={tenantId:f.ids.tenant,factoryId:f.ids.factory,userId:f.ids.admin};
   await local.requireClear(session,access,f.ids.lot,false,'Bearer fixture-admin');
+
+  const correctionPath = root+'/batches/'+batch+'/corrections/';
+  const correction = correctionPath+randomUUID();
+  const reason = {reason:'Berat hasil diverifikasi ulang.'};
+  assert.equal((await f.request(correction,'POST',reason,'fixture-owner')).status,403);
+  assert.equal((await f.request(correction.replace(f.root,f.siblingRoot),'POST',reason)).status,404);
+  assert.equal((await f.request(correction,'POST',reason)).body.version,1);
+  assert.equal((await f.request(correction,'POST',reason)).body.version,1);
+  assert.equal((await f.request(correctionPath+randomUUID(),'POST',reason)).status,409);
+  await assert.rejects(()=>local.requireClear(session,access,f.ids.lot,false,'Bearer fixture-admin'),e=>e.getStatus()===409);
+  const changes = {version:1,physicalWeightKg:'31.25',grades:[{code:'B',weightKg:'29',pricePerKgRupiah:'18000'}]};
+  assert.equal((await f.request(correction,'PATCH',{...changes,quantityMl:'99000'})).status,400);
+  assert.equal((await f.request(correction,'PATCH',changes)).body.version,2);
+  assert.equal((await f.request(correction,'PATCH',changes)).body.version,2);
+  assert.equal((await f.request(correction+'/approve','POST',{version:1})).status,409);
+  assert.equal((await f.request(root+'/production-report')).body.totals.finalSugarKg,'30');
+  assert.equal((await f.request(root+'/batches/'+batch)).body.correction.proposed_data.physicalWeightKg,'31.25');
+  await f.client.query(`CREATE FUNCTION pg_temp.reject_correction_snapshot() RETURNS trigger LANGUAGE plpgsql
+    AS $$ BEGIN RAISE EXCEPTION 'fixture snapshot failure'; END $$;
+    CREATE TRIGGER fixture_snapshot_failure BEFORE INSERT ON sobatnira.production_calculation_snapshots
+    FOR EACH ROW WHEN (NEW.correction_id IS NOT NULL) EXECUTE FUNCTION pg_temp.reject_correction_snapshot()`);
+  assert.equal((await f.request(correction+'/approve','POST',{version:2})).status,500);
+  const afterFailure = await f.request(root+'/batches/'+batch);
+  assert.equal(afterFailure.body.physical_weight_kg,'32');
+  assert.equal(afterFailure.body.grades[0].code,'A');
+  assert.equal(afterFailure.body.correction.version,2);
+  assert.equal((await f.request(root+'/production-report')).body.totals.finalSugarKg,'30');
+  await f.client.query('DROP TRIGGER fixture_snapshot_failure ON sobatnira.production_calculation_snapshots');
+  const corrected = await f.request(correction+'/approve','POST',{version:2});
+  assert.equal(corrected.status,200,JSON.stringify(corrected.body));
+  assert.equal((await f.request(correction+'/approve','POST',{version:2})).body.id,corrected.body.id);
+  const correctedReport = await f.request(root+'/production-report');
+  assert.equal(correctedReport.body.totals.finalSugarKg,'29');
+  assert.equal(correctedReport.body.totals.productionMarginRupiah,'397000');
+  assert.equal(correctedReport.body.totals.batchCount,1);
+  assert.equal((await f.request(root+'/recap')).body.items[0].batches.length,1);
+  assert.equal((await f.request(f.root+'/lots/'+f.ids.lot+'/juice/availability')).body.onHandMl,'150000');
+  const snapshots=await f.client.query('SELECT correction_id FROM sobatnira.production_calculation_snapshots WHERE batch_id=$1',[batch]);
+  assert.equal(snapshots.rows.length,2);
+  assert.equal(snapshots.rows.filter(row=>row.correction_id===null).length,1);
+  assert.equal((await f.request(root+'/batches/'+batch+'/approve','POST')).body.id,approved.body.id);
+  const nextCorrection = correctionPath+randomUUID();
+  assert.equal((await f.request(nextCorrection,'POST',reason)).body.before_data.physicalWeightKg,'31.25');
+  assert.equal((await f.request(nextCorrection+'/discard','POST',{version:1})).body.status,'discarded');
+  assert.equal((await f.request(root+'/batches/'+batch)).body.correction,null);
+  await local.requireClear(session,access,f.ids.lot,false,'Bearer fixture-admin');
+
   assert.equal((await f.request(root+'/batches','POST',{...body,id:randomUUID(),code:'DRAFT-BLOCKS-CLOSURE'})).status,201);
   await assert.rejects(()=>local.requireClear(session,access,f.ids.lot,false,'Bearer fixture-admin'),e=>e.getStatus()===409);
   assert.equal((await f.request(root+'/production-report')).body.totals.batchCount,1);
@@ -135,5 +182,9 @@ test('operational closure checks an approved batch in the same database', async 
   assert.equal(closure.body.status,'closed');
   const report = await f.request(f.root + '/production/recap');
   assert.equal(report.body.items[0].closed,true);
+  const batchId = report.body.items[0].batches[0].id;
+  const correction = await f.request(f.root+'/production/batches/'+batchId+'/corrections/'+randomUUID(),
+    'POST',{reason:'Uji kloter tertutup'});
+  assert.equal(correction.status,409);
  } finally { await f.close(); }
 });

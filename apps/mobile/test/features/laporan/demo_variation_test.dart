@@ -74,7 +74,7 @@ void main() {
       expect(find.text('Slamet'), findsOneWidget);
       expect(
         find.byWidgetPredicate(
-          (widget) => widget is NiraValue && widget.value == '1.240Kg',
+          (widget) => widget is NiraValue && widget.value == '1.240',
         ),
         findsOneWidget,
       );
@@ -86,7 +86,7 @@ void main() {
       expect(find.text('MJT-260926-3A'), findsOneWidget);
       expect(
         find.byWidgetPredicate(
-          (widget) => widget is NiraValue && widget.value == '1.800Kg',
+          (widget) => widget is NiraValue && widget.value == '1.800',
         ),
         findsOneWidget,
       );

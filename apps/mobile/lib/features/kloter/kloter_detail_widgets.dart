@@ -2,6 +2,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../widgets/nira_loading.dart';
+
 import '../../sobatnira_ui.dart';
 import '../../widgets/adaptive_value.dart';
 import 'demo_production.dart';
@@ -404,7 +406,7 @@ class ApprovedDocumentPreview extends StatelessWidget {
       if (snapshot.connectionState == ConnectionState.waiting) {
         return const AspectRatio(
           aspectRatio: 2.4,
-          child: Center(child: LinearProgressIndicator()),
+          child: NiraLoading(label: 'Memuat foto nota…', compact: true),
         );
       }
       final bytes = snapshot.data;
@@ -531,7 +533,8 @@ class BatchReviewActions extends StatelessWidget {
     required this.onVerify,
     this.enabled = true,
     this.onReopen,
-    this.reopenUnavailableReason,
+    this.onCorrection,
+    this.revalidating = false,
     super.key,
   });
   final int batchNumber;
@@ -541,7 +544,8 @@ class BatchReviewActions extends StatelessWidget {
   final VoidCallback onVerify;
   final bool enabled;
   final VoidCallback? onReopen;
-  final String? reopenUnavailableReason;
+  final VoidCallback? onCorrection;
+  final bool revalidating;
 
   Future<void> _confirm(BuildContext context) async {
     final colors = Theme.of(context).colorScheme;
@@ -557,38 +561,41 @@ class BatchReviewActions extends StatelessWidget {
         scrollable: true,
         backgroundColor: niraPaper,
         title: Text(
-          verified ? 'Batalkan validasi $batchTitle?' : 'Validasi $batchTitle?',
+          verified
+              ? 'Batalkan validasi $batchTitle?'
+              : revalidating
+              ? 'Validasi ulang $batchTitle?'
+              : 'Validasi $batchTitle?',
           textAlign: TextAlign.center,
         ),
         content: Text(
           verified
-              ? reopenUnavailableReason ??
-                    'Batch kembali ke status Perlu ditinjau dan datanya bisa diedit lagi.'
+              ? 'Batch kembali ke status Perlu ditinjau dan datanya bisa diedit lagi.'
+              : revalidating
+              ? 'Hasil koreksi akan dipakai dalam laporan setelah divalidasi.'
               : 'Pastikan data batch sudah benar. Data akan terkunci setelah divalidasi.',
           textAlign: TextAlign.center,
         ),
         actions: [
           Row(
             children: [
-              if (!verified || reopenUnavailableReason == null)
-                Expanded(
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: cancelColor,
-                      side: BorderSide(color: cancelColor),
-                      minimumSize: const Size(0, 48),
-                      padding: buttonPadding,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(niraRadius),
-                      ),
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: cancelColor,
+                    side: BorderSide(color: cancelColor),
+                    minimumSize: const Size(0, 48),
+                    padding: buttonPadding,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(niraRadius),
                     ),
-                    onPressed: () => Navigator.pop(dialogContext, false),
-                    child: const Text('Batal', textAlign: TextAlign.center),
                   ),
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Batal', textAlign: TextAlign.center),
                 ),
-              if (!verified || reopenUnavailableReason == null)
-                const SizedBox(width: NiraSpace.sm),
+              ),
+              const SizedBox(width: NiraSpace.sm),
               Expanded(
                 child: FilledButton(
                   style: FilledButton.styleFrom(
@@ -596,14 +603,8 @@ class BatchReviewActions extends StatelessWidget {
                     foregroundColor: verified ? Colors.white : null,
                     padding: buttonPadding,
                   ),
-                  onPressed: () => Navigator.pop(
-                    dialogContext,
-                    reopenUnavailableReason == null,
-                  ),
-                  child: Text(
-                    reopenUnavailableReason == null ? 'Konfirmasi' : 'Tutup',
-                    textAlign: TextAlign.center,
-                  ),
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('Konfirmasi', textAlign: TextAlign.center),
                 ),
               ),
             ],
@@ -633,12 +634,13 @@ class BatchReviewActions extends StatelessWidget {
           minimumHeight: verified ? reviewedActionHeight : reviewActionHeight,
         ),
       ),
-      if (verified &&
-          (onReopen != null || reopenUnavailableReason != null)) ...[
+      if (verified && (onReopen != null || onCorrection != null)) ...[
         const SizedBox(width: NiraSpace.sm),
         IconButton.filled(
-          tooltip: 'Batalkan validasi batch',
-          onPressed: () => _confirm(context),
+          tooltip: onCorrection == null
+              ? 'Batalkan validasi batch'
+              : 'Buka koreksi batch',
+          onPressed: onCorrection ?? () => _confirm(context),
           style: IconButton.styleFrom(
             backgroundColor: Theme.of(context).colorScheme.error,
             foregroundColor: Colors.white,

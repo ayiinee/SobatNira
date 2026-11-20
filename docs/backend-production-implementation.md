@@ -36,6 +36,9 @@ Prefix: `/tenants/:tenantId/factories/:factoryId/production`. Semua endpoint mem
 | POST `/lots/:id/costs` | Simpan biaya sebelum pengesahan pertama |
 | POST `/batches/:id/approve` | Sahkan batch, konsumsi reservasi dan simpan snapshot secara atomik |
 | POST `/batches/:id/cancel` | Batalkan draf dan lepaskan reservasinya dalam satu transaksi |
+| POST `/batches/:id/corrections/:correctionId` | Buka draf koreksi dengan alasan dan UUID permintaan |
+| PATCH `/batches/:id/corrections/:correctionId` | Simpan berat hasil dan grade dengan versi draf yang dibaca |
+| POST `/batches/:id/corrections/:correctionId/approve` atau `/discard` | Sahkan atau buang draf berdasarkan versinya |
 | GET `/profit-report?from=...&before=...&synthetic=false` | Laporan snapshot terbaru per kloter, total rupiah string eksak |
 | GET `/recap?from=...&before=...&synthetic=false` | Snapshot yang sama beserta batch sah, grade, dan total gula |
 
@@ -58,6 +61,8 @@ Contoh body batch:
 Biaya menerima empat string rupiah integer: `caneCostRupiah`, `operationalCostRupiah`, `ingredientCostRupiah`, `otherCostRupiah`.
 
 Urutan: receipt dan milling sah → buat batch → simpan biaya kloter → reservasi nira menggunakan UUID batch melalui endpoint juice yang sudah ada → approve batch. Approval mengunci kloter dan batch, memeriksa asal/kategori/volume reservasi, lalu mengonsumsi reservasi dan membuat snapshot dalam transaksi yang sama. Retry approval mengembalikan snapshot yang sama.
+
+Migrasi `023_batch_corrections.sql` menambahkan riwayat koreksi dan mengizinkan snapshot lanjutan per batch. Terapkan migrasi sebelum merilis API. Admin dapat membuka satu draf koreksi pada batch sah dari kloter terbuka. Selama proses koreksi, angka laporan tetap memakai hasil sah terakhir. Validasi ulang membekukan riwayat perubahan dan menyimpan snapshot kumulatif baru dalam satu transaksi. Konsumsi nira tetap mengikuti pengesahan asli. Kloter tidak dapat ditutup selama masih memiliki draf koreksi.
 
 Periode laporan mengikuti **waktu penerimaan kloter**, interval `from` inklusif dan `before` eksklusif. Laporan memakai snapshot terbaru dari batch sah pada setiap kloter dalam periode. Kloter terbuka memakai label margin sementara karena perhitungan kumulatif memasukkan seluruh biaya kloter.
 
@@ -109,7 +114,7 @@ Mode Flutter tanpa konfigurasi Supabase tetap membuka demo lokal lama. Seed data
 
 ## Batasan dan pekerjaan yang belum selesai
 
-Batch baru memakai satu asal kloter dan satu grade. Alokasi campuran, koreksi batch yang sudah sah, serta katalog harga historis membutuhkan keputusan lanjutan. Master wajan/shift/BTP, retensi media dan latihan backup/restore tetap tercatat di backlog.
+Batch baru memakai satu asal kloter dan satu grade. Koreksi batch sah mencakup berat hasil dan data grade. Alokasi campuran, koreksi volume nira batch sah, serta katalog harga historis membutuhkan keputusan lanjutan. Master wajan/shift/BTP, retensi media dan latihan backup/restore tetap tercatat di backlog.
 
 Hasil fisik dan berat grade disimpan terpisah; toleransi/kesamaan keduanya belum ditetapkan. Harga draf berasal dari input eksplisit berizin, bukan lookup katalog historis. Kehadiran snapshot tidak berarti katalog harga historis sudah selesai.
 

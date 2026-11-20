@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/nira_loading.dart';
 import '../../widgets/page_frame.dart';
 import 'login_pages.dart';
 import '../pekerjaan/review_api.dart';
@@ -173,6 +174,16 @@ class _ConnectedSessionGateState extends State<ConnectedSessionGate> {
               onContinue: () => setState(() => _showLogin = true),
             );
     }
+    return NiraLoading(
+      busy: _checkingAccess,
+      finish: _scope != null,
+      label: 'Memeriksa akses pabrik…',
+      loadingBuilder: (_, indicator) => _accessScaffold(indicator),
+      child: _authenticated(api),
+    );
+  }
+
+  Widget _authenticated(ReviewApi api) {
     final scope = _scope;
     if (scope != null) {
       void selectFactory(FactoryScope selected) {
@@ -200,39 +211,30 @@ class _ConnectedSessionGateState extends State<ConnectedSessionGate> {
         changeSynthetic,
       );
     }
-    return NiraPageScaffold(
-      title: const Text('Akses pabrik'),
-      actions: [
-        TextButton(onPressed: _endSession, child: const Text('Keluar')),
-      ],
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(NiraSpace.lg),
-          children: _factories == null ? _accessPending(api) : _noAccess(),
-        ),
+    return _accessScaffold(
+      ListView(
+        padding: const EdgeInsets.all(NiraSpace.lg),
+        children: _factories == null ? _accessPending(api) : _noAccess(),
       ),
     );
   }
 
-  List<Widget> _accessPending(ReviewApi api) => _checkingAccess
-      ? [
-          const LinearProgressIndicator(),
-          const SizedBox(height: NiraSpace.lg),
-          Semantics(
-            liveRegion: true,
-            child: const Text('Memeriksa akses pabrik…'),
-          ),
-        ]
-      : [
-          Semantics(
-            liveRegion: true,
-            child: const Text(
-              'Akses pabrik belum dapat diperiksa. Periksa koneksi dan coba lagi.',
-            ),
-          ),
-          const SizedBox(height: NiraSpace.lg),
-          NiraButton('Coba lagi', () => _checkAccess(api), shadow: false),
-        ];
+  Widget _accessScaffold(Widget body) => NiraPageScaffold(
+    title: const Text('Akses pabrik'),
+    actions: [TextButton(onPressed: _endSession, child: const Text('Keluar'))],
+    body: SafeArea(child: body),
+  );
+
+  List<Widget> _accessPending(ReviewApi api) => [
+    Semantics(
+      liveRegion: true,
+      child: const Text(
+        'Akses pabrik belum dapat diperiksa. Periksa koneksi dan coba lagi.',
+      ),
+    ),
+    const SizedBox(height: NiraSpace.lg),
+    NiraButton('Coba lagi', () => _checkAccess(api), shadow: false),
+  ];
 
   List<Widget> _noAccess() => [
     Semantics(

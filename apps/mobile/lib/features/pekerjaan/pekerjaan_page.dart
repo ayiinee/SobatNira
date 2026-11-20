@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../widgets/nira_loading.dart';
+
 import '../../sobatnira_ui.dart';
 
 import 'review_api.dart';
@@ -228,7 +230,7 @@ class _PekerjaanPageState extends State<PekerjaanPage>
           dataset: (_api, widget.factoryId, _status),
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
-              return const LinearProgressIndicator();
+              return const NiraLoading(label: 'Memuat pekerjaan…');
             }
             if (snapshot.hasError) {
               final error = snapshot.error;

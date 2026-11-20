@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/nira_loading.dart';
+
 import '../beranda/beranda_page.dart';
 import '../bantuan/bantuan_page.dart';
 import '../beranda/quick_action_icon.dart';
@@ -102,7 +104,7 @@ class _NiraHomeState extends State<NiraHome> {
   Widget? _loadStatus() {
     final live = _live;
     if (live == null) return null;
-    if (live.loading) return const LinearProgressIndicator();
+    if (live.loading) return const NiraLoading(label: 'Memuat kloter…');
     final error = live.error;
     if (error == null) return null;
     return _LoadFailed(error, live.refresh);
@@ -130,9 +132,9 @@ class _NiraHomeState extends State<NiraHome> {
           profit:
               _live?.reports.amount('productionMarginRupiah', money: true) ??
               demoMoney(_analytics.marginTotal),
-          reportStatus: _live == null
+          reportStatus: _live == null || _live.loading
               ? null
-              : ConnectedReportStatus(reports: _live.reports),
+              : ConnectedReportStatus(reports: _live.reports, compact: true),
           statusMessage:
               _loadStatus() ??
               (_live != null && _lots.isEmpty

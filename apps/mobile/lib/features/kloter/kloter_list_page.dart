@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/nira_loading.dart';
 import 'demo_production.dart';
 import 'kloter_card.dart';
 import 'kloter_date_filter.dart';
@@ -256,41 +257,47 @@ class _KloterListPageState extends State<KloterListPage> {
                     ScrollViewKeyboardDismissBehavior.onDrag,
                 slivers: [
                   if (short) SliverToBoxAdapter(child: tabs),
-                  SliverPadding(
-                    padding: EdgeInsets.fromLTRB(
-                      inset,
-                      10,
-                      inset,
-                      NiraSpace.lg,
-                    ),
-                    sliver: SliverList.list(
-                      children: [
-                        if (widget.statusMessage case final status?)
-                          status
-                        else if (pageDates.isEmpty)
-                          _empty()
-                        else ...[
-                          for (final date in pageDates)
-                            _dateAccordion(
-                              date,
-                              groups[date]!,
-                              latest: date == pageDates.first,
-                            ),
-                          if (pageCount > 1)
-                            NiraPagination(
-                              page: _page + 1,
-                              pageCount: pageCount,
-                              onPrevious: _page > 0
-                                  ? () => _showPage(_page - 1)
-                                  : null,
-                              onNext: _page + 1 < pageCount
-                                  ? () => _showPage(_page + 1)
-                                  : null,
-                            ),
+                  if (widget.statusMessage is NiraLoading)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: widget.statusMessage,
+                    )
+                  else
+                    SliverPadding(
+                      padding: EdgeInsets.fromLTRB(
+                        inset,
+                        10,
+                        inset,
+                        NiraSpace.lg,
+                      ),
+                      sliver: SliverList.list(
+                        children: [
+                          if (widget.statusMessage case final status?)
+                            status
+                          else if (pageDates.isEmpty)
+                            _empty()
+                          else ...[
+                            for (final date in pageDates)
+                              _dateAccordion(
+                                date,
+                                groups[date]!,
+                                latest: date == pageDates.first,
+                              ),
+                            if (pageCount > 1)
+                              NiraPagination(
+                                page: _page + 1,
+                                pageCount: pageCount,
+                                onPrevious: _page > 0
+                                    ? () => _showPage(_page - 1)
+                                    : null,
+                                onNext: _page + 1 < pageCount
+                                    ? () => _showPage(_page + 1)
+                                    : null,
+                              ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),

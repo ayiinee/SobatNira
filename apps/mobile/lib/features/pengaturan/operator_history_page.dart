@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/nira_loading.dart';
+
 import '../../sobatnira_ui.dart';
 import '../../widgets/page_frame.dart';
 import '../pekerjaan/review_api.dart';
@@ -61,7 +63,7 @@ class _OperatorHistoryPageState extends State<OperatorHistoryPage> {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Align(
               alignment: Alignment.topCenter,
-              child: LinearProgressIndicator(),
+              child: NiraLoading(label: 'Memuat riwayat…'),
             );
           }
           if (snapshot.hasError) {

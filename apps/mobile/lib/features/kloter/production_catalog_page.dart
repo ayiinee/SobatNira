@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/nira_loading.dart';
+
 import '../../sobatnira_ui.dart';
 import '../../widgets/page_frame.dart';
 import '../pekerjaan/review_api.dart';
@@ -149,7 +151,7 @@ class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
         dataset: (widget.scope.factoryId, widget.kind, _query),
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return const LinearProgressIndicator();
+            return const NiraLoading(label: 'Memuat daftar…');
           }
           if (snapshot.hasError) {
             return Column(
@@ -436,7 +438,8 @@ class _CatalogEditorState extends State<_CatalogEditor> {
                     ? null
                     : (value) => setState(() => _active = value),
               ),
-            if (_saving) const LinearProgressIndicator(),
+            if (_saving)
+              const NiraLoading(label: 'Menyimpan data…', compact: true),
             if (_error != null) Text(_error!),
           ],
         ),

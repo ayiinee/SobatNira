@@ -9,6 +9,7 @@ import 'package:sobatnira/features/kloter/lot_closure_page.dart';
 import 'package:sobatnira/features/kloter/juice_transfer_page.dart';
 import 'package:sobatnira/features/kloter/production_lot_editor.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
+import 'package:sobatnira/widgets/nira_loading.dart';
 
 const _base = String.fromEnvironment('PRODUCTION_TEST_API');
 const _tenant = String.fromEnvironment('PRODUCTION_TEST_TENANT');
@@ -74,7 +75,7 @@ void main() {
         );
         await tester.pump(const Duration(milliseconds: 20));
         if (finder.evaluate().isNotEmpty &&
-            find.byType(LinearProgressIndicator).evaluate().isEmpty) {
+            find.byType(NiraLoading).evaluate().isEmpty) {
           await tester.pumpAndSettle();
           return;
         }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/nira_loading.dart';
+
 import '../../widgets/page_frame.dart';
 import '../../sobatnira_ui.dart';
 
@@ -193,7 +195,8 @@ class _ProductionLotEditorState extends State<ProductionLotEditor> {
                 const Text(
                   'Penerimaan sudah disahkan. Perubahan pemasok dan waktu memerlukan koreksi nota.',
                 ),
-              if (_saving) const LinearProgressIndicator(),
+              if (_saving)
+                const NiraLoading(label: 'Menyimpan kloter…', compact: true),
               if (_error != null) Text(_error!),
               FilledButton(
                 onPressed: _saving ? null : _save,

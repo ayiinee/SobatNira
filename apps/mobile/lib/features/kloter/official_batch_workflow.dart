@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/nira_loading.dart';
+
 import '../../sobatnira_ui.dart';
 import '../pekerjaan/review_api.dart';
 import 'batch_detail_page.dart';
@@ -133,7 +135,7 @@ class _OfficialLotBatchesState extends State<OfficialLotBatches> {
     future: _result,
     builder: (context, snapshot) {
       if (snapshot.connectionState != ConnectionState.done) {
-        return const LinearProgressIndicator();
+        return const NiraLoading(label: 'Memuat data batch…');
       }
       if (snapshot.hasError) {
         return Column(
@@ -254,6 +256,7 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
             .then((photo) => photo, onError: (Object _) => null);
   bool _busy = false;
   String? _error;
+  String? _notice;
 
   Future<Json> _load() => widget.api.factoryBatch(widget.scope, _id);
   Future<Json?> _loadReportLot() async {
@@ -292,6 +295,7 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
   Future<void> _run(
     Future<Json> Function() operation, {
     String? confirmation,
+    String? notice,
   }) async {
     if (_busy) return;
     if (confirmation != null) {
@@ -319,6 +323,7 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
     });
     try {
       await operation();
+      if (mounted) _notice = notice;
     } catch (error) {
       if (mounted) _error = _errorText(error);
     } finally {
@@ -330,6 +335,168 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
         });
       }
     }
+  }
+
+  Future<void> _openCorrection() async {
+    final correctionId = ReviewApi.requestUuid();
+    final result = await _form(
+      context,
+      'Buka koreksi batch?',
+      const [_Field('Alasan koreksi')],
+      (values) => widget.api.openBatchCorrection(
+        widget.scope,
+        _id,
+        correctionId,
+        values.single,
+      ),
+      description:
+          'Stok dan laporan tetap memakai data sah terakhir sampai koreksi divalidasi.',
+      destructive: true,
+      saveLabel: 'Buka koreksi',
+    );
+    if (!mounted || result == null) return;
+    _notice = 'Draf koreksi dibuka';
+    _reload();
+  }
+
+  Future<void> _editCorrection(Json correction, {int? gradeIndex}) async {
+    final data = correction['proposed_data'] as Json;
+    final grades = (data['grades'] as List).cast<Json>().toList();
+    final editingWeight = gradeIndex == null;
+    final grade = editingWeight || gradeIndex >= grades.length
+        ? null
+        : grades[gradeIndex];
+    final result = await _form(
+      context,
+      editingWeight
+          ? 'Edit berat hasil'
+          : grade == null
+          ? 'Tambah grade'
+          : 'Edit grade',
+      editingWeight
+          ? [
+              _Field(
+                'Berat hasil (kg)',
+                kind: _Input.quantity,
+                initial: data['physicalWeightKg'] as String,
+              ),
+            ]
+          : [
+              _Field('Grade', initial: grade?['code'] as String? ?? ''),
+              _Field(
+                'Berat grade (kg)',
+                kind: _Input.quantity,
+                initial: grade?['weightKg'] as String? ?? '',
+              ),
+              _Field(
+                'Harga per kg (Rp)',
+                kind: _Input.money,
+                initial: grade?['pricePerKgRupiah'] as String? ?? '',
+              ),
+            ],
+      (values) => widget.api.saveBatchCorrection(
+        widget.scope,
+        _id,
+        correction['id'] as String,
+        {
+          'version': correction['version'],
+          'physicalWeightKg': editingWeight
+              ? values.single
+              : data['physicalWeightKg'],
+          'grades': editingWeight
+              ? grades
+              : [
+                  ...grades.take(gradeIndex),
+                  {
+                    'code': values[0],
+                    'weightKg': values[1],
+                    'pricePerKgRupiah': values[2],
+                  },
+                  ...grades.skip(gradeIndex + 1),
+                ],
+        },
+      ),
+    );
+    if (mounted && result != null) _reload();
+  }
+
+  Future<void> _finishCorrection(Json correction, {bool discard = false}) =>
+      _run(
+        () => widget.api.finishBatchCorrection(
+          widget.scope,
+          _id,
+          correction['id'] as String,
+          correction['version'] as int,
+          discard: discard,
+        ),
+        confirmation: discard
+            ? 'Buang draf koreksi? Data sah tetap berlaku.'
+            : null,
+        notice: discard ? null : 'Koreksi batch berhasil divalidasi',
+      );
+
+  List<Widget> _correctionActions(Json correction, bool editable) {
+    final data = correction['proposed_data'] as Json;
+    final grades = (data['grades'] as List).cast<Json>();
+    return [
+      const SizedBox(height: NiraSpace.md),
+      const DetailSectionTitle('Draf koreksi'),
+      Text('Alasan: ${correction['reason']}'),
+      const Text(
+        'Laporan memakai data sah terakhir sampai koreksi divalidasi.',
+      ),
+      ListTile(
+        title: Text(
+          'Berat hasil: ${reportNumber(data['physicalWeightKg'])} kg',
+        ),
+        trailing: editable ? const Icon(Icons.edit_outlined) : null,
+        onTap: editable ? () => _editCorrection(correction) : null,
+      ),
+      for (final (index, grade) in grades.indexed)
+        ListTile(
+          title: Text('Grade ${grade['code']}'),
+          subtitle: Text(
+            '${reportNumber(grade['weightKg'])} kg · ${reportMoney(grade['pricePerKgRupiah'])}/kg',
+          ),
+          onTap: editable
+              ? () => _editCorrection(correction, gradeIndex: index)
+              : null,
+          trailing: editable && grades.length > 1
+              ? IconButton(
+                  tooltip: 'Hapus grade ${grade['code']}',
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: () => _run(
+                    () => widget.api.saveBatchCorrection(
+                      widget.scope,
+                      _id,
+                      correction['id'] as String,
+                      {
+                        'version': correction['version'],
+                        'physicalWeightKg': data['physicalWeightKg'],
+                        'grades': [
+                          ...grades.take(index),
+                          ...grades.skip(index + 1),
+                        ],
+                      },
+                    ),
+                    confirmation:
+                        'Hapus grade ${grade['code']} dari draf koreksi?',
+                  ),
+                )
+              : null,
+        ),
+      if (editable) ...[
+        TextButton(
+          onPressed: () =>
+              _editCorrection(correction, gradeIndex: grades.length),
+          child: const Text('Tambah grade'),
+        ),
+        TextButton(
+          onPressed: () => _finishCorrection(correction, discard: true),
+          child: const Text('Buang draf koreksi'),
+        ),
+      ],
+    ];
   }
 
   BatchDetailData _data(Json batch) {
@@ -402,8 +569,7 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
           ],
         ),
       ],
-      if (_error != null) Text(_error!),
-      if (_busy) const LinearProgressIndicator(),
+      if (_busy) const NiraLoading(label: 'Menyimpan batch…', compact: true),
       if (batch['status'] == 'approved')
         DocumentLink(
           'Nilai produksi dan margin kloter',
@@ -449,14 +615,40 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
           failure.detail?.startsWith('Cannot GET ') == true;
       final status = current?['status'] ?? widget.initial['status'];
       final approved = status == 'approved';
-      final canApprove =
-          current?['status'] == 'draft' &&
-          current?['costSaved'] == true &&
-          current?['remainingMl'] == '0' &&
-          widget.scope.role == 'admin' &&
-          widget.initial['is_synthetic'] != true &&
-          !_busy &&
-          snapshot.connectionState == ConnectionState.done;
+      final pending = status == 'draft';
+      final ready =
+          snapshot.connectionState == ConnectionState.done &&
+          !snapshot.hasError;
+      final correction = current?['correction'] as Json?;
+      final canCorrect = ready && current?['canCorrect'] == true && !_busy;
+      final validationBlock = switch ((
+        ready,
+        current != null,
+        widget.scope.role,
+        widget.initial['is_synthetic'] == true,
+        current?['lotClosed'] == true,
+        current?['costSaved'] == true,
+        current?['remainingMl'] == '0',
+      )) {
+        (false, _, _, _, _, _, _) =>
+          snapshot.hasError
+              ? (legacy
+                    ? 'Validasi belum tersedia pada versi API ini.'
+                    : 'Rincian batch belum bisa dimuat.')
+              : 'Memuat rincian batch.',
+        (_, false, _, _, _, _, _) => 'Rincian batch belum tersedia.',
+        (_, _, 'owner', _, _, _, _) =>
+          'Hanya admin yang dapat memvalidasi batch.',
+        (_, _, _, true, _, _, _) => 'Data contoh hanya dapat dilihat.',
+        (_, _, _, _, true, _, _) =>
+          'Buka kembali kloter sebelum memvalidasi batch.',
+        (_, _, _, _, _, false, _) =>
+          'Isi biaya kloter di Ringkasan sebelum validasi.',
+        (_, _, _, _, _, _, false) =>
+          'Lengkapi reservasi nira di Ringkasan sebelum validasi.',
+        _ => null,
+      };
+      final canApprove = pending && validationBlock == null && !_busy;
       return FutureBuilder<Json?>(
         future: _reportLot,
         builder: (_, report) {
@@ -473,6 +665,7 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
             officialTitle: widget.initial['code'] as String,
             kloterCode: widget.kloterCode,
             officialReviewed: approved,
+            officialNotice: _notice,
             officialCancelled: status == 'cancelled',
             officialData: batch == null ? null : _data(batch),
             officialDocument: widget.onOpenPekerjaan,
@@ -485,7 +678,11 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
               ),
             ),
             officialActions: current != null
-                ? _actions(current)
+                ? [
+                    if (correction != null)
+                      ..._correctionActions(correction, canCorrect),
+                    ..._actions(current),
+                  ]
                 : [
                     if (legacy && reportedBatch == null)
                       const Text(
@@ -507,19 +704,48 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
                       ),
                     ],
                   )
-                : const LinearProgressIndicator(),
-            officialAction: approved || (current != null && status == 'draft')
-                ? BatchReviewActions(
-                    batchNumber: widget.initial['wok_number'] as int,
-                    batchCode: widget.initial['code'] as String,
-                    label: approved ? 'Batch tervalidasi' : 'Validasi',
-                    verified: approved,
-                    enabled: canApprove,
-                    reopenUnavailableReason: approved
-                        ? 'API produksi belum mendukung pembatalan validasi batch resmi.'
-                        : null,
-                    onVerify: () =>
-                        _run(() => widget.api.finishBatch(widget.scope, _id)),
+                : const NiraLoading(label: 'Memuat data batch…'),
+            officialAction: approved || pending || _error != null
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (_error != null)
+                        Text(
+                          _error!,
+                          style: niraText(
+                            NiraType.caption,
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      if (pending && validationBlock != null)
+                        Text(
+                          validationBlock,
+                          style: niraText(NiraType.caption, color: niraLeaf),
+                        ),
+                      if (approved || pending)
+                        BatchReviewActions(
+                          batchNumber: widget.initial['wok_number'] as int,
+                          batchCode: widget.initial['code'] as String,
+                          label: correction != null
+                              ? 'Validasi ulang'
+                              : approved
+                              ? 'Batch tervalidasi'
+                              : 'Validasi',
+                          verified: approved && correction == null,
+                          enabled: correction != null ? canCorrect : canApprove,
+                          onCorrection: canCorrect && correction == null
+                              ? _openCorrection
+                              : null,
+                          revalidating: correction != null,
+                          onVerify: correction != null
+                              ? () => _finishCorrection(correction)
+                              : () => _run(
+                                  () =>
+                                      widget.api.finishBatch(widget.scope, _id),
+                                ),
+                        ),
+                    ],
                   )
                 : null,
             onNavigate: widget.onNavigate,
@@ -566,11 +792,21 @@ Future<Json?> _form(
   BuildContext context,
   String title,
   List<_Field> fields,
-  Future<Json> Function(List<String>) save,
-) => showDialog<Json>(
+  Future<Json> Function(List<String>) save, {
+  String? description,
+  bool destructive = false,
+  String? saveLabel,
+}) => showDialog<Json>(
   context: context,
   barrierDismissible: false,
-  builder: (_) => _ProductionForm(title: title, fields: fields, save: save),
+  builder: (_) => _ProductionForm(
+    title: title,
+    fields: fields,
+    save: save,
+    description: description,
+    destructive: destructive,
+    saveLabel: saveLabel,
+  ),
 );
 
 class _ProductionForm extends StatefulWidget {
@@ -578,10 +814,16 @@ class _ProductionForm extends StatefulWidget {
     required this.title,
     required this.fields,
     required this.save,
+    this.description,
+    required this.destructive,
+    this.saveLabel,
   });
   final String title;
   final List<_Field> fields;
   final Future<Json> Function(List<String>) save;
+  final String? description;
+  final bool destructive;
+  final String? saveLabel;
 
   @override
   State<_ProductionForm> createState() => _ProductionFormState();
@@ -667,6 +909,8 @@ class _ProductionFormState extends State<_ProductionForm> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (widget.description case final description?)
+                  Text(description),
                 for (final (i, field) in widget.fields.indexed)
                   TextFormField(
                     controller: _inputs[i],
@@ -698,13 +942,19 @@ class _ProductionFormState extends State<_ProductionForm> {
           child: const Text('Tutup'),
         ),
         FilledButton(
+          style: widget.destructive
+              ? FilledButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                  foregroundColor: Theme.of(context).colorScheme.onError,
+                )
+              : null,
           onPressed: _busy ? null : _submit,
           child: Text(
             _busy
                 ? 'Menyimpan…'
                 : _pending != null
                 ? 'Coba lagi'
-                : 'Simpan',
+                : widget.saveLabel ?? 'Simpan',
           ),
         ),
       ],

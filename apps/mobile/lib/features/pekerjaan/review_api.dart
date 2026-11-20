@@ -359,6 +359,47 @@ class ReviewApi {
   Future<Json> factoryBatch(FactoryScope scope, String batchId) =>
       _productionGet([...scope._base, 'production', 'batches', batchId]);
 
+  Future<Json> openBatchCorrection(
+    FactoryScope scope,
+    String batch,
+    String correction,
+    String reason,
+  ) => writeProduction(
+    [...scope._base, 'production', 'batches', batch, 'corrections', correction],
+    {'reason': reason},
+  );
+
+  Future<Json> saveBatchCorrection(
+    FactoryScope scope,
+    String batch,
+    String correction,
+    Json values,
+  ) => writeProduction(
+    [...scope._base, 'production', 'batches', batch, 'corrections'],
+    values,
+    id: correction,
+  );
+
+  Future<Json> finishBatchCorrection(
+    FactoryScope scope,
+    String batch,
+    String correction,
+    int version, {
+    bool discard = false,
+  }) => writeProduction(
+    [
+      ...scope._base,
+      'production',
+      'batches',
+      batch,
+      'corrections',
+      correction,
+      discard ? 'discard' : 'approve',
+    ],
+    {'version': version},
+    expectedStatus: 200,
+  );
+
   Future<Json> createBatch(FactoryScope scope, Json draft) =>
       writeProduction([...scope._base, 'production', 'batches'], draft);
 

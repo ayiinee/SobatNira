@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/nira_loading.dart';
+
 import '../../sobatnira_ui.dart';
 import '../kloter/connected_production.dart';
 import '../kloter/demo_production.dart';
@@ -84,7 +86,7 @@ class _ConnectedExpensesPageState extends State<ConnectedExpensesPage> {
           : 'Harga dan biaya per kloter',
       children: [
         if (snapshot.connectionState != ConnectionState.done)
-          const LinearProgressIndicator()
+          const NiraLoading(label: 'Memuat biaya…')
         else if (snapshot.hasError) ...[
           const SettingsNote('Data harga dan biaya belum bisa dimuat.'),
           TextButton(

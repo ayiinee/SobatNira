@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/nira_loading.dart';
+
 import '../../sobatnira_ui.dart';
 import 'review_api.dart';
 
@@ -84,7 +86,7 @@ class _IntakeLotDialogState extends State<IntakeLotDialog> {
         dataset: (widget.taskId, widget.millingLabel),
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return const LinearProgressIndicator();
+            return const NiraLoading(label: 'Memuat kloter…');
           }
           if (!snapshot.hasData) {
             final error = snapshot.error;

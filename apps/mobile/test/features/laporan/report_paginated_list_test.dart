@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sobatnira/features/laporan/report_paginated_list.dart';
 import 'package:sobatnira/sobatnira_ui.dart';
+import 'package:sobatnira/widgets/nira_loading.dart';
 
 void main() {
   testWidgets('API pagination holds the footer while loading', (tester) async {
@@ -55,7 +56,7 @@ void main() {
     final initialTop = tester.getTopLeft(find.byType(NiraPagination)).dy;
     await tester.tap(next);
     await tester.pump();
-    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    expect(find.byType(NiraLoading), findsOneWidget);
     expect(tester.getTopLeft(find.byType(NiraPagination)).dy, initialTop);
     lastPage.complete(1);
     await tester.pumpAndSettle();

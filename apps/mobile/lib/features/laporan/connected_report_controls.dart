@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/nira_loading.dart';
+
 import '../kloter/kloter_date_filter.dart';
 import '../pekerjaan/review_api.dart';
 import 'connected_reports.dart';
@@ -17,12 +19,17 @@ Future<void> filterConnectedReport(
 }
 
 class ConnectedReportStatus extends StatelessWidget {
-  const ConnectedReportStatus({required this.reports, super.key});
+  const ConnectedReportStatus({
+    required this.reports,
+    this.compact = false,
+    super.key,
+  });
   final ConnectedReports reports;
+  final bool compact;
   @override
   Widget build(BuildContext context) {
     if (reports.loading) {
-      return const LinearProgressIndicator();
+      return NiraLoading(label: 'Memuat laporan…', compact: compact);
     }
     if (reports.error != null) {
       return Column(

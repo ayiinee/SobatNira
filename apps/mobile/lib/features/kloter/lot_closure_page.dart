@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/nira_loading.dart';
+
 import '../../sobatnira_ui.dart';
 import '../../widgets/page_frame.dart';
 import '../pekerjaan/review_api.dart';
@@ -167,14 +169,15 @@ class _LotClosurePageState extends State<LotClosurePage> {
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Text(_notice!),
               ),
-            if (_submitting) const LinearProgressIndicator(),
+            if (_submitting)
+              const NiraLoading(label: 'Menyimpan status…', compact: true),
             NiraPagedFutureBuilder<List<Json>>(
               future: _data,
               page: _offset,
               dataset: (widget.scope.factoryId, widget.lotId),
               builder: (context, snapshot) {
                 if (snapshot.connectionState != ConnectionState.done) {
-                  return const LinearProgressIndicator();
+                  return const NiraLoading(label: 'Memuat riwayat kloter…');
                 }
                 if (snapshot.hasError) {
                   final error = snapshot.error;

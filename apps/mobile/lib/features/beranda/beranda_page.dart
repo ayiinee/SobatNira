@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/cane_motif.dart';
+import '../../widgets/nira_loading.dart';
 import '../../widgets/summary_card.dart';
 import '../../widgets/adaptive_value.dart';
 import '../kloter/demo_production.dart';
@@ -195,25 +197,29 @@ class _BerandaPageState extends State<BerandaPage> {
                         ),
                       ],
                     ),
-                    if (widget.statusMessage case final status?)
+                    if (widget.statusMessage case final status?
+                        when status is! NiraLoading)
                       Padding(
                         padding: EdgeInsets.symmetric(horizontal: inset),
                         child: status,
                       ),
                     Expanded(
-                      child: ListView.builder(
-                        key: const ValueKey('beranda-kloter-list'),
-                        controller: scrollController,
-                        padding: EdgeInsets.fromLTRB(
-                          inset,
-                          NiraSpace.md,
-                          inset,
-                          NiraSpace.lg,
-                        ),
-                        itemCount: showEmpty ? 1 : items.length,
-                        itemBuilder: (context, index) =>
-                            showEmpty ? _emptyList() : _card(items[index]),
-                      ),
+                      child: widget.statusMessage is NiraLoading
+                          ? widget.statusMessage!
+                          : ListView.builder(
+                              key: const ValueKey('beranda-kloter-list'),
+                              controller: scrollController,
+                              padding: EdgeInsets.fromLTRB(
+                                inset,
+                                NiraSpace.md,
+                                inset,
+                                NiraSpace.lg,
+                              ),
+                              itemCount: showEmpty ? 1 : items.length,
+                              itemBuilder: (context, index) => showEmpty
+                                  ? _emptyList()
+                                  : _card(items[index]),
+                            ),
                     ),
                   ],
                 ),
@@ -531,33 +537,8 @@ class _CanePatternPainter extends CustomPainter {
         canvas.save();
         canvas.translate(col * 28 + (row.isOdd ? 14 : 0), row * 29.0);
         canvas.rotate(.35);
-        for (var stalk = 0; stalk < 2; stalk++) {
-          for (var joint = 0; joint < 3; joint++) {
-            canvas.drawRRect(
-              RRect.fromRectAndRadius(
-                Rect.fromLTWH(stalk * 7.0, joint * 7.0, 5, 6),
-                const Radius.circular(1.3),
-              ),
-              outline,
-            );
-          }
-        }
-        canvas.drawPath(
-          Path()
-            ..moveTo(6, 7)
-            ..quadraticBezierTo(-6, 7, -5, -1)
-            ..quadraticBezierTo(3, -1, 6, 7)
-            ..close(),
-          leaf,
-        );
-        canvas.drawPath(
-          Path()
-            ..moveTo(7, 7)
-            ..quadraticBezierTo(7, -5, 17, -4)
-            ..quadraticBezierTo(17, 4, 7, 7)
-            ..close(),
-          leaf,
-        );
+        canvas.drawPath(CaneMotif.stems, outline);
+        canvas.drawPath(CaneMotif.leaves, leaf);
         canvas.restore();
       }
     }

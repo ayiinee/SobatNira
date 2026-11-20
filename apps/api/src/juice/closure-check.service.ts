@@ -8,6 +8,11 @@ export class ClosureCheckService {
   constructor(@Inject(BACKEND_CONFIG) private readonly config: BackendConfig) {}
 
   async requireClear(tx: DatabaseSession, access: FactoryAccess, lotId: string, synthetic: boolean, authorization: string) {
+    const correction = await tx.query(`SELECT 1 FROM sobatnira.production_batch_corrections c
+      JOIN sobatnira.production_batches b ON b.id=c.batch_id
+      WHERE b.tenant_id=$1 AND b.factory_id=$2 AND b.lot_id=$3 AND b.is_synthetic=$4 AND c.status='draft' LIMIT 1`,
+      [access.tenantId, access.factoryId, lotId, synthetic]);
+    if (correction.rows.length) throw new ConflictException('Selesaikan koreksi batch sebelum menutup kloter.');
     const upstream = synthetic && this.config.environment !== 'production' ? this.config.batchClosure : undefined;
     if (!upstream) {
       const { rows: [result] } = await tx.query<{blocked:boolean}>(`SELECT

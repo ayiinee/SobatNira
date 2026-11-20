@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/nira_loading.dart';
+
 import '../../sobatnira_ui.dart';
 import '../../widgets/page_frame.dart';
 import '../pekerjaan/review_api.dart';
@@ -195,7 +197,8 @@ class _JuiceTransferPageState extends State<JuiceTransferPage> {
           padding: const EdgeInsets.all(16),
           children: [
             Text(widget.scope.factoryName),
-            if (_working) const LinearProgressIndicator(),
+            if (_working)
+              const NiraLoading(label: 'Menyimpan transfer…', compact: true),
             if (_error != null) Text(_error!),
             if (_receipt != null) ...[
               Text(
@@ -223,7 +226,7 @@ class _JuiceTransferPageState extends State<JuiceTransferPage> {
                 future: _data,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState != ConnectionState.done) {
-                    return const LinearProgressIndicator();
+                    return const NiraLoading(label: 'Memuat data nira…');
                   }
                   if (snapshot.hasError) {
                     final error = snapshot.error;
@@ -438,7 +441,7 @@ class _TransferDestinationState extends State<_TransferDestination> {
             dataset: (widget.scope.factoryId, _query),
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
-                return const LinearProgressIndicator();
+                return const NiraLoading(label: 'Memuat data nira…');
               }
               if (snapshot.hasError) {
                 return Column(
