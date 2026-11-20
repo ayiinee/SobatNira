@@ -27,7 +27,7 @@ berarti perubahan sudah di-commit, digabung, atau diterapkan ke database tim/pro
 | 4. Optimisasi foto | Validasi bersama, preview/thumbnail dan unduh asli sesuai kebutuhan tersedia | Metadata turunan persisten, kualitas tulisan tangan/foto besar, peak RAM dan latensi perangkat |
 | 5. Database dan kapasitas | Pool terkonfigurasi, metrik akuisisi/transaksi dan diagnostik tersedia; indeks lama dimanfaatkan | Profil antrean/review/pencarian, sizing produksi, beban/staging |
 | 6. Caching | Cache katalog opt-in, generasi PostgreSQL, isolasi, penggabungan request dan fallback selesai lokal | Server Redis nyata, beban/staging; laporan belum dicache |
-| 7. Verifikasi dan rilis | API 120 tes lulus, Flutter 138 lulus/3 skip dan regresi lanjutan lulus; belum deployment | CI pada revisi akhir, beban, layanan nyata, staging dan rilis |
+| 7. Verifikasi dan rilis | CI NestJS, Flutter dan FastAPI lulus pada `3b9d986`; draft PR #22 tersedia | Beban, layanan nyata, staging, review tim dan rilis |
 
 ## A. Baseline dan observabilitas
 
@@ -273,17 +273,24 @@ pengganti pembacaan resmi pada transaksi stok/pengesahan.
 - [x] **QA-05G** Suite Flutter penuh sesudah preview: 138 tes lulus, 3 fixture skip; analyzer sebelumnya bersih. Hasil ini sebelum perbaikan RPT-08, yang memerlukan regresi tersendiri.
 - [x] **QA-05H** RPT-08: analyzer bersih dan 29 tes state/widget login–Beranda–laporan–PDF lulus. Meliputi kembali ke Beranda setelah detail 101 kloter gagal, navigasi laporan yang sudah tersimpan, penggabungan request dan pembatalan hasil lama sesudah refresh.
 - [x] **QA-05I** Preview nota sah: 19 tes Pekerjaan/Detail Kloter/Batch/Beranda lulus setelah perbaikan retry. Uji memastikan asli tidak dimuat sebelum zoom, error berulang dapat dicoba lagi dan filter pabrik/revisi tetap dikirim.
-- [x] **QA-05J** Perintah standar `npm test -- --test-concurrency=1` lulus 110 tes tanpa skip, diikuti uji cache PostgreSQL lulus. Tujuh tes pada step CI optimisasi yang baru juga lulus lokal; pemeriksaan CI remote pada revisi akhir menyusul.
-- [x] **QA-05K** Selaraskan lockfile dengan Flutter 3.44.6/Dart 3.12.2 yang dipatok CI. `flutter pub get --enforce-lockfile` lulus lokal; job Flutter semula berhenti pada instalasi karena lockfile lama membutuhkan Dart >=3.13 prerelease. CI backend/FastAPI pada PR #22 sudah lulus; seluruh job diulang setelah lockfile diperbaiki.
-- [ ] **QA-06** Jalankan tes FastAPI dari `apps/ai` dengan `uv run --locked python -m unittest` bila kontrak/pemrosesan AI berubah.
+- [x] **QA-05J** Perintah standar `npm test -- --test-concurrency=1` lulus 110 tes tanpa skip, diikuti uji cache PostgreSQL lulus. Tujuh tes pada step CI optimisasi yang baru juga lulus lokal; step integrasi optimisasi juga lulus di CI pada 3b9d986.
+- [x] **QA-05K** Selaraskan lockfile dengan Flutter 3.44.6/Dart 3.12.2 yang dipatok CI. `flutter pub get --enforce-lockfile` lulus lokal; job Flutter semula berhenti pada instalasi karena lockfile lama membutuhkan Dart >=3.13 prerelease. Sesudah perbaikan lockfile, seluruh job CI pada PR #22 lulus di 3b9d986.
+- [x] **QA-06** CI menjalankan `uv run --locked python -m unittest` dari `apps/ai`: 16 tes lulus pada `3b9d986`. Ini tes unit, belum benchmark predictor Paddle atau pengujian provider nyata.
 - [ ] **QA-07** Uji satu skenario sintetis dari foto → OCR → revisi → pengesahan → stok → laporan/PDF; pastikan angka dan status konsisten.
 - [ ] **QA-08** Uji R2 nyata dengan fixture sintetis terpisah; catat dan bersihkan hanya objek fixture yang dibuat tes.
 - [ ] **QA-09** Uji beban dan kegagalan gabungan serta bandingkan p95, RAM, koneksi, ukuran respons dan byte storage.
-- [ ] **QA-10** Review diff, commit dan PR; sertakan perubahan kontrak, bukti, keterbatasan serta rencana rollback.
+- [x] **QA-10** Review diff implementasi, commit dan push ke branch kerja; draft [PR #22](https://github.com/ayiinee/SobatNira/pull/22) memuat kontrak, validasi, keterbatasan dan panduan rollout/rollback. Review tim, merge dan deployment masih menunggu proses rilis.
 - [ ] **QA-11** Terapkan migrasi manifest ke lingkungan tim/staging sebelum kode upload baru, lalu smoke test dan pantau metrik.
 - [ ] **QA-12** Terapkan perubahan ke produksi melalui proses rilis tim; catat versi, tanggal, hasil dan rollback bila diperlukan.
 
-Perintah suite terakhir yang lulus, dari `apps/api` dengan database khusus sintetis:
+Verifikasi gabungan terakhir: [CI run 44834709677](https://github.com/ayiinee/SobatNira/actions/runs/44834709677)
+pada kode `3b9d986106b575a4a309009abbb8df4dd8fc7a16`. Ketiga job NestJS,
+Flutter (analyze dan test), serta FastAPI lulus, termasuk instalasi Flutter dengan
+`--enforce-lockfile` dan step integrasi optimisasi PostgreSQL. Catatan QA-05J/K
+di atas menjelaskan pengujian lokal dan perbaikan lockfile sebelum hasil CI ini.
+Tidak ada perubahan kode setelah revisi tersebut pada pembaruan bukti ini.
+
+Perintah suite lokal yang lulus, dari `apps/api` dengan database khusus sintetis:
 
 ```powershell
 npm.cmd run build
@@ -315,8 +322,10 @@ Branch kerja: `perf/api-staged-photo-upload`.
 | 21 November 2026 | `a3436d8` | Histogram HTTP/query/pool, penghitung error/byte dan dokumentasi terpadu |
 | 21 November 2026 | `c0e1de2` | State ringkasan Beranda terpisah, pembatalan respons detail lama dan regresi navigasi |
 | 21 November 2026 | `7c73382` | Preview Kloter/Batch dan pemuatan asli saat zoom dengan retry |
+| 21 November 2026 | `6d75325` | Verifikasi integrasi optimisasi PostgreSQL di CI |
+| 21 November 2026 | `3b9d986` | Lockfile sesuai Flutter yang dipatok; seluruh job CI lulus |
 
-Riwayat ini mencatat commit lokal. Status sinkronisasi remote dapat diperiksa dengan
+Commit implementasi di atas sudah di-push ke remote branch kerja. Status sinkronisasi dapat diperiksa dengan
 `git status -sb`; commit tidak berarti perubahan sudah digabung ke main atau dirilis.
 
 ### Urutan lanjutan
