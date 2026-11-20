@@ -109,6 +109,7 @@ class _OfficialLotBatchesState extends State<OfficialLotBatches> {
     final api = widget.api;
     final scope = widget.scope;
     var changed = created;
+    var returned = false;
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => _OfficialBatchDetail(
@@ -122,10 +123,17 @@ class _OfficialLotBatchesState extends State<OfficialLotBatches> {
           millingRevision: widget.millingRevision,
           onNavigate: widget.onNavigate,
           reportLink: widget.reportLink,
-          onChanged: () => changed = true,
+          onChanged: () {
+            changed = true;
+            if (returned && mounted) {
+              _reload();
+              widget.onChanged();
+            }
+          },
         ),
       ),
     );
+    returned = true;
     if (mounted && changed) {
       _reload();
       widget.onChanged();
@@ -364,8 +372,8 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
       _error = null;
     });
     try {
-      widget.onChanged();
       final result = await operation();
+      widget.onChanged();
       if (mounted) {
         _notice = notice;
         if (apply == null) {
@@ -379,6 +387,8 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
         _error = _errorText(error);
         _detail = _load();
       }
+      // A transport error can follow a successful commit. Refresh on return too.
+      widget.onChanged();
     } finally {
       if (mounted) {
         setState(() {

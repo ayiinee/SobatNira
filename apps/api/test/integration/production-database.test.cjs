@@ -142,6 +142,76 @@ test('production master data and lot HTTP flows enforce scope, filters and atomi
     assert.equal(summary.body.items[0].netWeightGrams, null);
     assert.equal(summary.body.items[0].juiceProducedLiters, null);
     assert.equal(summary.body.items[0].intake, null);
+    const cursorFirst = await request(root + '/lots?pagination=cursor&includeSummary=true&limit=1');
+    assert.equal(cursorFirst.status, 200, JSON.stringify(cursorFirst.body));
+    assert.equal(Object.hasOwn(cursorFirst.body, 'total'), false);
+    assert.equal(Object.hasOwn(cursorFirst.body.items[0], 'cursorReceivedAt'), false);
+    assert.ok(cursorFirst.body.nextCursor);
+    const nextPath = '/lots?pagination=cursor&includeSummary=true&limit=1&after=' + cursorFirst.body.nextCursor;
+    const cursorSecond = await request(root + nextPath);
+    assert.equal(cursorSecond.status, 200, JSON.stringify(cursorSecond.body));
+    assert.equal(cursorSecond.body.nextCursor, null);
+    assert.deepEqual(new Set([...cursorFirst.body.items, ...cursorSecond.body.items].map(item => item.id)),
+      new Set([lot.id, secondLot.body.id]));
+    assert.equal((await request(scope(tenantA, factoryB) + nextPath)).body.items.length, 0);
+    assert.equal((await request(root + '/lots?pagination=cursor&q=missing')).body.items.length, 0);
+    await client.query("UPDATE sobatnira.lots SET received_at='2026-11-16T01:00:00.000001Z' WHERE id=$1", [secondLot.body.id]);
+    const precise = await request(root + '/lots?pagination=cursor&limit=1');
+    assert.equal(precise.body.items[0].id, secondLot.body.id);
+    assert.equal(JSON.parse(Buffer.from(precise.body.nextCursor, 'base64url'))[0], '2026-11-16T01:00:00.000001Z');
+    const preciseNext = await request(root + '/lots?pagination=cursor&limit=1&after=' + precise.body.nextCursor);
+    assert.equal(preciseNext.body.items[0].id, lot.id);
+    assert.equal((await request(root + '/lots?pagination=cursor&lotId=' + lot.id)).body.items[0].id, lot.id);
+    assert.equal((await request(root + '/lots/counts?lotId=' + lot.id)).body.total, 1);
+    assert.equal((await request(root + '/lots/suggestions')).status, 400);
+    assert.equal((await request(root + '/lots/suggestions?q=---')).body.items.length, 0);
+    await client.query('SAVEPOINT lot_suggestions_fixture');
+    for (const code of ['MANUAL', 'MANUAL-TAIL', 'X-MANUAL-X']) {
+      await client.query(`INSERT INTO sobatnira.lots(tenant_id,factory_id,supplier_id,display_code,received_at)
+        VALUES($1,$2,$3,$4,'2025-01-01T00:00:00Z')`, [tenantA, factoryA, supplier.id, code]);
+    }
+    const ranked = await request(root + '/lots/suggestions?q=man%20ual');
+    assert.equal(ranked.status, 200, JSON.stringify(ranked.body));
+    assert.deepEqual(ranked.body.items.map(item => item.rank), [0, 1, 2, 2, 2]);
+    assert.equal(ranked.body.items[0].displayCode, 'MANUAL');
+    assert.equal((await request(scope(tenantA, factoryB) + '/lots/suggestions?q=MANUAL')).body.items.length, 0);
+    assert.equal((await request(root + '/lots/suggestions?q=MANUAL&receivedFrom=2026-01-01T00:00:00Z')).body.items.length, 2);
+    await client.query('ROLLBACK TO SAVEPOINT lot_suggestions_fixture');
+    // Counts use the full matching dataset, independent of the loaded cursor page.
+    await client.query('SAVEPOINT lot_counts_fixture');
+    await client.query(`INSERT INTO sobatnira.lot_closures(tenant_id,factory_id,lot_id,is_synthetic,closed_by)
+      VALUES($1,$2,$3,false,$4)`, [tenantA, factoryA, lot.id, user]);
+    assert.deepEqual((await request(root + '/lots/counts')).body, { total: 2, open: 1, closed: 1 });
+    await client.query(`INSERT INTO sobatnira.lot_closures(tenant_id,factory_id,lot_id,is_synthetic,closed_by)
+      VALUES($1,$2,$3,true,$4)`, [tenantA, factoryA, secondLot.body.id, user]);
+    assert.deepEqual((await request(root + '/lots/counts')).body, { total: 2, open: 1, closed: 1 });
+    assert.deepEqual((await request(root + '/lots/counts?synthetic=true')).body, { total: 0, open: 0, closed: 0 });
+    assert.deepEqual((await request(root + '/lots/counts?q=missing')).body, { total: 0, open: 0, closed: 0 });
+    assert.deepEqual((await request(scope(tenantA, factoryB) + '/lots/counts')).body, { total: 0, open: 0, closed: 0 });
+    assert.deepEqual((await request(scope(tenantB, factoryC) + '/lots/counts')).body, { total: 0, open: 0, closed: 0 });
+    for (const status of ['open', 'closed']) {
+      const result = await request(root + '/lots?pagination=cursor&includeSummary=true&limit=1&status=' + status);
+      assert.equal(result.status, 200, JSON.stringify(result.body));
+      assert.equal(result.body.items.length, 1);
+      assert.equal(result.body.items[0].status, status);
+      assert.equal(result.body.nextCursor, null);
+      assert.equal((await request(root + '/lots?status=' + status)).body.total, 1);
+    }
+    const search = '&searchMode=normalized&q=demo%20manual';
+    assert.equal((await request(root + '/lots?pagination=cursor' + search)).body.items.length, 2);
+    assert.equal((await request(root + '/lots/counts?' + search.slice(1))).body.total, 2);
+    const byId = await request(root + '/lots?searchMode=normalized&q=' + lot.id.replaceAll('-', '').toUpperCase());
+    assert.equal(byId.body.items[0].id, lot.id);
+    assert.equal((await request(root + '/lots?searchMode=normalized&q=---')).body.total, 0);
+    assert.equal((await request(root + '/lots/counts?receivedBefore=2026-11-16T00:00:00Z')).body.total, 0);
+    assert.equal((await request(root + '/lots/counts?supplierId=' + randomUUID())).body.total, 0);
+    assert.equal((await fetch(base + root + '/lots/counts')).status, 401);
+    assert.equal((await request(root + '/lots/counts?limit=1')).status, 400);
+    assert.equal((await request(root + '/lots?status=done')).status, 400);
+    await client.query("UPDATE sobatnira.lot_closures SET reopened_at=clock_timestamp(),reopened_by=$2,reopen_reason='Synthetic correction' WHERE lot_id=$1", [lot.id, user]);
+    assert.deepEqual((await request(root + '/lots/counts')).body, { total: 2, open: 2, closed: 0 });
+    assert.equal((await request(root + '/lots?status=closed')).body.total, 0);
+    await client.query('ROLLBACK TO SAVEPOINT lot_counts_fixture');
     assert.equal((await request(root + '/lots?includeSummary=invalid')).status, 400);
     assert.equal((await request(scope(tenantA, factoryB) + '/lots?includeSummary=true')).body.total, 0);
     const emptyPage = await request(root + '/lots?offset=99');
@@ -208,6 +278,9 @@ test('production master data and lot HTTP flows enforce scope, filters and atomi
     await client.query('ROLLBACK TO SAVEPOINT catalogue_access');
 
     await client.query('UPDATE sobatnira.factory_memberships SET is_active = false WHERE user_id = $1', [user]);
+    assert.equal((await request(root + '/lots/counts')).status, 403);
+    assert.equal((await request(root + '/lots?status=open&pagination=cursor')).status, 403);
+    assert.equal((await request(root + '/lots/suggestions?q=MANUAL')).status, 403);
     assert.equal((await request(root + '/suppliers', 'POST', { name: 'Denied' })).status, 403);
     assert.equal((await request(caneTypes)).status, 403);
   } finally {

@@ -6,6 +6,7 @@
     "node": ">=24 <25"
   },
   "scripts": {
+    "perf:lots": "npm run build --silent && node scripts/profile-lots.cjs",
     "seed:calculations": "npm run build --silent && node scripts/seed-calculations.cjs",
     "build": "tsc -p tsconfig.json",
     "dev": "npm run build && node --env-file-if-exists=../../.env --env-file-if-exists=.env dist/main.js",

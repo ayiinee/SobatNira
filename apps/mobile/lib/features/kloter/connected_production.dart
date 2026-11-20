@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../pekerjaan/review_api.dart';
 import 'demo_production.dart';
+import 'connected_lot_pager.dart';
 import '../laporan/connected_reports.dart';
 
 class ConnectedProduction extends ChangeNotifier {
@@ -13,110 +14,60 @@ class ConnectedProduction extends ChangeNotifier {
     bool synthetic = false,
     this.onSyntheticChanged,
   }) : reports = ConnectedReports(api, scope, synthetic: synthetic),
+       home = ConnectedLotPager(
+         api,
+         scope,
+         synthetic: synthetic,
+         status: 'open',
+       ),
+       browser = ConnectedLotPager(api, scope, synthetic: synthetic),
        _synthetic = synthetic {
     reports.addListener(_sourceChanged);
+    home.addListener(notifyListeners);
+    browser.addListener(notifyListeners);
   }
-
-  final ConnectedReports reports;
-
   final ReviewApi api;
   final FactoryScope scope;
+  final ConnectedReports reports;
+  final ConnectedLotPager home;
+  final ConnectedLotPager browser;
   final ValueChanged<bool>? onSyntheticChanged;
-  List<DemoKloter> lots = const [];
-  Object? error;
-  bool loading = true;
-  int _generation = 0;
   bool _synthetic;
+  bool _disposed = false;
+  List<DemoKloter> get lots => home.items;
+  bool get loading => home.loading;
+  Object? get error => home.error;
 
   void _sourceChanged() {
     if (_synthetic == reports.synthetic) return;
     _synthetic = reports.synthetic;
     onSyntheticChanged?.call(_synthetic);
-    unawaited(_refreshLots());
+    home.synthetic = browser.synthetic = _synthetic;
+    browser.search = '';
+    browser.selectedId = null;
+    browser.date = null;
+    browser.status = null;
+    unawaited(home.refresh(reset: true));
+    // Clear both sources immediately, including an unopened/offstage list.
+    unawaited(browser.refresh(reset: true));
   }
 
-  Future<void> refresh() async {
-    final unfiltered = _synthetic && reports.filter == null
-        ? api.productionReport(scope, synthetic: true)
-        : null;
-    await Future.wait([
-      reports.refresh(unfiltered: unfiltered),
-      _refreshLots(unfiltered: unfiltered),
-    ]);
-  }
-
-  Future<void> _refreshLots({Future<Json>? unfiltered}) async {
-    final generation = ++_generation;
-    final synthetic = _synthetic;
-    loading = true;
-    error = null;
-    lots = const [];
-    notifyListeners();
-    try {
-      final rows = <String, DemoKloter>{};
-      var offset = 0;
-      while (true) {
-        final page = synthetic
-            ? await api.syntheticLotPage(scope, offset)
-            : await api.lots(
-                scope,
-                offset: offset,
-                search: '',
-                limit: 100,
-                includeSummary: true,
-              );
-        if (generation != _generation) return;
-        if (page == null) {
-          final legacy = await _legacySyntheticLots(generation, unfiltered);
-          if (generation == _generation) lots = List.unmodifiable(legacy);
-          return;
-        }
-        final items = (page['items'] as List).cast<Json>();
-        for (final item in items) {
-          rows[item['id'] as String] = connectedLot(item);
-        }
-        offset += items.length;
-        if (items.isEmpty || offset >= (page['total'] as int)) break;
-      }
-      lots = List.unmodifiable(rows.values);
-    } catch (failure) {
-      if (generation != _generation) return;
-      error = failure;
-    } finally {
-      if (generation == _generation) {
-        loading = false;
-        notifyListeners();
-      }
-    }
-  }
-
-  Future<List<DemoKloter>> _legacySyntheticLots(
-    int generation,
-    Future<Json>? unfiltered,
-  ) async {
-    // Older APIs only list official summaries. Keep their supported read path.
-    final report =
-        await (unfiltered ?? api.productionReport(scope, synthetic: true));
-    final items = (report['items'] as List).cast<Json>();
-    final result = <DemoKloter>[];
-    for (
-      var start = 0;
-      start < items.length && generation == _generation;
-      start += 6
-    ) {
-      final details = await Future.wait([
-        for (final item in items.skip(start).take(6))
-          api.lot(scope, item['lotId'] as String, synthetic: true),
-      ]);
-      result.addAll(details.map(connectedLot));
-    }
-    return result;
-  }
+  Future<void> refresh() => _disposed
+      ? Future.value()
+      : Future.wait([
+          reports.refresh(),
+          home.refresh(),
+          if (browser.initialized) browser.refresh(),
+        ]);
 
   @override
   void dispose() {
-    _generation++;
+    _disposed = true;
     reports.removeListener(_sourceChanged);
+    home.removeListener(notifyListeners);
+    browser.removeListener(notifyListeners);
+    home.dispose();
+    browser.dispose();
     reports.dispose();
     super.dispose();
   }

@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query }
 import { CurrentFactory, FactoryRoles } from '../auth/auth.decorators';
 import { FactoryAccess } from '../auth/auth.types';
 import { parseStockQuery } from '../documents/intake.dto';
-import { found, object, parseLotInput, parseLotQuery, parsePage, uuid } from '../production/production.dto';
+import { found, object, parseLotInput, parseLotQuery, parseLotCountsQuery, parseLotSuggestionsQuery, parsePage, uuid } from '../production/production.dto';
 import { ProductionHistoryRepository } from '../production/production.repository';
 import { LotsRepository } from './lots.repository';
 
@@ -14,6 +14,16 @@ export class LotsController {
   @Get()
   list(@CurrentFactory() access: FactoryAccess, @Query() query: unknown) {
     return this.lots.list(access, parseLotQuery(query));
+  }
+
+  @Get('counts')
+  counts(@CurrentFactory() access: FactoryAccess, @Query() query: unknown) {
+    return this.lots.counts(access, parseLotCountsQuery(query));
+  }
+
+  @Get('suggestions')
+  suggestions(@CurrentFactory() access: FactoryAccess, @Query() query: unknown) {
+    return this.lots.suggestions(access, parseLotSuggestionsQuery(query));
   }
 
   @Post()

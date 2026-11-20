@@ -479,6 +479,32 @@ class ReviewApi {
     },
   );
 
+  Future<Json> lotCursor(
+    FactoryScope scope, {
+    Map<String, String> filters = const {},
+    String? after,
+  }) => _productionGet(
+    scope._lots,
+    query: {
+      ...filters,
+      'pagination': 'cursor',
+      'limit': '30',
+      'includeSummary': 'true',
+      'after': ?after,
+    },
+  );
+
+  Future<Json> lotCounts(FactoryScope scope, Map<String, String> filters) =>
+      _productionGet([...scope._lots, 'counts'], query: filters);
+
+  Future<Json> lotSuggestions(
+    FactoryScope scope,
+    Map<String, String> filters,
+  ) => _productionGet(
+    [...scope._lots, 'suggestions'],
+    query: {...filters, 'limit': '5'},
+  );
+
   Future<Json?> syntheticLotPage(FactoryScope scope, int offset) async {
     if (!_supportsSyntheticLotPage) return null;
     try {

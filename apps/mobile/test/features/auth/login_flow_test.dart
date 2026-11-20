@@ -312,7 +312,8 @@ void main() {
                   'productionMarginRupiah': '0',
                 },
               }),
-            '/tenants/tenant/factories/factory/lots' => http.Response(
+            '/tenants/tenant/factories/factory/lots' ||
+            '/tenants/tenant/factories/factory/lots/counts' => http.Response(
               '{}',
               403,
             ),

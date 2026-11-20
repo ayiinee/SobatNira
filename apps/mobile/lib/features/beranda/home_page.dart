@@ -118,6 +118,7 @@ class _NiraHomeState extends State<NiraHome> {
           : Listenable.merge([_live, _live.reports]),
       builder: (context, _) => switch (tab) {
         NiraTab.beranda => BerandaPage(
+          pager: _live?.home,
           kloter: _lots,
           onOpenKloter: _openKloter,
           onQuickAction: _openQuickAction,
@@ -142,6 +143,10 @@ class _NiraHomeState extends State<NiraHome> {
                   : null),
         ),
         NiraTab.kloter => KloterListPage(
+          key: ValueKey(
+            'kloter-${widget.scope?.factoryId}-${_live?.reports.synthetic}',
+          ),
+          pager: _live?.browser,
           kloter: _lots,
           onOpenKloter: _openKloter,
           filterToday: _live?.reports.filterToday,
@@ -461,6 +466,7 @@ class _LotDetailState extends State<_LotDetail> {
                   api: _api,
                   scope: _scope,
                   lotId: _id,
+                  onChanged: widget.live.refresh,
                   onNavigate: widget.onNavigate,
                 ),
               )
