@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:sobatnira/features/auth/login_pages.dart';
+import 'package:sobatnira/features/kloter/demo_production.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
 import 'package:sobatnira/main.dart';
 import 'package:sobatnira/widgets/adaptive_value.dart';
@@ -38,6 +39,8 @@ void main() {
     await tester.pumpAndSettle();
     final caneSummary = find.text('Tebu diterima (kg)');
     expect(caneSummary, findsOneWidget);
+    expect(find.text(formatDate(DateTime.now())), findsOneWidget);
+    expect(find.textContaining('Semua tanggal'), findsNothing);
     expect(
       find.byWidgetPredicate(
         (widget) => widget is NiraValue && widget.value == '17.990',

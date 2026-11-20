@@ -119,7 +119,7 @@ void main() {
     await tester.enterText(find.byType(TextField), 'mjt01');
     await tester.testTextInput.receiveAction(TextInputAction.search);
     await tester.pumpAndSettle();
-    expect(find.text('ID cocok · Ketuk kartu untuk membuka'), findsOneWidget);
+    expect(find.textContaining('ID cocok'), findsNothing);
     expect(
       find.byWidgetPredicate(
         (widget) => widget is Semantics && widget.properties.expanded == true,
@@ -285,6 +285,11 @@ void main() {
       ),
     );
     expect(find.text('Tebu bersih (kg)'), findsOneWidget);
+    expect(tester.widget<Text>(find.text('Tebu bersih (kg)')).maxLines, 1);
+    expect(
+      tester.getCenter(find.text('Brix tebu')).dy,
+      closeTo(tester.getCenter(find.text('Tebu bersih (kg)')).dy, .1),
+    );
     expect(find.text('1.435'), findsOneWidget);
     expect(find.text('19,4 °Bx'), findsOneWidget);
     expect(find.text('267 L'), findsOneWidget);

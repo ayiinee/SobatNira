@@ -19,8 +19,6 @@ class BerandaPage extends StatefulWidget {
     this.profile,
     this.summary,
     this.profit,
-    this.period,
-    this.onPeriod,
     this.reportStatus,
     this.statusMessage,
     super.key,
@@ -36,8 +34,7 @@ class BerandaPage extends StatefulWidget {
   final ({String cane, String lots})? summary;
   final Widget? statusMessage;
   final Widget? reportStatus;
-  final String? profit, period;
-  final VoidCallback? onPeriod;
+  final String? profit;
 
   @override
   State<BerandaPage> createState() => _BerandaPageState();
@@ -109,7 +106,7 @@ class _BerandaPageState extends State<BerandaPage> {
           );
         }
         final collapsed = (1 - headerHeight / height).clamp(.22, .75);
-        final expanded = (collapsed + .22).clamp(collapsed, .94);
+        const expanded = 1.0;
         void settle() {
           if (!_sheet.isAttached) return;
           final target = _sheet.size > (collapsed + expanded) / 2
@@ -243,12 +240,7 @@ class _BerandaPageState extends State<BerandaPage> {
             profile: widget.profile,
           ),
           const SizedBox(height: NiraSpace.lg),
-          _ProductionSummary(
-            summary: widget.summary,
-            profit: widget.profit,
-            period: widget.period,
-            onPeriod: widget.onPeriod,
-          ),
+          _ProductionSummary(summary: widget.summary, profit: widget.profit),
           if (widget.reportStatus != null) widget.reportStatus!,
           const SizedBox(height: NiraSpace.md),
           _QuickActions(onSelected: widget.onQuickAction),
@@ -373,14 +365,8 @@ class _ProfileState extends State<_Profile> {
 }
 
 class _ProductionSummary extends StatefulWidget {
-  const _ProductionSummary({
-    this.summary,
-    this.profit,
-    this.period,
-    this.onPeriod,
-  });
-  final String? profit, period;
-  final VoidCallback? onPeriod;
+  const _ProductionSummary({this.summary, this.profit});
+  final String? profit;
   final ({String cane, String lots})? summary;
 
   @override
@@ -443,7 +429,7 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                       style: niraText(
                         NiraType.section,
                         color: Colors.white,
-                        weight: FontWeight.w700,
+                        weight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: NiraSpace.sm),
@@ -457,7 +443,7 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                             style: niraText(
                               NiraType.hero,
                               color: niraYellow,
-                              weight: FontWeight.w700,
+                              weight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -485,38 +471,28 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                       ],
                     ),
                     const SizedBox(height: NiraSpace.sm),
-                    InkWell(
-                      onTap: widget.onPeriod,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.calendar_today_outlined,
-                              size: 12,
-                              color: Colors.white,
-                            ),
-                            const SizedBox(width: NiraSpace.sm),
-                            Expanded(
-                              child: Text(
-                                widget.period ??
-                                    'Semua tanggal · data sintetis',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: niraText(
-                                  NiraType.caption,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                            if (widget.onPeriod != null)
-                              const Icon(
-                                Icons.expand_more,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.calendar_today_outlined,
+                            size: 12,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: NiraSpace.sm),
+                          Expanded(
+                            child: Text(
+                              formatDate(DateTime.now()),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: niraText(
+                                NiraType.caption,
                                 color: Colors.white,
-                                size: 18,
                               ),
-                          ],
-                        ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],

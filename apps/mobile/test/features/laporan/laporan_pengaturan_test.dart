@@ -102,6 +102,7 @@ void main() {
     await tap(tester, find.text('Grade A').last);
     expect(find.text('Detail Grade'), findsOneWidget);
     expect(find.text('Kontribusi per kloter'), findsOneWidget);
+    expect(find.byTooltip('Berikutnya'), findsNothing);
 
     await tap(tester, find.byTooltip('Kembali'));
     await tap(tester, find.text('Margin'));

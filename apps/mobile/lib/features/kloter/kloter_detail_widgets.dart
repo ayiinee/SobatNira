@@ -122,16 +122,23 @@ class DetailMetrics extends StatelessWidget {
     this.metrics, {
     this.separate = false,
     this.centerAll = false,
+    this.singleLineLabels = false,
     super.key,
   });
   final List<(String, String)> metrics;
   final bool separate;
   final bool centerAll;
+  final bool singleLineLabels;
+
+  double get _horizontalInset => singleLineLabels ? NiraSpace.xs : NiraSpace.sm;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      final minWidth = MediaQuery.textScalerOf(context).scale(20) * 4.5 + 16;
+      final minWidth =
+          MediaQuery.textScalerOf(context).scale(20) *
+              (singleLineLabels ? 3.5 : 4.5) +
+          _horizontalInset * 2;
       final columns = (constraints.maxWidth / minWidth).floor().clamp(
         1,
         metrics.length,
@@ -148,8 +155,9 @@ class DetailMetrics extends StatelessWidget {
               ),
               textDirection: Directionality.of(context),
               textScaler: MediaQuery.textScalerOf(context),
+              maxLines: singleLineLabels ? 1 : null,
             )..layout(
-              maxWidth: (width - NiraSpace.sm * 2 - 2).clamp(
+              maxWidth: (width - _horizontalInset * 2 - 2).clamp(
                 1,
                 double.infinity,
               ),
@@ -223,38 +231,45 @@ class DetailMetrics extends StatelessWidget {
     double height,
     double labelHeight, {
     required bool center,
-  }) => SizedBox(
-    height: height,
-    child: Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: NiraSpace.sm,
-        vertical: NiraSpace.sm,
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: center
-            ? CrossAxisAlignment.center
-            : CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            height: labelHeight,
-            child: Text(
-              metric.$1,
-              textAlign: center ? TextAlign.center : TextAlign.start,
-              style: niraText(NiraType.caption, weight: FontWeight.w500),
+  }) {
+    final label = Text(
+      metric.$1,
+      textAlign: center ? TextAlign.center : TextAlign.start,
+      maxLines: singleLineLabels ? 1 : null,
+      softWrap: !singleLineLabels,
+      style: niraText(NiraType.caption, weight: FontWeight.w500),
+    );
+    return SizedBox(
+      height: height,
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: _horizontalInset,
+          vertical: NiraSpace.sm,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: center
+              ? CrossAxisAlignment.center
+              : CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              height: labelHeight,
+              child: singleLineLabels
+                  ? FittedBox(fit: BoxFit.scaleDown, child: label)
+                  : label,
             ),
-          ),
-          const SizedBox(height: NiraSpace.xs),
-          NiraValue(
-            metric.$2,
-            label: metric.$1,
-            alignment: center ? Alignment.center : Alignment.centerLeft,
-            style: niraText(NiraType.title, weight: FontWeight.w700),
-          ),
-        ],
+            const SizedBox(height: NiraSpace.xs),
+            NiraValue(
+              metric.$2,
+              label: metric.$1,
+              alignment: center ? Alignment.center : Alignment.centerLeft,
+              style: niraText(NiraType.title, weight: FontWeight.w700),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class DetailSectionTitle extends StatelessWidget {

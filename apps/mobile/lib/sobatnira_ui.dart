@@ -197,9 +197,11 @@ class NiraScaffold extends StatelessWidget {
     final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
     final hideNavigation = keyboard || (hideNavigationWhileEditing && editing);
     final inset = niraPageInset(context);
+    final navigationInset = inset + 6;
     final short = MediaQuery.sizeOf(context).height - padding.vertical < 500;
-    const navigationHeight = 58.0;
-    final navigationBottom = math.max(padding.bottom, short ? 4.0 : 16.0);
+    const navigationHeight = _BottomNavigation.height;
+    final navigationBottom =
+        math.max(padding.bottom, short ? 4.0 : 16.0) + (short ? 4 : 8);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark.copyWith(
         statusBarColor: Colors.transparent,
@@ -257,10 +259,10 @@ class NiraScaffold extends StatelessWidget {
                       if (!hideNavigation && !floatingNavigation)
                         Padding(
                           padding: EdgeInsets.fromLTRB(
-                            inset,
+                            navigationInset,
                             short ? 4 : 14,
-                            inset,
-                            math.max(padding.bottom, short ? 4 : 30),
+                            navigationInset,
+                            math.max(navigationBottom, short ? 8.0 : 38.0),
                           ),
                           child: _BottomNavigation(
                             tab: tab,
@@ -271,8 +273,8 @@ class NiraScaffold extends StatelessWidget {
                   ),
                   if (!hideNavigation && floatingNavigation)
                     Positioned(
-                      left: inset,
-                      right: inset,
+                      left: navigationInset,
+                      right: navigationInset,
                       bottom: navigationBottom,
                       height: navigationHeight,
                       child: RepaintBoundary(
@@ -295,6 +297,7 @@ class NiraScaffold extends StatelessWidget {
 class _BottomNavigation extends StatelessWidget {
   const _BottomNavigation({required this.tab, required this.onNavigate});
 
+  static const height = 52.0;
   final NiraTab tab;
   final ValueChanged<NiraTab> onNavigate;
 
@@ -311,10 +314,10 @@ class _BottomNavigation extends StatelessWidget {
       constraints: const BoxConstraints(maxWidth: 440),
       child: Material(
         color: niraGreen,
-        borderRadius: BorderRadius.circular(29),
+        borderRadius: BorderRadius.circular(height / 2),
         clipBehavior: Clip.antiAlias,
         child: SizedBox(
-          height: 58,
+          height: height,
           child: LayoutBuilder(
             builder: (context, constraints) {
               final style = niraText(12, weight: FontWeight.w600, height: 1.15);
@@ -400,8 +403,8 @@ class _BottomNavigation extends StatelessWidget {
                         Positioned(
                           left: left + 2,
                           width: width - 4,
-                          top: 13,
-                          bottom: 13,
+                          top: 10,
+                          bottom: 10,
                           child: const DecoratedBox(
                             decoration: BoxDecoration(
                               color: Colors.white,
@@ -453,9 +456,9 @@ class _BottomNavigation extends StatelessWidget {
       child: InkWell(
         onTap: () => onNavigate(item),
         overlayColor: niraGreenOverlay,
-        borderRadius: BorderRadius.circular(29),
+        borderRadius: BorderRadius.circular(height / 2),
         child: SizedBox(
-          height: 58,
+          height: height,
           child: Padding(
             padding: EdgeInsets.symmetric(horizontal: 4 + 6 * emphasis),
             child: Row(

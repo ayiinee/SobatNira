@@ -449,25 +449,12 @@ class _KloterListPageState extends State<KloterListPage> {
 
   Widget _card(DemoKloter item) => Padding(
     padding: const EdgeInsets.only(bottom: NiraSpace.sm),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (_selectedId == _keyFor(item))
-          Padding(
-            padding: const EdgeInsets.only(bottom: NiraSpace.xs),
-            child: Text(
-              'ID cocok · Ketuk kartu untuk membuka',
-              style: niraText(NiraType.caption, color: niraGreen),
-            ),
-          ),
-        KloterCard(
-          kloter: item,
-          onTap: () {
-            FocusScope.of(context).unfocus();
-            widget.onOpenKloter(item);
-          },
-        ),
-      ],
+    child: KloterCard(
+      kloter: item,
+      onTap: () {
+        FocusScope.of(context).unfocus();
+        widget.onOpenKloter(item);
+      },
     ),
   );
 

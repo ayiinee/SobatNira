@@ -368,11 +368,12 @@ class ReportDetailPage extends StatelessWidget {
   Widget _moneyRow(String label, String value, {bool bold = false}) => Padding(
     padding: const EdgeInsets.symmetric(vertical: NiraSpace.xs),
     child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: Text(
+          flex: 6,
+          child: NiraValue(
             label,
+            abbreviate: false,
             style: niraText(
               NiraType.body,
               weight: bold ? FontWeight.w700 : FontWeight.w400,
@@ -381,7 +382,7 @@ class ReportDetailPage extends StatelessWidget {
         ),
         const SizedBox(width: NiraSpace.sm),
         Expanded(
-          flex: 2,
+          flex: 5,
           child: NiraValue(
             value,
             label: label,
@@ -408,19 +409,8 @@ class ReportDetailPage extends StatelessWidget {
             'Porsi',
             header: true,
           ),
-          if (kind == ReportDetailKind.grade)
-            ReportPaginatedList<(String, String, String)>(
-              items: contributions,
-              resetToken: kind,
-              builder: (rows) => Column(
-                children: [
-                  for (final row in rows) _tableRow(row.$1, row.$2, row.$3),
-                ],
-              ),
-            )
-          else
-            for (final row in contributions) _tableRow(row.$1, row.$2, row.$3),
-          const Divider(height: 10),
+          for (final row in contributions) _tableRow(row.$1, row.$2, row.$3),
+          const Divider(height: 12, thickness: 1, color: niraLine),
           _tableRow(
             'Total',
             kind == ReportDetailKind.grade ? displayedGrade : displayedSugar,
@@ -442,25 +432,32 @@ class ReportDetailPage extends StatelessWidget {
     child: Row(
       children: [
         Expanded(
-          child: Text(
+          flex: 54,
+          child: NiraValue(
             one,
+            abbreviate: false,
             style: niraText(
               NiraType.body,
               weight: header ? FontWeight.w700 : FontWeight.w400,
             ),
           ),
         ),
+        const SizedBox(width: NiraSpace.xs),
         Expanded(
+          flex: 25,
           child: NiraValue(
             two,
             label: 'Berat',
+            alignment: Alignment.center,
             style: niraText(
               NiraType.body,
               weight: header ? FontWeight.w700 : FontWeight.w400,
             ),
           ),
         ),
+        const SizedBox(width: NiraSpace.xs),
         Expanded(
+          flex: 21,
           child: NiraValue(
             three,
             label: 'Porsi',

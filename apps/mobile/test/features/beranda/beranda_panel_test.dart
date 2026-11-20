@@ -45,11 +45,14 @@ void main() {
       expect(amount, findsOneWidget);
       final handle = find.byKey(const ValueKey('beranda-kloter-handle'));
       final header = tester.getTopLeft(find.text('Keuntungan'));
+      final panelTop = tester
+          .getTopLeft(find.byType(DraggableScrollableSheet))
+          .dy;
       final originalHandle = tester.getTopLeft(handle);
-      await tester.drag(handle, const Offset(0, -150));
+      await tester.drag(handle, Offset(0, panelTop - originalHandle.dy - 30));
       await tester.pumpAndSettle();
       expect(tester.getTopLeft(find.text('Keuntungan')), header);
-      expect(tester.getTopLeft(handle).dy, lessThan(originalHandle.dy - 40));
+      expect(tester.getTopLeft(handle).dy, closeTo(panelTop, 1));
       final scrollable = find.descendant(
         of: find.byKey(const ValueKey('beranda-kloter-list')),
         matching: find.byType(Scrollable),

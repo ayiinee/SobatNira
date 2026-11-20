@@ -130,12 +130,6 @@ class _NiraHomeState extends State<NiraHome> {
           profit:
               _live?.reports.amount('productionMarginRupiah', money: true) ??
               demoMoney(_analytics.marginTotal),
-          period: _live == null
-              ? '${_analytics.dateFilter == null ? 'Semua tanggal' : '${formatDate(_analytics.dateFilter!.range.start)} - ${formatDate(_analytics.dateFilter!.range.end)}'} · data sintetis'
-              : '${_live.reports.period} · ${_live.reports.synthetic ? 'Data sintetis' : 'Data disahkan'}',
-          onPeriod: _live == null
-              ? null
-              : () => filterConnectedReport(context, _live.reports),
           reportStatus: _live == null
               ? null
               : ConnectedReportStatus(reports: _live.reports),

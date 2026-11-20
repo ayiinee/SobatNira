@@ -63,35 +63,39 @@ class KloterDetailPage extends StatelessWidget {
                 ),
                 child: Column(
                   children: [
-                    DetailMetrics([
-                      (
-                        'Tebu bersih (kg)',
-                        kloter.record != null && kloter.netWeightKg == null
-                            ? '—'
-                            : kloter.weight.replaceFirst(
-                                RegExp(r'\s*kg$', caseSensitive: false),
-                                '',
-                              ),
-                      ),
-                      (
-                        'Brix tebu',
-                        kloter.brix == null
-                            ? '—'
-                            : formatQuantity(kloter.brix, '°Bx'),
-                      ),
-                      if (kloter.record == null)
+                    DetailMetrics(
+                      [
                         (
-                          'Nira batch',
-                          formatQuantity(kloter.batchJuiceLiters, 'L'),
-                        )
-                      else
-                        (
-                          'Nira dihasilkan',
-                          kloter.juiceLiters == null
+                          'Tebu bersih (kg)',
+                          kloter.record != null && kloter.netWeightKg == null
                               ? '—'
-                              : formatQuantity(kloter.juiceLiters, 'L'),
+                              : kloter.weight.replaceFirst(
+                                  RegExp(r'\s*kg$', caseSensitive: false),
+                                  '',
+                                ),
                         ),
-                    ], centerAll: true),
+                        (
+                          'Brix tebu',
+                          kloter.brix == null
+                              ? '—'
+                              : formatQuantity(kloter.brix, '°Bx'),
+                        ),
+                        if (kloter.record == null)
+                          (
+                            'Nira batch',
+                            formatQuantity(kloter.batchJuiceLiters, 'L'),
+                          )
+                        else
+                          (
+                            'Nira dihasilkan',
+                            kloter.juiceLiters == null
+                                ? '—'
+                                : formatQuantity(kloter.juiceLiters, 'L'),
+                          ),
+                      ],
+                      centerAll: true,
+                      singleLineLabels: true,
+                    ),
                     ?statusMessage,
                     const SizedBox(height: NiraSpace.lg),
                     DocumentLink('Data tebu dan penggilingan', () async {
