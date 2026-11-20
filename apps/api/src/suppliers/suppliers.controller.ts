@@ -4,15 +4,18 @@ import { FactoryAccess } from '../auth/auth.types';
 import { found, parsePage, parseSupplierInput, parseSupplierQuery, uuid } from '../production/production.dto';
 import { ProductionHistoryRepository } from '../production/production.repository';
 import { SuppliersRepository } from './suppliers.repository';
+import { CatalogCache } from '../cache/catalog-cache';
 
 @Controller('tenants/:tenantId/factories/:factoryId/suppliers')
 @FactoryRoles('admin', 'owner')
 export class SuppliersController {
-  constructor(private readonly suppliers: SuppliersRepository, private readonly history: ProductionHistoryRepository) {}
+  constructor(private readonly suppliers: SuppliersRepository, private readonly history: ProductionHistoryRepository,
+    private readonly cache: CatalogCache) {}
 
   @Get()
   list(@CurrentFactory() access: FactoryAccess, @Query() query: unknown) {
-    return this.suppliers.list(access, parseSupplierQuery(query));
+    const filters = parseSupplierQuery(query);
+    return this.cache.read(access, 'suppliers', filters, () => this.suppliers.list(access, filters));
   }
 
   @Post()

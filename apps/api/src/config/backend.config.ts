@@ -21,6 +21,7 @@ export interface BackendConfig {
   postgres?: { url: string; caFile?: string; caPem?: string };
   databasePool?: { businessMax: number; documentsMax: number; idleMs: number; connectMs: number; statementMs: number };
   redis?: { url: string };
+  catalogCache?: { enabled: boolean; ttlSeconds: number; timeoutMs: number };
   r2?: {
     endpoint: string;
     region: string;
@@ -123,6 +124,13 @@ export function loadConfiguration(options: ConfigOptions = {}): BackendConfig {
     idleMs: integer('DB_POOL_IDLE_MS', 30000, 1000, 600000),
     connectMs: integer('DB_POOL_CONNECT_MS', config.timeoutMs, 100, 60000),
     statementMs: integer('DB_STATEMENT_TIMEOUT_MS', config.timeoutMs, 100, 600000),
+  };
+  const catalogCacheEnabled = value('CATALOG_CACHE_ENABLED', 'false');
+  if (!['true', 'false'].includes(catalogCacheEnabled)) invalid.push('CATALOG_CACHE_ENABLED');
+  config.catalogCache = {
+    enabled: catalogCacheEnabled === 'true',
+    ttlSeconds: integer('CATALOG_CACHE_TTL_SECONDS', 300, 1, 3600),
+    timeoutMs: integer('CATALOG_CACHE_TIMEOUT_MS', 100, 20, 1000),
   };
 
   if (value('BATCH_API_BASE_URL')) {

@@ -26,7 +26,7 @@ berarti perubahan sudah di-commit, digabung, atau diterapkan ke database tim/pro
 | 3. Retensi storage | Inventaris dan simulasi lokal selesai; tanpa penghapusan sesuai keputusan pengguna | Review staging, metadata lifecycle dan keputusan masa simpan; worker hapus ditunda |
 | 4. Optimisasi foto | Validasi bersama, preview/thumbnail dan unduh asli sesuai kebutuhan tersedia | Metadata turunan persisten, kualitas tulisan tangan/foto besar, peak RAM dan latensi perangkat |
 | 5. Database dan kapasitas | Pool terkonfigurasi, metrik akuisisi/transaksi dan diagnostik tersedia; indeks lama dimanfaatkan | Profil antrean/review/pencarian, sizing produksi, beban/staging |
-| 6. Caching | Belum diimplementasikan | Cache-aside, invalidasi, isolasi dan fallback |
+| 6. Caching | Cache katalog opt-in, generasi PostgreSQL, isolasi, penggabungan request dan fallback selesai lokal | Server Redis nyata, beban/staging; laporan belum dicache |
 | 7. Verifikasi dan rilis | Tes lokal tahap 1–2 selesai | Uji Flutter, beban, staging dan rilis |
 
 ## A. Baseline dan observabilitas
@@ -125,7 +125,7 @@ Profil sintetis 30 kloter, 120 batch/grade dan 150 snapshot: median lengkap 65,5
 - [x] **DB-02** Buktikan query cursor memakai indeks kloter yang tersedia, tanpa migrasi indeks tambahan.
 - [ ] **DB-03** Evaluasi composite/partial index untuk batch sah, laporan, antrean review dan claim job berdasarkan rencana query serta selektivitas.
 - [x] **DB-03A** Profil lokal review/claim/statistik pada 30.000 job/task dua pabrik; indeks claim lama dipakai, kandidat index review tidak dipakai dan tidak diterapkan.
-- [ ] **DB-04** Profil pencarian `strpos(lower(...))`; evaluasi perubahan query dan `pg_trgm` hanya bila pengukuran membenarkan.
+- [x] **DB-04** Profil pencarian `strpos(lower(...))`; evaluasi perubahan query dan `pg_trgm` hanya bila pengukuran membenarkan.
 - [ ] **DB-05** Ukur dampak setiap kandidat indeks pada baca, INSERT/UPDATE, ukuran index dan pemeliharaan sebelum membuat migrasi.
 - [x] **DB-05A** Ukur kandidat review pada baca dan INSERT/UPDATE 500 task serta ukuran 1.818.624 byte; tolak kandidat yang tidak digunakan planner. Pemeliharaan/beban produksi tetap belum diukur.
 - [ ] **DB-06** Tinjau biaya `COUNT(*)`, deep OFFSET, proyeksi kolom dan agregasi JSON; perbaiki hanya jalur yang terbukti mahal.
@@ -228,18 +228,28 @@ di staging. Tidak ada concurrency Paddle/worker atau kebijakan retry yang diubah
 ## I. Redis dan caching
 
 - [ ] **CAC-01** Pilih endpoint dari pengukuran biaya/frekuensi; sepakati toleransi data lama tiap kategori.
-- [ ] **CAC-02** Implementasikan cache-aside untuk katalog/ringkasan yang dipilih dengan TTL terkonfigurasi.
-- [ ] **CAC-03** Gunakan key berisi tenant, pabrik, filter/periode, sintetis/resmi, versi dan cakupan akses bila hasil berbeda.
-- [ ] **CAC-04** Periksa otorisasi sebelum cache dikembalikan; pencabutan membership tetap berlaku pada request berikutnya.
+- [x] **CAC-01A** Pilih dua daftar katalog dari profil 20.000 pemasok; gunakan invalidasi generasi pada commit, tanpa mengizinkan TTL sebagai jendela stale. Frekuensi produksi dan toleransi laporan masih terbuka.
+- [x] **CAC-02** Implementasikan cache-aside untuk katalog/ringkasan yang dipilih dengan TTL terkonfigurasi.
+- [x] **CAC-03** Gunakan key berisi tenant, pabrik, filter/periode, sintetis/resmi, versi dan cakupan akses bila hasil berbeda.
+- [x] **CAC-04** Periksa otorisasi sebelum cache dikembalikan; pencabutan membership tetap berlaku pada request berikutnya.
 - [ ] **CAC-05** Invalidasi setelah commit perubahan katalog, pengesahan, koreksi, transfer, biaya dan penutupan kloter.
-- [ ] **CAC-06** Tangani kegagalan/race invalidasi antar-replika; TTL menjadi batas cadangan, bukan satu-satunya jaminan konsistensi.
-- [ ] **CAC-07** Gabungkan request identik saat cache kosong dan cegah lonjakan pengisian ulang bersamaan.
+- [x] **CAC-05A** Generasi katalog berubah atomik dengan INSERT/UPDATE/DELETE/TRUNCATE dan rollback bersama transaksi; operasi produksi tetap uncached, sehingga invalidasi ringkasannya belum diimplementasikan.
+- [x] **CAC-06** Tangani kegagalan/race invalidasi antar-replika; TTL menjadi batas cadangan, bukan satu-satunya jaminan konsistensi.
+- [x] **CAC-07** Gabungkan request identik saat cache kosong dan cegah lonjakan pengisian ulang bersamaan.
 - [ ] **CAC-08** Sediakan fallback database dengan timeout Redis terbatas dan pantau hit/miss, eviction, error serta memori.
-- [ ] **CAC-09** Pertahankan pembacaan keadaan resmi untuk validasi stok, reservasi dan penutupan dalam transaksi database.
+- [x] **CAC-08A** Fallback database, timeout per command, log hit/miss/error/invalid/coalesced tersedia; eviction/memory server Redis tetap dipantau melalui provider, belum dipungut API.
+- [x] **CAC-09** Pertahankan pembacaan keadaan resmi untuk validasi stok, reservasi dan penutupan dalam transaksi database.
 - [ ] **CAC-10** Uji isolasi pabrik/role, invalidasi koreksi, cache kedaluwarsa, Redis mati dan pemulihan.
+- [x] **CAC-10A** Uji katalog dengan unit dan HTTP/PostgreSQL serta fixture protokol TCP ioredis: scope, commit/rollback, TTL, timeout, outage/reconnect dan pengisian antar-instance. Server Redis nyata/multi-replika staging belum diuji.
 
-TTL katalog 5–15 menit, Beranda 15–30 detik dan ringkasan laporan 30–60 detik masih
-merupakan kandidat pengujian. Redis saat audit baru dipakai untuk pemeriksaan koneksi.
+Kontrak dan bukti ada pada [cache katalog](catalog-cache.md). Migrasi bisnis 024
+menambahkan metadata generasi dan trigger statement-level. Default flag false;
+TTL katalog 300 detik mengatur umur entri, bukan stale setelah perubahan commit.
+Profil sintetis: katalog 75,503 ms, cold cache 103,146 ms, warm 6,094 ms (Redis fixture
+protokol lokal, bukan p95 provider). GIN 1.081.344 byte membantu substring langka
+28,086 → 5,107 ms, tetapi tidak pencarian umum; belum diterapkan tanpa pola produksi.
+Cache Beranda/laporan dan toleransi stalenya tetap terbuka. Caching tidak menjadi
+pengganti pembacaan resmi pada transaksi stok/pengesahan.
 
 ## J. Bukti pengujian dan penerapan
 
@@ -254,6 +264,7 @@ merupakan kandidat pengujian. Redis saat audit baru dipakai untuk pemeriksaan ko
 - [x] **QA-05B** Laporan: analyzer bersih dan suite Flutter 136 tes lulus, 3 tes fixture dilewati (runner berurutan). Build API serta regresi PostgreSQL summary/page, koreksi, PDF/XLSX dan batas 101 kloter lulus; detail bukti ada di bagian D.
 - [x] **QA-05C** Foto: build dan 107 tes backend/integrasi lulus tanpa skip; analyzer Flutter bersih dan 5 tes Pekerjaan/varian lulus. Mencakup foto rusak, WebP animasi/APNG, hash, orientasi/bbox, antrean transformasi, akses pabrik dan pembukaan asli setelah preview gagal. Suite Flutter penuh belum diulang setelah tahap foto; hasil 136 tes di atas berasal dari tahap laporan.
 - [x] **QA-05D** Worker/review: build dan 13 tes timer/alur OCR PostgreSQL lulus tanpa skip. Profiler 30.000 task/job memverifikasi hasil query lama/baru identik dan merekam biaya baca/tulis kandidat index yang akhirnya ditolak.
+- [x] **QA-05E** Katalog/cache: migrasi 024 diterapkan pada database sintetis, build dan suite 117 tes backend/integrasi lulus tanpa skip. Redis diuji melalui fixture protokol lokal, belum server/provider nyata; flag cache tetap nonaktif secara default.
 - [ ] **QA-06** Jalankan tes FastAPI dari `apps/ai` dengan `uv run --locked python -m unittest` bila kontrak/pemrosesan AI berubah.
 - [ ] **QA-07** Uji satu skenario sintetis dari foto → OCR → revisi → pengesahan → stok → laporan/PDF; pastikan angka dan status konsisten.
 - [ ] **QA-08** Uji R2 nyata dengan fixture sintetis terpisah; catat dan bersihkan hanya objek fixture yang dibuat tes.
@@ -288,6 +299,7 @@ Branch kerja: `perf/api-staged-photo-upload`.
 | 21 November 2026 | `b7911a9` | Inventaris dan simulasi cleanup tanpa penghapusan |
 | 21 November 2026 | `0e11c3f` | Konfigurasi pool, metrik akuisisi/transaksi dan diagnostik database |
 | 21 November 2026 | `553beb0` | Validasi bersama dan varian foto privat, overlay serta pembukaan asli di Flutter |
+| 21 November 2026 | `5470202` | Query review sesudah pagination, metrik antrean dan opsi polling adaptif |
 
 Riwayat ini mencatat commit lokal. Status sinkronisasi remote dapat diperiksa dengan
 `git status -sb`; commit tidak berarti perubahan sudah digabung ke main atau dirilis.

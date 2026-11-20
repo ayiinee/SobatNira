@@ -5,15 +5,18 @@ import { found, parseCatalogQuery, parsePage, uuid } from '../production/product
 import { ProductionHistoryRepository } from '../production/production.repository';
 import { parseCaneTypeCreate, parseCaneTypeUpdate } from './cane-types.dto';
 import { CaneTypesRepository } from './cane-types.repository';
+import { CatalogCache } from '../cache/catalog-cache';
 
 @Controller('tenants/:tenantId/factories/:factoryId/cane-types')
 @FactoryRoles('admin', 'owner')
 export class CaneTypesController {
-  constructor(private readonly caneTypes: CaneTypesRepository, private readonly history: ProductionHistoryRepository) {}
+  constructor(private readonly caneTypes: CaneTypesRepository, private readonly history: ProductionHistoryRepository,
+    private readonly cache: CatalogCache) {}
 
   @Get()
   list(@CurrentFactory() access: FactoryAccess, @Query() query: unknown) {
-    return this.caneTypes.list(access, parseCatalogQuery(query));
+    const filters = parseCatalogQuery(query);
+    return this.cache.read(access, 'cane_types', filters, () => this.caneTypes.list(access, filters));
   }
 
   @Post()
