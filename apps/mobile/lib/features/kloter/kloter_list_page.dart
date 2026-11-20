@@ -369,9 +369,6 @@ class _KloterListPageState extends State<KloterListPage> {
           color: niraGreen,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(niraRadius),
-            side: active
-                ? const BorderSide(color: niraGold, width: 2)
-                : BorderSide.none,
           ),
           child: InkWell(
             onTap: _selectDate,

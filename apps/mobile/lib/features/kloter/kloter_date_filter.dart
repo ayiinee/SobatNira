@@ -230,14 +230,14 @@ class _FilterPanelState extends State<_FilterPanel> {
                 children: [
                   Icon(
                     switch (period) {
-                      KloterPeriod.today => Icons.today,
-                      KloterPeriod.week => Icons.date_range,
-                      KloterPeriod.month => Icons.calendar_month,
-                      KloterPeriod.year => Icons.event_note,
-                      KloterPeriod.custom => Icons.filter_alt,
+                      KloterPeriod.today => Icons.event_rounded,
+                      KloterPeriod.week => Icons.view_week_rounded,
+                      KloterPeriod.month => Icons.calendar_view_month_rounded,
+                      KloterPeriod.year => Icons.event_note_rounded,
+                      KloterPeriod.custom => Icons.filter_alt_rounded,
                     },
                     size: 23,
-                    color: selected ? niraGreen : niraLeaf,
+                    color: niraGreen,
                   ),
                   const SizedBox(width: NiraSpace.lg),
                   Expanded(

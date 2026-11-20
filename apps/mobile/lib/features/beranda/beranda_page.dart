@@ -417,7 +417,7 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(
                   NiraSpace.lg,
-                  NiraSpace.sm,
+                  NiraSpace.sm + 3,
                   NiraSpace.md,
                   NiraSpace.lg,
                 ),
@@ -429,10 +429,10 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                       style: niraText(
                         NiraType.section,
                         color: Colors.white,
-                        weight: FontWeight.w600,
+                        weight: FontWeight.w500,
                       ),
                     ),
-                    const SizedBox(height: NiraSpace.sm),
+                    const SizedBox(height: NiraSpace.sm - 3),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -443,7 +443,7 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                             style: niraText(
                               NiraType.hero,
                               color: niraYellow,
-                              weight: FontWeight.w600,
+                              weight: FontWeight.w700,
                             ),
                           ),
                         ),

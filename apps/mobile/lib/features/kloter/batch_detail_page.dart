@@ -391,8 +391,12 @@ class _BatchDetailPageState extends State<BatchDetailPage>
     const SizedBox(height: NiraSpace.md),
     DetailMetrics([
       (
-        'Tebu bersih kloter',
-        _data?.caneWeight ?? '${demoNumber(_batch.lot?.caneKg ?? 0)} kg',
+        'Tebu bersih kloter (kg)',
+        _data?.caneWeight.replaceFirst(
+              RegExp(r'\s*kg$', caseSensitive: false),
+              '',
+            ) ??
+            demoNumber(_batch.lot?.caneKg ?? 0),
       ),
       ('Nilai produksi batch', _productionValue),
     ], separate: true),
