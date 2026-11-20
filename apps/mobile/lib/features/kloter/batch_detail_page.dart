@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/adaptive_value.dart';
 import 'demo_production.dart';
 import 'demo_lot_fixture.dart';
 import 'detail_fields.dart';
@@ -330,13 +331,18 @@ class _BatchDetailPageState extends State<BatchDetailPage>
     for (final entry in _grades)
       _PriceRow(
         grade: Text(entry.code, style: niraText(NiraType.body)),
-        weight: Text(
+        weight: NiraValue(
           entry.weight == '–' || entry.weight == '—'
               ? entry.weight
               : '${entry.weight}${_official ? ' kg' : 'Kg'}',
           style: niraText(NiraType.body),
         ),
-        price: Text(entry.price, style: niraText(NiraType.body)),
+        price: NiraValue(
+          entry.price,
+          label: 'Harga grade ${entry.code}',
+          abbreviate: false,
+          style: niraText(NiraType.body),
+        ),
         height: 30,
       ),
     _PriceRow(
@@ -344,9 +350,15 @@ class _BatchDetailPageState extends State<BatchDetailPage>
         'Nilai produksi batch',
         style: niraText(NiraType.caption, weight: FontWeight.w700),
       ),
-      weight: Text(_totalWeight, style: niraText(NiraType.body)),
-      price: Text(
+      weight: NiraValue(
+        _totalWeight,
+        label: 'Berat total',
+        abbreviate: false,
+        style: niraText(NiraType.body),
+      ),
+      price: NiraValue(
         _productionValue,
+        label: 'Nilai produksi batch',
         style: niraText(NiraType.section, weight: FontWeight.w700),
       ),
       height: 32,
@@ -408,8 +420,11 @@ class _BatchDetailPageState extends State<BatchDetailPage>
           weight: grade.weight,
           onTap: _official || _reviewed ? null : () => _editGrade(grade.code),
         ),
-        price: Text(
+        price: NiraValue(
           grade.price == '—' ? '—' : '${grade.price}/Kg',
+          label: 'Harga grade ${grade.code}',
+          abbreviate: false,
+          alignment: Alignment.centerRight,
           style: niraText(NiraType.body),
         ),
         height: 35,
@@ -633,7 +648,13 @@ class _GradeWeight extends StatelessWidget {
                   horizontal: NiraSpace.sm,
                   vertical: NiraSpace.xs,
                 ),
-                child: Text(weight, style: niraText(NiraType.body)),
+                child: NiraValue(
+                  weight,
+                  label: 'Berat grade $grade',
+                  abbreviate: false,
+                  revealOnTap: onTap == null,
+                  style: niraText(NiraType.body),
+                ),
               ),
             ),
             Container(

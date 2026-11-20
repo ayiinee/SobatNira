@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/adaptive_value.dart';
 import '../../widgets/summary_card.dart';
 import '../kloter/demo_production.dart';
 import '../kloter/kloter_date_filter.dart';
@@ -342,8 +343,11 @@ class _ReportExportPageState extends State<ReportExportPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(
+              NiraValue(
                 row.value,
+                label: row.supplier,
+                abbreviate: false,
+                alignment: Alignment.centerRight,
                 style: niraText(NiraType.body, weight: FontWeight.w600),
               ),
               if (!profit) ...[

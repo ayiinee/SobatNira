@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sobatnira/features/kloter/demo_production.dart';
 import 'package:sobatnira/main.dart';
+import 'package:sobatnira/widgets/adaptive_value.dart';
 import 'package:sobatnira/features/laporan/demo_analytics.dart';
 import 'package:sobatnira/features/kloter/demo_lot_fixture.dart';
 
@@ -25,7 +26,11 @@ void main() {
       await tester.pumpAndSettle();
       final analytics = DemoAnalytics();
       addTearDown(analytics.dispose);
-      final amount = find.text(demoMoney(analytics.marginTotal));
+      final amount = find.byWidgetPredicate(
+        (widget) =>
+            widget is NiraValue &&
+            widget.value == demoMoney(analytics.marginTotal),
+      );
       final eye = find.byTooltip('Sembunyikan keuntungan');
       expect(
         tester.getCenter(eye).dx,
