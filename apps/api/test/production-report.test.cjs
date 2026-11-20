@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { productionReport } = require('../dist/production/production-report');
+const { contributionRanking, productionReport } = require('../dist/production/production-report');
 const { Batches } = require('../dist/production/batches');
 
 const lot = (id, calculation = null, batches = []) => ({ lotId: id, code: 'DUPLICATE',
@@ -34,6 +34,22 @@ test('empty report has explicit zero totals and no fabricated results', () => {
   assert.equal(result.totals.finalSugarKg, '0');
   assert.deepEqual(result.items, []);
   assert.deepEqual(result.grades, []);
+});
+
+test('contribution ranking retains exact sums and ties, and withholds incomplete results', () => {
+  const consumed = (originLotId, quantityMl) => ({ originLotId, lotCode: originLotId, quantityMl });
+  const first = { ...batch, id: 'first', quantityMl: '0.3',
+    consumedByOrigin: [consumed('A', '0.1'), consumed('B', '0.2')] };
+  const second = { ...batch, id: 'second', quantityMl: '0.1', consumedByOrigin: [consumed('A', '0.1')] };
+  const ranking = contributionRanking([lot('one', calculation, [first, second])]);
+  assert.equal(ranking.status, 'complete');
+  assert.equal(ranking.leadingCount, 2);
+  assert.deepEqual(ranking.leaders, [consumed('A', '0.2'), consumed('B', '0.2')]);
+  const incomplete = contributionRanking([lot('one', calculation, [first, { ...second, consumedByOrigin: [] }])]);
+  assert.equal(incomplete.status, 'incomplete');
+  assert.deepEqual(incomplete.incompleteBatchIds, ['second']);
+  assert.deepEqual(incomplete.leaders, []);
+  assert.equal(contributionRanking([lot('one')]).status, 'no_data');
 });
 
 test('report validates period and category before accessing database, and binds scope/time values', async () => {

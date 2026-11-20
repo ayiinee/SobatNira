@@ -2,6 +2,8 @@
 
 Skema JSON dan contoh sintetis tersedia di [schemas](schemas/) dan [examples](examples/). Status pengujian tercatat di [log implementasi](IMPLEMENTATION_LOG.md). PRD dan register keputusan tim disimpan secara privat di `docs/internal/ai/`.
 
+Lihat [hasil Implementation Pack](IMPLEMENTATION_PROGRESS.md) untuk status terkini dan [kontrak capability owner](CAPABILITY_API.md) untuk membaca data resmi melalui NestJS.
+
 ## Instalasi bersama
 
 Untuk uji penerimaan tim, gunakan Flutter **3.44.6** (Dart **3.12.2**), Chrome, Node.js **24.14.1** (npm **11.11.0**), Python **3.13.18** x64, uv **0.13.8**, dan PostgreSQL **18.6**. Samakan zona waktu browser ke **Asia/Jakarta** karena tampilan tanggal dan filter menggunakan zona waktu perangkat. Dari clone bersih, checkout SHA yang disetujui tim, lalu jalankan perintah per direktori.
@@ -43,7 +45,7 @@ Panggilan pertama PaddleOCR mengunduh model. Gunakan `PADDLE_PDX_CACHE_HOME` unt
 
    Gateway preview membatasi koneksi browser dan pemuatan font ke origin lokal. Tampilan uji memakai font yang ikut di build, termasuk saat mesin terhubung ke internet.
 
-4. Masuk dengan `admin@example.invalid` / `sobatnira-demo`, buka **Pekerjaan** dari Beranda **Pabrik Demo**. Gunakan ID tugas dan kode kloter yang dicetak terminal.
+4. Masuk dengan `admin@example.invalid` / `sobatnira-demo`, lalu buka **Pengaturan → Pekerjaan** di **Pabrik Demo**. Gunakan ID tugas dan kode kloter yang dicetak terminal.
 
    - Buka **Nota Kedatangan Truk**, periksa foto dan riwayat, pilih **Validasi revisi ini**, pilih kloter `OCR-A-UJI`, lalu pilih **Sahkan dan catat stok**.
    - Buka tugas dari **Perlu tinjauan manual**. Lengkapi tanggal `2026-11-16`, pemasok `PEMASOK DEMO`, jenis tebu `BL`, berat `1250` dan catatan pemeriksaan. Simpan draf dan sahkan ke kloter `OCR-B-UJI`.
@@ -62,7 +64,33 @@ Panggilan pertama PaddleOCR mengunduh model. Gunakan `PADDLE_PDX_CACHE_HOME` unt
 
 Jika port web diubah melalui `LOCAL_WEB_PORT`, buat ulang build dengan port yang sama pada kedua definisi URL. Di preview lokal, formulir Pengaturan tanpa kontrak API memakai data sesi sintetis. Pengelolaan operator WhatsApp, pemasok, dan jenis tebu memakai API pabrik. Event `whatsapp_photo_accepted`, `ocr_attempt` dan `whatsapp_notice_delivery` dapat dicocokkan lewat `revisionId`. Catat waktu penerimaan, waktu sejak revisi dibuat sampai percobaan OCR (`queueMs`), durasi ekstraksi (`extractionMs`) dan durasi pengiriman per jenis nota. Ukur persentil dan hasil tinjauan manual di staging dengan sampel yang sudah dianonimkan.
 
-Untuk menjalankan layanan dengan data yang sudah tersedia, gunakan `npm run local:stack -- --web`. Untuk menguji tambahan foto ambigu dan foto ulang, ganti `--acceptance` dengan `--smoke`. Mode `--smoke` mencetak kode kloter dan batch yang dibuat untuk putaran tersebut. Tes PostgreSQL komponen juga memeriksa lease kedaluwarsa akibat restart dan kegagalan provider yang menuju antrean **Perlu tinjauan manual**.
+### Acceptance otomatis di Chrome
+
+Untuk menggantikan langkah browser manual, gunakan `--acceptance-browser` bersama `--web` setelah membangun Flutter dan menyiapkan database kosong. Chrome harus terpasang. Npm mengambil Playwright CLI 0.1.25 pada putaran pertama dan dapat memakai cache npm untuk putaran selanjutnya. Runner membuka profil terisolasi di ukuran 418 × 966 dan zona waktu Asia/Jakarta setelah tiga tugas OCR siap. Layanan yang dimulai runner ditutup saat selesai.
+
+```powershell
+$env:LOCAL_DATABASE_URL = 'postgres://postgres:sobatnira-local@127.0.0.1:55437/sobatnira_accept_a'
+$env:LOCAL_ACCEPTANCE_OUTPUT_DIR = 'output/playwright/checkout-a'
+npm.cmd run local:stack -- --web --acceptance-browser
+```
+
+Jalankan perintah yang sama dari checkout B dengan database dan direktori bukti berbeda. Simpan SHA checkout A/B di catatan pengujian. Gunakan direktori baru setiap kali. Jalankan putaran secara bergiliran setelah build selesai agar kedua pengujian memakai port 8000 dan kompilasi tidak berebut memori dengan OCR. Setelah dua putaran lulus, bandingkan dari `apps/api` memakai path absolut kedua folder.
+
+```powershell
+node scripts/compare-acceptance.mjs <direktori-bukti-A> <direktori-bukti-B>
+```
+
+Runner menyimpan `acceptance.json`, PDF Rekap Flutter, teks PDF yang dinormalisasi, serta tangkapan layar Detail Kloter, Laporan, dan Pengaturan. Fixture menguji sesi owner, pertanyaan OpenClaw, PDF/XLSX dari worker, dan receipt notifikasi simulasi. Untuk pertanyaan gabungan produksi dan grade, peringkat ambigu meminta klarifikasi. Dengan basis tanggal penerimaan kloter batch, hasil yang diharapkan adalah 25 kg grade A dan 40.000 mL dari kloter `OCR-A-UJI`. Artefak worker disimpan sebagai `owner-rekap.pdf` dan `owner-rekap.xlsx`. Pembanding memeriksa nilai bisnis, pemeriksaan akses, serta isi PDF Flutter. Bandingkan tangkapan layar untuk perbedaan visual karena versi Chrome dan sistem operasi dapat memengaruhi piksel. Jika automasi browser gagal, buka `browser-error.txt` dan snapshot yang tersedia di direktori bukti. Simpan berkas bukti di luar commit.
+
+Untuk membuka kembali database sintetis yang sudah diisi acceptance, gunakan `LOCAL_DATABASE_URL` dari putaran tersebut. Aktifkan endpoint owner dan ekspor secara eksplisit bila diperlukan.
+
+```powershell
+$env:OWNER_AGENT_ENABLED = 'true'
+$env:REPORT_EXPORT_ENABLED = 'true'
+npm.cmd run local:stack -- --web
+```
+
+Gunakan `--smoke` untuk menguji foto ambigu dan foto ulang. Mode `--smoke` mencetak kode kloter dan batch yang dibuat untuk putaran tersebut. Tes PostgreSQL komponen juga memeriksa lease kedaluwarsa akibat restart dan kegagalan provider yang menuju antrean **Perlu tinjauan manual**.
 
 Untuk menguji sampai antrean **Pekerjaan** dengan PaddleOCR CPU lokal tanpa membuka Flutter, jalankan `npm run local:stack -- --ocr-smoke` dari `apps/api` memakai database pengembangan sintetis. Perintah memeriksa foto truk, dua revisi produksi, penolakan konfirmasi saat klarifikasi masih terbuka, penolakan format angka ambigu, foto ulang, dan tinjauan manual. Layanan yang dimulai oleh perintah ini ditutup setelah tes selesai.
 
@@ -70,14 +98,28 @@ Untuk menguji sampai antrean **Pekerjaan** dengan PaddleOCR CPU lokal tanpa memb
 
 - Balasan **“Foto diterima. Sedang membaca nota…”** dikirim setelah API menyimpan foto dan pekerjaan OCR. Gunakan **STATUS** untuk cek progres. Jika ada beberapa nota dalam satu chat, balas foto atau ringkasan nota yang dimaksud dengan **STATUS**.
 - Balas pesan otomatis yang memuat pertanyaan dengan **JAWAB** diikuti nilai pada nota. Gunakan `1250` untuk berat 1.250 kg dan `12,5` untuk desimal. Bot mengirim ringkasan revisi terbaru setelah koreksi. Balas **KONFIRMASI** hanya ketika data pada ringkasan terbaru sudah sesuai.
+- Untuk revisi nota produksi, kirim foto dengan membalas pesan nota yang terverifikasi di percakapan itu. Jika bot meminta pilihan, tandai foto dengan **REVISI <ID>** dari daftar yang tampil, atau **BARU** untuk nota baru.
 - `workflow_status` dan `can_confirm` pada status internal menunjukkan tahap dan kesiapan operator. `pending_question` merujuk pada pertanyaan aktif. Tanda terima pengiriman mengikat pertanyaan ke pesan WhatsApp yang menampilkannya. **STATUS** dapat meminta pengiriman ulang jika pengiriman gagal atau ringkasan lama belum menyimpan ikatan pertanyaan.
 - Jalankan `npm run db:migrate:ocr` sebelum memperbarui API dan plugin OpenClaw bersama-sama. Migrasi tambahan mempertahankan tanda terima lama. Untuk draf yang dibuat sebelumnya, pertanyaan wajib dilengkapi sewaktu operator memeriksa status.
 
 ### Pengukuran
 
-Ambil median dan p95 per tipe nota. `whatsapp_photo_reply_dispatch` mengukur waktu dari event masuk hingga balasan masuk antrean pengiriman gateway. Bandingkan dengan waktu balasan terlihat pada perangkat operator saat smoke WhatsApp live. Untuk hasil awal setiap foto, `whatsapp_notice_delivery` dengan hasil `SENT` mencatat `photoRecordedToProviderAckMs` dari pencatatan foto sampai tanda terima provider. Gunakan `ocr_attempt` untuk memisahkan waktu antrean dan inferensi. Koreksi operator serta foto ulang dapat dihitung dari `OPERATOR_CORRECTED`, `CLARIFICATION_ANSWERED`, dan `PHOTO_RETAKE_QUEUED` pada audit.
+Korelasikan log dengan `revisionId`. Gunakan `whatsapp_photo_reply_dispatch` dengan `queued=true` dan `duplicate=false`. `adapterToDispatchMs` mencakup intake dari awal adapter. `apiResponseToDispatchMs` memakai jam monoton adapter. `commitToDispatchMs` memakai waktu NestJS sesudah konfirmasi commit sampai dispatcher menerima balasan pertama. Gunakan metrik lintas proses ini pada mesin yang sama atau dengan jam tersinkronisasi. Receipt ringkasan hasil di `whatsapp_notice_delivery` hanya menyatakan hasil dari adapter pengirim. Waktu balasan muncul di perangkat perlu diukur pada smoke WhatsApp nyata.
 
-Dari `apps/ai`, jalankan `uv run --locked --extra paddle python benchmark_ocr.py <manifest-privat.json>` terhadap sampel anonim berlabel. Statistik agregat membedakan kolom yang kosong, salah baca, serta nilai salah yang diterima sebagai `READ`. Bagian kalibrasi membandingkan bacaan yang akan lolos pada beberapa ambang untuk berat bersih dan berat hasil. Hasil ini belum menerapkan ambang baru pada OCR. Gunakan baseline nota lapangan sebelum menetapkan ambang atau target waktu.
+Dalam `ocr_attempt`, kelompokkan percobaan pertama dan retry. `queueMs` dihitung dari pembuatan revisi. `eligibleWaitMs` dihitung dari saat job tersedia kembali atau lease lama kedaluwarsa. `extractionMs` mencatat panggilan NestJS ke FastAPI. `mediaMs`, `inferParseMs`, `rereadAttempts`, dan `rereadMs` memisahkan pengambilan foto, inferensi plus parsing, dan kerja tambahan crop ketika data tersedia. Log agregat memakai ID korelasi serta kode hasil, tanpa nilai nota atau nomor operator.
+
+`requestId` menghubungkan `ocr_attempt` dengan ekstraksi FastAPI pada percobaan tersebut. Bila selective reread dijalankan, `visionModel` dan `visionPromptVersion` mencatat versi yang dipakai. Penggunaan token hanya tersedia di envelope apabila provider mengirim metadata numerik. Benchmark lokal menerima `row_group_sizes` pada nota produksi serta melaporkan `production_row_grouping` dan `field_status_confusion`.
+
+Detail Pekerjaan mengirim `revision_id` saat menandai notifikasi dibaca. Audit `REVIEW_OPENED` menyimpan pembukaan pertama per revisi dan reviewer berwenang. Klien lama masih dapat menandai notifikasi tanpa mencatat pembukaan revisi. Dari terminal privat operator database, jalankan `psql -v factory_id=<UUID> -v from=<ISO-8601> -f scripts/review-timing.sql` dari `apps/api`, memakai koneksi dan `search_path` OCR yang sama dengan NestJS. Query menampilkan agregat dari tugas dibuat ke pembukaan pertama dan dari pembukaan revisi ke keputusan reviewer yang sama. Angka ini adalah waktu berlalu. Laporkan jumlah keputusan yang tidak dapat dipasangkan dengan pembukaan sebagai cakupan yang belum terukur.
+
+#### Dataset dan metrik akurasi
+
+Jalankan regresi sintetis dari `apps/ai` dengan `uv run --locked --extra paddle python benchmark_ocr.py fixtures/acceptance/ground-truth.json --split test`. Pembacaan standar memakai decoder, PaddleOCR, dan parser grid yang sama dengan layanan. Catat SHA, model, perangkat, dan kondisi cache. Untuk nota lapangan, gunakan manifest privat dengan foto anonim yang disetujui, di luar Git. Catat tipe nota, tingkat keterbacaan, kondisi buram, gelap, miring atau terpotong, tulisan tangan, format angka, serta hubungan foto ulang dan revisi. Gunakan `document_group` yang sama untuk semua foto satu nota. Pisahkan grup antara `tuning` dan `test` dan beri `--split` secara eksplisit saat mengukur. Pertahankan set uji dan labelnya setelah penyetelan dimulai.
+
+- Pakai `fields` untuk `raw_value`, `normalized_value`, `unit`, dan status sesuai anotasi yang tersedia. Isi `required_fields` secara eksplisit sesuai tahap nota. Nilai harus cocok dengan seluruh atribut yang dianotasi. Field yang wajib dan terbaca tetapi hilang dihitung sebagai salah. Anotasi `ILLEGIBLE`, `AMBIGUOUS`, dan `NOT_PRESENT` dilaporkan terpisah. Nilai definitif yang dihasilkan pada field tersebut perlu ditinjau. Tampilkan jumlah nota serta field yang dapat dinilai sebagai penyebut.
+- Hitung nota dengan semua field wajib benar dari nota yang seluruh field wajibnya dapat dinilai. Untuk pembukuan, bandingkan nilai pada revisi sah, pemetaan kloter, dan catatan batch resmi dengan label privat. Laporkan jumlah nota sah yang memiliki minimal satu kesalahan kritis dibagi jumlah nota sah yang dapat dinilai. Jangan gunakan `wrong_read` pada draf sebagai pengganti metrik pengesahan.
+- Hitung nota dengan koreksi dari `OPERATOR_CORRECTED`, `CLARIFICATION_ANSWERED`, atau `ADMIN_CORRECTED`, dan nota difoto ulang dari `PHOTO_RETAKE_QUEUED`, masing-masing dibagi jumlah nota masuk dalam jendela yang sama. Untuk mengurutkan penyebab, tinjau audit bersama label dan hitung satu kali per field logis per nota. Pisahkan salah baca, salah parsing, salah normalisasi, salah pemetaan, dan nilai yang baru tersedia pada revisi lanjutan.
+- Gunakan median dan rentang untuk sampel kecil. Benchmark menahan p95 sampai tersedia 100 grup nota independen untuk agregat yang dilaporkan. Jalankan perbandingan pembacaan standar, crop, dan fallback pada set uji yang sama setelah data dan penggunaan provider disetujui. Laporkan perbaikan field kritis, proporsi nota yang memicu panggilan tambahan, delta waktu, dan biaya sesuai catatan pemakaian provider. Ambang dan target operasional mengikuti hasil pilot.
 
 ## Mode terhubung
 

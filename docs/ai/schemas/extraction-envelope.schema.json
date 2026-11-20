@@ -121,6 +121,10 @@
           "type": "integer",
           "minimum": 0
         },
+        "media_duration_ms": { "type": "integer", "minimum": 0 },
+        "infer_parse_duration_ms": { "type": "integer", "minimum": 0 },
+        "reread_attempts": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "reread_duration_ms": { "type": "integer", "minimum": 0 },
         "token_usage": {
           "type": [
             "object",

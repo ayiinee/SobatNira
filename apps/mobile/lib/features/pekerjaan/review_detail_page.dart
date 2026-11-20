@@ -36,22 +36,23 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
   bool _saving = false;
   String? _retrySignature;
   String? _retryKey;
-  bool _notificationRead = false;
+  final Set<String> _reviewOpened = {};
 
   Future<Json> _load() async {
-    final task = await widget.api.detail(_taskId);
-    if (mounted && !_notificationRead && task['role'] == 'ADMIN') {
-      unawaited(_markNotificationRead());
+    final taskId = _taskId;
+    final task = await widget.api.detail(taskId);
+    final revision = task['revision_id'];
+    if (mounted && revision is String && _reviewOpened.add(revision)) {
+      unawaited(_markNotificationRead(taskId, revision));
     }
     return task;
   }
 
-  Future<void> _markNotificationRead() async {
+  Future<void> _markNotificationRead(String taskId, String revision) async {
     try {
-      await widget.api.markNotificationRead(_taskId);
-      _notificationRead = true;
+      await widget.api.markNotificationRead(taskId, revision);
     } catch (_) {
-      // Loading the note succeeds even if the notification is still unread.
+      _reviewOpened.remove(revision);
     }
   }
 

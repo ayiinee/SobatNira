@@ -168,8 +168,11 @@ test('progressive merge preserves evidence and distinct runs with reused wajan',
     changed_fields: ['cane_blocks.0.batches.0.output.hasil_kg'] });
   assert.match(review, /Blok SYNTHETIC-A · Wajan .* · Berat hasil/);
   assert.match(review, /Perubahan pada revisi ini/);
+  assert.ok(review.indexOf('*JAWAB*') < review.indexOf('Perubahan pada revisi ini'));
   assert.match(review, /Belum dicatat/);
   assert.doesNotMatch(review, /KONFIRMASI/);
+  assert.match(summary({ processing_status: 'QUEUED' }), /menunggu giliran baca/);
+  assert.match(summary({ processing_status: 'PROCESSING' }), /sedang dibaca/);
   const lengthy = structuredClone(note);
   lengthy.cane_blocks[0].batches = Array(7).fill(first);
   const ready = { extraction: lengthy, processing_status: 'EXTRACTED', can_confirm: true };
@@ -649,9 +652,19 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     assert.deepEqual((await scoped('review-tasks', factory, 'other-user')).items, []);
     assert.equal((await mobile('review-tasks?factory_id=bogus')).status, 400);
     assert.equal((await mobile(`review-tasks/${taskId}`, 'owner')).status, 200);
+    const openRevision = (user, revision_id) => mobile(`review-notifications/${taskId}/read`, user, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ revision_id }),
+    });
+    assert.equal((await openRevision('other-user', corrected.revision_id)).status, 200);
+    assert.equal((await openRevision('reviewer', randomUUID())).status, 200);
+    assert.deepEqual(await unread('reviewer'), { unread_count: 1 });
     for (let attempt = 0; attempt < 2; attempt++) {
-      assert.equal((await mobile(`review-notifications/${taskId}/read`, 'reviewer', { method: 'PATCH' })).status, 200);
+      assert.equal((await openRevision('reviewer', corrected.revision_id)).status, 200);
     }
+    assert.equal((await openRevision('owner', corrected.revision_id)).status, 200);
+    const opened = await db.query(`SELECT details->>'task_id' AS task_id FROM audit_events
+      WHERE revision_id=$1 AND action='REVIEW_OPENED'`, [corrected.revision_id]);
+    assert.deepEqual(opened.rows, [{ task_id: taskId }, { task_id: taskId }]);
     assert.deepEqual(await unread('reviewer'), { unread_count: 0 });
     assert.deepEqual(await unread('colleague'), { unread_count: 1 });
     assert.equal((await mobile(`review-tasks/${taskId}`, 'other-user')).status, 404);
@@ -832,6 +845,11 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     const ambiguousResult = await db.query('SELECT processing_status,issues FROM document_revisions WHERE id=$1', [ambiguous.revision_id]);
     assert.equal(ambiguousResult.rows[0].processing_status, 'NEEDS_CLARIFICATION');
     assert.equal(ambiguousResult.rows[0].issues[0].code, 'DOCUMENT_REFERENCE_REQUIRED');
+    assert.ok(!(await status(ambiguous)).candidate_documents.includes(stage2.document_id));
+    assert.equal((await photo(event('reference-outside-operator', 'IMAGE', phone(101), null,
+      `REVISI ${stage2.document_id}`))).status, 404);
+    assert.equal((await photo({ ...event('reference-outside-chat', 'IMAGE', phone(102), null,
+      `REVISI ${stage2.document_id}`), chat_id: 'OTHER-SYNTHETIC-CHAT' })).status, 404);
     assert.equal((await action(event('ambiguous-confirm', 'TEXT'), ambiguous)).status, 409);
 
     const failure = await photo(event('failure')).then((response) => response.json());

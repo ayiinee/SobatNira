@@ -10,10 +10,18 @@ import { SuppliersController } from '../suppliers/suppliers.controller';
 import { SuppliersRepository } from '../suppliers/suppliers.repository';
 import { ProductionHistoryRepository } from './production.repository';
 import { CalculationController } from './calculation.controller';
+import { Capabilities, CapabilitiesController } from './capabilities';
+import { OcrDocumentsModule } from '../documents/ocr-documents.module';
+import { AuthModule } from '../auth/auth.module';
+import { OwnerAgentController, OwnerAgentSessionController, OwnerAgentSessions } from './owner-agent';
+import { ReportExports, ReportExportsController } from './report-exports';
+import { ReportDelivery } from './report-delivery';
 
 @Module({
-  imports: [DatabaseModule],
-  controllers: [SuppliersController, LotsController, CaneTypesController, CalculationController, BatchesController],
-  providers: [SuppliersRepository, LotsRepository, CaneTypesRepository, ProductionHistoryRepository, Batches, JuiceRepository],
+  imports: [DatabaseModule, AuthModule, OcrDocumentsModule],
+  controllers: [SuppliersController, LotsController, CaneTypesController, CalculationController, BatchesController,
+    CapabilitiesController, OwnerAgentController, OwnerAgentSessionController, ReportExportsController],
+  providers: [SuppliersRepository, LotsRepository, CaneTypesRepository, ProductionHistoryRepository, Batches, JuiceRepository,
+    Capabilities, OwnerAgentSessions, ReportExports, ReportDelivery],
 })
 export class ProductionModule {}

@@ -151,8 +151,37 @@ def table_columns(row):
     return sorted(columns, key=lambda column: column.center_x)
 
 
-def table(lines, columns, asset):
-    known = {column.key for column in columns}
+def production_cell(key, named, columns, borders, row, asset, image):
+    column = next((i for i, candidate in enumerate(columns) if candidate.key == key), None)
+    tokens = named.get(key, [])
+    entry = field(key, tokens, asset, "ILLEGIBLE" if column is not None else "NOT_PRESENT")
+    if (tokens or column is None or image is None or key not in {"grade", "hasil_kg"}
+            or not named.get("pan_number") or not (named.get("isi_kg") or named.get("gamping"))):
+        return entry
+    center = columns[column].center_x
+    left = borders[column - 1] if column else center - (borders[0] - center)
+    right = borders[column] if column < len(borders) else center + (center - borders[-1])
+    y = median(token.center[1] for token in row)
+    height = median(token.bbox[3] for token in row)
+    top, bottom = y - height, y + height
+    if not (.01 <= left < center < right <= .99 and .01 <= top < bottom <= .99):
+        return entry
+    width = right - left
+    left, right = left + width * .12, right - width * .12
+    x1, x2 = round(left * image.width), round(right * image.width)
+    y1, y2 = round(top * image.height), round(bottom * image.height)
+    if x2 - x1 < 12 or y2 - y1 < 12:
+        return entry
+    # A missing OCR token is only evidence of a blank cell on clean, bright paper.
+    darkest, lightest = image.crop((x1, y1, x2, y2)).convert("L").getextrema()
+    if darkest < 238 or lightest - darkest > 14:
+        return entry
+    entry["status"] = "NOT_YET_FILLED" if key == "hasil_kg" and not named.get("grade") else "BLANK"
+    entry["evidence"] = [Token("", None, (left, top, right - left, bottom - top)).evidence(asset)]
+    return entry
+
+
+def table(lines, columns, asset, image):
     borders = [(left.center_x + right.center_x) / 2 for left, right in zip(columns, columns[1:])]
     unknown = [{"header_raw": column.token.text, "column_reference": f"COLUMN-{index+1}", "status": "UNMAPPED",
                 "evidence": [column.token.evidence(asset)]} for index, column in enumerate(columns) if column.key is None]
@@ -172,7 +201,7 @@ def table(lines, columns, asset):
             blocks.append(active)
         if not any(named.get(key) for key in COLUMNS.values() if key != "cane_label"):
             continue
-        values = {key: field(key, named.get(key, []), asset, "ILLEGIBLE" if key in known else "NOT_PRESENT")
+        values = {key: production_cell(key, named, columns, borders, line, asset, image)
                   for key in COLUMNS.values() if key != "cane_label"}
         unmapped = [{"header_raw": column.token.text, "cell_raw": " ".join(t.text for t in cell), "status": "UNMAPPED",
                      "evidence": [t.evidence(asset) for t in cell]}
@@ -245,7 +274,7 @@ def production_grid(tokens, asset, shared, image):
         row_y = median(t.center[1] for t in row)
         index = bisect_right(cuts, row_y) - 1
         batches = grouped.setdefault(index, [])
-        values = {key: field(key, named.get(key, []), asset, "ILLEGIBLE" if key in keys else "NOT_PRESENT")
+        values = {key: production_cell(key, named, columns, borders, row, asset, image)
                   for key in COLUMNS.values() if key != "cane_label"}
         unmapped = [{"header_raw": c.token.text, "cell_raw": " ".join(t.text for t in cell), "status": "UNMAPPED",
                      "evidence": [t.evidence(asset) for t in cell]}
@@ -282,7 +311,7 @@ def extract(tokens, asset, schema_version, template_version, image=None):
         columns = table_columns(row)
         keys = [column.key for column in columns if column.key is not None]
         if COOKING_HEADERS <= set(keys) and len(keys) == len(set(keys)):
-            blocks, unknown = table(lines[index + 1:], columns, asset)
+            blocks, unknown = table(lines[index + 1:], columns, asset, image)
             if any(batch["pan_number"]["raw_value"] and (
                 batch["cooking"]["isi_kg"]["raw_value"] or batch["cooking"]["gamping"]["raw_value"]
             ) for block in blocks for batch in block["batches"]):

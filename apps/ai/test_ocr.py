@@ -87,12 +87,48 @@ class OcrTest(TestCase):
         self.assertEqual(batch["cooking"]["gamping"]["normalized_value"], "1 1/2")
         self.assertEqual(batch["cooking"]["jam_turun"]["normalized_value"], "15:35")
         self.assertEqual(batch["unmapped_cells"][0]["header_raw"], "?")
+        with TemporaryDirectory() as folder:
+            root = Path(folder)
+            image.save(root / "grid.png", "PNG")
+            manifest = root / "ground-truth.json"
+            manifest.write_text(json.dumps([{"image": "grid.png", "document_type": "PRODUCTION_NOTE", "row_group_sizes": [2, 1], "fields": {
+                "cane_blocks.0.batches.0.output.hasil_kg": {"normalized_value": 22, "unit": "kg", "status": "READ"},
+                "cane_blocks.1.batches.0.cooking.jam_turun": {"normalized_value": "15:35"},
+            }}]), encoding="utf-8")
+            report = evaluate(load_cases(manifest), lambda *_: tokens)
+        self.assertEqual(report["classification"], {"PRODUCTION_NOTE": {"PRODUCTION_NOTE": 1}})
+        self.assertEqual(report["field_status_confusion"], {"READ": {"READ": 1}})
+        self.assertEqual(report["production_row_grouping"], {"total": 1, "correct": 1})
+        self.assertTrue(all(field["correct"] == 1 for field in report["fields"].values()))
 
     def test_examples_conform_to_note_schemas(self):
         directory = Path(__file__).resolve().parents[2] / "docs" / "ai" / "examples"
         for file, schema in [("truck-arrival-note", "truck-arrival-note"), ("production-note-progressive-update", "production-note")]:
             with self.subTest(file=file):
                 SCHEMAS[schema].validate(json.loads((directory / f"{file}.example.json").read_text(encoding="utf-8")))
+
+    def test_tc014_distinguishes_empty_output_from_unreadable_or_missing_column(self):
+        tokens = [token("DATA PRODUKSI", .1, .04)]
+        for y, row in [
+            (.2, ["TEBU", "WAJAN", "BRIX", "ISI", "GAMPING", "GRADE", "HASIL", "JAM TURUN"]),
+            (.3, ["DEMO-A", "1", "15", "110", "1 1/2", None, None, "15:30"]),
+        ]:
+            tokens.extend(token(value, .08 + i * .1, y) for i, value in enumerate(row) if value)
+        image = Image.new("RGB", (900, 700), "white")
+
+        def output(current_tokens, current_image):
+            note = extract(current_tokens, self.request["image"]["asset_id"], "1.0.0", "1.0.0", current_image)
+            SCHEMAS["production-note"].validate(note)
+            return note["cane_blocks"][0]["batches"][0]["output"]
+
+        empty = output(tokens, image)
+        self.assertEqual(empty["hasil_kg"]["status"], "NOT_YET_FILLED")
+        self.assertEqual(empty["grade"]["status"], "BLANK")
+        self.assertIsNone(empty["hasil_kg"]["normalized_value"])
+        self.assertEqual(empty["hasil_kg"]["evidence"][0]["asset_id"], self.request["image"]["asset_id"])
+        ImageDraw.Draw(image).line((630, 211, 650, 223), fill="gray", width=2)
+        self.assertEqual(output(tokens, image)["hasil_kg"]["status"], "ILLEGIBLE")
+        self.assertEqual(output([t for t in tokens if t.text != "HASIL"], image)["hasil_kg"]["status"], "NOT_PRESENT")
 
     def test_serves_truck_with_evidence_and_preserves_provider_disagreement(self):
         tokens = [token(text, 0.1, 0.05 + index * 0.08) for index, text in enumerate([
@@ -102,7 +138,8 @@ class OcrTest(TestCase):
         env = {"AI_SERVICE_INTERNAL_TOKEN": self.headers["X-Internal-Service-Token"],
                "GEMINI_API_KEY": "test-key", "GEMINI_VISION_MODEL": "test-model"}
         url = "https://generativelanguage.googleapis.com/v1beta/models/test-model:generateContent"
-        result = httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": '{"value":"1251"}'}]}}]},
+        result = httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": '{"value":"1251"}'}]}}],
+                                          "usageMetadata": {"promptTokenCount": 61, "totalTokenCount": 93}},
                                 request=httpx.Request("POST", url))
         with (patch.dict("os.environ", env), patch("ocr_service.load_media", return_value=self.image),
               patch("ocr_service.recognize", return_value=tokens), patch("ocr_service.httpx.post", return_value=result) as reread):
@@ -118,6 +155,11 @@ class OcrTest(TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         data = response.json()
         self.assertEqual(data["status"], "PARTIAL")
+        self.assertEqual(data["processing"]["reread_attempts"], 1)
+        self.assertEqual(data["processing"]["prompt_version"], "crop-transcription-v1")
+        self.assertEqual(data["processing"]["token_usage"],
+                         {"prompt_tokens": 61, "total_tokens": 93, "responses_measured": 1})
+        self.assertGreaterEqual(data["processing"]["reread_duration_ms"], 0)
         SCHEMAS["extraction-envelope"].validate(data)
         self.assertEqual(len(data["processing"]["raw_ocr"]), len(tokens))
         weight = data["extraction"]["header"]["net_weight_kg"]
@@ -133,6 +175,7 @@ class OcrTest(TestCase):
         rate_limited = limited.json()
         self.assertEqual(rate_limited["extraction"]["header"]["net_weight_kg"]["raw_value"], "1.250")
         self.assertEqual(rate_limited["extraction"]["header"]["net_weight_kg"]["status"], "AMBIGUOUS")
+        self.assertNotIn("token_usage", rate_limited["processing"])
         self.assertIn("VISION_UNAVAILABLE", [issue["code"] for issue in rate_limited["issues"]])
 
     def test_production_preserves_reused_pan_unmapped_columns_and_units(self):
@@ -266,9 +309,11 @@ class OcrTest(TestCase):
             root = Path(folder)
             (root / "synthetic.png").write_bytes(self.image)
             manifest = root / "ground-truth.json"
-            manifest.write_text(json.dumps([{"image": "synthetic.png", "document_type": "TRUCK_ARRIVAL_NOTE", "fields": {
+            manifest.write_text(json.dumps([{"image": "synthetic.png", "document_type": "TRUCK_ARRIVAL_NOTE",
+                                             "required_fields": ["header.net_weight_kg"], "fields": {
                 "header.net_weight_kg": {"normalized_value": 1250, "unit": "kg"},
                 "header.supplier_name": {"normalized_value": "Pemasok Berbeda"},
+                "header.vehicle_number": {"status": "ILLEGIBLE"},
                 "header.unknown": {"status": "READ"},
             }}, {"image": "synthetic.png", "document_type": "TRUCK_ARRIVAL_NOTE", "fields": {
                 "header.net_weight_kg": {"normalized_value": 1280, "unit": "kg"},
@@ -286,4 +331,19 @@ class OcrTest(TestCase):
         scores = report["critical_read_calibration"][metric]["thresholds"]
         self.assertEqual(scores["0.9"], {"read_kept": 2, "wrong_read_kept": 1})
         self.assertEqual(scores["0.95"], {"read_kept": 0, "wrong_read_kept": 0})
-        self.assertGreaterEqual(report["p95_processing_ms"], report["median_processing_ms"])
+        self.assertEqual(report["required_fields_per_note"], {"TRUCK_ARRIVAL_NOTE": {"total": 1, "all_correct": 1}})
+        self.assertEqual(report["fields"]["TRUCK_ARRIVAL_NOTE.header.vehicle_number"],
+                         {"unscorable": 1, "read_without_ground_truth_value": 1})
+        self.assertIsNone(report["p95_processing_ms"])
+
+    def test_benchmark_rejects_revisions_split_between_tuning_and_test(self):
+        with TemporaryDirectory() as folder:
+            root = Path(folder)
+            for name in ("first.png", "retake.png"):
+                (root / name).write_bytes(self.image)
+            manifest = root / "ground-truth.json"
+            manifest.write_text(json.dumps([{"image": name, "document_type": "PRODUCTION_NOTE",
+                                             "document_group": "same-note", "split": split}
+                                            for name, split in (("first.png", "tuning"), ("retake.png", "test"))]), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "lebih dari satu split"):
+                load_cases(manifest, "test")

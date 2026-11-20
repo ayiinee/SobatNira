@@ -2,6 +2,8 @@
 
 Pemeriksaan kode: 19 November 2026. Dokumen ini memetakan jalur antarmuka utama saat ini, bukan hasil pengujian API/database live. Tidak mengubah implementasi.
 
+Untuk status implementasi terkini, gunakan [peta domain dan caller](ai/DOMAIN_DATA_MAP.md) dan [bukti pengujian](ai/E2E_TEST_REPORT.md). Bagian di bawah menyimpan temuan historis audit 19 November 2026.
+
 ## Status card
 
 | Halaman | Card / angka | Sumber saat ini | Pekerjaan integrasi |

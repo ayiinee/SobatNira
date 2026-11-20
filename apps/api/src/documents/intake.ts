@@ -139,14 +139,17 @@ export class Intake {
         docId = document.id;
         const result = await db.query<Revision>('SELECT * FROM document_revisions WHERE id=$1', [document.current_revision_id]);
         previous = result.rows[0];
-        if (retakeRevision) {
-          if (previous?.id !== retakeRevision || !canRetake(previous)) throw new ConflictException('STALE_OR_UNAVAILABLE_RETAKE');
-          const { rows: [source] } = await db.query(`SELECT s.explicit_new FROM document_submissions s
-            JOIN whatsapp_inbound_messages m ON m.id=s.inbound_message_id
-            WHERE s.id=$1 AND m.operator_id=$2 AND m.event->>'chat_id'=$3`, [previous.submission_id, operator.id, event.chat_id]);
-          if (!source) throw new NotFoundException('Rujukan foto ulang tidak tersedia pada percakapan ini');
-          submissionExplicitNew = source.explicit_new;
-        } else {
+        if (retakeRevision && (previous?.id !== retakeRevision || !canRetake(previous))) {
+          throw new ConflictException('STALE_OR_UNAVAILABLE_RETAKE');
+        }
+        // A verified quote in the same factory conversation supports an explicit shift handoff.
+        const { rows: [source] } = await db.query<{ explicit_new: boolean }>(`SELECT s.explicit_new FROM document_submissions s
+          JOIN whatsapp_inbound_messages m ON m.id=s.inbound_message_id
+          WHERE s.id=$1 AND m.event->>'chat_id'=$2 AND (m.operator_id=$3 OR $4::boolean)`,
+        [previous?.submission_id, event.chat_id, operator.id, !!quoted && !retakeRevision]);
+        if (!source) throw new NotFoundException('Rujukan nota tidak tersedia pada percakapan ini');
+        if (retakeRevision) submissionExplicitNew = source.explicit_new;
+        else {
           if (document.document_type !== 'PRODUCTION_NOTE') throw new ConflictException('Hanya nota produksi mendukung foto revisi');
           if (!previous?.extraction || previous.issues.some(({ code }) => code === 'DOCUMENT_REFERENCE_REQUIRED') ||
               ['QUEUED', 'PROCESSING'].includes(previous.processing_status)) throw new ConflictException('Revisi sebelumnya belum siap');
@@ -182,7 +185,7 @@ export class Intake {
   async status(phone: string, documentId: string, revisionId: string) {
     const { rows: [revision] } = await this.db.query<Revision & { factory_id: string; follow_up: unknown;
       review_status: string | null; failed_notice: boolean; sent_questions: (string | null)[]; previous_extraction: Note | null;
-      photo_recorded_at: string | null }>(`SELECT r.*,
+      photo_recorded_at: string | null; operator_id: string; chat_id: string }>(`SELECT r.*,o.id AS operator_id,m.event->>'chat_id' AS chat_id,
       CASE WHEN m.outcome->>'revision_id'=r.id::text THEN m.outcome->>'recorded_at' END AS photo_recorded_at,
       (SELECT t.status FROM admin_review_tasks t WHERE t.revision_id=r.id ORDER BY t.created_at DESC,t.id LIMIT 1) AS review_status,
       EXISTS(SELECT 1 FROM whatsapp_notices n WHERE n.revision_id=r.id AND n.status='FAILED') AS failed_notice,
@@ -196,7 +199,7 @@ export class Intake {
       WHERE o.phone_e164=$1 AND o.active AND d.id=$2 AND m.operator_id=o.id`,
     [phone, documentId, revisionId]);
     if (!revision) throw new NotFoundException('Revisi aktif tidak ditemukan');
-    const { factory_id, review_status, previous_extraction, failed_notice, sent_questions, ...stored } = revision;
+    const { factory_id, review_status, previous_extraction, failed_notice, sent_questions, operator_id, chat_id, ...stored } = revision;
     const pending = revision.operator_status === 'PENDING' && revision.extraction;
     const checks = pending ? operatorChecks(pending, revision.issues) : null;
     const can_confirm = checks !== null && !checks.documentBlocked && checks.questions.size === 0;
@@ -220,9 +223,13 @@ export class Intake {
       photo_retake_allowed: !['VALIDATED','PENDING_VALIDATION'].includes(review_status ?? '') && canRetake(revision) };
     if (!revision.issues.some(({ code }) => code === 'DOCUMENT_REFERENCE_REQUIRED')) return result;
     const { rows } = await this.db.query<{ id: string }>(`SELECT d.id FROM source_documents d
-      JOIN document_revisions r ON r.id=d.current_revision_id WHERE d.factory_id=$1 AND d.id<>$2 AND d.document_type='PRODUCTION_NOTE'
+      JOIN document_revisions r ON r.id=d.current_revision_id
+      JOIN document_submissions s ON s.id=r.submission_id
+      JOIN whatsapp_inbound_messages m ON m.id=s.inbound_message_id
+      WHERE d.factory_id=$1 AND d.id<>$2 AND d.document_type='PRODUCTION_NOTE'
+      AND m.operator_id=$3 AND m.event->>'chat_id'=$4 AND r.extraction IS NOT NULL
       AND NOT EXISTS (SELECT FROM jsonb_array_elements(r.issues) i WHERE i->>'code'='DOCUMENT_REFERENCE_REQUIRED')
-      ORDER BY d.created_at DESC LIMIT 5`, [factory_id, documentId]);
+      ORDER BY d.created_at DESC,d.id LIMIT 5`, [factory_id, documentId, operator_id, chat_id]);
     return { ...result, candidate_documents: rows.map(({ id }) => id) };
   }
 

@@ -1,6 +1,7 @@
 import { open, realpath } from 'node:fs/promises';
 import { isAbsolute, relative } from 'node:path';
 import { createOperatorAgent } from './operator-agent.mjs';
+import { createOwnerNarrator, createOwnerSelector, ownerReply } from './owner-agent.mjs';
 import { answerExample, operatorHelp, operatorInstructions, reference, summary, terminal } from './operator-copy.mjs';
 
 const uuid = '[a-f0-9-]{36}';
@@ -30,7 +31,8 @@ async function attachment(root, path) {
   }
 }
 
-export function createBridge({ apiUrl, token, mediaDir, request = fetch, classifyIntent, observe = () => {} }) {
+export function createBridge({ apiUrl, token, mediaDir, request = fetch, classifyIntent,
+  ownerAgent = false, selectOwnerView, narrateOwnerResult, observe = () => {} }) {
   const call = async (endpoint, options = {}, messageId) => {
     const headers = { ...options.headers, 'X-Internal-Service-Token': token };
     if (messageId) headers['Idempotency-Key'] = `baileys:${messageId}`;
@@ -39,7 +41,10 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
     });
     if (!result.ok) {
       const reason = (await result.json().catch(() => null))?.message;
-      const response = result.status === 403 ? 'Nomor operator belum aktif.' :
+      const response = endpoint === 'owner-agent' && result.status === 403 ?
+        'Akses belum tersedia. Sambungkan sesi owner dari pabrik yang berwenang.' :
+        endpoint === 'owner-agent' && result.status === 404 ? 'Referensi tidak ditemukan dalam pabrik aktif.' :
+        result.status === 403 ? 'Nomor operator belum aktif.' :
         result.status === 429 ? 'Terlalu banyak kiriman. Tunggu sebentar dan coba lagi.' :
         reason === 'DOCUMENT_REFERENCE_REQUIRED' || reason === 'DOCUMENT_REFERENCE_CONFLICT' ? 'Untuk lanjutan, balas ringkasan nota sebelumnya dengan foto. Untuk nota baru, kirim terpisah dengan caption BARU.' :
         reason === 'OCR_RETRY_UNAVAILABLE' ? 'Foto ini sudah diproses atau belum bisa dicoba ulang. Ketik STATUS untuk melihat hasil terbaru.' :
@@ -136,14 +141,31 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
         form.set('event', JSON.stringify({ ...metadata, message_type: 'IMAGE', media_mime_type: media.contentType }));
         form.set('media', new Blob([bytes], { type: media.contentType }), 'nota');
         const accepted = await call('inbound', { method: 'POST', body: form }, messageId);
+        const acceptedAt = performance.now();
         observe({ event: 'whatsapp_photo_accepted', revisionId: accepted.revision_id,
-          duplicate: accepted.duplicate, elapsedMs: Math.round(performance.now() - started) });
+          duplicate: accepted.duplicate, elapsedMs: Math.round(acceptedAt - started) });
         const label = reference(accepted.document_id);
         return { text: accepted.duplicate
           ? `Foto ini sudah tercatat ${label}. Balas foto yang Anda kirim dengan *STATUS* untuk melihat nota ini.`
           : `Foto diterima. Sedang membaca nota… ${label}\nSaya akan kirim hasilnya di chat ini. Ketik *STATUS* untuk cek progres.`,
         photoReceipt: { revisionId: accepted.revision_id, duplicate: accepted.duplicate,
-          adapterStarted: started, eventTimestamp: timestamp.valueOf() } };
+          adapterStarted: started, eventTimestamp: timestamp.valueOf(), acceptedAt,
+          commitConfirmedAtMs: accepted.commit_confirmed_at_ms } };
+      }
+      const owner = /^(SAMBUNG|PUTUS|ASISTEN)(?:\s+(.+))?$/i.exec(content);
+      if (ownerAgent && owner) {
+        const [, command, input] = owner;
+        const execute = payload => call('owner-agent', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, chat: chatId, messageId, ...payload }) });
+        if (command.toUpperCase() === 'SAMBUNG') {
+          await execute({ action: 'connect', code: input });
+          return { text: 'Sesi owner tersambung selama satu jam. Ketik ASISTEN untuk melihat panduan.' };
+        }
+        if (command.toUpperCase() === 'PUTUS') {
+          await execute({ action: 'disconnect' });
+          return { text: 'Sesi owner diputus.' };
+        }
+        return { text: await ownerReply(input ?? '', execute, selectOwnerView, timestamp.valueOf(), narrateOwnerResult) };
       }
       const quote = metadata.quoted_message_id;
       const shortStatus = /^STATUS(?:\s+(\d+))?$/i.exec(content);
@@ -252,7 +274,19 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
         ? { photoRecordedToProviderAckMs: Math.max(0, Date.now() - photoRecordedAt) } : {}) });
     return true;
   }
-  return { handle, status, deliverNotice };
+  async function deliverReportNotice(send) {
+    const { notice } = await call('owner-agent/notices/claim', { method: 'POST' });
+    if (!notice) return false;
+    let receipt = null;
+    try {
+      const value = await send({ to: notice.to, text: notice.text, replyToId: notice.replyToId });
+      if (typeof value === 'string' && value.length && value.length <= 255) receipt = value;
+    } catch { /* The persisted delivery lease and retry budget control recovery. */ }
+    await call('owner-agent/notices/complete', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reportId: notice.reportId, claim: notice.claim, receipt }) });
+    return true;
+  }
+  return { handle, status, deliverNotice, deliverReportNotice };
 }
 
 class BridgeError extends Error {
@@ -277,13 +311,19 @@ export default {
         (connected && process.env.SOBATNIRA_WHATSAPP_ACCOUNT_ID !== accountId)) {
       throw new Error('OpenClaw: periksa SOBATNIRA_API_URL, WHATSAPP_ADAPTER_INTERNAL_TOKEN, SOBATNIRA_WHATSAPP_ACCOUNT_ID dan konfigurasi accountId/mediaDir');
     }
-    let classifyIntent;
+    let classifyIntent, selectOwnerView, narrateOwnerResult;
+    const ownerAgent = process.env.OWNER_AGENT_ENABLED === 'true';
     const disableReasoning = process.env.OPENROUTER_AGENT_DISABLE_REASONING;
     try {
       if (disableReasoning && !['true', 'false'].includes(disableReasoning)) throw new Error('Invalid reasoning configuration');
-      classifyIntent = createOperatorAgent({ key: process.env.OPENROUTER_API_KEY, model: process.env.OPENROUTER_AGENT_MODEL,
+      const agentConfig = { key: process.env.OPENROUTER_API_KEY, model: process.env.OPENROUTER_AGENT_MODEL,
         fallbackModel: process.env.OPENROUTER_AGENT_FALLBACK_MODEL, providers: process.env.OPENROUTER_ALLOWED_PROVIDERS,
-        disableReasoning: disableReasoning === 'true' });
+        disableReasoning: disableReasoning === 'true' };
+      classifyIntent = createOperatorAgent(agentConfig);
+      if (ownerAgent) {
+        selectOwnerView = createOwnerSelector(agentConfig);
+        narrateOwnerResult = createOwnerNarrator(agentConfig);
+      }
     } catch {
       if (connected) throw new Error('OpenRouter: periksa OPENROUTER_AGENT_MODEL, OPENROUTER_AGENT_FALLBACK_MODEL, OPENROUTER_ALLOWED_PROVIDERS, OPENROUTER_AGENT_DISABLE_REASONING');
       api.logger.warn('Konfigurasi OpenRouter tidak lengkap. Panduan operator memakai template.');
@@ -293,7 +333,8 @@ export default {
       throw new Error('OpenClaw: SDK outbound dan registerService wajib');
     }
     const observe = (event) => api.logger.info?.(JSON.stringify(event));
-    const bridge = createBridge({ apiUrl, token, mediaDir, classifyIntent, observe });
+    const bridge = createBridge({ apiUrl, token, mediaDir, classifyIntent, ownerAgent, selectOwnerView,
+      narrateOwnerResult, observe });
     let timer;
     let inFlight;
     const send = async ({ to, text, replyToId }) => {
@@ -308,6 +349,11 @@ export default {
     api.registerService({ id: 'sobatnira-notices', start() {
       timer = setInterval(() => {
         if (!inFlight) inFlight = bridge.deliverNotice(send).catch(() => api.logger.warn('SobatNira notice queue unavailable'))
+          .then(async () => {
+            if (ownerAgent && process.env.REPORT_EXPORT_ENABLED === 'true') {
+              await bridge.deliverReportNotice(send).catch(() => api.logger.warn('SobatNira report notice queue unavailable'));
+            }
+          })
           .finally(() => { inFlight = undefined; });
       }, 2_000);
       timer.unref();
@@ -332,10 +378,14 @@ export default {
         }, {});
         queuedFinal = !event.suppressUserDelivery && context.dispatcher.sendFinalReply({ text: result.text });
         if (result.photoReceipt) {
-          const { revisionId, duplicate, adapterStarted, eventTimestamp } = result.photoReceipt;
+          const { revisionId, duplicate, adapterStarted, eventTimestamp, acceptedAt, commitConfirmedAtMs } = result.photoReceipt;
+          const dispatchedAt = Date.now();
           observe({ event: 'whatsapp_photo_reply_dispatch', revisionId, duplicate, queued: Boolean(queuedFinal),
             adapterToDispatchMs: Math.round(performance.now() - adapterStarted),
-            messageToDispatchMs: Math.max(0, Date.now() - eventTimestamp) });
+            messageToDispatchMs: Math.max(0, dispatchedAt - eventTimestamp),
+            ...(queuedFinal ? { apiResponseToDispatchMs: Math.round(performance.now() - acceptedAt) } : {}),
+            ...(queuedFinal && !duplicate && Number.isFinite(commitConfirmedAtMs) && dispatchedAt >= commitConfirmedAtMs
+              ? { commitToDispatchMs: dispatchedAt - commitConfirmedAtMs } : {}) });
         }
       }
       context.recordProcessed('completed', { reason: 'sobatnira_intake' });
