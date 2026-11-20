@@ -14,6 +14,62 @@ enum KloterPeriod {
   final String label;
 }
 
+class _CalendarPeriodIcon extends CustomPainter {
+  const _CalendarPeriodIcon(this.period);
+
+  final KloterPeriod period;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final fill = Paint()..color = niraGreen;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(3, 5, 17, 15),
+        const Radius.circular(2),
+      ),
+      fill,
+    );
+    for (final x in [7.0, 16.0]) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(x - 1, 3, 2, 4),
+          const Radius.circular(1),
+        ),
+        fill,
+      );
+    }
+    final accent = Paint()..color = Colors.white;
+    switch (period) {
+      case KloterPeriod.today:
+        canvas.drawCircle(const Offset(11.5, 13), 1.5, accent);
+      case KloterPeriod.month:
+        for (final x in [8.5, 11.5, 14.5]) {
+          for (final y in [12.0, 15.0]) {
+            canvas.drawCircle(Offset(x, y), .7, accent);
+          }
+        }
+      case KloterPeriod.year:
+        accent
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.35
+          ..strokeCap = StrokeCap.round;
+        canvas.drawPath(
+          Path()
+            ..moveTo(9, 13)
+            ..lineTo(11, 15)
+            ..lineTo(14.5, 11),
+          accent,
+        );
+      default:
+        break;
+    }
+  }
+
+  @override
+  bool shouldRepaint(_CalendarPeriodIcon oldDelegate) =>
+      period != oldDelegate.period;
+}
+
 class KloterDateFilter {
   const KloterDateFilter(this.period, this.range);
 
@@ -228,17 +284,22 @@ class _FilterPanelState extends State<_FilterPanel> {
               ),
               child: Row(
                 children: [
-                  Icon(
-                    switch (period) {
-                      KloterPeriod.today => Icons.event_rounded,
-                      KloterPeriod.week => Icons.view_week_rounded,
-                      KloterPeriod.month => Icons.calendar_view_month_rounded,
-                      KloterPeriod.year => Icons.event_note_rounded,
-                      KloterPeriod.custom => Icons.filter_alt_rounded,
-                    },
-                    size: 23,
-                    color: niraGreen,
-                  ),
+                  switch (period) {
+                    KloterPeriod.week => const Icon(
+                      Icons.view_week_rounded,
+                      size: 23,
+                      color: niraGreen,
+                    ),
+                    KloterPeriod.custom => const Icon(
+                      Icons.filter_alt_rounded,
+                      size: 23,
+                      color: niraGreen,
+                    ),
+                    _ => CustomPaint(
+                      size: const Size.square(23),
+                      painter: _CalendarPeriodIcon(period),
+                    ),
+                  },
                   const SizedBox(width: NiraSpace.lg),
                   Expanded(
                     child: Column(

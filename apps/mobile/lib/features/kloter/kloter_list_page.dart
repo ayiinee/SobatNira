@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
@@ -27,12 +29,14 @@ class KloterListPage extends StatefulWidget {
 
 class _KloterListPageState extends State<KloterListPage> {
   final _search = TextEditingController();
+  final _searchFocus = FocusNode();
+  final _searchGroup = Object();
+  final _suggestions = OverlayPortalController();
   final _scroll = ScrollController();
   final _expandedDates = <DateTime, bool>{};
   KloterDateFilter? _dateFilter;
   int _activeTab = 0;
   int _page = 0;
-  bool _suggestIds = false;
   String? _selectedId;
 
   static const _statuses = [null, KloterStatus.review, KloterStatus.done];
@@ -40,7 +44,19 @@ class _KloterListPageState extends State<KloterListPage> {
   static const _searchControlSize = 48.0;
 
   @override
+  void initState() {
+    super.initState();
+    _searchFocus.addListener(() {
+      if (!_searchFocus.hasFocus && _suggestions.isShowing) {
+        _suggestions.hide();
+        setState(() {});
+      }
+    });
+  }
+
+  @override
   void dispose() {
+    _searchFocus.dispose();
     _search.dispose();
     _scroll.dispose();
     super.dispose();
@@ -88,7 +104,6 @@ class _KloterListPageState extends State<KloterListPage> {
     FocusScope.of(context).unfocus();
     _scrollToTop();
     setState(() {
-      _suggestIds = false;
       _selectedId = _keyFor(item);
       _expandedDates[DateUtils.dateOnly(item.date)] = true;
       _page = 0;
@@ -119,7 +134,6 @@ class _KloterListPageState extends State<KloterListPage> {
     setState(() {
       _dateFilter = result.selection;
       _page = 0;
-      _suggestIds = false;
     });
   }
 
@@ -127,9 +141,12 @@ class _KloterListPageState extends State<KloterListPage> {
   Widget build(BuildContext context) {
     final term = _search.text.trim().toLowerCase();
     final idTerm = _normalizeId(term);
-    final suggestions = _suggestIds
+    final suggestions = _suggestions.isShowing && widget.statusMessage == null
         ? _matchingIds().take(5).toList()
         : <DemoKloter>[];
+    final showSuggestions =
+        suggestions.isNotEmpty &&
+        !(suggestions.length == 1 && _idRank(suggestions.single, idTerm) == 0);
     final status = _statuses[_activeTab];
     final groups = <DateTime, List<DemoKloter>>{};
     var pending = 0;
@@ -168,7 +185,6 @@ class _KloterListPageState extends State<KloterListPage> {
         setState(() {
           _activeTab = index;
           _page = 0;
-          _suggestIds = false;
         });
       },
     );
@@ -176,19 +192,51 @@ class _KloterListPageState extends State<KloterListPage> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final short = constraints.maxHeight < 180;
+        final searchTop = short ? NiraSpace.xs : NiraSpace.lg;
         return Column(
           children: [
             Padding(
               padding: EdgeInsets.fromLTRB(
                 inset,
-                short ? NiraSpace.xs : NiraSpace.lg,
+                searchTop,
                 inset,
                 short ? NiraSpace.xs : NiraSpace.sm,
               ),
               child: Row(
                 spacing: 8,
                 children: [
-                  Expanded(child: _searchBox()),
+                  Expanded(
+                    child: OverlayPortal.overlayChildLayoutBuilder(
+                      controller: _suggestions,
+                      child: _searchBox(showSuggestions),
+                      overlayChildBuilder: (context, anchor) {
+                        final height =
+                            constraints.maxHeight -
+                            searchTop -
+                            anchor.childSize.height;
+                        if (!showSuggestions || height <= 0) {
+                          return const SizedBox.shrink();
+                        }
+                        final origin = MatrixUtils.transformPoint(
+                          anchor.childPaintTransform,
+                          Offset(0, anchor.childSize.height - 1),
+                        );
+                        return Stack(
+                          children: [
+                            Positioned(
+                              left: origin.dx,
+                              top: origin.dy,
+                              width: anchor.childSize.width,
+                              child: _suggestionPanel(
+                                suggestions,
+                                maxHeight: math.min(height, 290),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
                   _filterButton(context),
                   if (widget.onCreate case final create?)
                     IconButton(
@@ -222,31 +270,6 @@ class _KloterListPageState extends State<KloterListPage> {
                         else if (pageDates.isEmpty)
                           _empty()
                         else ...[
-                          if (suggestions.isNotEmpty &&
-                              !(suggestions.length == 1 &&
-                                  _idRank(suggestions.single, idTerm) == 0))
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                bottom: NiraSpace.md,
-                              ),
-                              child: NiraOutline(
-                                Column(
-                                  children: [
-                                    for (final item in suggestions)
-                                      ListTile(
-                                        dense: true,
-                                        leading: const Icon(
-                                          Icons.search,
-                                          size: 20,
-                                        ),
-                                        title: Text(item.code),
-                                        subtitle: Text(formatDate(item.date)),
-                                        onTap: () => _selectId(item),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ),
                           for (final date in pageDates)
                             _dateAccordion(
                               date,
@@ -386,20 +409,68 @@ class _KloterListPageState extends State<KloterListPage> {
     );
   }
 
-  Widget _searchBox() {
+  Widget _suggestionPanel(
+    List<DemoKloter> items, {
+    required double maxHeight,
+  }) => TextFieldTapRegion(
+    groupId: _searchGroup,
+    child: Material(
+      color: Colors.white,
+      elevation: 4,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          bottom: Radius.circular(niraRadius),
+        ),
+        side: BorderSide(color: niraGreen),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: ListView(
+          padding: EdgeInsets.zero,
+          shrinkWrap: true,
+          children: [
+            for (final item in items)
+              ListTile(
+                dense: true,
+                leading: const Icon(Icons.search, size: 20),
+                title: Text(item.code),
+                subtitle: Text(formatDate(item.date)),
+                onTap: () => _selectId(item),
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  Widget _searchBox(bool showSuggestions) {
     final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(niraRadius),
+      borderRadius: showSuggestions
+          ? const BorderRadius.vertical(top: Radius.circular(niraRadius))
+          : BorderRadius.circular(niraRadius),
       borderSide: const BorderSide(color: niraGreen, width: 1.35),
     );
     return TextField(
       controller: _search,
+      focusNode: _searchFocus,
+      groupId: _searchGroup,
+      onTapOutside: (_) => _searchFocus.unfocus(),
+      onTap: () {
+        if (_search.text.isNotEmpty &&
+            _selectedId == null &&
+            !_suggestions.isShowing) {
+          _suggestions.show();
+          setState(() {});
+        }
+      },
       textInputAction: TextInputAction.search,
       textAlignVertical: TextAlignVertical.center,
       style: niraText(NiraType.body),
       cursorColor: niraGreen,
       onChanged: (_) {
         _selectedId = null;
-        _suggestIds = true;
+        _suggestions.show();
         _showPage(0);
       },
       onSubmitted: _submitSearch,
@@ -432,7 +503,7 @@ class _KloterListPageState extends State<KloterListPage> {
                 onPressed: () {
                   _search.clear();
                   _selectedId = null;
-                  _suggestIds = false;
+                  _suggestions.hide();
                   _showPage(0);
                 },
                 tooltip: 'Hapus pencarian',

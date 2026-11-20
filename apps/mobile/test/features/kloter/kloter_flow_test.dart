@@ -108,15 +108,29 @@ void main() {
         ),
       ),
     );
-    await tester.enterText(find.byType(TextField), 'mjt');
+    final field = find.byType(TextField);
+    final tabs = find.text('Semua');
+    final tabPosition = tester.getTopLeft(tabs);
+    await tester.enterText(field, 'mjt');
     await tester.pumpAndSettle();
     final suggestions = find.byType(ListTile);
     expect(suggestions, findsNWidgets(2));
+    final fieldBounds = tester.getRect(field);
+    final firstSuggestion = tester.getRect(suggestions.first);
+    expect(firstSuggestion.left, closeTo(fieldBounds.left, 1));
+    expect(firstSuggestion.width, closeTo(fieldBounds.width, 1));
+    expect(firstSuggestion.top, closeTo(fieldBounds.bottom, 1));
+    expect(tester.getTopLeft(tabs), tabPosition);
+    expect(firstSuggestion.overlaps(tester.getRect(tabs)), isTrue);
     expect(
       find.descendant(of: suggestions.first, matching: find.text('MJT-01')),
       findsOneWidget,
     );
-    await tester.enterText(find.byType(TextField), 'mjt01');
+    await tester.tap(suggestions.last);
+    await tester.pumpAndSettle();
+    expect(suggestions, findsNothing);
+    expect(tester.widget<TextField>(field).controller!.text, 'MJT-02');
+    await tester.enterText(field, 'mjt01');
     await tester.testTextInput.receiveAction(TextInputAction.search);
     await tester.pumpAndSettle();
     expect(find.textContaining('ID cocok'), findsNothing);
