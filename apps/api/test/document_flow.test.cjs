@@ -555,7 +555,14 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     // A new worker picks up a crash-expired lease without losing the photo or replacing the job.
     await db.query(`UPDATE document_jobs SET status='PROCESSING',attempts=1,lease_until=now()-interval '1 second',
       claim_token=$2 WHERE revision_id=$1`, [a.revision_id, randomUUID()]);
-    assert.equal(await new DocumentProcessor(db).processOne(), true);
+    const queue = await new DocumentProcessor(db).queueStatistics();
+    assert.equal(queue.processing, 1); assert.equal(queue.expiredLeases, 1);
+    assert.ok(Number(queue.oldestEligibleWaitMs) >= 1000);
+    const claimed = await Promise.all([new DocumentProcessor(db).processOne(), new DocumentProcessor(db).processOne()]);
+    assert.deepEqual(claimed.sort(), [false, true]);
+    const drained = await new DocumentProcessor(db).queueStatistics();
+    assert.equal(drained.queued, 0); assert.equal(drained.processing, 0);
+    assert.equal(drained.oldestEligibleWaitMs, null);
     assert.equal((await db.query('SELECT attempts FROM document_jobs WHERE revision_id=$1', [a.revision_id])).rows[0].attempts, 2);
     const draft = await status(a);
     const { pending_question: question } = draft;

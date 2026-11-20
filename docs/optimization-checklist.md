@@ -124,9 +124,12 @@ Profil sintetis 30 kloter, 120 batch/grade dan 150 snapshot: median lengkap 65,5
 - [x] **DB-01** Verifikasi indeks kloter serta snapshot terbaru sudah tersedia; hindari menambahkan indeks duplikat.
 - [x] **DB-02** Buktikan query cursor memakai indeks kloter yang tersedia, tanpa migrasi indeks tambahan.
 - [ ] **DB-03** Evaluasi composite/partial index untuk batch sah, laporan, antrean review dan claim job berdasarkan rencana query serta selektivitas.
+- [x] **DB-03A** Profil lokal review/claim/statistik pada 30.000 job/task dua pabrik; indeks claim lama dipakai, kandidat index review tidak dipakai dan tidak diterapkan.
 - [ ] **DB-04** Profil pencarian `strpos(lower(...))`; evaluasi perubahan query dan `pg_trgm` hanya bila pengukuran membenarkan.
 - [ ] **DB-05** Ukur dampak setiap kandidat indeks pada baca, INSERT/UPDATE, ukuran index dan pemeliharaan sebelum membuat migrasi.
+- [x] **DB-05A** Ukur kandidat review pada baca dan INSERT/UPDATE 500 task serta ukuran 1.818.624 byte; tolak kandidat yang tidak digunakan planner. Pemeliharaan/beban produksi tetap belum diukur.
 - [ ] **DB-06** Tinjau biaya `COUNT(*)`, deep OFFSET, proyeksi kolom dan agregasi JSON; perbaiki hanya jalur yang terbukti mahal.
+- [x] **DB-06A** Ambil rincian review sesudah halaman terotorisasi dipilih; verifikasi hasil identik dan profil OFFSET 1980 turun dari 532,469 menjadi 82,918 ms pada fixture lokal.
 - [ ] **DB-07** Tetapkan anggaran koneksi gabungan pool bisnis, OCR, worker dan seluruh replika sesuai kapasitas database.
 - [x] **DB-08** Jadikan batas pool/timeout/idle terkonfigurasi dan konsisten; ukur waktu menunggu koneksi sebelum menaikkan batas.
 - [ ] **DB-09** Tinjau statistik planner, autovacuum, bloat dan indeks tidak terpakai menggunakan lingkungan representatif.
@@ -206,12 +209,21 @@ IMG-09 menunggu perluasan fixture tulisan tangan/buram/terpotong.
 
 ## H. Worker dan antrean OCR
 
-- [ ] **WRK-01** Pantau panjang antrean, umur job tertua, waktu tunggu, durasi OCR, retry dan kegagalan akhir.
+- [x] **WRK-01** Pantau panjang antrean, umur job tertua, waktu tunggu, durasi OCR, retry dan kegagalan akhir.
 - [ ] **WRK-02** Ukur kapasitas CPU/RAM Paddle serta throughput worker sebelum mengubah concurrency atau jumlah replika.
 - [ ] **WRK-03** Terapkan concurrency terbatas dan backpressure agar upload/job tidak menghabiskan resource layanan.
-- [ ] **WRK-04** Evaluasi jeda polling adaptif saat kosong tanpa memperburuk latensi penerimaan pekerjaan.
+- [x] **WRK-04** Evaluasi jeda polling adaptif saat kosong tanpa memperburuk latensi penerimaan pekerjaan.
 - [ ] **WRK-05** Uji lease, reclaim, timeout, penghentian proses dan retry agar tidak menggandakan hasil atau kehilangan pekerjaan.
-- [ ] **WRK-06** Profil claim query dan evaluasi indeks antrean menggunakan backlog sintetis realistis.
+- [x] **WRK-06** Profil claim query dan evaluasi indeks antrean menggunakan backlog sintetis realistis.
+
+Bukti: [worker, query review dan keputusan indeks](worker-queue-optimization.md).
+Worker tetap serial; default idle 500/500 ms mempertahankan latensi polling lama.
+Backoff MAX lebih besar tersedia sebagai opt-in setelah toleransi latensi diuji;
+contoh 500/2000 belum diaktifkan. Metrik antrean dipisahkan dari claim dan tidak
+menghitung ulang seluruh job terminal. Tes timer/shutdown, dua worker atas satu
+lease kedaluwarsa, reclaim dan retry lulus. WRK-02/03/05 tetap parsial: belum ada
+benchmark CPU/RAM Paddle, uji tekanan upload gabungan atau penghentian paksa proses
+di staging. Tidak ada concurrency Paddle/worker atau kebijakan retry yang diubah.
 
 ## I. Redis dan caching
 
@@ -241,6 +253,7 @@ merupakan kandidat pengujian. Redis saat audit baru dipakai untuk pemeriksaan ko
 - [x] **QA-04A** Tahap laporan/storage/pool: 100 tes backend/integrasi lulus tanpa skip pada PostgreSQL sintetis. Sesudah penambahan sampling metrik, build dan 8 tes pool/storage terarah kembali lulus. Tidak ada uji bucket produksi atau deployment.
 - [x] **QA-05B** Laporan: analyzer bersih dan suite Flutter 136 tes lulus, 3 tes fixture dilewati (runner berurutan). Build API serta regresi PostgreSQL summary/page, koreksi, PDF/XLSX dan batas 101 kloter lulus; detail bukti ada di bagian D.
 - [x] **QA-05C** Foto: build dan 107 tes backend/integrasi lulus tanpa skip; analyzer Flutter bersih dan 5 tes Pekerjaan/varian lulus. Mencakup foto rusak, WebP animasi/APNG, hash, orientasi/bbox, antrean transformasi, akses pabrik dan pembukaan asli setelah preview gagal. Suite Flutter penuh belum diulang setelah tahap foto; hasil 136 tes di atas berasal dari tahap laporan.
+- [x] **QA-05D** Worker/review: build dan 13 tes timer/alur OCR PostgreSQL lulus tanpa skip. Profiler 30.000 task/job memverifikasi hasil query lama/baru identik dan merekam biaya baca/tulis kandidat index yang akhirnya ditolak.
 - [ ] **QA-06** Jalankan tes FastAPI dari `apps/ai` dengan `uv run --locked python -m unittest` bila kontrak/pemrosesan AI berubah.
 - [ ] **QA-07** Uji satu skenario sintetis dari foto → OCR → revisi → pengesahan → stok → laporan/PDF; pastikan angka dan status konsisten.
 - [ ] **QA-08** Uji R2 nyata dengan fixture sintetis terpisah; catat dan bersihkan hanya objek fixture yang dibuat tes.
@@ -274,6 +287,7 @@ Branch kerja: `perf/api-staged-photo-upload`.
 | 21 November 2026 | `eddeab9` | Ringkasan laporan, batas respons, rincian per halaman, jalur ekspor Flutter dan profil sintetis |
 | 21 November 2026 | `b7911a9` | Inventaris dan simulasi cleanup tanpa penghapusan |
 | 21 November 2026 | `0e11c3f` | Konfigurasi pool, metrik akuisisi/transaksi dan diagnostik database |
+| 21 November 2026 | `553beb0` | Validasi bersama dan varian foto privat, overlay serta pembukaan asli di Flutter |
 
 Riwayat ini mencatat commit lokal. Status sinkronisasi remote dapat diperiksa dengan
 `git status -sb`; commit tidak berarti perubahan sudah digabung ke main atau dirilis.
