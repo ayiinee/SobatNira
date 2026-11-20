@@ -249,7 +249,17 @@ void main() {
       await tester.ensureVisible(find.text('Pemasok satu'));
       await tester.tap(find.text('Pemasok satu'));
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('BATCH-REAL'), 400);
+      await tester.scrollUntilVisible(
+        find.text('BATCH-REAL'),
+        400,
+        scrollable: find
+            .byWidgetPredicate(
+              (widget) =>
+                  widget is Scrollable &&
+                  widget.axisDirection == AxisDirection.down,
+            )
+            .first,
+      );
       await Scrollable.ensureVisible(
         tester.element(find.text('BATCH-REAL')),
         alignment: .4,

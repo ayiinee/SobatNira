@@ -105,8 +105,16 @@ void main() {
               alignment: .2,
             );
             await tester.pumpAndSettle();
-            await tester.tap(find.text(expandText).first);
-            await tester.pumpAndSettle();
+            final tile = tester.widget<ExpansionTile>(
+              find.ancestor(
+                of: find.text(expandText).first,
+                matching: find.byType(ExpansionTile),
+              ),
+            );
+            if (!(tile.controller?.isExpanded ?? tile.initiallyExpanded)) {
+              await tester.tap(find.text(expandText).first);
+              await tester.pumpAndSettle();
+            }
             expect(find.byType(Table), findsOneWidget);
           }
           final scroll = find.byWidgetPredicate(

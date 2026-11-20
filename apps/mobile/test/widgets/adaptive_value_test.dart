@@ -184,6 +184,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text(value), findsOneWidget);
+      expect(find.byIcon(Icons.more_horiz), findsOneWidget);
       final scroll = tester.state<ScrollableState>(find.byType(Scrollable));
       expect(scroll.position.maxScrollExtent, greaterThan(0));
       await tester.drag(find.byType(NiraValue), const Offset(-80, 0));
@@ -216,7 +217,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text(field.value));
+    await tester.tap(find.byType(NiraValue));
     await tester.pumpAndSettle();
     expect(edited, same(field));
     expect(find.byType(AlertDialog), findsNothing);
