@@ -39,6 +39,17 @@ async (page, { origin, output }) => {
   const expectText = (text, marker) => {
     if (!text.includes(marker)) throw new Error(`Teks layar tidak memuat "${marker}".`);
   };
+  const waitForText = async (marker, timeout = 15_000) => {
+    const deadline = Date.now() + timeout;
+    const body = page.locator('body');
+    let snapshot = await body.ariaSnapshot();
+    while (!snapshot.includes(marker) && Date.now() < deadline) {
+      await page.waitForTimeout(200);
+      snapshot = await body.ariaSnapshot();
+    }
+    expectText(snapshot, marker);
+    return snapshot;
+  };
   const capture = name => page.screenshot({ path: `${output}/${name}.png` });
   const validateIntake = async lot => {
     await scroll(3000);
@@ -112,11 +123,10 @@ async (page, { origin, output }) => {
   await button('Kembali').click();
 
   await button('Laporan').click();
-  await page.getByText('25 kg', { exact: true }).first().waitFor({ timeout: 15_000 });
+  await waitForText('Gula final 25 kg');
   await capture('laporan');
   await button('Margin').click();
-  await page.getByText('Rp375.000', { exact: true }).first().waitFor({ timeout: 15_000 });
-  const margin = await page.locator('body').ariaSnapshot();
+  const margin = await waitForText('Margin Produksi Rp375.000');
   expectText(margin, 'Margin sementara');
   await button('Kloter').click();
   await button(/OCR-A-UJI/).click();
@@ -135,8 +145,7 @@ async (page, { origin, output }) => {
 
   await button('Beranda').click();
   await button('Rekap').click();
-  await page.getByText('Total gula final', { exact: true }).waitFor({ timeout: 20_000 });
-  await page.getByText('25 kg', { exact: true }).first().waitFor({ timeout: 20_000 });
+  await waitForText('Total gula final 25 kg', 20_000);
   const [download] = await Promise.all([
     page.waitForEvent('download', { timeout: 20_000 }),
     button('Simpan PDF').click(),
