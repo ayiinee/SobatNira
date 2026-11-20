@@ -8,6 +8,7 @@ import { EvidenceRepository } from './evidence.repository';
 import { EvidenceService } from './evidence.service';
 import { EvidenceFile, MAX_EVIDENCE_BYTES } from './evidence.types';
 import { parseEvidenceUpload } from './evidence.validation';
+import { imageVariant } from './image-variant';
 
 @Controller('tenants/:tenantId/factories/:factoryId/intake-documents/:documentId/evidence')
 @FactoryRoles('admin', 'owner')
@@ -33,10 +34,10 @@ export class EvidenceController {
   @Get(':evidenceId/content')
   @Header('Cache-Control', 'private, no-store')
   @Header('X-Content-Type-Options', 'nosniff')
-  async content(@CurrentFactory() access: FactoryAccess, @Param('documentId') documentId: string, @Param('evidenceId') id: string) {
-    const result = await this.service.content(access, uuid(documentId, 'documentId'), uuid(id, 'evidenceId'));
-    const extension = result.evidence.contentType === 'image/jpeg' ? 'jpg' : result.evidence.contentType.split('/')[1];
-    return new StreamableFile(result.bytes, { type: result.evidence.contentType, length: result.bytes.length,
+  async content(@CurrentFactory() access: FactoryAccess, @Param('documentId') documentId: string, @Param('evidenceId') id: string, @Query() query: unknown) {
+    const result = await this.service.content(access, uuid(documentId, 'documentId'), uuid(id, 'evidenceId'), imageVariant(query));
+    const extension = result.mime === 'image/jpeg' ? 'jpg' : result.mime.split('/')[1];
+    return new StreamableFile(result.bytes, { type: result.mime, length: result.bytes.length,
       disposition: `inline; filename="receipt-${result.evidence.id}.${extension}"` });
   }
 }

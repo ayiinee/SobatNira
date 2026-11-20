@@ -118,6 +118,7 @@ class _NiraHomeState extends State<NiraHome> {
           : Listenable.merge([_live, _live.reports]),
       builder: (context, _) => switch (tab) {
         NiraTab.beranda => BerandaPage(
+          pager: _live?.home,
           kloter: _lots,
           onOpenKloter: _openKloter,
           onQuickAction: _openQuickAction,
@@ -130,11 +131,17 @@ class _NiraHomeState extends State<NiraHome> {
           profile: _live == null ? null : _role,
           summary: _summary(),
           profit:
-              _live?.reports.amount('productionMarginRupiah', money: true) ??
+              _live?.reports.summary.amount(
+                'productionMarginRupiah',
+                money: true,
+              ) ??
               demoMoney(_analytics.marginTotal),
           reportStatus: _live == null || _live.loading
               ? null
-              : ConnectedReportStatus(reports: _live.reports, compact: true),
+              : ConnectedReportStatus(
+                  reports: _live.reports.summary,
+                  compact: true,
+                ),
           statusMessage:
               _loadStatus() ??
               (_live != null && _lots.isEmpty
@@ -142,6 +149,10 @@ class _NiraHomeState extends State<NiraHome> {
                   : null),
         ),
         NiraTab.kloter => KloterListPage(
+          key: ValueKey(
+            'kloter-${widget.scope?.factoryId}-${_live?.reports.synthetic}',
+          ),
+          pager: _live?.browser,
           kloter: _lots,
           onOpenKloter: _openKloter,
           filterToday: _live?.reports.filterToday,
@@ -189,10 +200,10 @@ class _NiraHomeState extends State<NiraHome> {
     final live = _live;
     if (live != null) {
       return (
-        cane: live.reports.amount('caneNetKg'),
-        lots: live.reports.data == null
+        cane: live.reports.summary.amount('caneNetKg'),
+        lots: live.reports.summary.data == null
             ? '—'
-            : '${live.reports.totals['lotCount']}',
+            : '${live.reports.summary.totals['lotCount']}',
       );
     }
     return (
@@ -265,6 +276,7 @@ class _NiraHomeState extends State<NiraHome> {
     final navigator = _navigator;
     FocusManager.instance.primaryFocus?.unfocus();
     navigator.popUntil((route) => route.isFirst);
+    if (tab == NiraTab.laporan) _live?.reports.ensureDetails();
     if (_tab.value == tab) return;
     _tab.value = tab;
   }
@@ -291,7 +303,7 @@ class _NiraHomeState extends State<NiraHome> {
     );
   }
 
-  void _openQuickAction(QuickActionKind action) {
+  void _openQuickAction(QuickActionKind action) async {
     final kind = switch (action) {
       QuickActionKind.profit => PrintableReportKind.profit,
       QuickActionKind.recap => PrintableReportKind.production,
@@ -320,6 +332,8 @@ class _NiraHomeState extends State<NiraHome> {
       );
       return;
     }
+    await _live?.reports.ensureDetails();
+    if (!mounted) return;
     _navigator.push(
       MaterialPageRoute<void>(
         builder: (_) => ReportExportPage(
@@ -444,7 +458,10 @@ class _LotDetailState extends State<_LotDetail> {
         demo: widget.demo,
         onNavigate: widget.onNavigate,
         onOpenPekerjaan: widget.onOpenPekerjaan,
-        approvedPhoto: (revision) => _api.approvedPhoto(_scope, revision),
+        approvedPhoto: (revision) =>
+            _api.approvedPhoto(_scope, revision, variant: 'preview'),
+        approvedPhotoOriginal: (revision) =>
+            _api.approvedPhoto(_scope, revision),
         onReturnFromProcess: () {
           if (mounted) _reload();
         },
@@ -461,6 +478,7 @@ class _LotDetailState extends State<_LotDetail> {
                   api: _api,
                   scope: _scope,
                   lotId: _id,
+                  onChanged: widget.live.refresh,
                   onNavigate: widget.onNavigate,
                 ),
               )

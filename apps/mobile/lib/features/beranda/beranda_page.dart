@@ -7,6 +7,8 @@ import '../../widgets/summary_card.dart';
 import '../../widgets/adaptive_value.dart';
 import '../kloter/demo_production.dart';
 import '../kloter/kloter_card.dart';
+import '../kloter/connected_lot_pager.dart';
+import '../kloter/lot_page_footer.dart';
 import 'quick_action_icon.dart';
 import 'factory_picker.dart';
 
@@ -23,6 +25,7 @@ class BerandaPage extends StatefulWidget {
     this.profit,
     this.reportStatus,
     this.statusMessage,
+    this.pager,
     super.key,
   });
 
@@ -37,6 +40,7 @@ class BerandaPage extends StatefulWidget {
   final Widget? statusMessage;
   final Widget? reportStatus;
   final String? profit;
+  final ConnectedLotPager? pager;
 
   @override
   State<BerandaPage> createState() => _BerandaPageState();
@@ -104,6 +108,8 @@ class _BerandaPageState extends State<BerandaPage> {
                       showEmpty ? _emptyList() : _card(items[index]),
                 ),
               ),
+              if (widget.pager case final pager?)
+                SliverToBoxAdapter(child: LotPageFooter(pager)),
             ],
           );
         }
@@ -215,9 +221,15 @@ class _BerandaPageState extends State<BerandaPage> {
                                 inset,
                                 NiraSpace.lg,
                               ),
-                              itemCount: showEmpty ? 1 : items.length,
+                              itemCount:
+                                  (showEmpty ? 1 : items.length) +
+                                  (widget.pager == null ? 0 : 1),
                               itemBuilder: (context, index) => showEmpty
-                                  ? _emptyList()
+                                  ? (index == 0
+                                        ? _emptyList()
+                                        : LotPageFooter(widget.pager!))
+                                  : index == items.length
+                                  ? LotPageFooter(widget.pager!)
                                   : _card(items[index]),
                             ),
                     ),
@@ -263,6 +275,14 @@ class _BerandaPageState extends State<BerandaPage> {
     onSelected: (value) {
       if (controller != null && controller.hasClients) controller.jumpTo(0);
       setState(() => _selected = value);
+      final pager = widget.pager;
+      if (pager != null) {
+        pager.setFilters(
+          search: '',
+          status: value == 0 ? 'open' : 'closed',
+          date: null,
+        );
+      }
     },
   );
 

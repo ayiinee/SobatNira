@@ -6,6 +6,12 @@
     "node": ">=24 <25"
   },
   "scripts": {
+    "storage:audit": "npm run build --silent && node scripts/audit-storage.cjs",
+    "perf:lots": "npm run build --silent && node scripts/profile-lots.cjs",
+    "perf:reports": "npm run build --silent && node scripts/profile-reports.cjs",
+    "perf:images": "npm run build --silent && node scripts/profile-images.cjs",
+    "perf:queues": "npm run build --silent && node scripts/profile-queues.cjs",
+    "perf:catalogs": "npm run build --silent && node scripts/profile-catalogs.cjs",
     "seed:calculations": "npm run build --silent && node scripts/seed-calculations.cjs",
     "build": "tsc -p tsconfig.json",
     "dev": "npm run build && node --env-file-if-exists=../../.env --env-file-if-exists=.env dist/main.js",

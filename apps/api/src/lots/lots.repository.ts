@@ -74,30 +74,95 @@ function summaryJoins(synthetic: '$5' | 'true' | 'false', page = false) {
         AND c.is_synthetic = ${synthetic} AND c.reopened_at IS NULL`;
 }
 
+function closedLot(synthetic: boolean) {
+  return `EXISTS(SELECT 1 FROM sobatnira.lot_closures c
+    WHERE (c.tenant_id,c.factory_id,c.lot_id)=(l.tenant_id,l.factory_id,l.id)
+      AND c.is_synthetic=${synthetic ? 'true' : 'false'} AND c.reopened_at IS NULL)`;
+}
+
 @Injectable()
 export class LotsRepository {
   constructor(private readonly database: DatabaseService) {}
 
-  list(access: FactoryAccess, query: LotQuery) {
+  private selection(access: FactoryAccess, query: LotQuery, counts = false) {
     const synthetic = query.synthetic === true;
-    return queryPage<Lot | LotSummary>(this.database, `${FACTORY_SCOPE_CTE}, filtered AS (
-      SELECT ${COLUMNS}, s.name AS "supplierName"
+    const ctes = `${FACTORY_SCOPE_CTE}, filtered AS ${query.pagination === 'cursor' ? 'NOT MATERIALIZED ' : ''}(
+      SELECT ${COLUMNS}, s.name AS "supplierName"${query.pagination === 'cursor'
+        ? `, to_char(l.received_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "cursorReceivedAt"` : ''}
+        ${counts ? `, ${closedLot(synthetic)} AS "isClosed"` : ''}
       FROM sobatnira.lots l
       JOIN authorized_scope scope ON scope."tenantId" = l.tenant_id AND scope."factoryId" = l.factory_id
       JOIN sobatnira.suppliers s ON s.tenant_id = l.tenant_id AND s.id = l.supplier_id
       ${synthetic ? `JOIN sobatnira.intake_records receipt ON (receipt.tenant_id,receipt.factory_id,receipt.lot_id)
         = (l.tenant_id,l.factory_id,l.id) AND receipt.is_synthetic` : ''}
-      WHERE ($4::text IS NULL OR strpos(lower(COALESCE(l.display_code, '')), lower($4)) > 0 OR strpos(lower(s.name), lower($4)) > 0)
+      WHERE ($4::text IS NULL OR ${query.searchMode === 'normalized' ? `
+        (regexp_replace(lower($4),'[[:space:]-]','','g') <> '' AND
+          (strpos(regexp_replace(lower(COALESCE(l.display_code,l.id::text)),'[[:space:]-]','','g'),regexp_replace(lower($4),'[[:space:]-]','','g')) > 0
+           OR strpos(replace(l.id::text,'-',''),regexp_replace(lower($4),'[[:space:]-]','','g')) > 0))`
+        : `strpos(lower(COALESCE(l.display_code, '')), lower($4)) > 0`}
+        OR strpos(lower(s.name), lower($4)) > 0)
         AND ($5::uuid IS NULL OR l.supplier_id = $5)
         AND ($6::timestamptz IS NULL OR l.received_at >= $6)
         AND ($7::timestamptz IS NULL OR l.received_at < $7)
-    )`, [...scopeValues(access), query.q ?? null, query.supplierId ?? null,
-      query.receivedFrom ?? null, query.receivedBefore ?? null], query, '"receivedAt" DESC, id',
-    query.includeSummary ? {
+        AND ($8::uuid IS NULL OR l.id=$8)
+        ${query.status ? `AND ${query.status === 'open' ? 'NOT ' : ''}${closedLot(synthetic)}` : ''}
+    )`;
+    const values = [...scopeValues(access), query.q ?? null, query.supplierId ?? null,
+      query.receivedFrom ?? null, query.receivedBefore ?? null, query.lotId ?? null];
+    return { ctes, values };
+  }
+
+  async counts(access: FactoryAccess, query: LotQuery) {
+    const { ctes, values } = this.selection(access, query, true);
+    const { rows: [row] } = await this.database.query<{ total: string; open: string; closed: string }>(`WITH ${ctes}
+      SELECT count(*) AS total, count(*) FILTER (WHERE NOT "isClosed") AS open,
+        count(*) FILTER (WHERE "isClosed") AS closed FROM filtered`, values);
+    return { total: Number(row.total), open: Number(row.open), closed: Number(row.closed) };
+  }
+
+  async suggestions(access: FactoryAccess, query: LotQuery) {
+    const { ctes, values } = this.selection(access, query);
+    const { rows } = await this.database.query<Lot & { rank: number }>(`WITH ${ctes}, normalized AS (
+      SELECT *, regexp_replace(lower(COALESCE("displayCode",id::text)),'[[:space:]-]','','g') AS code,
+        replace(id::text,'-','') AS identifier, regexp_replace(lower($4),'[[:space:]-]','','g') AS term
+      FROM filtered
+    ), ranked AS (
+      SELECT *, CASE WHEN code=term OR identifier=term THEN 0
+        WHEN starts_with(code,term) OR starts_with(identifier,term) THEN 1
+        WHEN strpos(code,term)>0 OR strpos(identifier,term)>0 THEN 2 ELSE 3 END AS rank
+      FROM normalized WHERE term<>''
+    ) SELECT id,"tenantId","factoryId","supplierId","supplierName","displayCode","receivedAt","createdAt","updatedAt",rank
+      FROM ranked WHERE rank<3 ORDER BY rank, COALESCE("displayCode",id::text) COLLATE "C",id LIMIT $9`,
+    [...values, query.limit]);
+    return { items: rows };
+  }
+
+  list(access: FactoryAccess, query: LotQuery) {
+    const synthetic = query.synthetic === true;
+    const { ctes, values } = this.selection(access, query);
+    const enrichment = query.includeSummary ? {
       columns: `${synthetic ? 'true AS synthetic, ' : ''}summary.*`,
       joins: `LEFT JOIN LATERAL (SELECT ${SUMMARY_COLUMNS} FROM (SELECT 1) seed
         ${summaryJoins(synthetic ? 'true' : 'false', true)}) summary ON page.id IS NOT NULL`,
-    } : undefined);
+    } : undefined;
+    if (query.pagination === 'cursor') return this.cursorPage(ctes, values, query, enrichment);
+    // Keep the legacy response shape, including its complete total.
+    return queryPage<Lot | LotSummary>(this.database, ctes, values, query, '"receivedAt" DESC, id', enrichment);
+  }
+
+  private async cursorPage(ctes: string, values: unknown[], query: LotQuery, enrichment?: { columns: string; joins: string }) {
+    const result = await this.database.query<Lot & { cursorReceivedAt: string }>(`WITH ${ctes}, page AS (
+      SELECT * FROM filtered WHERE ($9::timestamptz IS NULL OR
+        ("receivedAt" <= $9 AND ("receivedAt" < $9 OR id > $10::uuid)))
+      ORDER BY "receivedAt" DESC,id LIMIT $11
+    ) SELECT page.*${enrichment ? `, ${enrichment.columns}` : ''} FROM page
+      ${enrichment?.joins ?? ''} ORDER BY "receivedAt" DESC,id`,
+    [...values, query.after?.receivedAt ?? null, query.after?.id ?? null, query.limit + 1]);
+    const rows = result.rows.slice(0, query.limit);
+    const last = rows.at(-1);
+    return { items: rows.map(({ cursorReceivedAt: _, ...row }) => row), limit: query.limit,
+      nextCursor: result.rows.length > query.limit && last
+        ? Buffer.from(JSON.stringify([last.cursorReceivedAt, last.id])).toString('base64url') : null };
   }
 
   async find(access: FactoryAccess, id: string, synthetic = false): Promise<LotDetail | undefined> {

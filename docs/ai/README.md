@@ -2,7 +2,54 @@
 
 Skema JSON dan contoh sintetis tersedia di [schemas](schemas/) dan [examples](examples/). Status pengujian tercatat di [log implementasi](IMPLEMENTATION_LOG.md). PRD dan register keputusan tim disimpan secara privat di `docs/internal/ai/`.
 
+Panduan optimisasi terbaru: [foto dan preview privat](../photo-optimization.md),
+[worker/review](../worker-queue-optimization.md),
+[pool/kapasitas](../database-capacity.md),
+[simulasi inventaris storage tanpa penghapusan](../storage-audit.md), dan
+[ceklis seluruh tahap](../optimization-checklist.md).
+
 Lihat [hasil Implementation Pack](IMPLEMENTATION_PROGRESS.md) untuk status terkini dan [kontrak capability owner](CAPABILITY_API.md) untuk membaca data resmi melalui NestJS.
+
+## Optimisasi upload WhatsApp (tahap 1)
+
+Status seluruh tahap dan pekerjaan tersisa dilacak di
+[checklist optimisasi](../optimization-checklist.md).
+
+Upload foto kini memakai dua transaksi singkat. Transaksi pertama memeriksa operator,
+rate limit, duplikat, dan rujukan revisi, lalu mencatat manifest `media_uploads`.
+Upload ke R2 atau direktori lokal berjalan setelah transaksi dilepas. Transaksi kedua
+memeriksa ulang akses, rate limit, duplikat dan revisi sebelum memasang media,
+submission, revisi, audit dan pekerjaan OCR secara atomik. Kontrak HTTP tetap sama.
+
+Terapkan `npm run db:migrate:ocr` sebelum menjalankan backend versi ini; migrasi
+`009_media_uploads.sql` menambahkan manifest dan indeks parsial untuk upload belum
+tertaut. Deploy skema terlebih dahulu, lalu restart API/worker. Rollback kode dapat
+mempertahankan tabel tambahan tersebut tanpa menghapusnya.
+
+Kegagalan upload atau pemasangan tidak menerima pesan maupun menjadwalkan OCR.
+Retry memakai object key deterministik dan penulisan storage yang tidak menimpa
+objek. Manifest yang belum tertaut dapat menunjukkan upload gagal, objek orphan,
+atau upload yang masih berjalan; manifest bukan izin penghapusan. Tahap ini belum
+mengaktifkan retensi atau cleanup otomatis dan belum menginventaris orphan lama.
+Foto tidak dihapus saat hasil COMMIT belum pasti atau request bersamaan masih berjalan.
+
+Verifikasi dari `apps/api` dengan `npm test`. Tes `staged-photo.test.cjs` mencakup
+batas transaksi, kegagalan storage/database, retry dan perubahan akses. Dengan
+`TEST_DATABASE_URL` khusus data sintetis, tes PostgreSQL juga memeriksa pelepasan
+lock operator, replay bersamaan, alias foto duplikat dan pembatalan akses saat upload.
+Suite `document_flow.test.cjs` memeriksa alur HTTP intake hingga review dengan upstream
+OCR sintetis. Pengukuran p95 dan uji R2 nyata tetap dilakukan terpisah sebelum rilis.
+
+Verifikasi lokal 20 November 2026: build TypeScript lulus; seluruh 84 tes backend
+lulus tanpa skip dengan PostgreSQL sintetis terisolasi menggunakan
+`node --test --test-concurrency=1 test/*.test.cjs`. Putaran paralel sebelumnya
+mengalami timeout pada satu tes Auth; tes itu lulus saat dijalankan berurutan.
+
+Urutan tahap lanjutan: ukur query dan waktu tunggu pool dengan fixture bervolume;
+perbaiki pagination kloter/laporan; evaluasi indeks memakai rencana eksekusi;
+tambahkan preview foto dan simulasi retensi; kemudian cache ringkasan dengan
+invalidasi setelah commit. Masa simpan bukti asli dan revisi historis masih
+memerlukan keputusan tim sebelum penghapusan otomatis diaktifkan.
 
 ## Instalasi bersama
 

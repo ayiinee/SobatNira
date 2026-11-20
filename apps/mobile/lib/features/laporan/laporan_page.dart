@@ -32,6 +32,20 @@ class LaporanPage extends StatefulWidget {
 }
 
 class _LaporanPageState extends State<LaporanPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final reports = widget.reports;
+      if (mounted &&
+          reports != null &&
+          reports.data == null &&
+          reports.error == null) {
+        reports.ensureDetails();
+      }
+    });
+  }
+
   ConnectedReports? get _reports => widget.reports;
   List<AnalyticsRow> get _rows =>
       _reports?.rows(widget.analytics.tab) ?? widget.analytics.visibleRows;

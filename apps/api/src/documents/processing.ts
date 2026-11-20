@@ -7,6 +7,7 @@ import { mergeProduction } from './revisions';
 import { openClarifications } from './clarifications';
 import { operatorChecks } from './operator-readiness';
 import { enqueueNotice } from './notices';
+import { AdaptivePoller, documentPollSettings } from './adaptive-poller';
 
 type Job = { id: string; revision_id: string; attempts: number; claim_token: string; eligible_at: Date };
 type Work = Revision & { created_at: Date; factory_id: string; document_type: DocumentType; parent_revision_id: string | null;
@@ -18,24 +19,42 @@ const LEASE = TIMEOUT + 30_000;
 @Injectable()
 export class DocumentProcessor implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DocumentProcessor.name);
-  private timer?: ReturnType<typeof setInterval>;
-  private busy?: Promise<unknown>;
+  private poller?: AdaptivePoller;
+  private metricsTimer?: NodeJS.Timeout;
+  private sampling?: Promise<void>;
 
   constructor(private readonly db: Database) {}
 
   onModuleInit() {
     if (process.env.DOCUMENT_WORKER_ENABLED !== 'true') return;
-    this.timer = setInterval(() => {
-      if (this.busy) return;
-      this.busy = this.processOne().catch(() => { this.logger.warn('Pekerjaan dokumen belum dapat diproses'); })
-        .finally(() => { this.busy = undefined; });
-    }, 500);
-    this.timer.unref();
+    this.poller = new AdaptivePoller(() => this.processOne(), documentPollSettings(),
+      () => this.logger.warn('Pekerjaan dokumen belum dapat diproses'));
+    this.poller.start();
+    this.metricsTimer = setInterval(() => {
+      this.sampling ??= this.queueStatistics()
+        .then(queue => { this.logger.debug({ event: 'ocr_queue', ...queue, ...this.poller?.statistics() }); })
+        .catch(() => { this.logger.debug({ event: 'ocr_queue_sample_failed' }); })
+        .finally(() => { this.sampling = undefined; });
+    }, 30000);
+    this.metricsTimer.unref();
   }
 
   async onModuleDestroy() {
-    clearInterval(this.timer);
-    await this.busy;
+    clearInterval(this.metricsTimer);
+    await this.poller?.stop();
+    await this.sampling;
+  }
+
+  async queueStatistics() {
+    const { rows: [stats] } = await this.db.query(`SELECT
+      count(*) FILTER(WHERE status='QUEUED')::int AS queued,
+      count(*) FILTER(WHERE status='PROCESSING')::int AS processing,
+      count(*) FILTER(WHERE status='PROCESSING' AND lease_until<=now())::int AS "expiredLeases",
+      count(*) FILTER(WHERE attempts>1 OR (status='QUEUED' AND attempts>0))::int AS "activeRetries",
+      max(greatest(0,extract(epoch FROM now() - CASE WHEN status='PROCESSING' THEN lease_until ELSE available_at END)*1000))
+        FILTER(WHERE (status='QUEUED' AND available_at<=now()) OR (status='PROCESSING' AND lease_until<=now())) AS "oldestEligibleWaitMs"
+      FROM document_jobs WHERE status IN ('QUEUED','PROCESSING')`);
+    return stats;
   }
 
   async processOne() {

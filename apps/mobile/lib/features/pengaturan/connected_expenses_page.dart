@@ -4,6 +4,8 @@ import '../../widgets/nira_loading.dart';
 
 import '../../sobatnira_ui.dart';
 import '../kloter/connected_production.dart';
+import '../kloter/connected_lot_pager.dart';
+import '../kloter/lot_page_footer.dart';
 import '../kloter/demo_production.dart';
 import '../kloter/official_batch_workflow.dart';
 import '../laporan/connected_reports.dart';
@@ -27,8 +29,26 @@ class ConnectedExpensesPage extends StatefulWidget {
 class _ConnectedExpensesPageState extends State<ConnectedExpensesPage> {
   ConnectedProduction get _production => widget.production;
   late final bool _synthetic = _production.reports.synthetic;
+  late final _pager = ConnectedLotPager(
+    _production.api,
+    _production.scope,
+    synthetic: _synthetic,
+    status: 'open',
+  );
   late Future<Json> _report = _load();
   final _saved = <String, Json>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _pager.refresh();
+  }
+
+  @override
+  void dispose() {
+    _pager.dispose();
+    super.dispose();
+  }
 
   Future<Json> _load() async {
     final report = await _production.api.productionReport(
@@ -51,11 +71,12 @@ class _ConnectedExpensesPageState extends State<ConnectedExpensesPage> {
     );
     if (!mounted || result == null) return;
     setState(() => _saved[lot.id!] = result);
+    _production.refresh();
   }
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: _production,
+    listenable: Listenable.merge([_production, _pager]),
     builder: (context, _) => FutureBuilder<Json>(
       future: _report,
       builder: (context, snapshot) => _expenses(snapshot),
@@ -70,7 +91,7 @@ class _ConnectedExpensesPageState extends State<ConnectedExpensesPage> {
     };
     final editable = [
       if (!_synthetic && _production.scope.role == 'admin')
-        for (final lot in _production.lots)
+        for (final lot in _pager.items)
           if (lot.id != null &&
               lot.intake.verified &&
               lot.status != KloterStatus.done &&
@@ -94,7 +115,11 @@ class _ConnectedExpensesPageState extends State<ConnectedExpensesPage> {
             child: const Text('Coba lagi'),
           ),
         ] else ...[
-          if (editable.isEmpty && approved.isEmpty)
+          if (editable.isEmpty &&
+              approved.isEmpty &&
+              !_pager.loading &&
+              _pager.error == null &&
+              !_pager.hasMore)
             const SettingsNote('Belum ada biaya operasional tercatat.'),
           if (editable.isNotEmpty) ...[
             const SettingsNote(
@@ -124,6 +149,15 @@ class _ConnectedExpensesPageState extends State<ConnectedExpensesPage> {
               ),
           ],
           for (final lot in approved.values) _approvedCosts(lot),
+          if (!_synthetic && _production.scope.role == 'admin') ...[
+            if (_pager.loading) const NiraLoading(label: 'Memuat kloter…'),
+            if (_pager.error != null)
+              TextButton(
+                onPressed: _pager.refresh,
+                child: const Text('Coba lagi kloter untuk biaya'),
+              ),
+            LotPageFooter(_pager),
+          ],
         ],
       ],
     );

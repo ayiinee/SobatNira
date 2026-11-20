@@ -52,6 +52,8 @@ void main() {
                 'productionMarginRupiah': '0',
               },
             };
+          } else if (path.endsWith('/lots/counts')) {
+            result = {'total': 0, 'open': 0, 'closed': 0};
           } else if (path.endsWith('/lots')) {
             result = {'items': [], 'total': 0};
           } else if (path == '/api/v1/mobile/review-tasks') {
