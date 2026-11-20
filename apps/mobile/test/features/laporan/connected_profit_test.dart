@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
 import 'package:sobatnira/main.dart';
+import 'package:sobatnira/widgets/adaptive_value.dart';
 import '../../support/demo_login.dart';
 
 void main() {
@@ -92,7 +93,12 @@ void main() {
       await tester.tap(find.byTooltip('Berikutnya'));
       await tester.pumpAndSettle();
       expect(find.text('Pemasok 6'), findsOneWidget);
-      expect(find.text('-Rp100.000'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) => widget is NiraValue && widget.value == '-Rp100.000',
+        ),
+        findsOneWidget,
+      );
       expect(find.text('Rp500.000'), findsOneWidget);
       await tester.ensureVisible(find.text('Pemasok 6'));
       await tester.tap(find.text('Pemasok 6'));
