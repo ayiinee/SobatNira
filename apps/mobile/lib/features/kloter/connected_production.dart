@@ -23,6 +23,7 @@ class ConnectedProduction extends ChangeNotifier {
        browser = ConnectedLotPager(api, scope, synthetic: synthetic),
        _synthetic = synthetic {
     reports.addListener(_sourceChanged);
+    reports.summary.addListener(notifyListeners);
     home.addListener(notifyListeners);
     browser.addListener(notifyListeners);
   }
@@ -55,7 +56,7 @@ class ConnectedProduction extends ChangeNotifier {
   Future<void> refresh() => _disposed
       ? Future.value()
       : Future.wait([
-          reports.refresh(summaryOnly: !reports.detailsRequested),
+          reports.refreshHome(),
           home.refresh(),
           if (browser.initialized) browser.refresh(),
         ]);
@@ -64,6 +65,7 @@ class ConnectedProduction extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     reports.removeListener(_sourceChanged);
+    reports.summary.removeListener(notifyListeners);
     home.removeListener(notifyListeners);
     browser.removeListener(notifyListeners);
     home.dispose();

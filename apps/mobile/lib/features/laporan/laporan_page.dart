@@ -36,7 +36,13 @@ class _LaporanPageState extends State<LaporanPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) widget.reports?.ensureDetails();
+      final reports = widget.reports;
+      if (mounted &&
+          reports != null &&
+          reports.data == null &&
+          reports.error == null) {
+        reports.ensureDetails();
+      }
     });
   }
 

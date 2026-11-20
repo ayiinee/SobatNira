@@ -50,10 +50,18 @@ keras untuk seluruh proses rendering/query.
 
 ## Flutter
 
-Beranda pada awal sesi meminta `view=summary`, sehingga tidak perlu mengunduh semua
-rincian laporan. Membuka tab Laporan atau pintasan Rekap/Laba memuat rincian lengkap
+Beranda pada setiap refresh meminta `view=summary`, sehingga tidak perlu mengunduh
+semua rincian laporan. State ringkasan dan rincian terpisah, dengan periode/kategori
+yang sama. Penolakan rincian besar tidak mengosongkan ringkasan Beranda. Membuka tab
+Laporan atau pintasan Rekap/Laba memuat rincian lengkap
 sesuai periode ketika dibutuhkan. Laporan kecil tetap memakai tampilan dan cetak
 yang sama. Kegagalan memuat detail tidak boleh mencetak summary sebagai dokumen lengkap.
+
+Refresh produksi membatalkan hasil detail lama dan memperbarui ringkasan saja.
+Kembali ke tab Laporan yang sudah pernah dibuka meminta detail kembali bila belum
+tersedia; request detail identik yang sedang berlangsung digabung. Perubahan filter
+laporan mengisi ringkasan dari total snapshot detail yang sama bila berhasil, atau
+meminta summary tersendiri bila detail gagal. Error/loading kedua state terpisah.
 
 Jika laporan lengkap melewati batas, layar menampilkan error, filter tanggal, dan
 **Lihat rincian per halaman**. Layar ini mengambil 20 kloter per request, menampilkan

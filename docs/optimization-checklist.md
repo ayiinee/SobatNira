@@ -116,7 +116,7 @@ atau produksi tetap merupakan pekerjaan rilis, bukan bagian centang implementasi
 - [x] **RPT-05** Pertahankan konsistensi snapshot, periode penerimaan kloter, angka presisi dan aturan biaya satu kali per kloter.
 - [x] **RPT-06** Uji koreksi aktif/disahkan/dibuang, margin negatif dan isolasi pabrik antara detail, Beranda, laporan dan PDF/XLSX.
 - [x] **RPT-07** Verifikasi pembatasan baru tidak memotong laporan secara diam-diam atau menghasilkan total dari data parsial.
-- [ ] **RPT-08** Pisahkan state ringkasan Beranda dari rincian agar penolakan detail besar, refresh dan kembali ke Beranda tidak menghilangkan total; tambahkan regresi state/navigasi.
+- [x] **RPT-08** Pisahkan state ringkasan Beranda dari rincian agar penolakan detail besar, refresh dan kembali ke Beranda tidak menghilangkan total; tambahkan regresi state/navigasi.
 
 Lihat [kontrak dan baseline laporan](backend-report-optimization.md). Endpoint lengkap/laba/rekap dibatasi 100 kloter dan respons 5 MiB, rincian 1000 batch per kloter; interval eksplisit maksimal 366 hari. Summary dan halaman mempertahankan total seluruh filter. Ekspor owner memakai worker yang sudah tersedia (maksimal 500 kloter), dengan kontrol Flutter baru.
 
@@ -270,6 +270,7 @@ pengganti pembacaan resmi pada transaksi stok/pengesahan.
 - [x] **QA-05E** Katalog/cache: migrasi cache diterapkan pada database sintetis, build dan suite 117 tes backend/integrasi lulus tanpa skip. Nomor cache diperbaiki dari 024 menjadi 025 agar tidak bertabrakan dengan indeks snapshot; rekonsiliasi catatan lokal mempertahankan checksum/DDL. Redis diuji melalui fixture protokol lokal, belum server/provider nyata; flag cache tetap nonaktif secara default.
 - [x] **QA-05F** Observabilitas: build dan 120 tes backend/integrasi lulus tanpa skip; 19 tes HTTP/Auth/pool terarah juga lulus. Sesudah perbaikan nomor migrasi, 11 tes migrasi/alur OCR kembali lulus dan migrator dua kali tanpa perubahan pada tiga database sintetis.
 - [x] **QA-05G** Suite Flutter penuh sesudah preview: 138 tes lulus, 3 fixture skip; analyzer sebelumnya bersih. Hasil ini sebelum perbaikan RPT-08, yang memerlukan regresi tersendiri.
+- [x] **QA-05H** RPT-08: analyzer bersih dan 29 tes state/widget login–Beranda–laporan–PDF lulus. Meliputi kembali ke Beranda setelah detail 101 kloter gagal, navigasi laporan yang sudah tersimpan, penggabungan request dan pembatalan hasil lama sesudah refresh.
 - [ ] **QA-06** Jalankan tes FastAPI dari `apps/ai` dengan `uv run --locked python -m unittest` bila kontrak/pemrosesan AI berubah.
 - [ ] **QA-07** Uji satu skenario sintetis dari foto → OCR → revisi → pengesahan → stok → laporan/PDF; pastikan angka dan status konsisten.
 - [ ] **QA-08** Uji R2 nyata dengan fixture sintetis terpisah; catat dan bersihkan hanya objek fixture yang dibuat tes.
@@ -307,6 +308,7 @@ Branch kerja: `perf/api-staged-photo-upload`.
 | 21 November 2026 | `5470202` | Query review sesudah pagination, metrik antrean dan opsi polling adaptif |
 | 21 November 2026 | `f894172` | Cache katalog dengan generasi transaksi, profil pencarian dan pengujian outage |
 | 21 November 2026 | `6650bbd` | Nomor migrasi cache 025, rekonsiliasi lokal dan penjagaan tabrakan baru |
+| 21 November 2026 | `a3436d8` | Histogram HTTP/query/pool, penghitung error/byte dan dokumentasi terpadu |
 
 Riwayat ini mencatat commit lokal. Status sinkronisasi remote dapat diperiksa dengan
 `git status -sb`; commit tidak berarti perubahan sudah digabung ke main atau dirilis.

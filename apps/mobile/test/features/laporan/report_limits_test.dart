@@ -1,9 +1,12 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:sobatnira/features/kloter/connected_production.dart';
+import 'package:sobatnira/features/beranda/home_page.dart';
+import 'package:sobatnira/features/beranda/beranda_page.dart';
 import 'package:sobatnira/features/laporan/connected_reports.dart';
 import 'package:sobatnira/features/laporan/connected_report_controls.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
@@ -29,6 +32,53 @@ Json summary() => {
   },
 };
 void main() {
+  testWidgets(
+    'home keeps global totals after a large report fails and cached report navigation retries once',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(430, 950));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      var details = 0;
+      final api = ReviewApi(
+        'token',
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/counts')) {
+            return response({'total': 101, 'open': 101, 'closed': 0});
+          }
+          if (request.url.path.endsWith('/lots')) {
+            return response({'items': [], 'nextCursor': null});
+          }
+          if (request.url.queryParameters['view'] == 'summary') {
+            return response(summary());
+          }
+          details++;
+          return response({'message': 'Persempit periode laporan.'}, 400);
+        }),
+      );
+      addTearDown(api.close);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: NiraHome(api: api, scope: scope, factories: [scope]),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<BerandaPage>(find.byType(BerandaPage)).summary!.lots,
+        '101',
+      );
+      for (var n = 1; n <= 2; n++) {
+        await tester.tap(find.bySemanticsLabel('Laporan'));
+        await tester.pumpAndSettle();
+        expect(details, n);
+        await tester.tap(find.bySemanticsLabel('Beranda'));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<BerandaPage>(find.byType(BerandaPage)).summary!.lots,
+          '101',
+        );
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
   test(
     'home requests only summary; rejected detail never exposes partial rows or totals',
     () async {
@@ -61,13 +111,59 @@ void main() {
             .queryParameters['view'],
         'summary',
       );
-      expect(live.reports.totals['lotCount'], 101);
-      expect(live.reports.provisional, true);
+      expect(live.reports.summary.totals['lotCount'], 101);
+      expect(live.reports.summary.provisional, true);
       expect(live.reports.lots, isEmpty);
       await live.reports.ensureDetails();
       expect(live.reports.error, isA<ReviewApiError>());
       expect(live.reports.data, isNull);
       expect(live.reports.lots, isEmpty);
+      expect(live.reports.summary.totals['lotCount'], 101);
+      expect(live.reports.summary.error, isNull);
+      await live.refresh();
+      expect(
+        requests.where(
+          (u) =>
+              u.path.endsWith('/production-report') &&
+              u.queryParameters['view'] != 'summary',
+        ),
+        hasLength(1),
+      );
+      expect(live.reports.summary.totals['lotCount'], 101);
+    },
+  );
+  test(
+    'refresh home cancels old detail and identical detail requests coalesce',
+    () async {
+      final detail = Completer<http.Response>();
+      var fullRequests = 0;
+      final api = ReviewApi(
+        'token',
+        client: MockClient((request) async {
+          if (request.url.queryParameters['view'] == 'summary') {
+            return response(summary());
+          }
+          fullRequests++;
+          return detail.future;
+        }),
+      );
+      final reports = ConnectedReports(api, scope);
+      addTearDown(reports.dispose);
+      addTearDown(api.close);
+      final first = reports.ensureDetails(), second = reports.ensureDetails();
+      await Future<void>.delayed(Duration.zero);
+      expect(fullRequests, 1);
+      await reports.refreshHome();
+      detail.complete(
+        response({
+          ...summary(),
+          'view': 'full',
+          'totals': {'lotCount': 999},
+        }),
+      );
+      await Future.wait([first, second]);
+      expect(reports.data, isNull);
+      expect(reports.summary.totals['lotCount'], 101);
     },
   );
   testWidgets(

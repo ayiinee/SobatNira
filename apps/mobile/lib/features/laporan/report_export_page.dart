@@ -48,6 +48,20 @@ class ReportExportPage extends StatefulWidget {
 class _ReportExportPageState extends State<ReportExportPage> {
   bool _busy = false;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final reports = widget.reports;
+      if (mounted &&
+          reports != null &&
+          reports.data == null &&
+          reports.error == null) {
+        reports.ensureDetails();
+      }
+    });
+  }
+
   Future<void> _filter() async {
     if (widget.reports case final reports?) {
       await filterConnectedReport(context, reports);
