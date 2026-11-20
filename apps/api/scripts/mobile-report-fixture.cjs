@@ -22,8 +22,15 @@ async function main() {
     await checked(fixture.root + '/lots/' + fixture.ids.lot + '/juice/reservations', 'POST', {
       requestId: randomUUID(), batchId: batch, quantityMl: '100000' });
     await checked(root + '/batches/' + batch + '/approve', 'POST');
+    const syntheticLot = fixture.ids.secondLot;
+    const draft = await checked(fixture.root + '/intake-documents/synthetic', 'POST', {
+      lotId: syntheticLot, requestId: randomUUID(),
+    });
+    const intake = fixture.root + '/intake-documents/' + draft.id;
+    await checked(intake + '/confirm-synthetic', 'POST', { expectedRevision: draft.currentRevision });
+    await checked(intake + '/approve', 'POST', { expectedRevision: draft.currentRevision });
     console.log(JSON.stringify({ REPORT_TEST_API: fixture.base, REPORT_TEST_TENANT: fixture.ids.tenant,
-      REPORT_TEST_FACTORY: fixture.ids.factory }));
+      REPORT_TEST_FACTORY: fixture.ids.factory, REPORT_TEST_SYNTHETIC_LOT: syntheticLot }));
     // Close explicitly so the caller can verify that PostgreSQL was rolled back.
     const input = createInterface({ input: process.stdin });
     await new Promise(resolve => { input.on('line', line => { if (line.trim() === 'stop') resolve(); }); input.on('close', resolve); });

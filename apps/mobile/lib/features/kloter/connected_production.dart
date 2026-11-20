@@ -47,40 +47,30 @@ class ConnectedProduction extends ChangeNotifier {
 
   Future<void> _refreshLots({Future<Json>? unfiltered}) async {
     final generation = ++_generation;
+    final synthetic = _synthetic;
     loading = true;
     error = null;
     lots = const [];
     notifyListeners();
     try {
-      if (_synthetic) {
-        // The list endpoint summarizes official records. Use the unfiltered
-        // synthetic report as the index and load synthetic lot summaries.
-        final report =
-            await (unfiltered ?? api.productionReport(scope, synthetic: true));
-        final items = (report['items'] as List).cast<Json>();
-        final result = <DemoKloter>[];
-        for (var start = 0; start < items.length; start += 6) {
-          if (generation != _generation) return;
-          final details = await Future.wait([
-            for (final item in items.skip(start).take(6))
-              api.lot(scope, item['lotId'] as String, synthetic: true),
-          ]);
-          result.addAll(details.map(connectedLot));
-        }
-        if (generation == _generation) lots = List.unmodifiable(result);
-        return;
-      }
       final rows = <String, DemoKloter>{};
       var offset = 0;
       while (true) {
-        final page = await api.lots(
-          scope,
-          offset: offset,
-          search: '',
-          limit: 100,
-          includeSummary: true,
-        );
+        final page = synthetic
+            ? await api.syntheticLotPage(scope, offset)
+            : await api.lots(
+                scope,
+                offset: offset,
+                search: '',
+                limit: 100,
+                includeSummary: true,
+              );
         if (generation != _generation) return;
+        if (page == null) {
+          final legacy = await _legacySyntheticLots(generation, unfiltered);
+          if (generation == _generation) lots = List.unmodifiable(legacy);
+          return;
+        }
         final items = (page['items'] as List).cast<Json>();
         for (final item in items) {
           rows[item['id'] as String] = connectedLot(item);
@@ -98,6 +88,29 @@ class ConnectedProduction extends ChangeNotifier {
         notifyListeners();
       }
     }
+  }
+
+  Future<List<DemoKloter>> _legacySyntheticLots(
+    int generation,
+    Future<Json>? unfiltered,
+  ) async {
+    // Older APIs only list official summaries. Keep their supported read path.
+    final report =
+        await (unfiltered ?? api.productionReport(scope, synthetic: true));
+    final items = (report['items'] as List).cast<Json>();
+    final result = <DemoKloter>[];
+    for (
+      var start = 0;
+      start < items.length && generation == _generation;
+      start += 6
+    ) {
+      final details = await Future.wait([
+        for (final item in items.skip(start).take(6))
+          api.lot(scope, item['lotId'] as String, synthetic: true),
+      ]);
+      result.addAll(details.map(connectedLot));
+    }
+    return result;
   }
 
   @override

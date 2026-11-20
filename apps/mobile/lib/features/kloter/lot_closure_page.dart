@@ -13,9 +13,11 @@ class LotClosurePage extends StatefulWidget {
     required this.api,
     required this.scope,
     this.onNavigate,
+    this.onChanged,
     required this.lotId,
   });
   final ValueChanged<NiraTab>? onNavigate;
+  final VoidCallback? onChanged;
   final ReviewApi api;
   final FactoryScope scope;
   final String lotId;
@@ -96,6 +98,7 @@ class _LotClosurePageState extends State<LotClosurePage> {
       } else {
         await closure.close(widget.scope, widget.lotId);
       }
+      widget.onChanged?.call();
       if (mounted) {
         setState(() {
           _notice = reopen

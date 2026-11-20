@@ -198,8 +198,8 @@ void main() {
       expect(find.textContaining('Margin kumulatif kloter'), findsNothing);
       expect(find.text('Rp540.000'), findsOneWidget);
       expect(
-        tester.getTopLeft(find.text('Rp540.000')).dx,
-        closeTo(tester.getTopLeft(find.text('Harga')).dx, 0.1),
+        tester.getTopRight(find.text('Rp540.000')).dx,
+        closeTo(tester.getTopRight(find.text('Harga')).dx, 0.1),
       );
       expect(find.text('Status biaya'), findsNothing);
       await tester.tap(find.text('Masak'));
@@ -216,8 +216,8 @@ void main() {
       await tester.tap(find.text('Grade'));
       await tester.pumpAndSettle();
       expect(
-        tester.getTopLeft(find.text('Rp20.000/Kg')).dx,
-        closeTo(tester.getTopLeft(find.text('Harga')).dx, 0.1),
+        tester.getTopRight(find.text('Rp20.000/Kg')).dx,
+        closeTo(tester.getTopRight(find.text('Harga')).dx, 0.1),
       );
       expect(find.text('A'), findsOneWidget);
       expect(find.text('B'), findsOneWidget);

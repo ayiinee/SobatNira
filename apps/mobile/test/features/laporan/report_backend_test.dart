@@ -50,6 +50,22 @@ void main() {
       expect(reports.totals['lotCount'], 1);
       expect(reports.totals['caneNetKg'], '1250');
       expect(reports.totals['finalSugarKg'], '30');
+      final lotId = reports.lots.single['lotId'] as String;
+      final scoped = (await tester.runAsync(
+        () => api.lotProductionReport(reports.scope, lotId, synthetic: false),
+      ))!;
+      expect(scoped['items'], reports.lots);
+      final synthetic = (await tester.runAsync(
+        () => api.syntheticLotPage(reports.scope, 0),
+      ))!;
+      expect(synthetic['total'], 1);
+      final syntheticLot = (synthetic['items'] as List).single as Json;
+      expect(
+        syntheticLot['id'],
+        const String.fromEnvironment('REPORT_TEST_SYNTHETIC_LOT'),
+      );
+      expect(syntheticLot['synthetic'], isTrue);
+      expect(syntheticLot['netWeightGrams'], '1250000');
       final recap = reports.printable(PrintableReportKind.production);
       expect(recap.totalDisplay, '30 kg');
       expect(recap.recap!.batchCount, 1);

@@ -49,6 +49,12 @@ test('batch approval freezes costs, consumes once, isolates scope and produces a
   assert.equal((await f.request(root+'/profit-report?from=2026-12-01T00:00:00Z')).body.total,0);
   const production=await f.request(root+'/production-report');
   assert.equal(production.status,200,JSON.stringify(production.body));
+  const scopedReport=await f.request(root+'/production-report?lotId='+f.ids.lot);
+  assert.deepEqual(scopedReport.body,production.body);
+  assert.deepEqual((await f.request(root+'/production-report?lotId='+f.ids.secondLot)).body.items,[]);
+  assert.deepEqual((await f.request(f.siblingRoot+'/production/production-report?lotId='+f.ids.lot)).body.items,[]);
+  assert.deepEqual((await f.request(root+'/production-report?synthetic=true&lotId='+f.ids.lot)).body.items,[]);
+  assert.equal((await f.request(root+'/production-report?lotId=invalid')).status,400);
   assert.equal(production.body.totals.lotCount,1);
   assert.equal(production.body.totals.batchCount,1);
   assert.equal(production.body.totals.finalSugarKg,'30');

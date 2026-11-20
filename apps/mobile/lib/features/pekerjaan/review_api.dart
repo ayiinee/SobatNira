@@ -105,6 +105,9 @@ class ReviewApiError implements Exception {
   final String? authCode;
   final String? detail;
 
+  bool get unsupportedQuery =>
+      status == 400 && detail == 'Terdapat field yang tidak didukung.';
+
   String get message => switch (status) {
     401 => 'Sesi masuk telah berakhir.',
     403 || 404 => 'Data tidak tersedia untuk akun ini.',
@@ -122,6 +125,8 @@ class ReviewApi {
   final http.Client _client;
   final String baseUrl;
   final _pendingTransfers = <String, JuiceTransferRequest>{};
+  bool _supportsLotReport = true;
+  bool _supportsSyntheticLotPage = true;
   void Function()? onSessionExpired;
 
   String _transferKey(FactoryScope scope, String lotId) =>
@@ -301,6 +306,25 @@ class ReviewApi {
     },
   );
 
+  Future<Json> lotProductionReport(
+    FactoryScope scope,
+    String lotId, {
+    required bool synthetic,
+  }) async {
+    if (_supportsLotReport) {
+      try {
+        return await _productionGet(
+          [...scope._base, 'production', 'production-report'],
+          query: {'lotId': lotId, 'synthetic': '$synthetic'},
+        );
+      } on ReviewApiError catch (error) {
+        if (!error.unsupportedQuery) rethrow;
+        _supportsLotReport = false;
+      }
+    }
+    return productionReport(scope, synthetic: synthetic);
+  }
+
   Future<Json> factoryBatches(
     FactoryScope scope,
     String lotId, {
@@ -320,10 +344,7 @@ class ReviewApi {
         },
       );
     } on ReviewApiError catch (error) {
-      if (error.status != 400 ||
-          error.detail != 'Terdapat field yang tidak didukung.') {
-        rethrow;
-      }
+      if (!error.unsupportedQuery) rethrow;
     }
 
     // Older deployments only accept pagination on the factory batch list.
@@ -456,6 +477,25 @@ class ReviewApi {
       if (search.isNotEmpty) 'q': search,
     },
   );
+
+  Future<Json?> syntheticLotPage(FactoryScope scope, int offset) async {
+    if (!_supportsSyntheticLotPage) return null;
+    try {
+      return await _productionGet(
+        scope._lots,
+        query: {
+          'limit': '100',
+          'offset': '$offset',
+          'includeSummary': 'true',
+          'synthetic': 'true',
+        },
+      );
+    } on ReviewApiError catch (error) {
+      if (!error.unsupportedQuery) rethrow;
+      _supportsSyntheticLotPage = false;
+      return null;
+    }
+  }
 
   Future<Json> lot(FactoryScope scope, String id, {bool synthetic = false}) =>
       _productionGet(

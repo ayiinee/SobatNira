@@ -9,13 +9,17 @@ export interface Page<T> { items: T[]; total: number; limit: number; offset: num
 // CTEs and ORDER BY fragments are fixed source code, never client input.
 export async function queryPage<T extends { id: string }>(
   database: DatabaseSession, ctes: string, values: unknown[], page: Pagination, order: string,
+  enrichment?: { columns: string; joins: string },
 ): Promise<Page<T>> {
   const result = await database.query<T & { total: string }>(`
     WITH ${ctes}, page AS (
       SELECT * FROM filtered ORDER BY ${order} LIMIT $${values.length + 1}::int OFFSET $${values.length + 2}::int
     )
-    SELECT page.*, totals.total FROM (SELECT count(*) AS total FROM filtered) totals
-    LEFT JOIN page ON true ORDER BY ${order}
+    SELECT page.*, totals.total${enrichment ? `, ${enrichment.columns}` : ''}
+    FROM (SELECT count(*) AS total FROM filtered) totals
+    LEFT JOIN page ON true
+    ${enrichment?.joins ?? ''}
+    ORDER BY ${order}
   `, [...values, page.limit, page.offset]);
   return {
     items: result.rows.filter((row) => row.id !== null).map(({ total: _total, ...row }) => row as unknown as T),

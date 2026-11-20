@@ -347,6 +347,7 @@ class _BatchDetailPageState extends State<BatchDetailPage>
           entry.price,
           label: 'Harga grade ${entry.code}',
           abbreviate: false,
+          alignment: Alignment.centerRight,
           style: niraText(NiraType.body),
         ),
         height: 30,
@@ -365,6 +366,7 @@ class _BatchDetailPageState extends State<BatchDetailPage>
       price: NiraValue(
         _productionValue,
         label: 'Nilai produksi batch',
+        alignment: Alignment.centerRight,
         style: niraText(NiraType.section, weight: FontWeight.w700),
       ),
       height: 32,
@@ -424,6 +426,7 @@ class _BatchDetailPageState extends State<BatchDetailPage>
           grade.price == '—' ? '—' : '${grade.price}/Kg',
           label: 'Harga grade ${grade.code}',
           abbreviate: false,
+          alignment: Alignment.centerRight,
           style: niraText(NiraType.body),
         ),
         height: 35,
@@ -493,7 +496,7 @@ class _PriceRow extends StatelessWidget {
         ),
         Expanded(
           flex: 33,
-          child: Align(alignment: Alignment.centerLeft, child: price),
+          child: Align(alignment: Alignment.centerRight, child: price),
         ),
       ],
     ),

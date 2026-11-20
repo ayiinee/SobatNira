@@ -61,18 +61,17 @@ const SUMMARY_COLUMNS = `
   trim_scale(COALESCE(mc.quantity_after, m.juice_produced_liters))::text AS "juiceProducedLiters",
   ${approvedRecord('i')} AS intake, ${approvedRecord('m')} AS milling`;
 
-function summaryJoins(synthetic: '$5' | 'false') {
+function summaryJoins(synthetic: '$5' | 'true' | 'false', page = false) {
+  const scope = page ? '(page."tenantId",page."factoryId",page.id)' : '(l.tenant_id,l.factory_id,l.id)';
   return `
-      LEFT JOIN sobatnira.intake_records i ON i.tenant_id = l.tenant_id AND i.factory_id = l.factory_id
-        AND i.lot_id = l.id AND i.is_synthetic = ${synthetic}
-      LEFT JOIN sobatnira.milling_records m ON m.tenant_id = l.tenant_id AND m.factory_id = l.factory_id
-        AND m.lot_id = l.id AND m.is_synthetic = ${synthetic}
+      LEFT JOIN sobatnira.intake_records i ON (i.tenant_id,i.factory_id,i.lot_id) = ${scope} AND i.is_synthetic = ${synthetic}
+      LEFT JOIN sobatnira.milling_records m ON (m.tenant_id,m.factory_id,m.lot_id) = ${scope} AND m.is_synthetic = ${synthetic}
       LEFT JOIN LATERAL (SELECT revision_id,created_at FROM sobatnira.stock_reconciliations
         WHERE intake_record_id=i.id ORDER BY revision_version DESC LIMIT 1) ic ON true
       LEFT JOIN LATERAL (SELECT revision_id,created_at,quantity_after FROM sobatnira.stock_reconciliations
         WHERE milling_record_id=m.id ORDER BY revision_version DESC LIMIT 1) mc ON true
-      LEFT JOIN sobatnira.lot_closures c ON c.tenant_id = l.tenant_id AND c.factory_id = l.factory_id
-        AND c.lot_id = l.id AND c.is_synthetic = ${synthetic} AND c.reopened_at IS NULL`;
+      LEFT JOIN sobatnira.lot_closures c ON (c.tenant_id,c.factory_id,c.lot_id) = ${scope}
+        AND c.is_synthetic = ${synthetic} AND c.reopened_at IS NULL`;
 }
 
 @Injectable()
@@ -80,18 +79,25 @@ export class LotsRepository {
   constructor(private readonly database: DatabaseService) {}
 
   list(access: FactoryAccess, query: LotQuery) {
+    const synthetic = query.synthetic === true;
     return queryPage<Lot | LotSummary>(this.database, `${FACTORY_SCOPE_CTE}, filtered AS (
-      SELECT ${COLUMNS}, s.name AS "supplierName"${query.includeSummary ? `, ${SUMMARY_COLUMNS}` : ''}
+      SELECT ${COLUMNS}, s.name AS "supplierName"
       FROM sobatnira.lots l
       JOIN authorized_scope scope ON scope."tenantId" = l.tenant_id AND scope."factoryId" = l.factory_id
       JOIN sobatnira.suppliers s ON s.tenant_id = l.tenant_id AND s.id = l.supplier_id
-      ${query.includeSummary ? summaryJoins('false') : ''}
+      ${synthetic ? `JOIN sobatnira.intake_records receipt ON (receipt.tenant_id,receipt.factory_id,receipt.lot_id)
+        = (l.tenant_id,l.factory_id,l.id) AND receipt.is_synthetic` : ''}
       WHERE ($4::text IS NULL OR strpos(lower(COALESCE(l.display_code, '')), lower($4)) > 0 OR strpos(lower(s.name), lower($4)) > 0)
         AND ($5::uuid IS NULL OR l.supplier_id = $5)
         AND ($6::timestamptz IS NULL OR l.received_at >= $6)
         AND ($7::timestamptz IS NULL OR l.received_at < $7)
     )`, [...scopeValues(access), query.q ?? null, query.supplierId ?? null,
-      query.receivedFrom ?? null, query.receivedBefore ?? null], query, '"receivedAt" DESC, id');
+      query.receivedFrom ?? null, query.receivedBefore ?? null], query, '"receivedAt" DESC, id',
+    query.includeSummary ? {
+      columns: `${synthetic ? 'true AS synthetic, ' : ''}summary.*`,
+      joins: `LEFT JOIN LATERAL (SELECT ${SUMMARY_COLUMNS} FROM (SELECT 1) seed
+        ${summaryJoins(synthetic ? 'true' : 'false', true)}) summary ON page.id IS NOT NULL`,
+    } : undefined);
   }
 
   async find(access: FactoryAccess, id: string, synthetic = false): Promise<LotDetail | undefined> {

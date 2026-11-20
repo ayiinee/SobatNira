@@ -266,22 +266,24 @@ FROM sobatnira.batch_grade_results g JOIN sobatnira.production_batches pb ON pb.
         return { items: rows.rows, ...page };
     }
     async productionReport(access: FactoryAccess, query: unknown, maxLots?: number, includeJuiceSources = false) {
-        const q = object(query, ['from', 'before', 'synthetic']);
+        const q = object(query, ['from', 'before', 'synthetic', 'lotId']);
         if (q.synthetic !== undefined && !['true', 'false'].includes(String(q.synthetic)))
             throw new BadRequestException('synthetic tidak valid.');
         const from = q.from === undefined ? null : timestamp(q.from, 'from');
         const before = q.before === undefined ? null : timestamp(q.before, 'before');
         if (from && before && from >= before) throw new BadRequestException('Periode tidak valid.');
         const synthetic = q.synthetic === 'true';
-        const items = await this.reportRows(access, synthetic, from, before,
-          maxLots === undefined ? null : maxLots + 1, undefined, includeJuiceSources);
+        const lotId = q.lotId === undefined ? null : uuid(q.lotId, 'lotId');
+        const items = await this.reportRows(access, synthetic, from, before, {
+          limit: maxLots === undefined ? null : maxLots + 1, includeJuiceSources, lotId,
+        });
         checkReportSize(items, maxLots);
         return { factory: access.factoryName, from, before, synthetic, periodBasis: 'lot_received_at', ...productionReport(items) };
     }
 
     async compareProductionReports(access: FactoryAccess, first: ReportPeriod, second: ReportPeriod, maxLots: number) {
         const synthetic = first.synthetic === 'true';
-        const items = await this.reportRows(access, synthetic, first.from, first.before, maxLots * 2 + 1, second);
+        const items = await this.reportRows(access, synthetic, first.from, first.before, { limit: maxLots * 2 + 1, second });
         return [first, second].map(({ from, before }) => {
             const lower = Date.parse(from), upper = Date.parse(before);
             const matching = items.filter(lot => {
@@ -294,7 +296,9 @@ FROM sobatnira.batch_grade_results g JOIN sobatnira.production_batches pb ON pb.
     }
 
     private async reportRows(access: FactoryAccess, synthetic: boolean, from: string | null, before: string | null,
-      limit: number | null, second?: ReportPeriod, includeJuiceSources = false) {
+      { limit, second, includeJuiceSources, lotId }: {
+        limit: number | null; second?: ReportPeriod; includeJuiceSources?: boolean; lotId?: string | null;
+      }) {
         // A single statement gives receipt, latest cumulative snapshot and approved
         // batch details one consistent PostgreSQL read snapshot, scoped by membership.
         const { rows } = await this.db.query<ProductionReportLot>(`WITH ${FACTORY_SCOPE_CTE}
@@ -335,10 +339,11 @@ FROM sobatnira.batch_grade_results g JOIN sobatnira.production_batches pb ON pb.
             ),'[]'::jsonb)` : ''}
             ) ORDER BY pb.occurred_at,pb.id) AS items FROM sobatnira.production_batches pb
             WHERE pb.lot_id=l.id AND pb.tenant_id=l.tenant_id AND pb.factory_id=l.factory_id AND pb.is_synthetic=$4 AND pb.status='approved') b ON true
-          WHERE ($5::timestamptz IS NULL OR l.received_at >= $5) AND ($6::timestamptz IS NULL OR l.received_at < $6)
-            OR (l.received_at >= $8::timestamptz AND l.received_at < $9::timestamptz)
+          WHERE ($10::uuid IS NULL OR l.id = $10)
+            AND ((($5::timestamptz IS NULL OR l.received_at >= $5) AND ($6::timestamptz IS NULL OR l.received_at < $6))
+              OR (l.received_at >= $8::timestamptz AND l.received_at < $9::timestamptz))
           ORDER BY l.received_at DESC,l.id LIMIT $7`, [...scopeValues(access), synthetic, from, before, limit,
-            second?.from ?? null, second?.before ?? null]);
+            second?.from ?? null, second?.before ?? null, lotId ?? null]);
         return rows;
     }
 

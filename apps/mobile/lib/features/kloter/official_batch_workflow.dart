@@ -99,15 +99,16 @@ class _OfficialLotBatchesState extends State<OfficialLotBatches> {
     );
     if (!mounted) return;
     if (created != null) {
-      await _open(created);
+      await _open(created, created: true);
     } else {
       _reload();
     }
   }
 
-  Future<void> _open(Json batch) async {
+  Future<void> _open(Json batch, {bool created = false}) async {
     final api = widget.api;
     final scope = widget.scope;
+    var changed = created;
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => _OfficialBatchDetail(
@@ -121,10 +122,11 @@ class _OfficialLotBatchesState extends State<OfficialLotBatches> {
           millingRevision: widget.millingRevision,
           onNavigate: widget.onNavigate,
           reportLink: widget.reportLink,
+          onChanged: () => changed = true,
         ),
       ),
     );
-    if (mounted) {
+    if (mounted && changed) {
       _reload();
       widget.onChanged();
     }
@@ -227,6 +229,7 @@ class _OfficialBatchDetail extends StatefulWidget {
     required this.millingRevision,
     required this.onNavigate,
     required this.reportLink,
+    required this.onChanged,
   });
 
   final ReviewApi api;
@@ -239,6 +242,7 @@ class _OfficialBatchDetail extends StatefulWidget {
   final String? millingRevision;
   final ValueChanged<NiraTab> onNavigate;
   final Future<void> Function([String? batchId]) reportLink;
+  final VoidCallback onChanged;
 
   @override
   State<_OfficialBatchDetail> createState() => _OfficialBatchDetailState();
@@ -261,8 +265,9 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
   Future<Json> _load() => widget.api.factoryBatch(widget.scope, _id);
   Future<Json?> _loadReportLot() async {
     try {
-      final report = await widget.api.productionReport(
+      final report = await widget.api.lotProductionReport(
         widget.scope,
+        _lot,
         synthetic: widget.initial['is_synthetic'] == true,
       );
       return (report['items'] as List)
@@ -275,6 +280,7 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
   }
 
   void _reload() {
+    widget.onChanged();
     setState(() {
       _detail = _load();
       _reportLot = _loadReportLot();
@@ -322,6 +328,7 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
       _error = null;
     });
     try {
+      widget.onChanged();
       await operation();
       if (mounted) _notice = notice;
     } catch (error) {

@@ -1,10 +1,11 @@
 # Ringkasan dan laporan produksi terhubung
 
-Beranda, tab Produksi/Margin, pintasan Laba/Rekap, serta detail kloter, grade dan batch memakai sumber laporan yang sama. Tidak diperlukan migrasi baru; laporan membaca penerimaan, batch dan snapshot produksi yang sudah tersedia.
+Beranda, tab Produksi/Margin, pintasan Laba/Rekap, serta detail kloter, grade dan batch memakai sumber laporan yang sama. Laporan membaca penerimaan, batch, dan snapshot produksi yang sudah tersedia. Migrasi `024_production_snapshot_lot_lookup.sql` menambah indeks untuk mencari snapshot terbaru per kloter.
 
 ## Sumber dan batas perhitungan
 
 - `GET /tenants/:tenantId/factories/:factoryId/production/production-report` memerlukan Bearer token serta membership admin/owner di pabrik tersebut.
+- Detail kloter dan batch meminta laporan dengan `lotId` untuk memuat satu kloter. Ringkasan kloter contoh memakai `GET .../lots?includeSummary=true&synthetic=true`, dengan batas dan offset yang sama seperti daftar reguler. Flutter memakai jalur baca lama jika backend belum menerima parameter baru.
 - Parameter `from` inklusif dan `before` eksklusif mengikuti **waktu penerimaan kloter**, sama dengan laporan laba yang sudah ada. Flutter mengubah pilihan tanggal lokal menjadi batas waktu UTC; akhir periode adalah awal hari berikutnya.
 - Tebu diterima dan jumlah kloter hanya menghitung penerimaan sah. Kloter tanpa penerimaan sah tidak dihitung. Penerimaan sah tanpa hasil produksi tetap ditampilkan, dengan hasil/margin belum tercatat.
 - Gula final, nilai produksi, biaya dan margin memakai **snapshot kumulatif terbaru per kloter**, sehingga biaya tidak dihitung lagi untuk setiap snapshot. Total batch hanya mencakup batch sah. Draf/cancelled tidak menjadi hasil resmi.
@@ -42,4 +43,4 @@ flutter test --no-pub test/features/laporan/report_backend_test.dart --dart-defi
 
 Fixture membuat batch dan pengesahan melalui HTTP pada transaksi rollback, lalu Flutter membaca dan menampilkan angka yang sama. Ketik `stop` pada terminal fixture setelah tes agar transaksi di-rollback dan koneksi ditutup. Tes ini dilewati oleh suite biasa jika konfigurasi fixture tidak diberikan.
 
-Jalankan ulang NestJS dan Flutter dari source terbaru. Tidak ada perubahan skema, deployment atau seed yang diperlukan oleh laporan ini.
+Terapkan migrasi indeks dan jalankan ulang NestJS serta Flutter dari source terbaru untuk memakai jalur baca yang dioptimalkan. Seed yang sudah ada dapat dipakai kembali.

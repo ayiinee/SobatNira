@@ -128,15 +128,20 @@ void main() {
           }
           expect(uri.path, startsWith('/tenants/tenant/factories/A/'));
           expect(uri.queryParameters['synthetic'], 'true');
-          if (uri.path.endsWith('/lots/one')) {
+          if (uri.path.endsWith('/lots')) {
             return response({
-              'id': 'one',
-              'displayCode': 'PABRIK-A-01',
-              'receivedAt': receipt.toIso8601String(),
-              'supplierName': 'Pemasok satu',
-              'netWeightGrams': '1250000',
-              'status': 'open',
-              'synthetic': true,
+              'items': [
+                {
+                  'id': 'one',
+                  'displayCode': 'PABRIK-A-01',
+                  'receivedAt': receipt.toIso8601String(),
+                  'supplierName': 'Pemasok satu',
+                  'netWeightGrams': '1250000',
+                  'status': 'open',
+                  'synthetic': true,
+                },
+              ],
+              'total': 1,
             });
           }
           expect(uri.path, endsWith('/production-report'));

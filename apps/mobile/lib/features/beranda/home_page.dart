@@ -354,7 +354,6 @@ class _NiraHomeState extends State<NiraHome> {
               ),
       ),
     );
-    if (mounted && live != null) await live.refresh();
   }
 
   @override
@@ -449,7 +448,13 @@ class _LotDetailState extends State<_LotDetail> {
         onReturnFromProcess: () {
           if (mounted) _reload();
         },
-        onEdit: canManage ? () => widget.onEdit(_lot.record!) : null,
+        onEdit: canManage
+            ? () async {
+                final saved = await widget.onEdit(_lot.record!);
+                if (saved && mounted) _reload();
+                return saved;
+              }
+            : null,
         onTransfer: canManage
             ? () => _open(
                 JuiceTransferPage(
@@ -468,6 +473,7 @@ class _LotDetailState extends State<_LotDetail> {
                   scope: _scope,
                   lotId: _id,
                   onNavigate: widget.onNavigate,
+                  onChanged: widget.live.refresh,
                 ),
               ),
         production: OfficialLotBatches(
@@ -488,7 +494,7 @@ class _LotDetailState extends State<_LotDetail> {
           onNavigate: widget.onNavigate,
           onChanged: () {
             _reload();
-            widget.live.reports.refresh();
+            widget.live.refresh();
           },
           reportLink: _production,
         ),
@@ -503,7 +509,11 @@ class _LotDetailState extends State<_LotDetail> {
   Future<void> _production([String? batchId]) async {
     final notice = ScaffoldMessenger.of(context);
     try {
-      final report = await _api.productionReport(_scope, synthetic: _synthetic);
+      final report = await _api.lotProductionReport(
+        _scope,
+        _id,
+        synthetic: _synthetic,
+      );
       if (!mounted) return;
       final lot = (report['items'] as List)
           .cast<Json>()

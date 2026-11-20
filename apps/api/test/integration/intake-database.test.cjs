@@ -45,6 +45,15 @@ test('synthetic intake flows through revisions, confirmation and atomic admin ap
     assert.equal(approved.body.status, 'approved');
     assert.equal(approved.body.approvedRevision, 4);
     assert.equal(approved.body.intake.netWeightKg, '1300.000000000000000001');
+    const syntheticLots = await request(root + '/lots?includeSummary=true&synthetic=true&limit=1');
+    assert.equal(syntheticLots.status, 200);
+    assert.equal(syntheticLots.body.total, 1);
+    assert.equal(syntheticLots.body.items[0].id, ids.lot);
+    assert.equal(syntheticLots.body.items[0].netWeightGrams, '1300000.000000000000001');
+    assert.equal(syntheticLots.body.items[0].intake.document.source, 'synthetic');
+    assert.equal((await request(root + '/lots?includeSummary=true&synthetic=true&offset=1')).body.items.length, 0);
+    assert.equal((await request(f.siblingRoot + '/lots?includeSummary=true&synthetic=true')).body.total, 0);
+    assert.equal((await request(root + '/lots?synthetic=invalid')).status, 400);
     const retry = await request(path + '/approve', 'POST', { expectedRevision: 4 }, 'fixture-owner');
     assert.equal(retry.status, 200);
     assert.equal(retry.body.intake.id, approved.body.intake.id);

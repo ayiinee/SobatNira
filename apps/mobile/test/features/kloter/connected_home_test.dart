@@ -120,10 +120,6 @@ void main() {
               'totals': {'lotCount': 1},
             });
           }
-          if (uri.path.endsWith('/lots/example')) {
-            expect(uri.queryParameters['synthetic'], 'true');
-            return _json({..._lot('example'), 'synthetic': true});
-          }
           if (uri.path.endsWith('/production/batches')) {
             expect(uri.queryParameters, {
               'lotId': 'example',
@@ -134,8 +130,14 @@ void main() {
             return _json({'items': []});
           }
           expect(uri.path, endsWith('/lots'));
+          final synthetic = uri.queryParameters['synthetic'] == 'true';
           return _json({
-            'items': [_lot('official')],
+            'items': [
+              if (synthetic)
+                {..._lot('example'), 'synthetic': true}
+              else
+                _lot('official'),
+            ],
             'total': 1,
           });
         }),
@@ -154,7 +156,10 @@ void main() {
       expect(live.error, isNull);
       expect(live.reports.error, isNull);
       expect(live.lots.single.id, 'example');
-      expect(requests.any((uri) => uri.path.endsWith('/lots')), isFalse);
+      expect(
+        requests.map((uri) => uri.path.split('/').last),
+        unorderedEquals(['lots', 'production-report']),
+      );
       await api.factoryBatches(scope, 'example', synthetic: true, offset: 20);
       final changed = Completer<void>();
       live.addListener(() {
@@ -372,6 +377,8 @@ void main() {
       };
       final opened = <String>[];
       var stockReads = 0;
+      var listReads = 0;
+      final reportLotIds = <String?>[];
       final batch = {
         'id': 'batch-first',
         'lot_id': 'first',
@@ -391,6 +398,10 @@ void main() {
         'local-token',
         client: MockClient((request) async {
           final path = request.url.path;
+          if (path == '$root/lots') listReads++;
+          if (path == '$root/production/production-report') {
+            reportLotIds.add(request.url.queryParameters['lotId']);
+          }
           if (path.endsWith('/juice/availability')) {
             stockReads++;
             return _json({
@@ -517,6 +528,8 @@ void main() {
       expect(find.text('Belum ada batch'), findsOneWidget);
       expect(find.text('BATCH-UJI-1'), findsNothing);
       expect(opened.toSet(), {'$root/lots/first', '$root/lots/second'});
+      expect(listReads, 1);
+      expect(reportLotIds, [null, 'first']);
     },
   );
 
