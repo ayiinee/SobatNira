@@ -37,7 +37,9 @@ class BatchDetailPage extends StatefulWidget {
        officialDocument = null,
        officialPreview = null,
        officialNotice = null,
-       officialActions = const [];
+       officialActions = const [],
+       officialGradeActions = null,
+       officialEditWeight = null;
 
   const BatchDetailPage.official({
     required this.officialTitle,
@@ -48,6 +50,8 @@ class BatchDetailPage extends StatefulWidget {
     this.officialDocument,
     this.officialPreview,
     this.officialActions = const [],
+    this.officialGradeActions,
+    this.officialEditWeight,
     this.officialAction,
     this.officialNotice,
     required this.kloterCode,
@@ -68,6 +72,8 @@ class BatchDetailPage extends StatefulWidget {
   final VoidCallback? officialDocument;
   final Widget? officialPreview;
   final List<Widget> officialActions;
+  final List<Widget>? officialGradeActions;
+  final VoidCallback? officialEditWeight;
   final Widget? officialAction;
   final String? officialNotice;
 
@@ -235,7 +241,7 @@ class _BatchDetailPageState extends State<BatchDetailPage>
         )
       : _layout(
           widget.officialTitle!,
-          widget.officialReviewed,
+          widget.officialReviewed && widget.officialGradeActions == null,
           _data == null ? [?widget.officialStatus] : _tabContent(),
           bottomAction: widget.officialAction,
         );
@@ -329,7 +335,11 @@ class _BatchDetailPageState extends State<BatchDetailPage>
         batchSummaryLabels,
         _data?.summary ?? _batch.review.fields,
       ),
-      onEdit: _official || _reviewed ? null : _editField,
+      canEdit: _official ? (field) => field.label == 'Hasil timbang' : null,
+      onEdit: switch (widget.officialEditWeight) {
+        final edit? => (_) => edit(),
+        _ => _official || _reviewed ? null : _editField,
+      },
     ),
     const SizedBox(height: NiraSpace.sm),
     const DetailSectionTitle('Harga pengesahan'),
@@ -413,25 +423,29 @@ class _BatchDetailPageState extends State<BatchDetailPage>
       ('Nilai produksi batch', _productionValue),
     ], separate: true),
     const SizedBox(height: NiraSpace.sm),
-    _priceHeader(),
-    for (final grade in _grades)
-      _PriceRow(
-        grade: Text(grade.code, style: niraText(NiraType.body)),
-        weight: _GradeWeight(
-          grade: grade.code,
-          weight: grade.weight,
-          onTap: _official || _reviewed ? null : () => _editGrade(grade.code),
+    if (widget.officialGradeActions case final actions?)
+      ...actions
+    else ...[
+      _priceHeader(),
+      for (final grade in _grades)
+        _PriceRow(
+          grade: Text(grade.code, style: niraText(NiraType.body)),
+          weight: _GradeWeight(
+            grade: grade.code,
+            weight: grade.weight,
+            onTap: _official || _reviewed ? null : () => _editGrade(grade.code),
+          ),
+          price: NiraValue(
+            grade.price == '—' ? '—' : '${grade.price}/Kg',
+            label: 'Harga grade ${grade.code}',
+            abbreviate: false,
+            alignment: Alignment.centerRight,
+            style: niraText(NiraType.body),
+          ),
+          height: 35,
         ),
-        price: NiraValue(
-          grade.price == '—' ? '—' : '${grade.price}/Kg',
-          label: 'Harga grade ${grade.code}',
-          abbreviate: false,
-          alignment: Alignment.centerRight,
-          style: niraText(NiraType.body),
-        ),
-        height: 35,
-      ),
-    const Divider(height: 1, color: niraLine),
+      const Divider(height: 1, color: niraLine),
+    ],
   ];
 
   Widget _priceHeader() => _PriceRow(

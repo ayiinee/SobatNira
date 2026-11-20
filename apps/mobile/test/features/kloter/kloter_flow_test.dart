@@ -399,7 +399,7 @@ void main() {
     expect(find.text('24,5'), findsOneWidget);
 
     await tap(tester, find.text('Ringkasan'));
-    expect(reviewButtonRect('Validasi'), intakeButton);
+    expect(reviewButtonRect('Validasi').height, reviewedMillingButton.height);
     await tap(tester, find.text('Validasi'));
     expect(find.text('Validasi Batch 3?'), findsOneWidget);
     final cancelAction = find.widgetWithText(OutlinedButton, 'Batal');
@@ -476,6 +476,7 @@ void main() {
     expect(find.bySemanticsLabel(RegExp('Edit berat grade')), findsNothing);
     await tap(tester, find.byTooltip('Batalkan validasi batch'));
     await tap(tester, find.text('Konfirmasi'));
+    expect(reviewButtonRect('Validasi').height, validationButton.height);
     expect(find.bySemanticsLabel(RegExp('Edit berat grade B')), findsOneWidget);
     final reopenedNotice = find.text('Validasi Batch 3 dibatalkan');
     expect(reopenedNotice, findsOneWidget);

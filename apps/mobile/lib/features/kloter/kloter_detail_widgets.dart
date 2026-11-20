@@ -642,7 +642,7 @@ class BatchReviewActions extends StatelessWidget {
           label,
           verified || !enabled ? null : () => _confirm(context),
           visualDensity: VisualDensity.standard,
-          minimumHeight: verified ? reviewedActionHeight : reviewActionHeight,
+          minimumHeight: reviewedActionHeight,
         ),
       ),
       if (verified && (onReopen != null || onCorrection != null)) ...[
@@ -673,12 +673,14 @@ class EditableFields extends StatelessWidget {
   const EditableFields({
     required this.fields,
     required this.onEdit,
+    this.canEdit,
     this.showEquals = false,
     super.key,
   });
 
   final List<DemoField> fields;
   final ValueChanged<DemoField>? onEdit;
+  final bool Function(DemoField)? canEdit;
   final bool showEquals;
 
   @override
@@ -703,63 +705,72 @@ class EditableFields extends StatelessWidget {
     ),
   );
 
-  Widget _field(DemoField field) => Semantics(
-    label: onEdit == null ? '${field.label}, terkunci' : 'Edit ${field.label}',
-    button: onEdit != null,
-    child: InkWell(
-      onTap: onEdit == null ? null : () => onEdit!(field),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 48),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: NiraSpace.md,
-            vertical: NiraSpace.xs,
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                flex: 10,
-                child: Text(
-                  field.label,
-                  style: niraText(
-                    NiraType.body,
-                    weight: FontWeight.w500,
-                    color: const Color(0xFF68736E),
+  Widget _field(DemoField field) {
+    final editable = onEdit != null && (canEdit?.call(field) ?? true);
+    return Semantics(
+      label: editable ? 'Edit ${field.label}' : '${field.label}, terkunci',
+      button: editable,
+      child: InkWell(
+        onTap: editable ? () => onEdit!(field) : null,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: NiraSpace.md,
+              vertical: NiraSpace.xs,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 10,
+                  child: Text(
+                    field.label,
+                    style: niraText(
+                      NiraType.body,
+                      weight: FontWeight.w500,
+                      color: const Color(0xFF68736E),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: NiraSpace.sm),
-              if (showEquals) ...[
-                Text('=', style: niraText(NiraType.body, color: niraMuted)),
                 const SizedBox(width: NiraSpace.sm),
+                if (showEquals) ...[
+                  Text('=', style: niraText(NiraType.body, color: niraMuted)),
+                  const SizedBox(width: NiraSpace.sm),
+                ],
+                Expanded(
+                  flex: 10,
+                  child: isDisplayNumber(field.display)
+                      ? NiraValue(
+                          field.display,
+                          label: field.label,
+                          abbreviate: false,
+                          revealOnTap: !editable,
+                          style: niraText(
+                            NiraType.body,
+                            weight: FontWeight.w600,
+                          ),
+                        )
+                      : Text(
+                          field.display,
+                          style: niraText(
+                            NiraType.body,
+                            weight: FontWeight.w600,
+                          ),
+                        ),
+                ),
+                const SizedBox(width: NiraSpace.xs),
+                Icon(
+                  editable ? Icons.edit_rounded : Icons.lock_outline,
+                  color: niraMuted,
+                  size: 20,
+                ),
               ],
-              Expanded(
-                flex: 10,
-                child: isDisplayNumber(field.display)
-                    ? NiraValue(
-                        field.display,
-                        label: field.label,
-                        abbreviate: false,
-                        revealOnTap: onEdit == null,
-                        style: niraText(NiraType.body, weight: FontWeight.w600),
-                      )
-                    : Text(
-                        field.display,
-                        style: niraText(NiraType.body, weight: FontWeight.w600),
-                      ),
-              ),
-              const SizedBox(width: NiraSpace.xs),
-              Icon(
-                onEdit == null ? Icons.lock_outline : Icons.edit_rounded,
-                color: niraMuted,
-                size: 20,
-              ),
-            ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 Future<String?> editDemoValue(

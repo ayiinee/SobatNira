@@ -79,11 +79,8 @@ export class Batches {
         });
     }
     async approve(access: FactoryAccess, id: string) {
-        // Read identity only; lock order is lot, then batch, matching stock operations.
-        const initial = found((await this.db.query(`WITH ${FACTORY_SCOPE_CTE} SELECT b.* FROM sobatnira.production_batches b JOIN authorized_scope s ON s."tenantId"=b.tenant_id AND s."factoryId"=b.factory_id WHERE b.id=$4`, [...scopeValues(access), id])).rows[0]);
         return this.juice.mutate(access, async (tx) => {
-            await this.juice.lockLots(tx, access, [initial.lot_id]);
-            const b = found((await tx.query('SELECT * FROM sobatnira.production_batches WHERE id=$1 FOR UPDATE', [id])).rows[0]);
+            const b = await this.lockBatch(tx, access, id);
             if (b.status === 'approved')
                 return found((await tx.query('SELECT * FROM sobatnira.production_calculation_snapshots WHERE batch_id=$1 AND correction_id IS NULL', [id])).rows[0]);
             if (b.status !== 'draft')
@@ -167,12 +164,9 @@ FROM sobatnira.batch_grade_results g JOIN sobatnira.production_batches pb ON pb.
             throw new BadRequestException('Versi koreksi tidak valid.');
         }
         const proposed = action === 'save' ? correctionData(body.physicalWeightKg, body.grades) : null;
-        const initial = await this.detail(access, id);
         return this.juice.mutate(access, async (tx) => {
-            await this.juice.lockLots(tx, access, [initial.lot_id]);
-            const scope = [access.tenantId, access.factoryId, initial.lot_id, initial.is_synthetic];
-            const batch = found((await tx.query(`SELECT * FROM sobatnira.production_batches
-              WHERE tenant_id=$1 AND factory_id=$2 AND id=$3 FOR UPDATE`, [scope[0], scope[1], id])).rows[0]);
+            const batch = await this.lockBatch(tx, access, id);
+            const scope = [access.tenantId, access.factoryId, batch.lot_id, batch.is_synthetic];
             if (batch.status !== 'approved') {
                 throw new ConflictException('Batch tidak dapat dikoreksi.');
             }
@@ -234,13 +228,20 @@ FROM sobatnira.batch_grade_results g JOIN sobatnira.production_batches pb ON pb.
         });
     }
 
+    private async lockBatch(tx: DatabaseSession, access: FactoryAccess, id: string) {
+        // Read identity first, then lock the lot before locking the batch.
+        const scope = [access.tenantId, access.factoryId, id];
+        const batch = found((await tx.query<{lot_id: string}>(`SELECT lot_id FROM sobatnira.production_batches
+          WHERE tenant_id=$1 AND factory_id=$2 AND id=$3`, scope)).rows[0]);
+        await this.juice.lockLots(tx, access, [batch.lot_id]);
+        return found((await tx.query(`SELECT * FROM sobatnira.production_batches
+          WHERE tenant_id=$1 AND factory_id=$2 AND id=$3 FOR UPDATE`, scope)).rows[0]);
+    }
+
     async cancel(access: FactoryAccess, id: string) {
-        const initial = await this.detail(access, id);
         return this.juice.mutate(access, async (tx) => {
-            await this.juice.lockLots(tx, access, [initial.lot_id]);
             const keys = [access.tenantId, access.factoryId, id];
-            const row = found((await tx.query(`SELECT * FROM sobatnira.production_batches
-              WHERE tenant_id=$1 AND factory_id=$2 AND id=$3 FOR UPDATE`, keys)).rows[0]);
+            const row = await this.lockBatch(tx, access, id);
             if (row.status === 'cancelled') return row;
             if (row.status !== 'draft') throw new ConflictException('Hanya draf batch yang dapat dibatalkan.');
             const reservations = (await tx.query(`SELECT lot_id, state FROM sobatnira.juice_reservations

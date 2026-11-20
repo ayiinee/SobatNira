@@ -325,6 +325,7 @@ void main() {
       String? closureId;
       var physicalWeight = '29.25';
       final writes = <String>[];
+      var detailReads = 0;
       final api = ReviewApi(
         'fixture',
         client: MockClient((request) async {
@@ -354,9 +355,14 @@ void main() {
                 correction = null;
                 return detailResponse({});
               }
+              if (path.endsWith('/discard')) {
+                expect(values['version'], 1);
+                correction = null;
+                return detailResponse({});
+              }
               expect(values, {
                 'reason': 'Koreksi batch dikonfirmasi melalui aplikasi.',
-                'reopenClosureId': 'closure-fixture',
+                'reopenClosureId': ?closureId,
               });
               closureId = null;
               correction = {
@@ -375,8 +381,11 @@ void main() {
             return detailResponse({});
           }
           if (request.url.path.endsWith('/production-report')) {
-            return detailResponse({'items': []});
+            fail(
+              'Detail batch yang tersedia tidak perlu memuat laporan kloter.',
+            );
           }
+          if (request.url.path.endsWith('/batches/batch')) detailReads++;
           return detailResponse(
             request.url.path.endsWith('/batches')
                 ? {
@@ -414,6 +423,9 @@ void main() {
         '/tenants/tenant/factories/factory/production/batches/batch/approve',
       ]);
       expect(find.text('Batch tervalidasi'), findsOneWidget);
+      final validatedHeight = tester
+          .getSize(find.widgetWithText(FilledButton, 'Batch tervalidasi'))
+          .height;
       expect(find.text('BATCH-UJI berhasil divalidasi'), findsOneWidget);
       await tester.tap(find.byTooltip('Buka koreksi batch'));
       await tester.pumpAndSettle();
@@ -448,10 +460,19 @@ void main() {
       expect(writes, hasLength(1));
       await tester.tap(find.byTooltip('Buka koreksi batch'));
       await tester.pumpAndSettle();
+      final readsBeforeOpen = detailReads;
       await tester.tap(confirm);
       await tester.pumpAndSettle();
-      expect(find.text('Draf koreksi dibuka'), findsOneWidget);
+      expect(detailReads, readsBeforeOpen);
+      expect(find.text('Draf koreksi'), findsNothing);
+      expect(find.text('Buang draf koreksi'), findsNothing);
       expect(find.text('Validasi ulang'), findsOneWidget);
+      expect(
+        tester
+            .getSize(find.widgetWithText(FilledButton, 'Validasi ulang'))
+            .height,
+        validatedHeight,
+      );
       await tester.tap(find.byTooltip('Kembali'));
       await tester.pumpAndSettle();
       expect(find.text('1 Batch perlu ditinjau'), findsOneWidget);
@@ -461,14 +482,19 @@ void main() {
       );
       await tester.tap(find.text('BATCH-UJI'));
       await tester.pumpAndSettle();
-      final weight = find.text('Berat hasil: 29,25 kg');
+      final weight = find.text('Hasil timbang');
       await tester.scrollUntilVisible(weight, 150);
       await tester.tap(weight);
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextFormField), '28,5');
+      final readsBeforeEdit = detailReads;
       await tester.tap(find.text('Simpan'));
       await tester.pumpAndSettle();
       expect(physicalWeight, '29.25');
+      expect(detailReads, readsBeforeEdit);
+      await tester.tap(find.text('Grade').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Buang draf koreksi'), findsOneWidget);
       await tester.tap(find.text('Validasi ulang'));
       await tester.pumpAndSettle();
       expect(find.text('Validasi ulang BATCH-UJI?'), findsOneWidget);
@@ -477,7 +503,26 @@ void main() {
       expect(find.text('Koreksi batch berhasil divalidasi'), findsOneWidget);
       expect(find.text('Batch tervalidasi'), findsOneWidget);
       expect(physicalWeight, '28.5');
+      expect(detailReads, readsBeforeEdit + 1);
       expect(writes, hasLength(4));
+
+      await tester.tap(find.byTooltip('Buka koreksi batch'));
+      await tester.pumpAndSettle();
+      await tester.tap(confirm);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Grade').first);
+      await tester.pumpAndSettle();
+      final discard = find.text('Buang draf koreksi');
+      await tester.ensureVisible(discard);
+      await tester.tap(discard);
+      await tester.pumpAndSettle();
+      final readsBeforeDiscard = detailReads;
+      await tester.tap(find.text('Lanjutkan'));
+      await tester.pumpAndSettle();
+      expect(detailReads, readsBeforeDiscard);
+      expect(writes.last, endsWith('/discard'));
+      expect(find.text('Batch tervalidasi'), findsOneWidget);
+      expect(discard, findsNothing);
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );

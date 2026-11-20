@@ -529,7 +529,7 @@ void main() {
       expect(find.text('BATCH-UJI-1'), findsNothing);
       expect(opened.toSet(), {'$root/lots/first', '$root/lots/second'});
       expect(listReads, 1);
-      expect(reportLotIds, [null, 'first']);
+      expect(reportLotIds, [null]);
     },
   );
 
