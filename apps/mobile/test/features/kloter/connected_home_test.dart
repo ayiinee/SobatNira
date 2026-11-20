@@ -403,7 +403,7 @@ void main() {
       await tap(find.byTooltip('Kembali'));
       await tap(find.text('BATCH-UJI-1'));
       expect(find.text('Detail batch'), findsOneWidget);
-      expect(find.text('83.500 mL'), findsOneWidget);
+      expect(find.text('83,5 L'), findsOneWidget);
       expect(find.text('29,25 kg'), findsOneWidget);
       await tap(find.byTooltip('Kembali'));
       await tap(find.byTooltip('Kembali'));

@@ -350,7 +350,22 @@ class ApprovedDocumentPreview extends StatelessWidget {
         );
       }
       final bytes = snapshot.data;
-      if (bytes == null) return fallback;
+      if (bytes == null) {
+        return AspectRatio(
+          aspectRatio: 2.4,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0F3EF),
+              border: Border.all(color: niraLine),
+              borderRadius: BorderRadius.circular(niraRadius),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(NiraSpace.sm),
+              child: Center(child: fallback),
+            ),
+          ),
+        );
+      }
       return DocumentPreview(batch: batch, photo: MemoryImage(bytes));
     },
   );
@@ -456,6 +471,7 @@ class BatchReviewActions extends StatelessWidget {
     required this.label,
     required this.verified,
     required this.onVerify,
+    this.enabled = true,
     this.onReopen,
     super.key,
   });
@@ -464,6 +480,7 @@ class BatchReviewActions extends StatelessWidget {
   final String label;
   final bool verified;
   final VoidCallback onVerify;
+  final bool enabled;
   final VoidCallback? onReopen;
 
   Future<void> _confirm(BuildContext context) async {
@@ -542,24 +559,22 @@ class BatchReviewActions extends StatelessWidget {
       Expanded(
         child: NiraButton(
           label,
-          verified ? null : () => _confirm(context),
+          verified || !enabled ? null : () => _confirm(context),
           visualDensity: VisualDensity.standard,
           minimumHeight: verified ? reviewedActionHeight : reviewActionHeight,
         ),
       ),
       if (verified && onReopen != null) ...[
         const SizedBox(width: NiraSpace.sm),
-        IconButton.filled(
+        IconButton.outlined(
           tooltip: 'Batalkan validasi batch',
           onPressed: () => _confirm(context),
           style: IconButton.styleFrom(
-            backgroundColor: Theme.of(context).colorScheme.error,
-            foregroundColor: Colors.white,
+            foregroundColor: niraGreen,
+            side: const BorderSide(color: niraLeaf),
             minimumSize: const Size.square(reviewedActionHeight),
             iconSize: 20,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(niraRadius),
-            ),
+            shape: const CircleBorder(),
           ),
           icon: const Icon(Icons.close_rounded),
         ),

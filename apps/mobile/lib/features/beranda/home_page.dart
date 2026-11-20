@@ -473,6 +473,7 @@ class _LotDetailState extends State<_LotDetail> {
           synthetic: _synthetic,
           kloterCode: _lot.code,
           caneWeight: _lot.weight,
+          kloter: _lot,
           onOpenPekerjaan: widget.onOpenPekerjaan,
           millingRevision: _lot.noteRevision(intake: false),
           canCreate:

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../sobatnira_ui.dart';
 import 'demo_production.dart';
 import 'demo_lot_fixture.dart';
+import 'detail_fields.dart';
 import 'kloter_detail_widgets.dart';
 
 typedef BatchDetailGrade = ({String code, String weight, String price});
@@ -35,7 +36,8 @@ class BatchDetailPage extends StatefulWidget {
        officialDocument = null,
        officialPreview = null,
        officialActions = const [],
-       officialNumber = null;
+       officialNumber = null,
+       officialMargin = null;
 
   const BatchDetailPage.official({
     required this.officialTitle,
@@ -48,6 +50,7 @@ class BatchDetailPage extends StatefulWidget {
     this.officialPreview,
     this.officialActions = const [],
     this.officialAction,
+    this.officialMargin,
     required this.kloterCode,
     required this.onNavigate,
     super.key,
@@ -68,6 +71,7 @@ class BatchDetailPage extends StatefulWidget {
   final List<Widget> officialActions;
   final int? officialNumber;
   final Widget? officialAction;
+  final String? officialMargin;
 
   @override
   State<BatchDetailPage> createState() => _BatchDetailPageState();
@@ -281,16 +285,25 @@ class _BatchDetailPageState extends State<BatchDetailPage>
     ),
   );
 
-  List<BatchDetailGrade> get _grades =>
-      _data?.grades ??
-      [
-        for (final entry in DemoBatch.gradePrices.entries)
-          (
-            code: entry.key,
-            weight: _batch.grade == entry.key ? _batch.gradeWeight : '–',
-            price: entry.value,
-          ),
-      ];
+  List<BatchDetailGrade> get _grades => _data == null
+      ? [
+          for (final entry in DemoBatch.gradePrices.entries)
+            (
+              code: entry.key,
+              weight: _batch.grade == entry.key ? _batch.gradeWeight : '–',
+              price: entry.value,
+            ),
+        ]
+      : [
+          for (final code in {
+            'A',
+            'B',
+            'C',
+            ..._data!.grades.map((grade) => grade.code),
+          })
+            _data!.grades.where((grade) => grade.code == code).firstOrNull ??
+                (code: code, weight: '—', price: '—'),
+        ];
 
   String get _totalWeight => _data?.totalWeight ?? '${_batch.gradeWeight}Kg';
   String get _productionValue =>
@@ -305,7 +318,10 @@ class _BatchDetailPageState extends State<BatchDetailPage>
     const DetailSectionTitle('Ringkasan proses'),
     const SizedBox(height: NiraSpace.sm),
     EditableFields(
-      fields: _data?.summary ?? _batch.review.fields,
+      fields: detailFields(
+        batchSummaryLabels,
+        _data?.summary ?? _batch.review.fields,
+      ),
       onEdit: _official || _reviewed ? null : _editField,
     ),
     const SizedBox(height: NiraSpace.sm),
@@ -315,7 +331,9 @@ class _BatchDetailPageState extends State<BatchDetailPage>
       _PriceRow(
         grade: Text(entry.code, style: niraText(NiraType.body)),
         weight: Text(
-          _official || entry.weight == '–' ? entry.weight : '${entry.weight}Kg',
+          entry.weight == '–' || entry.weight == '—'
+              ? entry.weight
+              : '${entry.weight}${_official ? ' kg' : 'Kg'}',
           style: niraText(NiraType.body),
         ),
         price: Text(entry.price, style: niraText(NiraType.body)),
@@ -334,18 +352,28 @@ class _BatchDetailPageState extends State<BatchDetailPage>
       height: 32,
       line: niraGold,
     ),
-    ...widget.officialActions,
-    if (!_official && _batch.lot != null)
+    if (_official || _batch.lot != null)
       DetailMetrics([
-        ('Margin kumulatif kloter (demo)', demoMoney(_batch.lot!.marginRupiah)),
+        (
+          _official
+              ? 'Margin kumulatif kloter'
+              : 'Margin kumulatif kloter (demo)',
+          _official
+              ? widget.officialMargin ?? '—'
+              : demoMoney(_batch.lot!.marginRupiah),
+        ),
       ]),
+    ...widget.officialActions,
   ];
 
   List<Widget> _cooking() => [
     const DetailSectionTitle('Data pemasakan'),
     const SizedBox(height: NiraSpace.sm),
     EditableFields(
-      fields: _data?.cooking ?? _batch.cooking,
+      fields: detailFields(
+        batchCookingLabels,
+        _data?.cooking ?? _batch.cooking,
+      ),
       onEdit: _official || _reviewed ? null : _editField,
     ),
     const SizedBox(height: NiraSpace.md),
@@ -355,7 +383,7 @@ class _BatchDetailPageState extends State<BatchDetailPage>
         () => DocumentPreview.open(context, batch: true),
       )
     else if (widget.officialDocument case final open?)
-      DocumentLink('Foto nota produksi di Pekerjaan', open),
+      DocumentLink('Foto pemasakan', open),
   ];
 
   List<Widget> _grade() => [
@@ -369,7 +397,6 @@ class _BatchDetailPageState extends State<BatchDetailPage>
         _data?.caneWeight ?? '${demoNumber(_batch.lot?.caneKg ?? 0)} kg',
       ),
       ('Nilai produksi batch', _productionValue),
-      if (_data case final data?) ('Hasil fisik', data.physicalWeight),
     ], separate: true),
     const SizedBox(height: NiraSpace.sm),
     _priceHeader(),
@@ -382,7 +409,7 @@ class _BatchDetailPageState extends State<BatchDetailPage>
           onTap: _official || _reviewed ? null : () => _editGrade(grade.code),
         ),
         price: Text(
-          '${grade.price}/${_official ? 'kg' : 'Kg'}',
+          grade.price == '—' ? '—' : '${grade.price}/Kg',
           style: niraText(NiraType.body),
         ),
         height: 35,

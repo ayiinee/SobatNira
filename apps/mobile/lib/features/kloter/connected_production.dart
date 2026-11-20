@@ -127,7 +127,8 @@ DemoKloter connectedLot(Json row) {
     code: code,
     date: date,
     intake: review(intake, [
-      DemoField('Pemasok', row['supplierName'] as String),
+      DemoField('Tanggal masuk', formatDate(date)),
+      DemoField('Pengirim', row['supplierName'] as String),
       if (row['caneTypeCode'] case final String type)
         DemoField('Jenis tebu', type),
     ]),
