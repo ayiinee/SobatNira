@@ -10,7 +10,7 @@ class KloterListPage extends StatefulWidget {
     required this.kloter,
     required this.onOpenKloter,
     this.onCreate,
-    this.synthetic = false,
+    this.filterToday,
     this.statusMessage,
     super.key,
   });
@@ -18,7 +18,7 @@ class KloterListPage extends StatefulWidget {
   final List<DemoKloter> kloter;
   final ValueChanged<DemoKloter> onOpenKloter;
   final VoidCallback? onCreate;
-  final bool synthetic;
+  final DateTime? filterToday;
   final Widget? statusMessage;
 
   @override
@@ -112,9 +112,7 @@ class _KloterListPageState extends State<KloterListPage> {
     final result = await showKloterDateFilter(
       context,
       _dateFilter,
-      today: widget.onCreate != null || widget.synthetic
-          ? DateTime.now()
-          : null,
+      today: widget.filterToday,
     );
     if (!mounted || result == null) return;
     _scrollToTop();

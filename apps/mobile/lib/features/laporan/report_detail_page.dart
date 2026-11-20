@@ -53,25 +53,28 @@ class ReportDetailPage extends StatelessWidget {
   String get displayedGrade =>
       report == null ? '${gradeTotal}Kg' : _kg(gradeResult?['weightKg']);
 
-  List<(String, String)> get lotMetrics => report == null
-      ? [
-          ('Tebu', '${demoNumber(lot.caneKg)}Kg'),
-          ('Gula final', displayedSugar),
-          (
-            'Rendemen',
-            '${demoNumber(lot.sugarKg / lot.caneKg * 100, decimals: 1)}%',
-          ),
-        ]
-      : [
-          ('Tebu', _kg(officialLot?['caneNetKg'])),
-          ('Gula final', displayedSugar),
-          (
-            'Rendemen',
-            calculation == null
-                ? '—'
-                : '${reportNumber(calculation!['rendemenPercent'])}%',
-          ),
-        ];
+  List<(String, String)> get lotMetrics => [
+    (
+      'Tebu (kg)',
+      report == null
+          ? demoNumber(lot.caneKg)
+          : _weight(officialLot?['caneNetKg']),
+    ),
+    (
+      'Gula final (kg)',
+      report == null
+          ? demoNumber(lot.sugarKg)
+          : _weight(calculation?['finalSugarKg']),
+    ),
+    (
+      'Rendemen',
+      report == null
+          ? '${demoNumber(lot.sugarKg / lot.caneKg * 100, decimals: 1)}%'
+          : calculation == null
+          ? '—'
+          : '${reportNumber(calculation!['rendemenPercent'])}%',
+    ),
+  ];
   int get gradeTotal =>
       analytics?.gradeWeight(grade) ??
       lot.batchWeights.indexed
@@ -135,6 +138,8 @@ class ReportDetailPage extends StatelessWidget {
 
   String _kg(Object? value) =>
       value == null ? '—' : '${reportNumber(value)} kg';
+
+  String _weight(Object? value) => value == null ? '—' : reportNumber(value);
 
   String _cost(String key) {
     final costs = calculation?['costs'] as Json?;
@@ -230,7 +235,7 @@ class ReportDetailPage extends StatelessWidget {
     children: [
       _entityCard(),
       const SizedBox(height: NiraSpace.md),
-      DetailMetrics(lotMetrics),
+      DetailMetrics(lotMetrics, centerAll: true),
       const SizedBox(height: NiraSpace.lg),
       const DetailSectionTitle('Kontribusi hasil per batch'),
       const SizedBox(height: NiraSpace.xs),
@@ -251,9 +256,14 @@ class ReportDetailPage extends StatelessWidget {
       ),
       const SizedBox(height: NiraSpace.md),
       DetailMetrics([
-        ('Grade $grade', displayedGrade),
+        (
+          'Grade $grade (kg)',
+          report == null
+              ? demoNumber(gradeTotal)
+              : _weight(gradeResult?['weightKg']),
+        ),
         ('Kloter asal', '${contributions.length}'),
-      ]),
+      ], centerAll: true),
       const SizedBox(height: NiraSpace.lg),
       Text(
         report == null
@@ -273,7 +283,7 @@ class ReportDetailPage extends StatelessWidget {
     children: [
       _entityCard(),
       const SizedBox(height: NiraSpace.md),
-      DetailMetrics(lotMetrics),
+      DetailMetrics(lotMetrics, centerAll: true),
       const SizedBox(height: NiraSpace.md),
       const DetailSectionTitle('Rincian perhitungan'),
       const SizedBox(height: NiraSpace.sm),

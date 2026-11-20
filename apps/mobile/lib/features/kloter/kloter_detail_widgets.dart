@@ -66,16 +66,17 @@ class DetailTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     final gutter = inset ?? niraPageInset(context);
     return Padding(
-      padding: EdgeInsets.only(
-        left: (gutter - NiraSpace.lg).clamp(0, double.infinity),
-        right: gutter,
-      ),
+      padding: EdgeInsets.only(left: gutter, right: gutter),
       child: Row(
         children: [
           IconButton(
             tooltip: 'Kembali',
             onPressed: () => Navigator.maybePop(context),
-            icon: const Icon(Icons.chevron_left, color: niraGreen, size: 23),
+            icon: Transform.translate(
+              offset: const Offset(-7, 0),
+              child: const Icon(Icons.chevron_left, color: niraGreen, size: 23),
+            ),
+            alignment: Alignment.centerLeft,
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
           ),

@@ -142,7 +142,7 @@ class _NiraHomeState extends State<NiraHome> {
         NiraTab.kloter => KloterListPage(
           kloter: _lots,
           onOpenKloter: _openKloter,
-          synthetic: _live?.reports.synthetic ?? false,
+          filterToday: _live?.reports.filterToday,
           onCreate:
               widget.scope?.role == 'admin' &&
                   !(_live?.reports.synthetic ?? false)

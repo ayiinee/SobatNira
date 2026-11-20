@@ -11,7 +11,7 @@ Future<void> filterConnectedReport(
   final result = await showKloterDateFilter(
     context,
     reports.filter,
-    today: DateTime.now(),
+    today: reports.filterToday,
   );
   if (result != null) await reports.setFilter(result.selection);
 }

@@ -36,10 +36,16 @@ class ConnectedProduction extends ChangeNotifier {
   }
 
   Future<void> refresh() async {
-    await Future.wait([reports.refresh(), _refreshLots()]);
+    final unfiltered = _synthetic && reports.filter == null
+        ? api.productionReport(scope, synthetic: true)
+        : null;
+    await Future.wait([
+      reports.refresh(unfiltered: unfiltered),
+      _refreshLots(unfiltered: unfiltered),
+    ]);
   }
 
-  Future<void> _refreshLots() async {
+  Future<void> _refreshLots({Future<Json>? unfiltered}) async {
     final generation = ++_generation;
     loading = true;
     error = null;
@@ -49,7 +55,8 @@ class ConnectedProduction extends ChangeNotifier {
       if (_synthetic) {
         // The list endpoint summarizes official records. Use the unfiltered
         // synthetic report as the index and load synthetic lot summaries.
-        final report = await api.productionReport(scope, synthetic: true);
+        final report =
+            await (unfiltered ?? api.productionReport(scope, synthetic: true));
         final items = (report['items'] as List).cast<Json>();
         final result = <DemoKloter>[];
         for (var start = 0; start < items.length; start += 6) {

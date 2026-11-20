@@ -104,7 +104,17 @@ class _ConnectedSessionGateState extends State<ConnectedSessionGate> {
           );
         }
         _factories = factories;
-        _scope = factories.firstOrNull;
+        final first = factories.firstOrNull;
+        _scope = first?.tenantName == 'SobatNira Uji'
+            ? factories
+                      .where(
+                        (scope) =>
+                            scope.tenantId == first!.tenantId &&
+                            scope.factoryName == 'Pabrik A',
+                      )
+                      .firstOrNull ??
+                  first
+            : first;
       });
     } catch (_) {
       // A transient failure leaves access unloaded so the user can retry.

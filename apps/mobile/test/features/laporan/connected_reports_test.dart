@@ -99,6 +99,126 @@ Json fixture() => {
 http.Response response(Json value) => http.Response(jsonEncode(value), 200);
 
 void main() {
+  testWidgets(
+    'seeded Pabrik A loads once at login and both charts filter dates',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 853));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final receipt = DateTime(2025, 10, 15, 12);
+      final report = fixture();
+      final lot = (report['items'] as List).cast<Json>().first;
+      final requests = <Uri>[];
+      final api = ReviewApi(
+        'token',
+        client: MockClient((request) async {
+          final uri = request.url;
+          if (uri.path == '/auth/me') {
+            return response({
+              'access': [
+                for (final factory in ['B', 'A'])
+                  {
+                    'tenantId': 'tenant',
+                    'tenantName': 'SobatNira Uji',
+                    'factoryId': factory,
+                    'factoryName': 'Pabrik $factory',
+                    'role': 'admin',
+                  },
+              ],
+            });
+          }
+          expect(uri.path, startsWith('/tenants/tenant/factories/A/'));
+          expect(uri.queryParameters['synthetic'], 'true');
+          if (uri.path.endsWith('/lots/one')) {
+            return response({
+              'id': 'one',
+              'displayCode': 'PABRIK-A-01',
+              'receivedAt': receipt.toIso8601String(),
+              'supplierName': 'Pemasok satu',
+              'netWeightGrams': '1250000',
+              'status': 'open',
+              'synthetic': true,
+            });
+          }
+          expect(uri.path, endsWith('/production-report'));
+          requests.add(uri);
+          final from = uri.queryParameters['from'];
+          final before = uri.queryParameters['before'];
+          final includesLot =
+              (from == null || !receipt.isBefore(DateTime.parse(from))) &&
+              (before == null || receipt.isBefore(DateTime.parse(before)));
+          return response({
+            ...report,
+            'synthetic': true,
+            'items': [
+              if (includesLot)
+                {...lot, 'receivedAt': receipt.toIso8601String()},
+            ],
+          });
+        }),
+      );
+      await tester.pumpWidget(
+        SobatNiraApp(
+          connected: true,
+          configurationErrors: const [],
+          signIn: (_, _) async => api,
+        ),
+      );
+      await openDemoLogin(tester);
+      await tester.enterText(
+        find.byType(TextFormField).at(0),
+        'admin@example.invalid',
+      );
+      await tester.enterText(
+        find.byType(TextFormField).at(1),
+        'synthetic-password',
+      );
+      final signIn = find.widgetWithText(FilledButton, 'Masuk');
+      await tester.ensureVisible(signIn);
+      await tester.tap(signIn);
+      await tester.pumpAndSettle();
+      expect(find.text('Pabrik A'), findsOneWidget);
+      expect(find.text('-Rp1'), findsOneWidget);
+      expect(requests, hasLength(1));
+      expect(requests.single.queryParameters.containsKey('from'), isFalse);
+
+      await tester.tap(find.bySemanticsLabel('Laporan'));
+      await tester.pumpAndSettle();
+      for (final (tab, plot) in [
+        ('Produksi', 'production-chart-plot'),
+        ('Margin', 'margin-chart-plot'),
+      ]) {
+        await tester.tap(find.text(tab).first);
+        await tester.pumpAndSettle();
+        expect(find.byKey(ValueKey(plot)), findsOneWidget);
+        for (final (label, start, before) in [
+          ('Minggu ini', DateTime(2025, 10, 13), DateTime(2025, 10, 20)),
+          ('Bulan ini', DateTime(2025, 10), DateTime(2025, 11)),
+          ('Rentang tanggal', DateTime(2025, 10, 14), DateTime(2025, 10, 17)),
+          ('Tahun ini', DateTime(2025), DateTime(2026)),
+        ]) {
+          final calendar = find.byTooltip('Filter tanggal laporan');
+          await tester.ensureVisible(calendar);
+          await tester.tap(calendar);
+          await tester.pumpAndSettle();
+          await tester.tap(find.text(label));
+          await tester.pumpAndSettle();
+          if (label == 'Rentang tanggal') {
+            await tester.tap(find.bySemanticsLabel('14 Oktober 2025'));
+            await tester.pumpAndSettle();
+            await tester.tap(find.bySemanticsLabel('16 Oktober 2025'));
+            await tester.pumpAndSettle();
+            await tester.tap(find.text('Terapkan'));
+            await tester.pumpAndSettle();
+          }
+          final query = requests.last.queryParameters;
+          expect(DateTime.parse(query['from']!), start.toUtc());
+          expect(DateTime.parse(query['before']!), before.toUtc());
+          expect(find.byKey(ValueKey(plot)), findsOneWidget);
+        }
+      }
+    },
+  );
+
   test(
     'one backend snapshot feeds totals, unique recap identities and PDF without floating point money',
     () async {

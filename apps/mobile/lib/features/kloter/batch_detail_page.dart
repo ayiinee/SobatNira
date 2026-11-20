@@ -259,11 +259,9 @@ class _BatchDetailPageState extends State<BatchDetailPage>
           child: Row(
             children: [
               Expanded(
-                child: NiraValue(
+                child: Text(
                   title,
-                  label: 'ID batch',
-                  abbreviate: false,
-                  style: niraText(NiraType.title, weight: FontWeight.w700),
+                  style: niraText(NiraType.section, weight: FontWeight.w700),
                 ),
               ),
               const SizedBox(width: NiraSpace.sm),

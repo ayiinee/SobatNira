@@ -36,6 +36,9 @@ class ConnectedReports extends ChangeNotifier {
   Object? error;
   Json? data;
   int _generation = 0;
+  DateTime? _latestSyntheticReceipt;
+  DateTime get filterToday =>
+      (synthetic ? _latestSyntheticReceipt : null) ?? DateTime.now();
   List<Json> get lots => (data?['items'] as List? ?? const []).cast<Json>();
   List<Json> get grades => (data?['grades'] as List? ?? const []).cast<Json>();
   Json get totals => data?['totals'] as Json? ?? const {};
@@ -64,22 +67,38 @@ class ConnectedReports extends ChangeNotifier {
       ? reportMoney(totals[key])
       : '${reportNumber(totals[key])}$unit';
 
-  Future<void> refresh() async {
+  Future<void> refresh({Future<Json>? unfiltered}) async {
     final generation = ++_generation;
     loading = true;
     error = null;
     data = null;
     notifyListeners();
     try {
-      final range = filter?.range;
-      final result = await api.productionReport(
-        scope,
-        synthetic: synthetic,
-        from: range?.start,
-        before: range == null
-            ? null
-            : DateTime(range.end.year, range.end.month, range.end.day + 1),
-      );
+      final selected = filter;
+      final preset = selected != null && selected.period != KloterPeriod.custom;
+      if (synthetic && preset && _latestSyntheticReceipt == null) {
+        final baseline = await api.productionReport(scope, synthetic: true);
+        if (generation != _generation) return;
+        _latestSyntheticReceipt = _latestReceipt(baseline);
+      }
+      final effective = preset
+          ? KloterDateFilter.preset(selected.period, today: filterToday)
+          : selected;
+      final range = effective?.range;
+      final result =
+          await (unfiltered ??
+              api.productionReport(
+                scope,
+                synthetic: synthetic,
+                from: range?.start,
+                before: range == null
+                    ? null
+                    : DateTime(
+                        range.end.year,
+                        range.end.month,
+                        range.end.day + 1,
+                      ),
+              ));
       if (generation != _generation) return;
       // Treat a malformed response as unavailable, never as an empty zero report.
       if (result['items'] is! List ||
@@ -87,6 +106,10 @@ class ConnectedReports extends ChangeNotifier {
           result['totals'] is! Map) {
         throw const FormatException('Laporan tidak lengkap.');
       }
+      if (synthetic && range == null) {
+        _latestSyntheticReceipt = _latestReceipt(result);
+      }
+      filter = effective;
       data = result;
     } catch (failure) {
       if (generation != _generation) return;
@@ -94,6 +117,18 @@ class ConnectedReports extends ChangeNotifier {
     }
     loading = false;
     notifyListeners();
+  }
+
+  DateTime? _latestReceipt(Json report) {
+    DateTime? latest;
+    for (final lot in (report['items'] as List).cast<Json>()) {
+      final received = lot['receivedAt'];
+      final date = received is String ? DateTime.tryParse(received) : null;
+      if (date != null && (latest == null || date.isAfter(latest))) {
+        latest = date;
+      }
+    }
+    return latest?.toLocal();
   }
 
   Future<void> setFilter(KloterDateFilter? value) {
