@@ -2,6 +2,14 @@
 
 Penyelarasan ini mencakup Beranda, Kloter, detail kloter/batch, Laporan, Pengaturan, serta tema komponen pada Pekerjaan dan Detail Nota. Perubahan hanya menyentuh presentasi dan penyesuaian tes antarmuka.
 
+## Acuan demo dan sumber data
+
+Acuan desain detail adalah demo pada `feat/mobile-production-reports`, commit `919ebe5`. Kartu kloter menempatkan tanggal di sisi ID dan kartu batch menempatkan identitas di samping nira serta hasil fisik. Pada layar sempit atau teks besar, informasi dapat turun ke baris berikutnya. Status kartu tetap tersedia melalui semantik aksesibilitas; badge detail dan tindakan validasi tetap mengikuti status sumber data.
+
+Demo dan Supabase memakai urutan field proses, ringkasan batch, tab Masak, serta tabel Grade yang sama melalui `detail_fields.dart`. Adapter hanya mengisi nilai yang tersedia dari API. Jam turun, bagian kloter, operator, takaran bahan, atau harga grade yang belum dikirim API ditampilkan sebagai `—`; angka demo tidak digunakan sebagai pengganti data backend. Margin kloter berasal dari snapshot laporan, dan volume batch dikonversi tepat dari mL ke L tanpa pembulatan tambahan.
+
+Area pratinjau nota mempertahankan rasio 2,4:1 saat foto sah belum tersedia, dengan tautan menuju Pekerjaan. Foto contoh hanya digunakan dalam demo. Biaya, reservasi dan pengesahan tetap memakai endpoint serta otorisasi resmi; detail batch sah tidak mengulang panel status biaya draf.
+
 ## Tipografi
 
 Font tetap Inter. Ukuran dipusatkan di `NiraType` dalam `apps/mobile/lib/sobatnira_ui.dart`.

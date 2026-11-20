@@ -490,7 +490,7 @@ void main() {
           .descendant(of: find.byWidget(card), matching: find.byType(Material))
           .first,
     );
-    expect(material.color, const Color(0xFFCFA331));
+    expect(material.color, niraGold);
   });
 
   testWidgets('pratinjau foto bisa diperbesar, dizoom dan ditutup', (
