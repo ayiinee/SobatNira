@@ -112,17 +112,24 @@ class NiraValue extends StatelessWidget {
         painter.dispose();
         final changed = display != value || scroll;
         final text = Text(display, maxLines: 1, softWrap: false, style: style);
+        Widget content = scroll
+            ? SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: text,
+              )
+            : text;
+        if (scroll && revealOnTap && constraints.maxWidth >= 40) {
+          content = Row(
+            children: [
+              Expanded(child: content),
+              const SizedBox(width: 4),
+              Icon(Icons.more_horiz, size: 12, color: style.color),
+            ],
+          );
+        }
         final child = SizedBox(
           height: valueTextHeight(context, style),
-          child: Align(
-            alignment: alignment,
-            child: scroll
-                ? SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: text,
-                  )
-                : text,
-          ),
+          child: Align(alignment: alignment, child: content),
         );
         if (!changed) return child;
         if (!revealOnTap) return Tooltip(message: value, child: child);

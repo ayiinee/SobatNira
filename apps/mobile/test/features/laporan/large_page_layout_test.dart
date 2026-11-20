@@ -90,7 +90,7 @@ void main() {
           }
           if (expandText != null) {
             await tester.scrollUntilVisible(
-              find.text(expandText).first,
+              find.text(expandText),
               300,
               scrollable: find
                   .byWidgetPredicate(
@@ -100,8 +100,14 @@ void main() {
                   )
                   .first,
             );
+            await Scrollable.ensureVisible(
+              tester.element(find.text(expandText).first),
+              alignment: .2,
+            );
+            await tester.pumpAndSettle();
             await tester.tap(find.text(expandText).first);
             await tester.pumpAndSettle();
+            expect(find.byType(Table), findsOneWidget);
           }
           final scroll = find.byWidgetPredicate(
             (widget) =>

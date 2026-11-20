@@ -15,6 +15,7 @@ import 'package:sobatnira/features/kloter/kloter_date_filter.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
 import 'package:sobatnira/sobatnira_ui.dart';
 import 'package:sobatnira/main.dart';
+import 'package:sobatnira/widgets/adaptive_value.dart';
 import '../../support/demo_login.dart';
 
 final scope = FactoryScope.fromJson({
@@ -237,7 +238,13 @@ void main() {
       await tester.tap(find.text('Margin').first);
       await tester.pumpAndSettle();
       expect(find.text('-Rp1'), findsWidgets);
-      expect(find.text('Rp9.007.199.254.740.993'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is NiraValue && widget.value == 'Rp9.007.199.254.740.993',
+        ),
+        findsOneWidget,
+      );
       expect(find.text('Margin per kloter (1000)'), findsOneWidget);
       await tester.ensureVisible(find.text('Pemasok satu'));
       await tester.tap(find.text('Pemasok satu'));
@@ -263,7 +270,13 @@ void main() {
       await tester.tap(grade);
       await tester.pumpAndSettle();
       expect(find.text('Detail Grade'), findsOneWidget);
-      expect(find.text('Rp9.007.199.254.740.993'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is NiraValue && widget.value == 'Rp9.007.199.254.740.993',
+        ),
+        findsOneWidget,
+      );
       expect(find.text('Kontribusi per kloter'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
@@ -318,7 +331,12 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Masuk'));
       await tester.pumpAndSettle();
       expect(find.text('-Rp1'), findsWidgets);
-      expect(find.text('2.500,01 kg'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) => widget is NiraValue && widget.value == '2.500,01 kg',
+        ),
+        findsOneWidget,
+      );
       await tester.ensureVisible(find.text('Laba'));
       await tester.tap(find.text('Laba'));
       await tester.pumpAndSettle();
