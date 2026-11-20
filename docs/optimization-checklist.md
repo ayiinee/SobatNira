@@ -242,7 +242,7 @@ di staging. Tidak ada concurrency Paddle/worker atau kebijakan retry yang diubah
 - [ ] **CAC-10** Uji isolasi pabrik/role, invalidasi koreksi, cache kedaluwarsa, Redis mati dan pemulihan.
 - [x] **CAC-10A** Uji katalog dengan unit dan HTTP/PostgreSQL serta fixture protokol TCP ioredis: scope, commit/rollback, TTL, timeout, outage/reconnect dan pengisian antar-instance. Server Redis nyata/multi-replika staging belum diuji.
 
-Kontrak dan bukti ada pada [cache katalog](catalog-cache.md). Migrasi bisnis 024
+Kontrak dan bukti ada pada [cache katalog](catalog-cache.md). Migrasi bisnis 025
 menambahkan metadata generasi dan trigger statement-level. Default flag false;
 TTL katalog 300 detik mengatur umur entri, bukan stale setelah perubahan commit.
 Profil sintetis: katalog 75,503 ms, cold cache 103,146 ms, warm 6,094 ms (Redis fixture
@@ -264,7 +264,7 @@ pengganti pembacaan resmi pada transaksi stok/pengesahan.
 - [x] **QA-05B** Laporan: analyzer bersih dan suite Flutter 136 tes lulus, 3 tes fixture dilewati (runner berurutan). Build API serta regresi PostgreSQL summary/page, koreksi, PDF/XLSX dan batas 101 kloter lulus; detail bukti ada di bagian D.
 - [x] **QA-05C** Foto: build dan 107 tes backend/integrasi lulus tanpa skip; analyzer Flutter bersih dan 5 tes Pekerjaan/varian lulus. Mencakup foto rusak, WebP animasi/APNG, hash, orientasi/bbox, antrean transformasi, akses pabrik dan pembukaan asli setelah preview gagal. Suite Flutter penuh belum diulang setelah tahap foto; hasil 136 tes di atas berasal dari tahap laporan.
 - [x] **QA-05D** Worker/review: build dan 13 tes timer/alur OCR PostgreSQL lulus tanpa skip. Profiler 30.000 task/job memverifikasi hasil query lama/baru identik dan merekam biaya baca/tulis kandidat index yang akhirnya ditolak.
-- [x] **QA-05E** Katalog/cache: migrasi 024 diterapkan pada database sintetis, build dan suite 117 tes backend/integrasi lulus tanpa skip. Redis diuji melalui fixture protokol lokal, belum server/provider nyata; flag cache tetap nonaktif secara default.
+- [x] **QA-05E** Katalog/cache: migrasi cache diterapkan pada database sintetis, build dan suite 117 tes backend/integrasi lulus tanpa skip. Nomor cache diperbaiki dari 024 menjadi 025 agar tidak bertabrakan dengan indeks snapshot; rekonsiliasi catatan lokal mempertahankan checksum/DDL. Redis diuji melalui fixture protokol lokal, belum server/provider nyata; flag cache tetap nonaktif secara default.
 - [ ] **QA-06** Jalankan tes FastAPI dari `apps/ai` dengan `uv run --locked python -m unittest` bila kontrak/pemrosesan AI berubah.
 - [ ] **QA-07** Uji satu skenario sintetis dari foto → OCR → revisi → pengesahan → stok → laporan/PDF; pastikan angka dan status konsisten.
 - [ ] **QA-08** Uji R2 nyata dengan fixture sintetis terpisah; catat dan bersihkan hanya objek fixture yang dibuat tes.

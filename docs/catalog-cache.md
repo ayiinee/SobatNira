@@ -20,7 +20,7 @@ tidak mengubah autentikasi/otorisasi pada repository/controller.
 
 ## Konsistensi dan akses
 
-Migrasi bisnis **024_catalog_cache_versions.sql** menambahkan satu generasi UUID per
+Migrasi bisnis **025_catalog_cache_versions.sql** menambahkan satu generasi UUID per
 tenant/katalog. Trigger statement-level menangani INSERT/UPDATE/DELETE dan TRUNCATE.
 Bulk import mengganti versi sekali per tenant per statement. Pindah tenant, bila
 dilakukan lewat SQL administratif, memperbarui versi tenant lama dan baru. Versi dan
@@ -115,7 +115,7 @@ koneksi terpisah, update/insert/delete/truncate, pencabutan membership, TTL, Red
 terputus dan pemulihan. Ini belum menggantikan uji server/provider Redis nyata,
 eviction, multi-replika dan beban produksi.
 
-Urutan rilis: terapkan migrasi 024 dengan role migrasi yang biasa dipakai proyek,
+Urutan rilis: terapkan migrasi 025 dengan role migrasi yang biasa dipakai proyek,
 verifikasi role runtime boleh membaca/menulis metadata versi, deploy API dengan
 flag false, uji staging, lalu aktifkan flag. Migrasi menambahkan trigger pada dua
 tabel; sediakan jendela DDL/lock dan periksa beban tulis di staging. Bila role migrasi
@@ -127,3 +127,12 @@ dengan tabel/trigger tambahan tetap ada; tidak perlu menghapus metadata saat rol
 Jangan menonaktifkan trigger atau mengubah katalog di luar protokol invalidasi saat
 cache aktif. Setelah restore/mengganti sumber database, kosongkan namespace cache
 atau ganti versi key sebelum aktivasi kembali bila konsistensi snapshot diragukan.
+
+Nomor 024 tetap milik `024_production_snapshot_lot_lookup.sql`. Versi eksperimen
+commit `f894172` sempat memakai nomor 024 juga untuk cache. Bila versi eksperimen
+itu sudah diterapkan, cocokkan checksum SQL cache dengan file 025 (normalisasi CRLF
+seperti migrator), lalu ganti **nama catatan** `024_catalog_cache_versions.sql` pada
+`sobatnira._migrations` menjadi `025_catalog_cache_versions.sql`. Jangan menjalankan
+ulang DDL tabel/trigger atau mengubah catatan migrasi indeks snapshot. Database lokal
+sintetis sudah direkonsiliasi dan migrator kembali diuji idempoten; belum ada
+penerapan ke database tim/produksi pada pekerjaan ini.
