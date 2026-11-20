@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
 import '../../widgets/summary_card.dart';
+import '../../widgets/adaptive_value.dart';
 import '../kloter/demo_production.dart';
 import '../kloter/kloter_card.dart';
 import 'quick_action_icon.dart';
@@ -450,18 +451,13 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Flexible(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              _showProfit
-                                  ? (widget.profit ?? '—')
-                                  : 'Rp ••••••',
-                              style: niraText(
-                                NiraType.hero,
-                                color: niraYellow,
-                                weight: FontWeight.w700,
-                              ),
+                          child: NiraValue(
+                            _showProfit ? (widget.profit ?? '—') : 'Rp ••••••',
+                            label: 'Keuntungan',
+                            style: niraText(
+                              NiraType.hero,
+                              color: niraYellow,
+                              weight: FontWeight.w700,
                             ),
                           ),
                         ),

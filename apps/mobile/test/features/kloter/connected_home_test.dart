@@ -13,6 +13,7 @@ import 'package:sobatnira/features/laporan/laporan_page.dart';
 import 'package:sobatnira/features/laporan/report_pdf.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
 import 'package:sobatnira/main.dart';
+import 'package:sobatnira/widgets/adaptive_value.dart';
 
 import '../../support/demo_login.dart';
 
@@ -429,9 +430,19 @@ void main() {
       }
 
       await tap(find.bySemanticsLabel('Kloter'));
-      expect(find.text('1.250,01 kg'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) => widget is NiraValue && widget.value == '1.250,01 kg',
+        ),
+        findsOneWidget,
+      );
       await tap(find.text('Pemasok first'));
-      expect(find.text('1.250,01 kg'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) => widget is NiraValue && widget.value == '1.250,01 kg',
+        ),
+        findsOneWidget,
+      );
       expect(find.text('19,5 °Bx'), findsOneWidget);
       expect(find.text('90 L'), findsOneWidget);
       expect(find.text('83,5 L'), findsOneWidget);

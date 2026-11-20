@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/adaptive_value.dart';
 import '../../widgets/kloter_cane_overlay.dart';
 import '../../widgets/summary_card.dart';
 import '../kloter/kloter_detail_widgets.dart';
@@ -367,6 +368,7 @@ class ReportDetailPage extends StatelessWidget {
   Widget _moneyRow(String label, String value, {bool bold = false}) => Padding(
     padding: const EdgeInsets.symmetric(vertical: NiraSpace.xs),
     child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
           child: Text(
@@ -377,11 +379,18 @@ class ReportDetailPage extends StatelessWidget {
             ),
           ),
         ),
-        Text(
-          value,
-          style: niraText(
-            NiraType.body,
-            weight: bold ? FontWeight.w700 : FontWeight.w500,
+        const SizedBox(width: NiraSpace.sm),
+        Expanded(
+          flex: 2,
+          child: NiraValue(
+            value,
+            label: label,
+            abbreviate: false,
+            alignment: Alignment.centerRight,
+            style: niraText(
+              NiraType.body,
+              weight: bold ? FontWeight.w700 : FontWeight.w500,
+            ),
           ),
         ),
       ],
@@ -442,8 +451,9 @@ class ReportDetailPage extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: Text(
+          child: NiraValue(
             two,
+            label: 'Berat',
             style: niraText(
               NiraType.body,
               weight: header ? FontWeight.w700 : FontWeight.w400,
@@ -451,9 +461,10 @@ class ReportDetailPage extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: Text(
+          child: NiraValue(
             three,
-            textAlign: TextAlign.end,
+            label: 'Porsi',
+            alignment: Alignment.centerRight,
             style: niraText(
               NiraType.body,
               weight: header ? FontWeight.w700 : FontWeight.w400,

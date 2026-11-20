@@ -9,6 +9,7 @@ import 'package:http/testing.dart';
 import 'package:sobatnira/features/auth/login_pages.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
 import 'package:sobatnira/main.dart';
+import 'package:sobatnira/widgets/adaptive_value.dart';
 import 'package:sobatnira/sobatnira_ui.dart';
 
 void main() {
@@ -37,7 +38,12 @@ void main() {
     await tester.pumpAndSettle();
     final caneSummary = find.text('Tebu diterima');
     expect(caneSummary, findsOneWidget);
-    expect(find.text('17.990 kg'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is NiraValue && widget.value == '17.990 kg',
+      ),
+      findsOneWidget,
+    );
     expect(find.byType(LoginWelcomePage), findsNothing);
     expect(find.byType(LoginFormPage), findsNothing);
     expect(Navigator.of(tester.element(caneSummary)).canPop(), isFalse);

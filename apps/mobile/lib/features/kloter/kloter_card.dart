@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/adaptive_value.dart';
 import '../../widgets/kloter_cane_overlay.dart';
 import '../../widgets/review_status_label.dart';
 import 'demo_production.dart';
@@ -92,8 +93,9 @@ class KloterCard extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Expanded(
-                              child: Text(
+                              child: NiraValue(
                                 kloter.weight,
+                                label: 'Tebu bersih',
                                 style: niraText(
                                   NiraType.body,
                                   color: foreground,

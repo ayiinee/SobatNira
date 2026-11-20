@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/adaptive_value.dart';
 import '../../widgets/kloter_cane_overlay.dart';
 import '../../widgets/review_status_label.dart';
 import 'batch_detail_page.dart';
@@ -292,7 +293,11 @@ class KloterBatchTile extends StatelessWidget {
       Text(':', style: niraText(NiraType.body, color: foreground)),
       const SizedBox(width: NiraSpace.xs),
       Expanded(
-        child: Text(value, style: niraText(NiraType.body, color: foreground)),
+        child: NiraValue(
+          value,
+          label: label,
+          style: niraText(NiraType.body, color: foreground),
+        ),
       ),
     ],
   );

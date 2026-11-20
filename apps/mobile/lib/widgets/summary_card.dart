@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../sobatnira_ui.dart';
+import 'adaptive_value.dart';
 
 const niraSummaryGradient = LinearGradient(
   begin: Alignment.topLeft,
@@ -16,6 +17,7 @@ class NiraSummaryCard extends StatelessWidget {
     this.boxes = false,
     this.cane = false,
     this.compactValue = false,
+    this.labelHeight,
     super.key,
   });
 
@@ -24,6 +26,17 @@ class NiraSummaryCard extends StatelessWidget {
   final bool boxes;
   final bool cane;
   final bool compactValue;
+  final double? labelHeight;
+
+  NiraSummaryCard withLabelHeight(double height) => NiraSummaryCard(
+    label,
+    value,
+    boxes: boxes,
+    cane: cane,
+    compactValue: compactValue,
+    labelHeight: height,
+    key: key,
+  );
 
   @override
   Widget build(BuildContext context) => Container(
@@ -79,36 +92,34 @@ class NiraSummaryCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label,
-                  textAlign: TextAlign.left,
-                  style: niraText(
-                    NiraType.caption,
-                    color: Colors.white,
-                    weight: FontWeight.w600,
+                SizedBox(
+                  height: labelHeight,
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.left,
+                    style: niraText(
+                      NiraType.caption,
+                      color: Colors.white,
+                      weight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 const SizedBox(height: NiraSpace.xs),
-                if (compactValue)
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: _valueText(NiraType.title),
-                  )
-                else
-                  _valueText(NiraType.metric),
+                NiraValue(
+                  value,
+                  label: label,
+                  style: niraText(
+                    compactValue ? NiraType.title : NiraType.metric,
+                    color: niraYellow,
+                    weight: FontWeight.w700,
+                  ),
+                ),
               ],
             ),
           ),
         ),
       ],
     ),
-  );
-
-  Widget _valueText(double fontSize) => Text(
-    value,
-    textAlign: TextAlign.left,
-    style: niraText(fontSize, color: niraYellow, weight: FontWeight.w700),
   );
 }
 
@@ -165,20 +176,48 @@ class NiraSummaryPair extends StatelessWidget {
       final stacked =
           constraints.maxWidth <
           MediaQuery.textScalerOf(context).scale(NiraType.metric) * 9 + 56;
+      final cardWidth = stacked
+          ? constraints.maxWidth
+          : (constraints.maxWidth - NiraSpace.sm) / 2;
+      var labelHeight = 0.0;
+      for (final card in [first, second]) {
+        final painter =
+            TextPainter(
+              text: TextSpan(
+                text: card.label,
+                style: niraText(
+                  NiraType.caption,
+                  color: Colors.white,
+                  weight: FontWeight.w600,
+                ),
+              ),
+              textDirection: Directionality.of(context),
+              textScaler: MediaQuery.textScalerOf(context),
+            )..layout(
+              maxWidth: (cardWidth - NiraSpace.lg - NiraSpace.md).clamp(
+                1,
+                double.infinity,
+              ),
+            );
+        if (painter.height > labelHeight) labelHeight = painter.height;
+        painter.dispose();
+      }
+      final alignedFirst = first.withLabelHeight(labelHeight);
+      final alignedSecond = second.withLabelHeight(labelHeight);
       return stacked
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                first,
+                alignedFirst,
                 const SizedBox(height: NiraSpace.sm),
-                second,
+                alignedSecond,
               ],
             )
           : Row(
               children: [
-                Expanded(child: first),
+                Expanded(child: alignedFirst),
                 const SizedBox(width: NiraSpace.sm),
-                Expanded(child: second),
+                Expanded(child: alignedSecond),
               ],
             );
     },

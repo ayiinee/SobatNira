@@ -15,6 +15,7 @@ import 'package:sobatnira/features/kloter/kloter_process_page.dart';
 import 'package:sobatnira/features/kloter/official_batch_workflow.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
 import 'package:sobatnira/sobatnira_ui.dart';
+import 'package:sobatnira/widgets/adaptive_value.dart';
 
 final detailScope = FactoryScope.fromJson({
   'tenantId': 'tenant',
@@ -196,7 +197,11 @@ void main() {
       final preview = tester.getSize(find.byType(ApprovedDocumentPreview));
       expect(preview.width / preview.height, closeTo(2.4, .01));
       await tester.scrollUntilVisible(
-        find.text('Rp900.719.925.474.099.312.345'),
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is NiraValue &&
+              widget.value == 'Rp900.719.925.474.099.312.345',
+        ),
         150,
       );
       expect(find.text('Rp540.000'), findsOneWidget);
