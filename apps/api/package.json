@@ -6,6 +6,7 @@
     "node": ">=24 <25"
   },
   "scripts": {
+    "storage:audit": "npm run build --silent && node scripts/audit-storage.cjs",
     "perf:lots": "npm run build --silent && node scripts/profile-lots.cjs",
     "perf:reports": "npm run build --silent && node scripts/profile-reports.cjs",
     "seed:calculations": "npm run build --silent && node scripts/seed-calculations.cjs",

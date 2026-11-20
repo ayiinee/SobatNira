@@ -23,7 +23,7 @@ berarti perubahan sudah di-commit, digabung, atau diterapkan ke database tim/pro
 | --- | --- | --- |
 | 1. Transaksi upload WhatsApp | Implementasi dan pengujian lokal selesai | Pengukuran latensi upload, rekonsiliasi, penerapan lingkungan tim |
 | 2. Query dan pagination | Pagination kloter dan Flutter selesai: cursor, filter, ranking, badge, lazy loading dan refresh | Ringkasan, pagination rincian dan batas laporan selesai di bagian D |
-| 3. Retensi storage | Manifest upload tersedia | Keputusan retensi, inventaris, simulasi, worker cleanup |
+| 3. Retensi storage | Inventaris dan simulasi lokal selesai; tanpa penghapusan sesuai keputusan pengguna | Review staging, metadata lifecycle dan keputusan masa simpan; worker hapus ditunda |
 | 4. Optimisasi foto | Belum diimplementasikan | Validasi seragam, preview, thumbnail, pengukuran kualitas/ukuran |
 | 5. Database dan kapasitas | Indeks kloter lama sudah dimanfaatkan | Profil laporan/antrean, anggaran pool, observabilitas |
 | 6. Caching | Belum diimplementasikan | Cache-aside, invalidasi, isolasi dan fallback |
@@ -151,10 +151,10 @@ Foto yang bukan revisi aktif tetap dapat menjadi bukti historis yang wajib diper
 ### Implementasi
 
 - [x] **RET-06** Sediakan manifest upload WhatsApp dan indeks parsial untuk kandidat belum tertaut; ini baru fondasi rekonsiliasi.
-- [ ] **RET-07** Inventaris seluruh jalur: `tenants/.../evidence/...`, `originals/`, `reports/`, turunan gambar dan storage lokal development.
+- [x] **RET-07** Inventaris seluruh jalur: `tenants/.../evidence/...`, `originals/`, `reports/`, turunan gambar dan storage lokal development.
 - [ ] **RET-08** Simpan kategori objek, ukuran/hash, waktu, kebijakan/versi, status lifecycle dan referensi pemilik yang diperlukan.
-- [ ] **RET-09** Buat mode simulasi yang melaporkan kandidat, alasan dan estimasi byte tanpa menghapus objek.
-- [ ] **RET-10** Periksa semua referensi: dokumen/revisi historis, pengesahan, submission, job aktif, artefak dan pengiriman laporan.
+- [x] **RET-09** Buat mode simulasi yang melaporkan kandidat, alasan dan estimasi byte tanpa menghapus objek.
+- [x] **RET-10** Periksa semua referensi: dokumen/revisi historis, pengesahan, submission, job aktif, artefak dan pengiriman laporan.
 - [ ] **RET-11** Terapkan mark-and-sweep: tandai kandidat, tunggu masa aman, lalu periksa ulang referensi sebelum hapus.
 - [ ] **RET-12** Cegah race antara pemasangan referensi/upload dan cleanup menggunakan protokol koordinasi yang diuji.
 - [ ] **RET-13** Implementasikan worker per batch dengan status, retry idempoten, batas concurrency dan audit hasil penghapusan.
@@ -162,6 +162,8 @@ Foto yang bukan revisi aktif tetap dapat menjadi bukti historis yang wajib diper
 - [ ] **RET-15** Pisahkan prefix/bucket fixture dan objek sementara dari bukti produksi; rencanakan kompatibilitas objek lama.
 - [ ] **RET-16** Tinjau lifecycle R2 per prefix dan incomplete multipart; terapkan hanya untuk kelas objek yang aman kedaluwarsa.
 - [ ] **RET-17** Jalankan simulasi pada inventaris staging dan review kandidat sebelum mengaktifkan penghapusan sesuai keputusan tim.
+
+Bukti simulasi: [CLI dan batas operasional](storage-audit.md), [klasifikasi/referensi](../apps/api/src/storage/storage-audit.ts), [tes PostgreSQL](../apps/api/test/integration/storage-audit-database.test.cjs). Empat tes unit dan satu tes database lulus; CLI lokal pada database disposable menginventaris satu objek sintetis 27 byte sebagai kandidat investigasi, dengan `dryRun: true`, `deletionAllowed: false`. Prefix asing, waktu tidak pasti, seluruh media/evidence dan seluruh job ekspor dilindungi. Belum memindai bucket staging/produksi. RET-08 tetap parsial: laporan inventaris tersedia, registry lifecycle/hash terpadu belum ada.
 
 Lifecycle bucket tidak mengetahui referensi database. Penghapusan bukti tertaut
 memerlukan keputusan aplikasi, bukan hanya umur objek.
@@ -247,6 +249,7 @@ Branch kerja: `perf/api-staged-photo-upload`.
 | --- | --- | --- |
 | 20 November 2026 | `596a0ac` | Transaksi upload foto, manifest, migrasi dan tes regresi |
 | 20 November 2026 | `c490482` | Cursor API, counts, ranking saran, pager Flutter, profiler dan tes integrasi |
+| 21 November 2026 | `eddeab9` | Ringkasan laporan, batas respons, rincian per halaman, jalur ekspor Flutter dan profil sintetis |
 
 Riwayat ini mencatat commit lokal. Status sinkronisasi remote dapat diperiksa dengan
 `git status -sb`; commit tidak berarti perubahan sudah digabung ke main atau dirilis.
