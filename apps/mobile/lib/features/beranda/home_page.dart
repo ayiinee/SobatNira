@@ -296,7 +296,7 @@ class _NiraHomeState extends State<NiraHome> {
     );
   }
 
-  void _openQuickAction(QuickActionKind action) {
+  void _openQuickAction(QuickActionKind action) async {
     final kind = switch (action) {
       QuickActionKind.profit => PrintableReportKind.profit,
       QuickActionKind.recap => PrintableReportKind.production,
@@ -325,6 +325,8 @@ class _NiraHomeState extends State<NiraHome> {
       );
       return;
     }
+    await _live?.reports.ensureDetails();
+    if (!mounted) return;
     _navigator.push(
       MaterialPageRoute<void>(
         builder: (_) => ReportExportPage(

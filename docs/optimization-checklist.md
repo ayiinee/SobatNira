@@ -1,6 +1,6 @@
 # Checklist optimisasi SobatNira
 
-Terakhir ditinjau: **20 November 2026 (Asia/Jakarta)**.
+Terakhir ditinjau: **21 November 2026 (Asia/Jakarta)**.
 
 Dokumen ini melacak pekerjaan backend, database, caching, foto dan retensi storage
 dari audit awal serta implementasi bertahap. Status diperiksa terhadap kode workspace
@@ -22,7 +22,7 @@ berarti perubahan sudah di-commit, digabung, atau diterapkan ke database tim/pro
 | Tahap | Status saat ini | Sisa utama |
 | --- | --- | --- |
 | 1. Transaksi upload WhatsApp | Implementasi dan pengujian lokal selesai | Pengukuran latensi upload, rekonsiliasi, penerapan lingkungan tim |
-| 2. Query dan pagination | Pagination kloter dan Flutter selesai: cursor, filter, ranking, badge, lazy loading dan refresh | Pembatasan/optimisasi laporan tetap di bagian D |
+| 2. Query dan pagination | Pagination kloter dan Flutter selesai: cursor, filter, ranking, badge, lazy loading dan refresh | Ringkasan, pagination rincian dan batas laporan selesai di bagian D |
 | 3. Retensi storage | Manifest upload tersedia | Keputusan retensi, inventaris, simulasi, worker cleanup |
 | 4. Optimisasi foto | Belum diimplementasikan | Validasi seragam, preview, thumbnail, pengukuran kualitas/ukuran |
 | 5. Database dan kapasitas | Indeks kloter lama sudah dimanfaatkan | Profil laporan/antrean, anggaran pool, observabilitas |
@@ -88,7 +88,7 @@ Bukti: [repository kloter](../apps/api/src/lots/lots.repository.ts),
 
 Bagian C selesai pada implementasi lokal. Beranda, daftar Kloter dan pilihan kloter
 Biaya Ops menggunakan pager terpisah. Badge memakai counts lengkap; total berat dan
-margin tetap dari laporan lengkap. Refresh mempertahankan kedalaman halaman yang
+margin tetap dari agregat laporan seluruh filter. Refresh mempertahankan kedalaman halaman yang
 sudah dibuka, bukan menelusuri seluruh data pabrik. Hari dikelompokkan dalam zona
 waktu perangkat, dengan batas hari dikirim ke API sebagai UTC. Satu hari dapat
 berlanjut ke halaman berikutnya; header menyebut jumlah yang dimuat selama daftar
@@ -107,16 +107,17 @@ atau produksi tetap merupakan pekerjaan rilis, bukan bagian centang implementasi
 
 ## D. Laporan dan ukuran respons
 
-- [ ] **RPT-01** Ukur query laporan dengan periode, jumlah kloter, batch, grade dan revisi yang representatif.
-- [ ] **RPT-02** Pisahkan ringkasan/agregat dari rincian agar Beranda tidak memerlukan seluruh isi laporan.
-- [ ] **RPT-03** Tetapkan batas periode, jumlah baris dan ukuran respons; dokumentasikan error serta arahan untuk ekspor besar.
-- [ ] **RPT-04** Tambahkan pagination rincian dan arahkan laporan besar ke jalur ekspor asinkron yang sudah tersedia.
-- [ ] **RPT-05** Pertahankan konsistensi snapshot, periode penerimaan kloter, angka presisi dan aturan biaya satu kali per kloter.
-- [ ] **RPT-06** Uji koreksi aktif/disahkan/dibuang, margin negatif dan isolasi pabrik antara detail, Beranda, laporan dan PDF/XLSX.
-- [ ] **RPT-07** Verifikasi pembatasan baru tidak memotong laporan secara diam-diam atau menghasilkan total dari data parsial.
+- [x] **RPT-01** Ukur query laporan dengan periode, jumlah kloter, batch, grade dan revisi yang representatif.
+- [x] **RPT-02** Pisahkan ringkasan/agregat dari rincian agar Beranda tidak memerlukan seluruh isi laporan.
+- [x] **RPT-03** Tetapkan batas periode, jumlah baris dan ukuran respons; dokumentasikan error serta arahan untuk ekspor besar.
+- [x] **RPT-04** Tambahkan pagination rincian dan arahkan laporan besar ke jalur ekspor asinkron yang sudah tersedia.
+- [x] **RPT-05** Pertahankan konsistensi snapshot, periode penerimaan kloter, angka presisi dan aturan biaya satu kali per kloter.
+- [x] **RPT-06** Uji koreksi aktif/disahkan/dibuang, margin negatif dan isolasi pabrik antara detail, Beranda, laporan dan PDF/XLSX.
+- [x] **RPT-07** Verifikasi pembatasan baru tidak memotong laporan secara diam-diam atau menghasilkan total dari data parsial.
 
-Jalur ekspor asinkron sudah ada sebelum pekerjaan optimisasi ini; keberadaannya belum
-menyelesaikan pembatasan seluruh endpoint laporan.
+Lihat [kontrak dan baseline laporan](backend-report-optimization.md). Endpoint lengkap/laba/rekap dibatasi 100 kloter dan respons 5 MiB, rincian 1000 batch per kloter; interval eksplisit maksimal 366 hari. Summary dan halaman mempertahankan total seluruh filter. Ekspor owner memakai worker yang sudah tersedia (maksimal 500 kloter), dengan kontrol Flutter baru.
+
+Profil sintetis 30 kloter, 120 batch/grade dan 150 snapshot: median lengkap 65,591 ms / 66.708 byte; summary 11,898 ms / 541 byte; halaman 20 kloter 78,479 ms / 44.775 byte. Lima sampel hangat lokal, belum p95 HTTP atau beban produksi. Build dan 10 tes laporan/integrasi terakhir lulus tanpa skip.
 
 ## E. Database, indexing dan pool
 
@@ -132,6 +133,8 @@ menyelesaikan pembatasan seluruh endpoint laporan.
 - [ ] **DB-10** Uji migrasi, konkurensi dan rollback strategi indeks/pool di staging sebelum penerapan produksi.
 
 ## F. Retensi storage dan rekonsiliasi
+
+Keputusan pengguna, 21 November 2026: **simulasi cleanup saja; belum menghapus otomatis**. Foto asli dan seluruh revisi historis tetap dilindungi. Ambang umur kandidat simulasi adalah parameter investigasi, bukan masa simpan yang disepakati. RET-11 sampai RET-16 yang mengaktifkan penghapusan ditunda sampai kebijakan disetujui.
 
 ### Keputusan kebijakan yang masih diperlukan
 
@@ -213,6 +216,7 @@ merupakan kandidat pengujian. Redis saat audit baru dipakai untuk pemeriksaan ko
 - [x] **QA-04** Dokumentasikan keterbatasan baseline: satu koneksi, lima sampel query hangat, belum HTTP/Auth, beban bersamaan atau nota padat.
 - [ ] **QA-05** Jalankan `flutter analyze` dan `flutter test` setelah integrasi pagination/preview; uji aplikasi hingga API terkait.
 - [x] **QA-05A** Pagination: analyzer Flutter bersih, suite standar 131 tes lulus (3 tes fixture dilewati); pengujian terarah dependensi Beranda/Biaya Ops lulus, lalu 22 tes regresi lulus setelah perbaikan terakhir, termasuk posisi scroll dan layar 320 px dengan teks 2x. Tes end-to-end pagination dijalankan terpisah dan lulus dengan PostgreSQL sintetis.
+- [x] **QA-05B** Laporan: analyzer bersih dan suite Flutter 136 tes lulus, 3 tes fixture dilewati (runner berurutan). Build API serta regresi PostgreSQL summary/page, koreksi, PDF/XLSX dan batas 101 kloter lulus; detail bukti ada di bagian D.
 - [ ] **QA-06** Jalankan tes FastAPI dari `apps/ai` dengan `uv run --locked python -m unittest` bila kontrak/pemrosesan AI berubah.
 - [ ] **QA-07** Uji satu skenario sintetis dari foto → OCR → revisi → pengesahan → stok → laporan/PDF; pastikan angka dan status konsisten.
 - [ ] **QA-08** Uji R2 nyata dengan fixture sintetis terpisah; catat dan bersihkan hanya objek fixture yang dibuat tes.
@@ -250,7 +254,7 @@ Riwayat ini mencatat commit lokal. Status sinkronisasi remote dapat diperiksa de
 ### Urutan lanjutan
 
 - [x] **NEXT-01** Selesaikan kontrak filter status dan hitungan lengkap, lalu migrasikan Flutter ke cursor (PAG-06 sampai PAG-12).
-- [ ] **NEXT-02** Profil dan batasi laporan (OBS-05, RPT-01 sampai RPT-07) sebelum menentukan indeks tambahan.
+- [x] **NEXT-02** Profil dan batasi laporan (OBS-05, RPT-01 sampai RPT-07) sebelum menentukan indeks tambahan.
 - [ ] **NEXT-03** Putuskan kebijakan retensi dan buat inventaris/simulasi cleanup sebelum penghapusan diaktifkan (RET-01 sampai RET-17).
 - [ ] **NEXT-04** Lanjutkan preview foto, kapasitas worker/pool dan cache berdasarkan hasil pengukuran.
 

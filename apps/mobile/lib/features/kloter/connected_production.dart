@@ -55,7 +55,7 @@ class ConnectedProduction extends ChangeNotifier {
   Future<void> refresh() => _disposed
       ? Future.value()
       : Future.wait([
-          reports.refresh(),
+          reports.refresh(summaryOnly: !reports.detailsRequested),
           home.refresh(),
           if (browser.initialized) browser.refresh(),
         ]);

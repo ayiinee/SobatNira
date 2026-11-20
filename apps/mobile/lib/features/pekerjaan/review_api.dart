@@ -297,9 +297,11 @@ class ReviewApi {
     DateTime? from,
     DateTime? before,
     bool synthetic = false,
+    bool summaryOnly = false,
   }) => _productionGet(
     [...scope._base, 'production', 'production-report'],
     query: {
+      if (summaryOnly) 'view': 'summary',
       'synthetic': '$synthetic',
       if (from != null) 'from': from.toUtc().toIso8601String(),
       if (before != null) 'before': before.toUtc().toIso8601String(),
@@ -323,6 +325,64 @@ class ReviewApi {
       }
     }
     return productionReport(scope, synthetic: synthetic);
+  }
+
+  Future<Json> requestReportExport(
+    FactoryScope scope,
+    Json values,
+    String key,
+  ) => _json(
+    _client.post(
+      Uri.parse(
+        baseUrl,
+      ).replace(pathSegments: ['', ...scope._base, 'report-exports']),
+      headers: {
+        ..._headers,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': key,
+      },
+      body: jsonEncode(values),
+    ),
+    expectedStatus: 202,
+  );
+
+  Future<Json> reportExportStatus(FactoryScope scope, String id) =>
+      _productionGet([...scope._base, 'report-exports', id]);
+
+  Future<Json> reportDetailPage(
+    FactoryScope scope, {
+    required bool synthetic,
+    required int offset,
+    DateTime? from,
+    DateTime? before,
+  }) => _productionGet(
+    [...scope._base, 'production', 'production-report'],
+    query: {
+      'view': 'page',
+      'limit': '20',
+      'offset': '$offset',
+      'synthetic': '$synthetic',
+      if (from != null) 'from': from.toUtc().toIso8601String(),
+      if (before != null) 'before': before.toUtc().toIso8601String(),
+    },
+  );
+
+  Future<Uint8List> reportExportPdf(FactoryScope scope, String id) async {
+    final response = await _client.get(
+      Uri.parse(baseUrl).replace(
+        pathSegments: [
+          '',
+          ...scope._base,
+          'report-exports',
+          id,
+          'files',
+          'pdf',
+        ],
+      ),
+      headers: _headers,
+    );
+    _requireStatus(response, 200);
+    return response.bodyBytes;
   }
 
   Future<Json> factoryBatches(

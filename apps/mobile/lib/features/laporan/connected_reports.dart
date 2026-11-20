@@ -35,6 +35,15 @@ class ConnectedReports extends ChangeNotifier {
   bool loading = true;
   Object? error;
   Json? data;
+  bool detailsRequested = false;
+  Future<void> ensureDetails() {
+    if (data != null && data?['view'] != 'summary') {
+      detailsRequested = true;
+      return Future.value();
+    }
+    return refresh();
+  }
+
   int _generation = 0;
   DateTime? _latestSyntheticReceipt;
   DateTime get filterToday =>
@@ -43,6 +52,7 @@ class ConnectedReports extends ChangeNotifier {
   List<Json> get grades => (data?['grades'] as List? ?? const []).cast<Json>();
   Json get totals => data?['totals'] as Json? ?? const {};
   bool get provisional =>
+      data?['provisional'] == true ||
       lots.any((lot) => lot['calculation'] != null && lot['closed'] == false);
   List<AnalyticsRow> rows(ReportTab tab) => [
     for (final lot in lots) _reportRow(lot, tab),
@@ -67,7 +77,11 @@ class ConnectedReports extends ChangeNotifier {
       ? reportMoney(totals[key])
       : '${reportNumber(totals[key])}$unit';
 
-  Future<void> refresh({Future<Json>? unfiltered}) async {
+  Future<void> refresh({
+    Future<Json>? unfiltered,
+    bool summaryOnly = false,
+  }) async {
+    if (!summaryOnly) detailsRequested = true;
     final generation = ++_generation;
     loading = true;
     error = null;
@@ -77,7 +91,11 @@ class ConnectedReports extends ChangeNotifier {
       final selected = filter;
       final preset = selected != null && selected.period != KloterPeriod.custom;
       if (synthetic && preset && _latestSyntheticReceipt == null) {
-        final baseline = await api.productionReport(scope, synthetic: true);
+        final baseline = await api.productionReport(
+          scope,
+          synthetic: true,
+          summaryOnly: true,
+        );
         if (generation != _generation) return;
         _latestSyntheticReceipt = _latestReceipt(baseline);
       }
@@ -90,6 +108,7 @@ class ConnectedReports extends ChangeNotifier {
               api.productionReport(
                 scope,
                 synthetic: synthetic,
+                summaryOnly: summaryOnly,
                 from: range?.start,
                 before: range == null
                     ? null
@@ -120,6 +139,9 @@ class ConnectedReports extends ChangeNotifier {
   }
 
   DateTime? _latestReceipt(Json report) {
+    if (report['latestReceivedAt'] case final String latest) {
+      return DateTime.parse(latest).toLocal();
+    }
     DateTime? latest;
     for (final lot in (report['items'] as List).cast<Json>()) {
       final received = lot['receivedAt'];
@@ -138,7 +160,7 @@ class ConnectedReports extends ChangeNotifier {
 
   Future<void> setSynthetic(bool value) {
     synthetic = value;
-    return refresh();
+    return refresh(summaryOnly: !detailsRequested);
   }
 
   PrintableReport printable(PrintableReportKind kind) => PrintableReport(
