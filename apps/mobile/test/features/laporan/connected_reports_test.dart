@@ -343,7 +343,7 @@ void main() {
       expect(find.text('-Rp1'), findsWidgets);
       expect(
         find.byWidgetPredicate(
-          (widget) => widget is NiraValue && widget.value == '2.500,01 kg',
+          (widget) => widget is NiraValue && widget.value == '2.500,01',
         ),
         findsOneWidget,
       );

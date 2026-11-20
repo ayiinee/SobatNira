@@ -52,11 +52,12 @@ class KloterDetailPage extends StatelessWidget {
           SliverList.list(
             children: [
               const DetailTitle('Detail kloter'),
+              const SizedBox(height: NiraSpace.md),
               KloterHeading(kloter),
               Padding(
                 padding: EdgeInsets.fromLTRB(
                   niraPageInset(context),
-                  NiraSpace.xl,
+                  NiraSpace.md,
                   niraPageInset(context),
                   NiraSpace.lg,
                 ),
@@ -64,10 +65,13 @@ class KloterDetailPage extends StatelessWidget {
                   children: [
                     DetailMetrics([
                       (
-                        'Tebu bersih',
+                        'Tebu bersih (kg)',
                         kloter.record != null && kloter.netWeightKg == null
                             ? '—'
-                            : kloter.weight,
+                            : kloter.weight.replaceFirst(
+                                RegExp(r'\s*kg$', caseSensitive: false),
+                                '',
+                              ),
                       ),
                       (
                         'Brix tebu',
@@ -87,7 +91,7 @@ class KloterDetailPage extends StatelessWidget {
                               ? '—'
                               : formatQuantity(kloter.juiceLiters, 'L'),
                         ),
-                    ]),
+                    ], centerAll: true),
                     ?statusMessage,
                     const SizedBox(height: NiraSpace.lg),
                     DocumentLink('Data tebu dan penggilingan', () async {
@@ -290,7 +294,7 @@ class KloterBatchTile extends StatelessWidget {
         child: Text(label, style: niraText(NiraType.body, color: foreground)),
       ),
       const SizedBox(width: NiraSpace.xs),
-      Text(':', style: niraText(NiraType.body, color: foreground)),
+      Text('=', style: niraText(NiraType.body, color: foreground)),
       const SizedBox(width: NiraSpace.xs),
       Expanded(
         child: NiraValue(

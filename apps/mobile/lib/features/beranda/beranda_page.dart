@@ -528,7 +528,7 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
         const SizedBox(height: NiraSpace.md),
         NiraSummaryPair(
           first: NiraSummaryCard(
-            'Tebu diterima',
+            'Tebu diterima (kg)',
             widget.summary?.cane ?? '—',
             boxes: true,
           ),

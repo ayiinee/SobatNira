@@ -196,6 +196,19 @@ void main() {
             return nextFactory.future;
           }
           if (request.url.path.endsWith(
+            '/factories/B/production/lots/draft/costs',
+          )) {
+            expect(request.method, 'POST');
+            expect(request.headers['authorization'], 'Bearer local-token');
+            expect(jsonDecode(request.body), {
+              'caneCostRupiah': '200000',
+              'operationalCostRupiah': '88000',
+              'ingredientCostRupiah': '25000',
+              'otherCostRupiah': '0',
+            });
+            return _json({'operational_rupiah': '88000'});
+          }
+          if (request.url.path.endsWith(
             '/factories/B/production/production-report',
           )) {
             expect(request.headers['authorization'], 'Bearer local-token');
@@ -222,6 +235,7 @@ void main() {
                     'rendemenPercent': '2',
                     'caneNetKg': '1250',
                     'productionMarginRupiah': '375000',
+                    'costs': {'operationalRupiah': '125000'},
                   },
                   'batches': [
                     {
@@ -232,7 +246,11 @@ void main() {
                       'occurredAt': '2026-11-10T06:00:00Z',
                       'physicalWeightKg': '26',
                       'grades': [
-                        {'code': 'A', 'weightKg': '25'},
+                        {
+                          'code': 'A',
+                          'weightKg': '25',
+                          'pricePerKgRupiah': '17000',
+                        },
                       ],
                     },
                   ],
@@ -277,8 +295,8 @@ void main() {
       expect(find.text('OCR-A'), findsNothing);
       nextFactory.complete(
         _json({
-          'items': [_lot('B')],
-          'total': 1,
+          'items': [_lot('B'), _lot('draft')],
+          'total': 2,
         }),
       );
       await tester.pumpAndSettle();
@@ -300,7 +318,28 @@ void main() {
       await tester.ensureVisible(recap);
       await tester.tap(recap);
       await tester.pumpAndSettle();
-      expect(find.text('Simpan PDF'), findsOneWidget);
+      expect(find.text('Cetak laporan'), findsOneWidget);
+      expect(find.text('Simpan PDF'), findsNothing);
+      await tester.tap(find.bySemanticsLabel('Beranda'));
+      await tester.pumpAndSettle();
+      final expenses = find.text('Biaya Ops');
+      await tester.ensureVisible(expenses);
+      await tester.tap(expenses);
+      await tester.pumpAndSettle();
+      expect(find.text('Biaya Operasional'), findsOneWidget);
+      await tester.tap(find.text('Isi biaya'));
+      await tester.pumpAndSettle();
+      final inputs = find.byType(TextFormField);
+      for (final (index, value) in ['200000', '88000', '25000', '0'].indexed) {
+        await tester.enterText(inputs.at(index), value);
+      }
+      await tester.tap(find.text('Simpan'));
+      await tester.pumpAndSettle();
+      expect(find.text('Rp88.000'), findsOneWidget);
+      await tester.tap(find.text('OCR-B'));
+      await tester.pumpAndSettle();
+      expect(find.text('Rp125.000'), findsOneWidget);
+      expect(find.text('Rp17.000/kg'), findsOneWidget);
       await tester.tap(find.bySemanticsLabel('Beranda'));
       await tester.pumpAndSettle();
       final pekerjaan = find.text('Pekerjaan');
@@ -439,7 +478,7 @@ void main() {
       await tap(find.text('Pemasok first'));
       expect(
         find.byWidgetPredicate(
-          (widget) => widget is NiraValue && widget.value == '1.250,01 kg',
+          (widget) => widget is NiraValue && widget.value == '1.250,01',
         ),
         findsOneWidget,
       );
@@ -474,7 +513,7 @@ void main() {
       await tap(find.byTooltip('Kembali'));
 
       await tap(find.text('Pemasok second'));
-      expect(find.text('875 kg'), findsOneWidget);
+      expect(find.text('875'), findsOneWidget);
       expect(find.text('Belum ada batch'), findsOneWidget);
       expect(find.text('BATCH-UJI-1'), findsNothing);
       expect(opened.toSet(), {'$root/lots/first', '$root/lots/second'});

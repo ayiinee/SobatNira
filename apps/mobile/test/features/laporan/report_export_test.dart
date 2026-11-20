@@ -37,21 +37,6 @@ class _TestPrinting extends MethodChannelPrinting {
     if (fail) throw StateError('Printer unavailable');
     return true;
   }
-
-  @override
-  Future<bool> sharePdf(
-    Uint8List bytes,
-    String filename,
-    Rect bounds,
-    String? subject,
-    String? body,
-    List<String>? emails,
-  ) async {
-    this.bytes = bytes;
-    this.filename = filename;
-    completed.complete();
-    return true;
-  }
 }
 
 void main() {
@@ -163,16 +148,17 @@ void main() {
           greaterThan(tester.getCenter(find.text(labels[i - 1])).dx),
         );
       }
-      for (final (label, title, file, save) in [
-        ('Laba', 'Laporan laba', 'sobatnira-laba.pdf', false),
-        ('Rekap', 'Rekap produksi', 'sobatnira-rekap.pdf', true),
+      for (final (label, title, file, row) in [
+        ('Laba', 'Laporan laba', 'sobatnira-laba.pdf', 'Sugeng'),
+        ('Rekap', 'Rekap produksi', 'sobatnira-rekap.pdf', 'MJT-260926-1A'),
       ]) {
         await tester.tap(find.text(label));
         await tester.pumpAndSettle();
         expect(find.text(title), findsOneWidget);
-        expect(find.text(save ? 'MJT-260926-1A' : 'Sugeng'), findsOneWidget);
+        expect(find.text(row), findsOneWidget);
+        expect(find.text('Simpan PDF'), findsNothing);
         printing.completed = Completer<void>();
-        await tester.tap(find.text(save ? 'Simpan PDF' : 'Cetak laporan'));
+        await tester.tap(find.text('Cetak laporan'));
         await tester.runAsync(
           () => printing.completed.future.timeout(const Duration(seconds: 20)),
         );
@@ -208,7 +194,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(
-      find.text('Laporan belum berhasil dibuka. Coba lagi atau simpan PDF.'),
+      find.text('Laporan belum berhasil dibuka. Coba lagi.'),
       findsOneWidget,
     );
     expect(
@@ -232,12 +218,7 @@ void main() {
           .onPressed,
       isNull,
     );
-    expect(
-      tester
-          .widget<TextButton>(find.widgetWithText(TextButton, 'Simpan PDF'))
-          .onPressed,
-      isNull,
-    );
+    expect(find.text('Simpan PDF'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

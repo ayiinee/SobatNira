@@ -28,7 +28,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Layanan masuk belum dikonfigurasi.'), findsOneWidget);
-    expect(find.text('Tebu diterima'), findsNothing);
+    expect(find.text('Tebu diterima (kg)'), findsNothing);
   });
 
   testWidgets('demo offline langsung membuka Beranda', (tester) async {
@@ -36,11 +36,11 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(const SobatNiraApp(connected: false));
     await tester.pumpAndSettle();
-    final caneSummary = find.text('Tebu diterima');
+    final caneSummary = find.text('Tebu diterima (kg)');
     expect(caneSummary, findsOneWidget);
     expect(
       find.byWidgetPredicate(
-        (widget) => widget is NiraValue && widget.value == '17.990 kg',
+        (widget) => widget is NiraValue && widget.value == '17.990',
       ),
       findsOneWidget,
     );

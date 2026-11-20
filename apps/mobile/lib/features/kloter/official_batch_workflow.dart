@@ -279,21 +279,12 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
   }
 
   Future<void> _costs() async {
-    final result = await _form(
+    final result = await showLotCostsForm(
       context,
-      'Biaya kloter',
-      const [
-        _Field('Biaya tebu (Rp)', kind: _Input.money),
-        _Field('Biaya operasional (Rp)', kind: _Input.money),
-        _Field('Biaya bahan (Rp)', kind: _Input.money),
-        _Field('Biaya lain (Rp)', kind: _Input.money),
-      ],
-      (values) => widget.api.saveLotCosts(widget.scope, _lot, {
-        'caneCostRupiah': values[0],
-        'operationalCostRupiah': values[1],
-        'ingredientCostRupiah': values[2],
-        'otherCostRupiah': values[3],
-      }),
+      widget.api,
+      widget.scope,
+      _lot,
+      widget.kloterCode,
     );
     if (mounted && result != null) _reload();
   }
@@ -469,8 +460,6 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
       return FutureBuilder<Json?>(
         future: _reportLot,
         builder: (_, report) {
-          final calculation = report.data?['calculation'] as Json?;
-          final margin = calculation?['productionMarginRupiah'];
           final reportedBatch = legacy && approved
               ? (report.data?['batches'] as List? ?? const [])
                     .cast<Json>()
@@ -486,8 +475,6 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
             officialReviewed: approved,
             officialCancelled: status == 'cancelled',
             officialData: batch == null ? null : _data(batch),
-            officialMargin: margin == null ? null : reportMoney(margin),
-            officialNumber: widget.initial['wok_number'] as int,
             officialDocument: widget.onOpenPekerjaan,
             officialPreview: ApprovedDocumentPreview(
               batch: true,
@@ -521,13 +508,16 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
                     ],
                   )
                 : const LinearProgressIndicator(),
-            officialAction: current != null && status != 'cancelled'
+            officialAction: approved || (current != null && status == 'draft')
                 ? BatchReviewActions(
-                    batchNumber: current['wok_number'] as int,
+                    batchNumber: widget.initial['wok_number'] as int,
                     batchCode: widget.initial['code'] as String,
                     label: approved ? 'Batch tervalidasi' : 'Validasi',
                     verified: approved,
                     enabled: canApprove,
+                    reopenUnavailableReason: approved
+                        ? 'API produksi belum mendukung pembatalan validasi batch resmi.'
+                        : null,
                     onVerify: () =>
                         _run(() => widget.api.finishBatch(widget.scope, _id)),
                   )
@@ -539,6 +529,29 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
     },
   );
 }
+
+Future<Json?> showLotCostsForm(
+  BuildContext context,
+  ReviewApi api,
+  FactoryScope scope,
+  String lotId,
+  String kloterCode,
+) => _form(
+  context,
+  'Biaya kloter $kloterCode',
+  const [
+    _Field('Biaya tebu (Rp)', kind: _Input.money),
+    _Field('Biaya operasional (Rp)', kind: _Input.money),
+    _Field('Biaya bahan (Rp)', kind: _Input.money),
+    _Field('Biaya lain (Rp)', kind: _Input.money),
+  ],
+  (values) => api.saveLotCosts(scope, lotId, {
+    'caneCostRupiah': values[0],
+    'operationalCostRupiah': values[1],
+    'ingredientCostRupiah': values[2],
+    'otherCostRupiah': values[3],
+  }),
+);
 
 enum _Input { text, integer, date, quantity, money }
 
@@ -658,6 +671,13 @@ class _ProductionFormState extends State<_ProductionForm> {
                   TextFormField(
                     controller: _inputs[i],
                     enabled: _pending == null,
+                    keyboardType: switch (field.kind) {
+                      _Input.integer || _Input.money => TextInputType.number,
+                      _Input.quantity => const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      _ => null,
+                    },
                     decoration: InputDecoration(
                       labelText: field.label,
                       hintText: field.kind == _Input.date

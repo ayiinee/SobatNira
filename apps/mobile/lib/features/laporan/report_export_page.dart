@@ -67,28 +67,22 @@ class _ReportExportPageState extends State<ReportExportPage> {
     }
   }
 
-  Future<void> _export(PrintableReport report, {bool save = false}) async {
+  Future<void> _print(PrintableReport report) async {
     if (_busy) return;
     setState(() => _busy = true);
     try {
       final bytes = await buildReportPdf(report);
       if (!mounted) return;
-      if (save) {
-        await Printing.sharePdf(bytes: bytes, filename: report.filename);
-      } else {
-        await Printing.layoutPdf(
-          onLayout: (_) async => bytes,
-          name: report.filename,
-          dynamicLayout: false,
-        );
-      }
+      await Printing.layoutPdf(
+        onLayout: (_) async => bytes,
+        name: report.filename,
+        dynamicLayout: false,
+      );
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'Laporan belum berhasil dibuka. Coba lagi atau simpan PDF.',
-            ),
+            content: Text('Laporan belum berhasil dibuka. Coba lagi.'),
           ),
         );
       }
@@ -129,21 +123,9 @@ class _ReportExportPageState extends State<ReportExportPage> {
       return NiraScaffold(
         tab: NiraTab.beranda,
         onNavigate: widget.onNavigate,
-        bottomAction: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            NiraButton(
-              _busy ? 'Menyiapkan laporan…' : 'Cetak laporan',
-              enabled ? () => _export(report) : null,
-            ),
-            const SizedBox(height: NiraSpace.xs),
-            TextButton.icon(
-              onPressed: enabled ? () => _export(report, save: true) : null,
-              icon: const Icon(Icons.file_download_outlined, size: 20),
-              label: const Text('Simpan PDF'),
-            ),
-          ],
+        bottomAction: NiraButton(
+          _busy ? 'Menyiapkan laporan…' : 'Cetak laporan',
+          enabled ? () => _print(report) : null,
         ),
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -81,7 +81,7 @@ void main() {
     await openDemo(tester);
     await tap(tester, find.bySemanticsLabel('Laporan'));
     expect(find.text('Gula final'), findsWidgets);
-    expect(find.text('Tebu diterima'), findsOneWidget);
+    expect(find.text('Tebu diterima (kg)'), findsOneWidget);
     expect(find.text('Rendemen'), findsWidgets);
     expect(find.byType(TextField), findsNothing);
     expect(

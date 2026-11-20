@@ -87,9 +87,9 @@ class _LaporanPageState extends State<LaporanPage> {
               '${demoNumber(widget.analytics.sugarTotal)}Kg',
         ),
         second: NiraSummaryCard(
-          'Tebu diterima',
-          _reports?.amount('caneNetKg', unit: ' kg') ??
-              '${demoNumber(widget.analytics.caneTotal)}Kg',
+          'Tebu diterima (kg)',
+          _reports?.amount('caneNetKg') ??
+              demoNumber(widget.analytics.caneTotal),
           boxes: true,
         ),
       ),

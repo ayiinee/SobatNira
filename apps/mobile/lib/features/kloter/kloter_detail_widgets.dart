@@ -118,9 +118,15 @@ class KloterHeading extends StatelessWidget {
 }
 
 class DetailMetrics extends StatelessWidget {
-  const DetailMetrics(this.metrics, {this.separate = false, super.key});
+  const DetailMetrics(
+    this.metrics, {
+    this.separate = false,
+    this.centerAll = false,
+    super.key,
+  });
   final List<(String, String)> metrics;
   final bool separate;
+  final bool centerAll;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -169,7 +175,7 @@ class DetailMetrics extends StatelessWidget {
               SizedBox(
                 width: width,
                 child: NiraOutline(
-                  _metric(metric, height, labelHeight, center: false),
+                  _metric(metric, height, labelHeight, center: centerAll),
                 ),
               ),
           ],
@@ -198,7 +204,12 @@ class DetailMetrics extends StatelessWidget {
                   ? NiraOutline(
                       _metric(metrics[i], height, labelHeight, center: true),
                     )
-                  : _metric(metrics[i], height, labelHeight, center: i > 0),
+                  : _metric(
+                      metrics[i],
+                      height,
+                      labelHeight,
+                      center: centerAll || i > 0,
+                    ),
             ),
           ],
         ],
@@ -504,6 +515,7 @@ class BatchReviewActions extends StatelessWidget {
     required this.onVerify,
     this.enabled = true,
     this.onReopen,
+    this.reopenUnavailableReason,
     super.key,
   });
   final int batchNumber;
@@ -513,6 +525,7 @@ class BatchReviewActions extends StatelessWidget {
   final VoidCallback onVerify;
   final bool enabled;
   final VoidCallback? onReopen;
+  final String? reopenUnavailableReason;
 
   Future<void> _confirm(BuildContext context) async {
     final colors = Theme.of(context).colorScheme;
@@ -533,30 +546,33 @@ class BatchReviewActions extends StatelessWidget {
         ),
         content: Text(
           verified
-              ? 'Batch kembali ke status Perlu ditinjau dan datanya bisa diedit lagi.'
+              ? reopenUnavailableReason ??
+                    'Batch kembali ke status Perlu ditinjau dan datanya bisa diedit lagi.'
               : 'Pastikan data batch sudah benar. Data akan terkunci setelah divalidasi.',
           textAlign: TextAlign.center,
         ),
         actions: [
           Row(
             children: [
-              Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: cancelColor,
-                    side: BorderSide(color: cancelColor),
-                    minimumSize: const Size(0, 48),
-                    padding: buttonPadding,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(niraRadius),
+              if (!verified || reopenUnavailableReason == null)
+                Expanded(
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: cancelColor,
+                      side: BorderSide(color: cancelColor),
+                      minimumSize: const Size(0, 48),
+                      padding: buttonPadding,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(niraRadius),
+                      ),
                     ),
+                    onPressed: () => Navigator.pop(dialogContext, false),
+                    child: const Text('Batal', textAlign: TextAlign.center),
                   ),
-                  onPressed: () => Navigator.pop(dialogContext, false),
-                  child: const Text('Batal', textAlign: TextAlign.center),
                 ),
-              ),
-              const SizedBox(width: NiraSpace.sm),
+              if (!verified || reopenUnavailableReason == null)
+                const SizedBox(width: NiraSpace.sm),
               Expanded(
                 child: FilledButton(
                   style: FilledButton.styleFrom(
@@ -564,8 +580,14 @@ class BatchReviewActions extends StatelessWidget {
                     foregroundColor: verified ? Colors.white : null,
                     padding: buttonPadding,
                   ),
-                  onPressed: () => Navigator.pop(dialogContext, true),
-                  child: const Text('Konfirmasi', textAlign: TextAlign.center),
+                  onPressed: () => Navigator.pop(
+                    dialogContext,
+                    reopenUnavailableReason == null,
+                  ),
+                  child: Text(
+                    reopenUnavailableReason == null ? 'Konfirmasi' : 'Tutup',
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               ),
             ],
@@ -595,7 +617,8 @@ class BatchReviewActions extends StatelessWidget {
           minimumHeight: verified ? reviewedActionHeight : reviewActionHeight,
         ),
       ),
-      if (verified && onReopen != null) ...[
+      if (verified &&
+          (onReopen != null || reopenUnavailableReason != null)) ...[
         const SizedBox(width: NiraSpace.sm),
         IconButton.filled(
           tooltip: 'Batalkan validasi batch',
@@ -604,6 +627,7 @@ class BatchReviewActions extends StatelessWidget {
             backgroundColor: Theme.of(context).colorScheme.error,
             foregroundColor: Colors.white,
             minimumSize: const Size.square(reviewedActionHeight),
+            visualDensity: VisualDensity.standard,
             iconSize: 20,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(niraRadius),
@@ -617,10 +641,16 @@ class BatchReviewActions extends StatelessWidget {
 }
 
 class EditableFields extends StatelessWidget {
-  const EditableFields({required this.fields, required this.onEdit, super.key});
+  const EditableFields({
+    required this.fields,
+    required this.onEdit,
+    this.showEquals = false,
+    super.key,
+  });
 
   final List<DemoField> fields;
   final ValueChanged<DemoField>? onEdit;
+  final bool showEquals;
 
   @override
   Widget build(BuildContext context) => NiraOutline(
@@ -670,6 +700,10 @@ class EditableFields extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: NiraSpace.sm),
+              if (showEquals) ...[
+                Text('=', style: niraText(NiraType.body, color: niraMuted)),
+                const SizedBox(width: NiraSpace.sm),
+              ],
               Expanded(
                 flex: 10,
                 child: isDisplayNumber(field.display)

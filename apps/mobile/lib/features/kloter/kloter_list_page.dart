@@ -32,6 +32,8 @@ class _KloterListPageState extends State<KloterListPage> {
   KloterDateFilter? _dateFilter;
   int _activeTab = 0;
   int _page = 0;
+  bool _suggestIds = false;
+  String? _selectedId;
 
   static const _statuses = [null, KloterStatus.review, KloterStatus.done];
   static const _datesPerPage = 10;
@@ -53,6 +55,58 @@ class _KloterListPageState extends State<KloterListPage> {
     setState(() => _page = page);
   }
 
+  String _normalizeId(String value) =>
+      value.toLowerCase().replaceAll(RegExp(r'[\s-]+'), '');
+
+  String _keyFor(DemoKloter item) => item.id ?? item.code;
+
+  int _idRank(DemoKloter item, String term) {
+    final code = _normalizeId(item.code);
+    final id = _normalizeId(_keyFor(item));
+    if (code == term || id == term) return 0;
+    if (code.startsWith(term) || id.startsWith(term)) return 1;
+    if (code.contains(term) || id.contains(term)) return 2;
+    return 3;
+  }
+
+  List<DemoKloter> _matchingIds() {
+    final term = _normalizeId(_search.text);
+    if (term.isEmpty) return [];
+    final status = _statuses[_activeTab];
+    return widget.kloter.where((item) {
+      return (status == null || item.status == status) &&
+          (_dateFilter?.contains(item.date) ?? true) &&
+          _idRank(item, term) < 3;
+    }).toList()..sort((a, b) {
+      final rank = _idRank(a, term).compareTo(_idRank(b, term));
+      return rank == 0 ? a.code.compareTo(b.code) : rank;
+    });
+  }
+
+  void _selectId(DemoKloter item) {
+    _search.text = item.code;
+    FocusScope.of(context).unfocus();
+    _scrollToTop();
+    setState(() {
+      _suggestIds = false;
+      _selectedId = _keyFor(item);
+      _expandedDates[DateUtils.dateOnly(item.date)] = true;
+      _page = 0;
+    });
+  }
+
+  void _submitSearch(String value) {
+    final matches = _matchingIds();
+    final exact = matches.where(
+      (item) => _idRank(item, _normalizeId(value)) == 0,
+    );
+    if (exact.length == 1) {
+      _selectId(exact.single);
+    } else if (matches.length == 1) {
+      _selectId(matches.single);
+    }
+  }
+
   Future<void> _selectDate() async {
     FocusScope.of(context).unfocus();
     final result = await showKloterDateFilter(
@@ -67,19 +121,26 @@ class _KloterListPageState extends State<KloterListPage> {
     setState(() {
       _dateFilter = result.selection;
       _page = 0;
+      _suggestIds = false;
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final term = _search.text.trim().toLowerCase();
+    final idTerm = _normalizeId(term);
+    final suggestions = _suggestIds
+        ? _matchingIds().take(5).toList()
+        : <DemoKloter>[];
     final status = _statuses[_activeTab];
     final groups = <DateTime, List<DemoKloter>>{};
     var pending = 0;
     for (final item in widget.kloter) {
-      final matchesSearch =
-          item.code.toLowerCase().contains(term) ||
-          (item.id != null && item.supplier.toLowerCase().contains(term));
+      final matchesSearch = _selectedId != null
+          ? _keyFor(item) == _selectedId
+          : term.isEmpty ||
+                (idTerm.isNotEmpty && _idRank(item, idTerm) < 3) ||
+                (item.id != null && item.supplier.toLowerCase().contains(term));
       if (!matchesSearch || !(_dateFilter?.contains(item.date) ?? true)) {
         continue;
       }
@@ -109,6 +170,7 @@ class _KloterListPageState extends State<KloterListPage> {
         setState(() {
           _activeTab = index;
           _page = 0;
+          _suggestIds = false;
         });
       },
     );
@@ -162,6 +224,31 @@ class _KloterListPageState extends State<KloterListPage> {
                         else if (pageDates.isEmpty)
                           _empty()
                         else ...[
+                          if (suggestions.isNotEmpty &&
+                              !(suggestions.length == 1 &&
+                                  _idRank(suggestions.single, idTerm) == 0))
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                bottom: NiraSpace.md,
+                              ),
+                              child: NiraOutline(
+                                Column(
+                                  children: [
+                                    for (final item in suggestions)
+                                      ListTile(
+                                        dense: true,
+                                        leading: const Icon(
+                                          Icons.search,
+                                          size: 20,
+                                        ),
+                                        title: Text(item.code),
+                                        subtitle: Text(formatDate(item.date)),
+                                        onTap: () => _selectId(item),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           for (final date in pageDates)
                             _dateAccordion(
                               date,
@@ -315,7 +402,12 @@ class _KloterListPageState extends State<KloterListPage> {
       textAlignVertical: TextAlignVertical.center,
       style: niraText(NiraType.body),
       cursorColor: niraGreen,
-      onChanged: (_) => _showPage(0),
+      onChanged: (_) {
+        _selectedId = null;
+        _suggestIds = true;
+        _showPage(0);
+      },
+      onSubmitted: _submitSearch,
       decoration: InputDecoration(
         hintText: 'Cari ID kloter',
         hintStyle: niraText(NiraType.body, color: niraLeaf),
@@ -344,6 +436,8 @@ class _KloterListPageState extends State<KloterListPage> {
             : IconButton(
                 onPressed: () {
                   _search.clear();
+                  _selectedId = null;
+                  _suggestIds = false;
                   _showPage(0);
                 },
                 tooltip: 'Hapus pencarian',
@@ -355,12 +449,25 @@ class _KloterListPageState extends State<KloterListPage> {
 
   Widget _card(DemoKloter item) => Padding(
     padding: const EdgeInsets.only(bottom: NiraSpace.sm),
-    child: KloterCard(
-      kloter: item,
-      onTap: () {
-        FocusScope.of(context).unfocus();
-        widget.onOpenKloter(item);
-      },
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_selectedId == _keyFor(item))
+          Padding(
+            padding: const EdgeInsets.only(bottom: NiraSpace.xs),
+            child: Text(
+              'ID cocok · Ketuk kartu untuk membuka',
+              style: niraText(NiraType.caption, color: niraGreen),
+            ),
+          ),
+        KloterCard(
+          kloter: item,
+          onTap: () {
+            FocusScope.of(context).unfocus();
+            widget.onOpenKloter(item);
+          },
+        ),
+      ],
     ),
   );
 

@@ -92,6 +92,46 @@ void main() {
     },
   );
 
+  testWidgets('saran ID dan Enter membuka tanggal kloter yang dipilih', (
+    tester,
+  ) async {
+    final older = DemoKloter('MJT-01', 18, KloterStatus.review, 'Pemasok A');
+    final newest = DemoKloter('MJT-02', 20, KloterStatus.review, 'Pemasok B');
+    DemoKloter? opened;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: KloterListPage(
+            kloter: [newest, older],
+            onOpenKloter: (lot) => opened = lot,
+          ),
+        ),
+      ),
+    );
+    await tester.enterText(find.byType(TextField), 'mjt');
+    await tester.pumpAndSettle();
+    final suggestions = find.byType(ListTile);
+    expect(suggestions, findsNWidgets(2));
+    expect(
+      find.descendant(of: suggestions.first, matching: find.text('MJT-01')),
+      findsOneWidget,
+    );
+    await tester.enterText(find.byType(TextField), 'mjt01');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+    expect(find.text('ID cocok · Ketuk kartu untuk membuka'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is Semantics && widget.properties.expanded == true,
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(KloterCard), findsOneWidget);
+    expect(opened, isNull);
+    await tap(tester, find.byType(KloterCard));
+    expect(opened, same(older));
+  });
+
   testWidgets('pagination menampilkan maksimal 10 tanggal per halaman', (
     tester,
   ) async {
@@ -156,7 +196,7 @@ void main() {
     tester,
   ) async {
     await openDemo(tester);
-    expect(find.text('Tebu diterima'), findsOneWidget);
+    expect(find.text('Tebu diterima (kg)'), findsOneWidget);
     // Status labels change how many cards fit in the initial viewport.
     expect(find.byType(KloterCard).evaluate().length, greaterThanOrEqualTo(1));
 
@@ -237,8 +277,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('1.435Kg'), findsOneWidget);
-    await tap(tester, find.text('MJT-220926-1A'));
-    expect(find.text('1.435Kg'), findsOneWidget);
+    await tap(
+      tester,
+      find.descendant(
+        of: find.byType(KloterCard),
+        matching: find.text('MJT-220926-1A'),
+      ),
+    );
+    expect(find.text('Tebu bersih (kg)'), findsOneWidget);
+    expect(find.text('1.435'), findsOneWidget);
     expect(find.text('19,4 °Bx'), findsOneWidget);
     expect(find.text('267 L'), findsOneWidget);
     expect(find.text('82L'), findsOneWidget);
@@ -264,8 +311,14 @@ void main() {
     expect(find.text('272,5 L'), findsOneWidget);
 
     await tap(tester, find.byTooltip('Kembali'));
-    await tap(tester, find.text('MJT-220926-2A'));
-    expect(find.text('1.580Kg'), findsOneWidget);
+    await tap(
+      tester,
+      find.descendant(
+        of: find.byType(KloterCard),
+        matching: find.text('MJT-220926-2A'),
+      ),
+    );
+    expect(find.text('1.580'), findsOneWidget);
     expect(find.text('567 L'), findsOneWidget);
     expect(find.text('83L'), findsOneWidget);
     expect(find.text('101,5L'), findsNothing);

@@ -34,7 +34,7 @@ void main() {
         );
         if (status == KloterStatus.review) {
           await tester.scrollUntilVisible(
-            find.text('Tuntas'),
+            find.text('Tuntas').hitTestable(),
             100,
             scrollable:
                 (normalScroll.evaluate().isEmpty ? compactScroll : normalScroll)

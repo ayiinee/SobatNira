@@ -36,22 +36,18 @@ class BatchDetailPage extends StatefulWidget {
        officialStatus = null,
        officialDocument = null,
        officialPreview = null,
-       officialActions = const [],
-       officialNumber = null,
-       officialMargin = null;
+       officialActions = const [];
 
   const BatchDetailPage.official({
     required this.officialTitle,
     required this.officialReviewed,
     required this.officialCancelled,
     required this.officialData,
-    required this.officialNumber,
     this.officialStatus,
     this.officialDocument,
     this.officialPreview,
     this.officialActions = const [],
     this.officialAction,
-    this.officialMargin,
     required this.kloterCode,
     required this.onNavigate,
     super.key,
@@ -70,9 +66,7 @@ class BatchDetailPage extends StatefulWidget {
   final VoidCallback? officialDocument;
   final Widget? officialPreview;
   final List<Widget> officialActions;
-  final int? officialNumber;
   final Widget? officialAction;
-  final String? officialMargin;
 
   @override
   State<BatchDetailPage> createState() => _BatchDetailPageState();
@@ -193,7 +187,8 @@ class _BatchDetailPageState extends State<BatchDetailPage>
                   child: SlideTransition(
                     position: _noticeSlide,
                     child: _BatchValidationNotice(
-                      batchNumber: widget.officialNumber ?? _batch.number,
+                      batchTitle:
+                          widget.officialTitle ?? 'Batch ${_batch.number}',
                       kloterCode: widget.kloterCode,
                       validated: validated,
                     ),
@@ -264,8 +259,10 @@ class _BatchDetailPageState extends State<BatchDetailPage>
           child: Row(
             children: [
               Expanded(
-                child: Text(
+                child: NiraValue(
                   title,
+                  label: 'ID batch',
+                  abbreviate: false,
                   style: niraText(NiraType.title, weight: FontWeight.w700),
                 ),
               ),
@@ -319,6 +316,7 @@ class _BatchDetailPageState extends State<BatchDetailPage>
     const DetailSectionTitle('Ringkasan proses'),
     const SizedBox(height: NiraSpace.sm),
     EditableFields(
+      showEquals: true,
       fields: detailFields(
         batchSummaryLabels,
         _data?.summary ?? _batch.review.fields,
@@ -364,17 +362,6 @@ class _BatchDetailPageState extends State<BatchDetailPage>
       height: 32,
       line: niraGold,
     ),
-    if (_official || _batch.lot != null)
-      DetailMetrics([
-        (
-          _official
-              ? 'Margin kumulatif kloter'
-              : 'Margin kumulatif kloter (demo)',
-          _official
-              ? widget.officialMargin ?? '—'
-              : demoMoney(_batch.lot!.marginRupiah),
-        ),
-      ]),
     ...widget.officialActions,
   ];
 
@@ -382,6 +369,7 @@ class _BatchDetailPageState extends State<BatchDetailPage>
     const DetailSectionTitle('Data pemasakan'),
     const SizedBox(height: NiraSpace.sm),
     EditableFields(
+      showEquals: true,
       fields: detailFields(
         batchCookingLabels,
         _data?.cooking ?? _batch.cooking,
@@ -503,20 +491,20 @@ class _PriceRow extends StatelessWidget {
 
 class _BatchValidationNotice extends StatelessWidget {
   const _BatchValidationNotice({
-    required this.batchNumber,
+    required this.batchTitle,
     required this.kloterCode,
     required this.validated,
   });
 
-  final int batchNumber;
+  final String batchTitle;
   final String kloterCode;
   final bool validated;
 
   @override
   Widget build(BuildContext context) {
     final title = validated
-        ? 'Batch $batchNumber berhasil divalidasi'
-        : 'Validasi Batch $batchNumber dibatalkan';
+        ? '$batchTitle berhasil divalidasi'
+        : 'Validasi $batchTitle dibatalkan';
     final detail = 'Kloter $kloterCode';
     final accent = validated ? niraGreen : niraOchre;
     return Semantics(

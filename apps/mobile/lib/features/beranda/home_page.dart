@@ -24,6 +24,7 @@ import '../pekerjaan/review_api.dart';
 import '../pengaturan/pengaturan_page.dart';
 import '../pengaturan/settings_demo.dart';
 import '../pengaturan/harga_biaya_page.dart';
+import '../pengaturan/connected_expenses_page.dart';
 import '../../sobatnira_ui.dart';
 
 import '../../widgets/page_frame.dart';
@@ -192,14 +193,14 @@ class _NiraHomeState extends State<NiraHome> {
     final live = _live;
     if (live != null) {
       return (
-        cane: live.reports.amount('caneNetKg', unit: ' kg'),
+        cane: live.reports.amount('caneNetKg'),
         lots: live.reports.data == null
             ? '—'
             : '${live.reports.totals['lotCount']}',
       );
     }
     return (
-      cane: '${demoNumber(_analytics.caneTotal)} kg',
+      cane: demoNumber(_analytics.caneTotal),
       lots: '${_analytics.visibleLots.length}',
     );
   }
@@ -303,14 +304,22 @@ class _NiraHomeState extends State<NiraHome> {
     if (kind == null) {
       _navigator.push(
         MaterialPageRoute<void>(
-          builder: (_) => action == QuickActionKind.expenses
-              ? HargaBiayaPage(
-                  settings: _settings,
-                  onNavigate: _navigate,
-                  operationalFirst: true,
-                  unavailable: !_allowSessionSettings,
-                )
-              : BantuanPage(onNavigate: _navigate),
+          builder: (_) {
+            if (action != QuickActionKind.expenses) {
+              return BantuanPage(onNavigate: _navigate);
+            }
+            if (_live case final live?) {
+              return ConnectedExpensesPage(
+                production: live,
+                onNavigate: _navigate,
+              );
+            }
+            return HargaBiayaPage(
+              settings: _settings,
+              onNavigate: _navigate,
+              operationalFirst: true,
+            );
+          },
         ),
       );
       return;

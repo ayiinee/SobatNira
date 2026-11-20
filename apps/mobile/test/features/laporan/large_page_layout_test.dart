@@ -229,10 +229,8 @@ void main() {
               officialTitle: 'BATCH-SINTETIS-PANJANG-001',
               officialReviewed: true,
               officialCancelled: false,
-              officialNumber: 1,
               kloterCode: lot.code,
               onNavigate: (_) {},
-              officialMargin: '-Rp1.234.567.890.123.456',
               officialData: (
                 summary: [
                   DemoField('Nira yang dimasak', '83.500,125123456789 L'),
