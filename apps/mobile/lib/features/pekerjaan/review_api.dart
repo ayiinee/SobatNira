@@ -321,15 +321,54 @@ class ReviewApi {
     String lotId, {
     int offset = 0,
     bool synthetic = false,
-  }) => _productionGet(
-    [...scope._base, 'production', 'batches'],
-    query: {
-      'lotId': lotId,
-      'synthetic': '$synthetic',
-      'limit': '20',
-      'offset': '$offset',
-    },
-  );
+  }) async {
+    const pageSize = 20;
+    final path = [...scope._base, 'production', 'batches'];
+    try {
+      return await _productionGet(
+        path,
+        query: {
+          'lotId': lotId,
+          'synthetic': '$synthetic',
+          'limit': '$pageSize',
+          'offset': '$offset',
+        },
+      );
+    } on ReviewApiError catch (error) {
+      if (error.status != 400 ||
+          error.detail != 'Terdapat field yang tidak didukung.') {
+        rethrow;
+      }
+    }
+
+    // Older deployments only accept pagination on the factory batch list.
+    const scanSize = 100;
+    final matches = <Json>[];
+    var skipped = 0;
+    for (
+      var scanOffset = 0;
+      matches.length < pageSize;
+      scanOffset += scanSize
+    ) {
+      final page = await _productionGet(
+        path,
+        query: {'limit': '$scanSize', 'offset': '$scanOffset'},
+      );
+      final rows = (page['items'] as List).cast<Json>();
+      for (final row in rows) {
+        if (row['lot_id'] != lotId || row['is_synthetic'] != synthetic)
+          continue;
+        if (skipped < offset) {
+          skipped++;
+          continue;
+        }
+        matches.add(row);
+        if (matches.length == pageSize) break;
+      }
+      if (rows.length < scanSize) break;
+    }
+    return {'items': matches, 'limit': pageSize, 'offset': offset};
+  }
 
   Future<Json> factoryBatch(FactoryScope scope, String batchId) =>
       _productionGet([...scope._base, 'production', 'batches', batchId]);

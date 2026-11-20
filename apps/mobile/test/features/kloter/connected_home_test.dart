@@ -47,6 +47,57 @@ http.Response _json(Object result) => http.Response(
 );
 
 void main() {
+  test('legacy API batch pages are filtered before lot pagination', () async {
+    final rows = [
+      for (var i = 0; i < 112; i++)
+        {
+          'id': i,
+          'lot_id': i.isEven ? 'selected' : 'other',
+          'is_synthetic': i % 4 == 0,
+        },
+    ];
+    final api = ReviewApi(
+      'fixture',
+      client: MockClient((request) async {
+        expect(
+          request.url.path,
+          '/tenants/tenant/factories/A/production/batches',
+        );
+        final query = request.url.queryParameters;
+        if (query.containsKey('lotId')) {
+          return http.Response(
+            jsonEncode({'message': 'Terdapat field yang tidak didukung.'}),
+            400,
+          );
+        }
+        expect(query.keys, unorderedEquals(['limit', 'offset']));
+        return _json({
+          'items': rows
+              .skip(int.parse(query['offset']!))
+              .take(int.parse(query['limit']!))
+              .toList(),
+        });
+      }),
+    );
+    addTearDown(api.close);
+    final result = await api.factoryBatches(
+      FactoryScope.fromJson(_factory('A')),
+      'selected',
+      offset: 20,
+      synthetic: true,
+    );
+    expect((result['items'] as List).map((row) => row['id']), [
+      80,
+      84,
+      88,
+      92,
+      96,
+      100,
+      104,
+      108,
+    ]);
+  });
+
   test(
     'changing report source keeps lots and batch requests in factory scope',
     () async {
@@ -252,7 +303,10 @@ void main() {
       await tester.tap(find.bySemanticsLabel('Beranda'));
       await tester.pumpAndSettle();
       final pekerjaan = find.text('Pekerjaan');
-      await tester.ensureVisible(pekerjaan);
+      expect(pekerjaan, findsNothing);
+      await tester.tap(find.bySemanticsLabel('Pengaturan'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(pekerjaan, 150);
       await tester.tap(pekerjaan);
       await tester.pumpAndSettle();
       expect(find.text('Sesi berakhir. Masuk kembali.'), findsOneWidget);

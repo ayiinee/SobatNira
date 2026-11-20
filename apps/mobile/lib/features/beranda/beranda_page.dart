@@ -12,7 +12,6 @@ class BerandaPage extends StatefulWidget {
     required this.kloter,
     required this.onOpenKloter,
     this.onQuickAction,
-    this.onOpenPekerjaan,
     this.factoryId,
     this.factories = const {},
     this.onFactoryChanged,
@@ -29,7 +28,6 @@ class BerandaPage extends StatefulWidget {
   final List<DemoKloter> kloter;
   final ValueChanged<DemoKloter> onOpenKloter;
   final ValueChanged<QuickActionKind>? onQuickAction;
-  final VoidCallback? onOpenPekerjaan;
   final String? factoryId;
   final Map<String, String> factories;
   final ValueChanged<String>? onFactoryChanged;
@@ -250,14 +248,6 @@ class _BerandaPageState extends State<BerandaPage> {
           if (widget.reportStatus != null) widget.reportStatus!,
           const SizedBox(height: NiraSpace.md),
           _QuickActions(onSelected: widget.onQuickAction),
-          if (widget.onOpenPekerjaan case final open?) ...[
-            const SizedBox(height: NiraSpace.md),
-            OutlinedButton.icon(
-              onPressed: open,
-              icon: const Icon(Icons.assignment_outlined),
-              label: const Text('Pekerjaan'),
-            ),
-          ],
         ],
       ),
     ),

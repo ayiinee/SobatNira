@@ -118,7 +118,6 @@ class _NiraHomeState extends State<NiraHome> {
           kloter: _lots,
           onOpenKloter: _openKloter,
           onQuickAction: _openQuickAction,
-          onOpenPekerjaan: _live == null ? null : _openPekerjaan,
           factoryId: widget.scope?.factoryId,
           factories: {
             for (final factory in widget.factories)
