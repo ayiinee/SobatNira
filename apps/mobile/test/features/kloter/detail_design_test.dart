@@ -100,7 +100,7 @@ void main() {
     }
     await inter.load();
   });
-  testWidgets('batch cards keep the reference horizontal arrangement', (
+  testWidgets('batch cards keep the repair status badge above the metrics', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(430, 950));
@@ -127,12 +127,11 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(
-      tester.getTopLeft(find.text('Batch 1')).dx,
-      lessThan(tester.getTopLeft(find.text('Nira batch')).dx),
+      tester.getRect(find.text('Batch 1')).bottom,
+      lessThanOrEqualTo(tester.getRect(find.text('Nira batch')).top),
     );
-    expect(tester.getSize(find.byType(KloterBatchTile)).height, 63);
-    expect(find.text('Tervalidasi'), findsNothing);
-    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+    expect(find.text('Tervalidasi'), findsOneWidget);
+    expect(find.byIcon(Icons.chevron_right), findsNothing);
   });
 
   testWidgets(
@@ -225,6 +224,71 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
+
+  for (final status in ['draft', 'approved']) {
+    testWidgets('legacy API opens $status batch detail without write actions', (
+      tester,
+    ) async {
+      final demo = DemoProduction.empty();
+      addTearDown(demo.dispose);
+      final batch = detailBatchRecord(status: status)
+        ..remove('grades')
+        ..remove('finalSugarKg')
+        ..remove('exactValueRupiah')
+        ..remove('costSaved')
+        ..remove('remainingMl');
+      final api = ReviewApi(
+        'fixture',
+        client: MockClient((request) async {
+          expect(request.method, 'GET');
+          if (request.url.path.endsWith('/batches')) {
+            return detailResponse({
+              'items': [batch],
+            });
+          }
+          if (request.url.path.endsWith('/production-report')) {
+            return detailResponse({
+              'items': [
+                {
+                  'lotId': 'lot',
+                  'batches': [
+                    {...detailBatchRecord(), 'id': 'other'},
+                    if (status == 'approved') detailBatchRecord(),
+                  ],
+                },
+              ],
+            });
+          }
+          expect(request.url.path, endsWith('/production/batches/batch'));
+          return http.Response(
+            jsonEncode({'message': 'Cannot GET ${request.url.path}'}),
+            404,
+          );
+        }),
+      );
+      addTearDown(api.close);
+      await tester.pumpWidget(
+        MaterialApp(theme: niraTheme(), home: detailLotPage(api, demo)),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('BATCH-UJI'));
+      await tester.pumpAndSettle();
+      expect(find.text('83,500125 L'), findsOneWidget);
+      expect(find.text('29,25 kg'), findsOneWidget);
+      expect(find.text('Muat ulang batch'), findsNothing);
+      expect(find.text('Validasi'), findsNothing);
+      expect(find.text('Isi biaya kloter'), findsNothing);
+      await tester.tap(find.text('Masak'));
+      await tester.pumpAndSettle();
+      expect(find.text('10 November 2026'), findsOneWidget);
+      await tester.tap(find.text('Grade'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Rp540.000'),
+        status == 'approved' ? findsOneWidget : findsNothing,
+      );
+    });
+  }
 
   testWidgets(
     'validation still uses the scoped backend after changing the design',
@@ -328,9 +392,9 @@ void main() {
       'fixture',
       client: MockClient((request) async {
         expect(request.method, 'GET');
-          if (request.url.path.endsWith('/production-report')) {
+        if (request.url.path.endsWith('/production-report')) {
           return detailResponse({'items': []});
-          }
+        }
         return detailResponse(
           request.url.path.endsWith('/batches')
               ? {

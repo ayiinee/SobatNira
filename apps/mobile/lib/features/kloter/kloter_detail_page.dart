@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
 import '../../widgets/kloter_cane_overlay.dart';
+import '../../widgets/review_status_label.dart';
 import 'batch_detail_page.dart';
 import 'demo_production.dart';
 import 'kloter_detail_widgets.dart';
@@ -75,12 +76,12 @@ class KloterDetailPage extends StatelessWidget {
                       ),
                       if (kloter.record == null)
                         (
-                          'Nira tercatat',
+                          'Nira batch',
                           formatQuantity(kloter.batchJuiceLiters, 'L'),
                         )
                       else
                         (
-                          'Nira tercatat',
+                          'Nira dihasilkan',
                           kloter.juiceLiters == null
                               ? '—'
                               : formatQuantity(kloter.juiceLiters, 'L'),
@@ -208,25 +209,6 @@ class KloterBatchTile extends StatelessWidget {
         : pending
         ? 'Perlu ditinjau'
         : 'Tervalidasi';
-    final heading = Text(
-      title,
-      style: niraText(
-        NiraType.section,
-        color: pending ? foreground : niraYellow,
-        weight: FontWeight.w700,
-      ),
-    );
-    final details = Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _info(context, 'Nira batch', juice, foreground),
-        const SizedBox(height: 2),
-        _info(context, 'Hasil fisik', physicalWeight, foreground),
-        if (cancelled)
-          Text(status, style: niraText(NiraType.caption, color: foreground)),
-      ],
-    );
     return Semantics(
       label: '$title, $status',
       button: true,
@@ -235,7 +217,7 @@ class KloterBatchTile extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(niraRadius),
-          side: BorderSide(color: pending ? niraOchre : niraGreen),
+          side: BorderSide(color: pending ? niraOchre : niraGreen, width: 1),
         ),
         child: InkWell(
           onTap: onTap,
@@ -250,47 +232,41 @@ class KloterBatchTile extends StatelessWidget {
                     horizontal: NiraSpace.md,
                     vertical: NiraSpace.sm,
                   ),
-                  child:
-                      MediaQuery.sizeOf(context).width < 390 ||
-                          MediaQuery.textScalerOf(context).scale(14) > 18
-                      ? Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(child: heading),
-                                const Icon(
-                                  Icons.chevron_right,
-                                  color: foreground,
-                                  size: 20,
-                                ),
-                              ],
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: NiraSpace.sm,
+                        runSpacing: NiraSpace.xs,
+                        children: [
+                          Text(
+                            title,
+                            style: niraText(
+                              NiraType.section,
+                              color: pending ? foreground : niraYellow,
+                              weight: FontWeight.w700,
                             ),
-                            const SizedBox(height: NiraSpace.xs),
-                            details,
-                          ],
-                        )
-                      : Row(
-                          children: [
-                            SizedBox(
-                              width: 90,
-                              child: Padding(
-                                padding: const EdgeInsets.only(
-                                  right: NiraSpace.sm,
-                                ),
-                                child: heading,
+                          ),
+                          if (cancelled)
+                            Text(
+                              'Dibatalkan',
+                              style: niraText(
+                                NiraType.caption,
+                                color: foreground,
                               ),
-                            ),
-                            Expanded(child: details),
-                            const SizedBox(width: NiraSpace.sm),
-                            const Icon(
-                              Icons.chevron_right,
-                              color: foreground,
-                              size: 20,
-                            ),
-                          ],
-                        ),
+                            )
+                          else
+                            ReviewStatusLabel(pending: pending),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      _info(context, 'Nira batch', juice, foreground),
+                      const SizedBox(height: 2),
+                      _info(context, 'Hasil fisik', physicalWeight, foreground),
+                    ],
+                  ),
                 ),
               ),
             ],

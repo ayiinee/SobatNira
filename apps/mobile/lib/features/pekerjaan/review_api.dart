@@ -252,7 +252,7 @@ class ReviewApi {
     if (status == expectedStatus) return;
     if (status == 401) onSessionExpired?.call();
     String? detail;
-    if (status == 400 || status == 409) {
+    if (status == 400 || status == 404 || status == 409) {
       try {
         final body = jsonDecode(response.body);
         final message = body is Json ? body['message'] : null;
@@ -356,8 +356,9 @@ class ReviewApi {
       );
       final rows = (page['items'] as List).cast<Json>();
       for (final row in rows) {
-        if (row['lot_id'] != lotId || row['is_synthetic'] != synthetic)
+        if (row['lot_id'] != lotId || row['is_synthetic'] != synthetic) {
           continue;
+        }
         if (skipped < offset) {
           skipped++;
           continue;

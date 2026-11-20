@@ -70,6 +70,7 @@ class _BerandaPageState extends State<BerandaPage> {
   Widget build(BuildContext context) {
     final status = _selected == 0 ? KloterStatus.review : KloterStatus.done;
     final items = widget.kloter.where((item) => item.status == status).toList();
+    final showEmpty = items.isEmpty && widget.statusMessage == null;
     return LayoutBuilder(
       builder: (context, constraints) {
         _measureHeader();
@@ -98,8 +99,9 @@ class _BerandaPageState extends State<BerandaPage> {
                   NiraSpace.lg,
                 ),
                 sliver: SliverList.builder(
-                  itemCount: items.length,
-                  itemBuilder: (context, index) => _card(items[index]),
+                  itemCount: showEmpty ? 1 : items.length,
+                  itemBuilder: (context, index) =>
+                      showEmpty ? _emptyList() : _card(items[index]),
                 ),
               ),
             ],
@@ -210,8 +212,9 @@ class _BerandaPageState extends State<BerandaPage> {
                           inset,
                           NiraSpace.lg,
                         ),
-                        itemCount: items.length,
-                        itemBuilder: (context, index) => _card(items[index]),
+                        itemCount: showEmpty ? 1 : items.length,
+                        itemBuilder: (context, index) =>
+                            showEmpty ? _emptyList() : _card(items[index]),
                       ),
                     ),
                   ],
@@ -267,6 +270,18 @@ class _BerandaPageState extends State<BerandaPage> {
   Widget _card(DemoKloter item) => Padding(
     padding: const EdgeInsets.only(bottom: NiraSpace.sm),
     child: KloterCard(kloter: item, onTap: () => widget.onOpenKloter(item)),
+  );
+  Widget _emptyList() => Padding(
+    padding: const EdgeInsets.symmetric(vertical: NiraSpace.lg),
+    child: Text(
+      widget.kloter.isEmpty
+          ? 'Belum ada kloter di pabrik ini.'
+          : _selected == 0
+          ? 'Tidak ada kloter yang perlu ditinjau.'
+          : 'Belum ada kloter tuntas.',
+      textAlign: TextAlign.center,
+      style: niraText(NiraType.body, color: niraLeaf),
+    ),
   );
 }
 

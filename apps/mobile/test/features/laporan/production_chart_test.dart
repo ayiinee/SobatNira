@@ -5,9 +5,111 @@ import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sobatnira/features/laporan/demo_analytics.dart';
 import 'package:sobatnira/features/laporan/production_chart.dart';
+import 'package:sobatnira/features/laporan/connected_reports.dart';
+import 'package:sobatnira/features/laporan/margin_chart.dart';
+import 'package:sobatnira/features/pekerjaan/review_api.dart';
 import 'package:sobatnira/sobatnira_ui.dart';
 
 void main() {
+  test('small nonzero margins remain visible on the thousand-rupiah scale', () {
+    expect(marginChartLabel(500 / 1000), '0,500');
+    expect(marginChartLabel(-500 / 1000), '-0,500');
+    expect(marginChartLabel(1 / 1000), '0,001');
+    expect(marginChartLabel(0), '0');
+    expect(marginChartLabel(475000 / 1000), '475');
+  });
+
+  testWidgets(
+    'all API grades reach the legend, painted bars and touch detail',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(430, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final analytics = DemoAnalytics()..setVariant(ProductionVariant.grade);
+      final api = ReviewApi('fixture');
+      final reports =
+          ConnectedReports(
+              api,
+              FactoryScope.fromJson({
+                'tenantId': 'tenant',
+                'tenantName': 'Audit',
+                'factoryId': 'factory',
+                'factoryName': 'Audit',
+              }),
+            )
+            ..loading = false
+            ..data = {
+              'items': [
+                {
+                  'lotId': 'lot',
+                  'receivedAt': '2026-10-20T00:00:00Z',
+                  'caneNetKg': '100',
+                  'calculation': {'finalSugarKg': '10'},
+                  'batches': [
+                    {
+                      'grades': [
+                        {'code': 'A', 'weightKg': '3'},
+                      ],
+                    },
+                    {
+                      'grades': [
+                        {'code': 'X', 'weightKg': '7'},
+                      ],
+                    },
+                  ],
+                },
+              ],
+              'grades': [],
+              'totals': {},
+            };
+      addTearDown(analytics.dispose);
+      addTearDown(reports.dispose);
+      addTearDown(api.close);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: niraTheme(),
+          home: Scaffold(
+            body: Padding(
+              padding: const EdgeInsets.all(30),
+              child: ProductionChart(
+                analytics: analytics,
+                reports: reports,
+                onFilter: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Grade A'), findsOneWidget);
+      expect(find.text('Grade X'), findsOneWidget);
+      expect(find.text('Grade B'), findsNothing);
+      final plot = find.byKey(const ValueKey('production-chart-plot'));
+      final painted = find
+          .descendant(of: plot, matching: find.byType(CustomPaint))
+          .first;
+      final recorder = _BarsCanvas();
+      tester
+          .widget<CustomPaint>(painted)
+          .painter!
+          .paint(recorder, tester.getSize(painted));
+      expect(recorder.bars, hasLength(2));
+      expect(recorder.bars.map((bar) => bar.color.toARGB32()), [
+        niraOchre.toARGB32(),
+        niraGreen.toARGB32(),
+      ]);
+      expect(
+        recorder.bars.first.rect.height / recorder.bars.last.rect.height,
+        closeTo(7 / 3, .00001),
+      );
+      final rect = tester.getRect(plot);
+      await tester.tapAt(rect.topLeft + Offset(rect.width / 2, 100));
+      await tester.pumpAndSettle();
+      expect(find.text('A: 3 · X: 7 kg'), findsOneWidget);
+      expect(find.text('Gula final: 10 kg'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets(
     'dropdown mengganti seri dan detail mendukung hover serta sentuhan',
     (tester) async {
@@ -84,4 +186,12 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+}
+
+class _BarsCanvas extends TestRecordingCanvas {
+  final bars = <({Rect rect, Color color})>[];
+
+  @override
+  void drawRect(Rect rect, Paint paint) =>
+      bars.add((rect: rect, color: paint.color));
 }

@@ -16,14 +16,19 @@ const _barColor = niraGreen;
 const _gradeB = Color(0xFFD3A734);
 const _gradeC = Color(0xFFDCE6DE);
 
+Color _gradeColor(String code, int index) => switch (code) {
+  'A' => niraGreen,
+  'B' => _gradeB,
+  'C' => _gradeC,
+  _ => index.isEven ? niraLeaf : niraOchre,
+};
+
 class _ChartDay {
-  const _ChartDay(this.date, this.kg, this.rendemen, this.a, this.b, this.c);
+  const _ChartDay(this.date, this.kg, this.rendemen, this.grades);
   final DateTime date;
   final double kg;
   final double rendemen;
-  final double a;
-  final double b;
-  final double c;
+  final Map<String, double> grades;
 }
 
 class ProductionChart extends StatefulWidget {
@@ -64,9 +69,9 @@ class _ProductionChartState extends State<ProductionChart> {
       date,
       sugar.toDouble(),
       cane == 0 ? 0 : sugar / cane * 100,
-      grade('A'),
-      grade('B'),
-      grade('C'),
+      {
+        for (final code in ['A', 'B', 'C']) code: grade(code),
+      },
     );
   }
 
@@ -102,14 +107,7 @@ class _ProductionChartState extends State<ProductionChart> {
         }
       }
     }
-    return _ChartDay(
-      date,
-      sugar,
-      cane == 0 ? 0 : sugar / cane * 100,
-      grades['A'] ?? 0,
-      grades['B'] ?? 0,
-      grades['C'] ?? 0,
-    );
+    return _ChartDay(date, sugar, cane == 0 ? 0 : sugar / cane * 100, grades);
   }
 
   @override
@@ -122,6 +120,7 @@ class _ProductionChartState extends State<ProductionChart> {
     final days = reports == null
         ? [for (final day in dates) _chartDay(DateTime(2026, 10, day))]
         : _officialDays(reports);
+    final codes = {for (final day in days) ...day.grades.keys}.toList()..sort();
     final selected = days.indexWhere((day) => day.date == _selectedDay);
     return NiraOutline(
       Padding(
@@ -277,9 +276,8 @@ class _ProductionChartState extends State<ProductionChart> {
               runSpacing: NiraSpace.sm,
               children: grade
                   ? [
-                      _legend('Grade A', niraGreen),
-                      _legend('Grade B', _gradeB),
-                      _legend('Grade C', _gradeC),
+                      for (final (index, code) in codes.indexed)
+                        _legend('Grade $code', _gradeColor(code, index)),
                     ]
                   : [_legend('Gula final (kg)', _barColor)],
             ),
@@ -317,7 +315,7 @@ class _ProductionChartState extends State<ProductionChart> {
 
                   return Semantics(
                     label: grade
-                        ? 'Grafik batang grade A, B, C dalam kilogram.'
+                        ? 'Grafik batang grade ${codes.join(', ')} dalam kilogram.'
                         : 'Grafik batang gula dalam kilogram. Ketuk untuk detail gula dan rendemen.',
                     child: MouseRegion(
                       cursor: SystemMouseCursors.precise,
@@ -343,6 +341,7 @@ class _ProductionChartState extends State<ProductionChart> {
                                   builder: (context, progress) => CustomPaint(
                                     painter: _ProductionPainter(
                                       days: days,
+                                      codes: codes,
                                       grade: grade,
                                       selected: selected,
                                       plot: plot,
@@ -406,7 +405,7 @@ class _ProductionChartState extends State<ProductionChart> {
     formatDate(day.date),
     'Gula final: ${demoNumber(day.kg, decimals: day.kg % 1 == 0 ? 0 : 3)} kg',
     grade
-        ? 'A: ${_chartAmount(day.a)} · B: ${_chartAmount(day.b)} · C: ${_chartAmount(day.c)} kg'
+        ? '${(day.grades.keys.toList()..sort()).map((code) => '$code: ${_chartAmount(day.grades[code]!)}').join(' · ')} kg'
         : 'Rendemen: ${day.rendemen.toStringAsFixed(1).replaceAll('.', ',')}%',
   ];
 
@@ -457,6 +456,7 @@ class _ProductionChartState extends State<ProductionChart> {
 class _ProductionPainter extends CustomPainter {
   const _ProductionPainter({
     required this.days,
+    required this.codes,
     required this.grade,
     required this.selected,
     required this.plot,
@@ -464,6 +464,7 @@ class _ProductionPainter extends CustomPainter {
     required this.progress,
   });
   final List<_ChartDay> days;
+  final List<String> codes;
   final bool grade;
   final int selected;
   final Rect plot;
@@ -514,11 +515,9 @@ class _ProductionPainter extends CustomPainter {
       final x = plot.left + slot * (i + .5);
       if (grade) {
         var bottom = plot.bottom;
-        for (final (value, color) in [
-          (day.c, _gradeC),
-          (day.b, _gradeB),
-          (day.a, niraGreen),
-        ]) {
+        for (final (index, code) in codes.indexed.toList().reversed) {
+          final value = day.grades[code] ?? 0;
+          final color = _gradeColor(code, index);
           final h = value / maximum * plot.height * progress;
           canvas.drawRect(
             Rect.fromLTWH(x - barWidth / 2, bottom - h, barWidth, h),
@@ -555,5 +554,6 @@ class _ProductionPainter extends CustomPainter {
       old.grade != grade ||
       old.selected != selected ||
       old.plot != plot ||
+      !listEquals(old.codes, codes) ||
       !listEquals(old.days, days);
 }
