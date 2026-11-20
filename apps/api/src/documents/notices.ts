@@ -12,6 +12,26 @@ export async function enqueueNotice(db: PoolClient, revisionId: string, kind: 'O
 export class Notices {
   constructor(private readonly db: Database) {}
 
+  async retry(phone: string, chat: string, document: string, revision: string, question: string | null) {
+    const result = await this.db.query(`WITH retryable AS (
+      SELECT n.id FROM whatsapp_notices n JOIN document_revisions r ON r.id=n.revision_id
+      JOIN source_documents d ON d.id=r.document_id AND d.current_revision_id=r.id
+      JOIN document_submissions s ON s.id=r.submission_id JOIN whatsapp_inbound_messages m ON m.id=s.inbound_message_id
+      JOIN operator_contacts o ON o.id=m.operator_id AND o.factory_id=d.factory_id
+      WHERE d.id=$1 AND r.id=$2 AND o.phone_e164=$3 AND o.active AND m.event->>'chat_id'=$4
+        AND (n.status='FAILED' OR (n.status='SENT' AND n.question_id IS DISTINCT FROM $5::uuid
+          AND EXISTS(SELECT 1 FROM clarification_requests q WHERE q.id=$5 AND q.revision_id=r.id AND q.status='OPEN')
+          AND NOT EXISTS(SELECT 1 FROM whatsapp_notices sent WHERE sent.revision_id=r.id
+            AND sent.status='SENT' AND sent.question_id=$5)))
+        AND (n.kind='ADMIN_RETURNED' OR r.operator_status<>'CONFIRMED')
+        AND NOT EXISTS (SELECT 1 FROM admin_review_tasks t WHERE t.revision_id=r.id
+          AND t.status IN ('VALIDATED','PENDING_VALIDATION'))
+      ORDER BY (n.kind='ADMIN_RETURNED') DESC,n.id LIMIT 1 FOR UPDATE OF n
+    ) UPDATE whatsapp_notices n SET status='QUEUED',attempts=0,available_at=now(),claim_token=NULL,lease_until=NULL
+      FROM retryable WHERE n.id=retryable.id`, [document, revision, phone, chat, question]);
+    return { queued: result.rowCount === 1 };
+  }
+
   async claim() {
     return this.db.transaction(async (db) => {
       await db.query(`UPDATE whatsapp_notices n SET status='FAILED',claim_token=NULL,lease_until=NULL
@@ -38,14 +58,19 @@ export class Notices {
     const claim = requireUuid(body?.claim_token);
     const outcome = body?.outcome;
     const receipt = body?.provider_message_id;
+    const question = outcome === 'SENT' && body?.question_id != null ? requireUuid(body.question_id) : null;
     if (typeof outcome !== 'string' || !['SENT','RETRY','CANCELLED'].includes(outcome) ||
       (outcome === 'SENT' && (typeof receipt !== 'string' || !receipt || receipt.length > 255))) {
       throw new BadRequestException('Status pengiriman tidak valid');
     }
     const { rowCount } = await this.db.query(`UPDATE whatsapp_notices SET
       status=CASE WHEN $3='RETRY' THEN CASE WHEN attempts>=5 THEN 'FAILED' ELSE 'QUEUED' END ELSE $3 END,
-      available_at=now()+power(2,attempts)*interval '1 second',claim_token=NULL,lease_until=NULL,provider_message_id=$4
-      WHERE id=$1 AND claim_token=$2 AND status='SENDING'`, [id, claim, outcome, outcome === 'SENT' ? receipt : null]);
+      available_at=now()+power(2,attempts)*interval '1 second',claim_token=NULL,lease_until=NULL,
+      provider_message_id=$4,question_id=$5
+      WHERE id=$1 AND claim_token=$2 AND status='SENDING'
+        AND ($5::uuid IS NULL OR EXISTS(SELECT 1 FROM clarification_requests q
+          WHERE q.id=$5 AND q.revision_id=whatsapp_notices.revision_id))`,
+    [id, claim, outcome, outcome === 'SENT' ? receipt : null, question]);
     return { acknowledged: rowCount === 1 };
   }
 }

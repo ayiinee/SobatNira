@@ -40,10 +40,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int)
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--connected", dest="connected", action="store_true",
-                      help="Gunakan Supabase dan API dari .env akar repo.")
-    mode.add_argument("--demo", dest="connected", action="store_false",
-                      help="Gunakan data demo lokal tanpa koneksi backend (bawaan).")
+    mode.add_argument("--connected", action="store_true", help="Gunakan Supabase dan API dari .env akar repo.")
+    mode.add_argument("--demo", dest="connected", action="store_false", help="Buka fixture desain offline (bawaan).")
     parser.set_defaults(connected=False)
     args = parser.parse_args()
     if args.port is None:
@@ -57,9 +55,11 @@ def main():
         if probe.connect_ex(("127.0.0.1", args.port)) == 0:
             parser.exit(1, f"Port {args.port} sedang dipakai. Hentikan Flutter lama dengan q atau pilih --port lain.\n")
 
-    command = [flutter, "run", "-d", "chrome", "--web-hostname", "127.0.0.1",
+    command = [flutter, "run", "-t", "lib/main.dart", "-d", "chrome", "--web-hostname", "127.0.0.1",
                "--web-port", str(args.port), "--hot", "--machine"]
-    if args.connected:
+    if not args.connected:
+        command.append("--dart-define=SOBATNIRA_MODE=demo")
+    else:
         node = shutil.which("node")
         if not node:
             parser.exit(1, "Node.js 24 diperlukan untuk membaca .env.\n")

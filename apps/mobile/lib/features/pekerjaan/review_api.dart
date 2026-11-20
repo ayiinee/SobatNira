@@ -13,10 +13,6 @@ const supabasePublicKey = String.fromEnvironment(
   'SUPABASE_PUBLISHABLE_KEY',
   defaultValue: String.fromEnvironment('SUPABASE_ANON_KEY'),
 );
-const _explicitConnectedMode =
-    String.fromEnvironment('SOBATNIRA_MODE') == 'connected';
-const connectedMobile =
-    _explicitConnectedMode || supabaseProject != '' || supabasePublicKey != '';
 
 typedef Json = Map<String, dynamic>;
 
@@ -84,7 +80,7 @@ String documentType(Object? type) => switch (type) {
 };
 
 class ReviewApiError implements Exception {
-  const ReviewApiError(this.status, {this.authCode});
+  const ReviewApiError(this.status, {this.authCode, this.detail});
 
   factory ReviewApiError.fromSignInResponse(http.Response response) {
     String? authCode;
@@ -107,6 +103,7 @@ class ReviewApiError implements Exception {
 
   final int status;
   final String? authCode;
+  final String? detail;
 
   String get message => switch (status) {
     401 => 'Sesi masuk telah berakhir.',
@@ -144,7 +141,7 @@ class ReviewApi {
   }) => _pendingTransfers.putIfAbsent(
     _transferKey(scope, lotId),
     () => JuiceTransferRequest(
-      requestId: _requestUuid(),
+      requestId: requestUuid(),
       toLotId: toLotId,
       toLabel: toLabel,
       originLotId: originLotId,
@@ -178,7 +175,7 @@ class ReviewApi {
     }
   }
 
-  static String _requestUuid() {
+  static String requestUuid() {
     final random = Random.secure();
     final bytes = List<int>.generate(16, (_) => random.nextInt(256));
     bytes[6] = (bytes[6] & 15) | 64;
@@ -254,7 +251,17 @@ class ReviewApi {
     final status = response.statusCode;
     if (status == expectedStatus) return;
     if (status == 401) onSessionExpired?.call();
-    throw ReviewApiError(status);
+    String? detail;
+    if (status == 400 || status == 409) {
+      try {
+        final body = jsonDecode(response.body);
+        final message = body is Json ? body['message'] : null;
+        if (message is String && message.length <= 200) detail = message;
+      } on FormatException {
+        // Proxies may return a plain text response.
+      }
+    }
+    throw ReviewApiError(status, detail: detail);
   }
 
   Future<Json> _productionGet(
@@ -299,8 +306,9 @@ class ReviewApi {
     DateTime? from,
     DateTime? before,
     bool synthetic = false,
+    bool recap = false,
   }) => _productionGet(
-    [...scope._base, 'production', 'profit-report'],
+    [...scope._base, 'production', recap ? 'recap' : 'profit-report'],
     query: {
       'synthetic': '$synthetic',
       if (from != null) 'from': from.toUtc().toIso8601String(),
@@ -308,28 +316,64 @@ class ReviewApi {
     },
   );
 
-  Future<List<Json>> lotBatches(
+  Future<Json> factoryBatches(
     FactoryScope scope,
-    String id,
-    bool synthetic,
-  ) async {
-    const limit = 100;
-    final batches = <Json>[];
-    for (var offset = 0; ; offset += limit) {
-      final page = await _productionGet(
-        [...scope._base, 'production', 'batches'],
-        query: {'limit': '$limit', 'offset': '$offset'},
+    String lotId, {
+    int offset = 0,
+    bool synthetic = false,
+  }) => _productionGet(
+    [...scope._base, 'production', 'batches'],
+    query: {
+      'lotId': lotId,
+      'synthetic': '$synthetic',
+      'limit': '20',
+      'offset': '$offset',
+    },
+  );
+
+  Future<Json> factoryBatch(FactoryScope scope, String batchId) =>
+      _productionGet([...scope._base, 'production', 'batches', batchId]);
+
+  Future<Json> createBatch(FactoryScope scope, Json draft) =>
+      writeProduction([...scope._base, 'production', 'batches'], draft);
+
+  Future<Json> saveLotCosts(FactoryScope scope, String lotId, Json costs) =>
+      writeProduction(
+        [...scope._base, 'production', 'lots', lotId, 'costs'],
+        costs,
+        expectedStatus: 200,
       );
-      final rows = (page['items'] as List).cast<Json>();
-      batches.addAll(
-        rows.where(
-          (row) => row['lot_id'] == id && row['is_synthetic'] == synthetic,
-        ),
-      );
-      if (rows.length < limit) break;
-    }
-    return batches.reversed.toList();
-  }
+
+  Future<Json> reserveBatchJuice(
+    FactoryScope scope,
+    String lotId,
+    String batchId,
+    String quantityMl,
+  ) => writeProduction(
+    [...scope._lots, lotId, 'juice', 'reservations'],
+    {
+      'requestId': batchId,
+      'batchId': batchId,
+      'originLotId': lotId,
+      'quantityMl': quantityMl,
+    },
+  );
+
+  Future<Json> finishBatch(
+    FactoryScope scope,
+    String id, {
+    bool cancel = false,
+  }) => writeProduction(
+    [
+      ...scope._base,
+      'production',
+      'batches',
+      id,
+      cancel ? 'cancel' : 'approve',
+    ],
+    {},
+    expectedStatus: 200,
+  );
 
   Future<Json> lots(
     FactoryScope scope, {
@@ -469,7 +513,12 @@ class ReviewApi {
     return _json(_client.send(request).then(http.Response.fromStream));
   }
 
-  Future<List<Json>> list(String status, int page, {String? factoryId}) async {
+  Future<List<Json>> list(
+    String status,
+    int page, {
+    String? factoryId,
+    String? revisionId,
+  }) async {
     final response = await _json(
       _client.get(
         _url('review-tasks', {
@@ -477,6 +526,7 @@ class ReviewApi {
           'page': '$page',
           'page_size': '20',
           'factory_id': ?factoryId,
+          'revision_id': ?revisionId,
         }),
         headers: _headers,
       ),
@@ -525,6 +575,21 @@ class ReviewApi {
         .timeout(const Duration(seconds: 12));
     _requireStatus(response, 200);
     return response.bodyBytes;
+  }
+
+  Future<Uint8List?> approvedPhoto(
+    FactoryScope scope,
+    String revisionId,
+  ) async {
+    final tasks = await list(
+      'VALIDATED',
+      1,
+      factoryId: scope.factoryId,
+      revisionId: revisionId,
+    );
+    final task = tasks.firstOrNull;
+    if (task == null) return null;
+    return photo(task['id'] as String, task['media_asset_id'] as String);
   }
 
   Future<Json> change(

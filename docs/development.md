@@ -1,10 +1,34 @@
 # Setup development lokal
 
+Gunakan [prosedur uji penerimaan lokal](ai/README.md#mode-lokal-sintetis) untuk menyamakan versi, fixture, migrasi dan hasil uji antaranggota tim. Prosedur ini membangun `apps/mobile/lib/main.dart` dan menyajikan Flutter, login sintetis, serta API NestJS di `http://127.0.0.1:8000/`. OCR berjalan sebagai layanan internal.
+
+### Penyimpanan menu Pengaturan
+
+Form sesi menggunakan widget Pengaturan tim dan kembali ke fixture ketika aplikasi dimulai ulang. Pada mode terhubung, menu yang memerlukan kontrak tambahan tampil dengan status **Belum tersedia**. Gunakan mode lokal untuk meninjau bentuk form tersebut.
+
+| Menu | Penyimpanan saat ini | Kontrak atau keputusan yang dibutuhkan |
+| --- | --- | --- |
+| Identitas pabrik | Nama pabrik dibaca dari sesi API. Form identitas tersimpan di sesi lokal. | Endpoint edit nama, kode, cabang dan zona waktu, serta hak edit. |
+| Fasilitas Produksi | Sesi lokal. API master memiliki daftar dan tambah wajan dengan kode dan nama. | Kontrak kapasitas, aktivasi, pembaruan dan pemakaian master saat memvalidasi pemasakan. |
+| Pegawai & WhatsApp | API pabrik untuk nama, nomor dan status aktif operator. | Penugasan per operator pada form tim memerlukan kontrak sendiri. |
+| Shift kerja | Sesi lokal. | Definisi shift, waktu lintas tengah malam dan pengaitnya ke batch. |
+| Hak akses & pengguna | Sesi lokal. Membership yang dipakai login dan otorisasi dibaca dari API. | Undangan, perubahan role, pencabutan akses dan siapa yang berwenang. |
+| Aturan produksi | Sesi lokal. API master memiliki versi konfigurasi awal. | Aturan campuran, masak ulang, batas volume serta aktivasi aturan yang berlaku. |
+| Grade produk | Sesi lokal. API master memiliki daftar dan tambah kode/nama. Grade resmi dicatat pada batch. | Pembaruan grade dan harga efektif, termasuk penerapannya pada snapshot dan batch lama. |
+| Bahan tambahan (BTP) | Sesi lokal. API master memiliki daftar dan tambah kode/nama. | Satuan, takaran, status aktif dan cara pencatatan pemakaian pada batch. |
+| Formulir produksi | Sesi lokal. OCR memakai skema yang ikut versi repositori. | Kontrak versi pemetaan field wajib dan alias yang boleh dikelola per pabrik. |
+| Harga & Biaya | Sesi lokal untuk menu ini dan pintasan Biaya Ops. Harga per batch dan biaya per kloter memakai API. | Harga sumber, komponen biaya, hak melihat harga/biaya, tanggal berlaku, serta riwayat koreksi. |
+| Pemasok | API katalog pabrik. | — |
+| Jenis tebu | API katalog pabrik. | — |
+| Keluar | Mengakhiri sesi pada aplikasi. | — |
+
+Endpoint awal master produksi menyimpan kode dan nama atau versi draf. Implementasi lama memakai memori atau adapter Supabase. Untuk menghubungkannya ke form tim, diperlukan penyimpanan PostgreSQL yang dipakai pemasakan resmi dan kontrak untuk field yang ditampilkan. Lihat [pemeriksaan akses dan konfigurasi backend](backend-authentication.md) serta [implementasi produksi](backend-production-implementation.md).
+
 Pasang Git dan alat sesuai area yang kamu kerjakan. Untuk menjalankan integrasi, siapkan alat dari ketiga baris.
 
 | Area | Alat | Titik awal |
 | --- | --- | --- |
-| Flutter | Flutter stable 3.44.6 (Dart 3.12.2) dan Chrome | `apps/mobile/lib/main.dart`. Mulai langsung dari Beranda dengan data sintetis. |
+| Flutter | Flutter stable 3.44.6 (Dart 3.12.2) dan Chrome | `apps/mobile/lib/main.dart`. Siapkan konfigurasi API dan login atau pilih demo offline. |
 | API bisnis | Node.js 24 dengan npm | `apps/api/src/app.module.ts`. Mulai dari kontrak dan validasi dokumen atau data kloter dan batch. |
 | AI | Python 3.13 dengan uv | `apps/ai/main.py`. Mulai dari pemetaan field dan fixture draf ekstraksi. |
 
@@ -25,7 +49,7 @@ Untuk menjalankan Chrome dari Command Prompt di akar repo dengan hot reload otom
 dev-mobile.cmd
 ```
 
-Perintah ini menggunakan Python yang tersedia di PATH, menjalankan Flutter pada port 8085, dan memantau `apps/mobile/lib`. Perubahan dari editor atau alat lain memicu hot reload setelah jeda 0,7 detik. Hentikan proses dengan Ctrl+C. Jika port sudah dipakai, hentikan sesi lama atau jalankan `dev-mobile.cmd --port 8086`. Perubahan yang membutuhkan hot restart tetap memerlukan menjalankan ulang sesi ini.
+Perintah ini menjalankan fixture desain offline melalui `lib/main.dart` pada port 8085 dan memantau `apps/mobile/lib`. Perubahan dari editor atau alat lain memicu hot reload setelah jeda 0,7 detik. Hentikan proses dengan Ctrl+C. Perubahan yang membutuhkan hot restart memerlukan menjalankan ulang sesi ini.
 
 Jalankan dari akar repo untuk langsung membuka Beranda, Kloter, Laporan, dan Pengaturan. Onboarding dan login demo dinonaktifkan sementara. Perubahan data lokal kembali ke kondisi awal ketika aplikasi dimulai ulang.
 
@@ -38,14 +62,14 @@ Rekap menggabungkan catatan berdasarkan kode kloter: identitas tebu, kendaraan d
 ```sh
 cd apps/mobile
 flutter pub get --enforce-lockfile
-flutter run -d chrome --web-hostname 127.0.0.1 --web-port 8080
+flutter run -d chrome -t lib/main.dart --web-hostname 127.0.0.1 --web-port 8085 --dart-define=SOBATNIRA_MODE=demo
 ```
 
-Untuk membuka layar draf sintetis secara mandiri, tambahkan `-t lib/main_demo.dart --dart-define=USE_LOCAL_FIXTURE=true`.
+Untuk menguji nota sintetis melalui Pekerjaan dan pembukuan resmi, ikuti [smoke test lokal](ai/README.md#mode-lokal-sintetis).
 
 ## Flutter dengan Supabase dan backend dari .env
 
-Pastikan `.env` di akar repo sudah berisi `SUPABASE_URL` dan `SUPABASE_PUBLISHABLE_KEY`. Isi `API_BASE_URL` dengan URL dasar layanan Railway untuk memakai backend yang sudah di-deploy. Untuk pengembangan backend lokal, ikuti [konfigurasi backend](backend-configuration.md) dan jalankan `npm run dev` dari `apps/api`.
+Pastikan `.env` di akar repo sudah berisi `SUPABASE_URL` dan `SUPABASE_PUBLISHABLE_KEY`. Isi `API_BASE_URL` dengan URL dasar layanan Railway untuk memakai backend yang sudah di-deploy. Untuk backend lokal, ikuti [konfigurasi backend](backend-configuration.md) dan jalankan `npm run dev` dari `apps/api`.
 
 Dari akar repo jalankan:
 
@@ -57,7 +81,7 @@ Perintah ini membuka Chrome di `http://127.0.0.1:8080` dengan layar login Supaba
 
 Launcher membaca `.env` menggunakan Node.js 24 dan membuat `.tmp/mobile/public-defines.json` yang diabaikan Git. Hanya `SOBATNIRA_MODE`, `API_BASE_URL`, `SUPABASE_URL`, dan publishable/anon key yang disertakan. Jangan memberikan `.env` backend langsung ke `--dart-define-from-file` karena semua nilainya dapat masuk ke aplikasi klien.
 
-Alamat API mengikuti `API_BASE_URL` bila diisi, atau `API_HOST` dan `API_PORT` (bawaan `http://127.0.0.1:3000`). Port tampilan dapat diganti dengan `--port 8086`; tambahkan origin `http://127.0.0.1:8086` ke `CORS_ORIGINS` dan mulai ulang NestJS. Perubahan `.env` memerlukan menjalankan ulang launcher. Perintah tanpa flag mode dan perintah dengan `--demo` sama-sama membuka demo lokal pada port 8085.
+Alamat API mengikuti `API_BASE_URL` bila diisi, atau `API_HOST` dan `API_PORT` (bawaan `http://127.0.0.1:3000`). Untuk mengganti port Flutter, daftarkan origin yang sesuai di `CORS_ORIGINS` dan mulai ulang NestJS. Perintah tanpa flag mode dan perintah dengan `--demo` sama-sama membuka fixture offline.
 
 Untuk membuat APK Android terhubung, buat konfigurasi publik dari akar repo, lalu build dari `apps/mobile`:
 
@@ -68,7 +92,6 @@ flutter build apk --release --dart-define-from-file=../../.tmp/mobile/public-def
 ```
 
 APK dihasilkan di `apps/mobile/build/app/outputs/flutter-apk/app-release.apk`. Konfigurasi Android pada repo menggunakan tanda tangan debug untuk build release lokal.
-
 
 Untuk mengisi database development dengan data sintetis, jalankan dari `apps/api`:
 
@@ -142,30 +165,30 @@ npm run dev
 ```sh
 cd apps/mobile
 flutter pub get --enforce-lockfile
-flutter run -d chrome -t lib/main_demo.dart --web-hostname 127.0.0.1 --web-port 8080
+flutter run -d chrome -t lib/main.dart --web-hostname 127.0.0.1 --web-port 8080 --dart-define-from-file=../../.tmp/mobile/public-defines.json
 ```
 
-Chrome menampilkan **Draf sintetis**, `DEMO-261114-01`, dan berat 1250 kg. Jika API belum berjalan, nyalakan kembali kedua layanan dan tekan **Coba lagi**.
+Gunakan file konfigurasi publik dari launcher terhubung. Untuk stub login dan nota sintetis dari adapter WhatsApp, gunakan perintah Flutter di [smoke test lokal](ai/README.md#mode-lokal-sintetis).
 
 ## Jalankan di Android
 
 Tinjau lisensi yang dilaporkan oleh `flutter doctor --android-licenses`. Buka emulator atau hubungkan HP dengan USB debugging. Jalankan `flutter devices`, lalu gunakan ID yang tampil. Untuk mengerjakan UI dengan draf lokal, jalankan dari `apps/mobile`.
 
 ```sh
-flutter run -d <device-id>
+flutter run -d <device-id> -t lib/main.dart --dart-define=SOBATNIRA_MODE=demo
 ```
 
 Untuk menguji integrasi dari emulator atau HP, jalankan kedua backend. Dengan satu perangkat Android terhubung, teruskan port API memakai ADB dan jalankan Flutter dengan URL bawaan.
 
 ```sh
 adb reverse tcp:3000 tcp:3000
-flutter run -d <device-id> -t lib/main_demo.dart
+flutter run -d <device-id> -t lib/main.dart --dart-define-from-file=../../.tmp/mobile/public-defines.json
 ```
 
 Jika beberapa perangkat terhubung, gunakan `adb -s <device-id> reverse tcp:3000 tcp:3000`. Emulator juga dapat mengakses loopback laptop menggunakan `10.0.2.2`.
 
 ```sh
-flutter run -d <emulator-id> -t lib/main_demo.dart --dart-define=API_BASE_URL=http://10.0.2.2:3000
+flutter run -d <emulator-id> -t lib/main.dart --dart-define-from-file=../../.tmp/mobile/public-defines.json --dart-define=API_BASE_URL=http://10.0.2.2:3000
 ```
 
 Untuk cek layanan langsung, buka `http://127.0.0.1:8000/health`, `http://127.0.0.1:3000/health`, dan `http://127.0.0.1:3000/demo/draft`. API dapat mengubah port dengan `API_PORT` dan tujuan AI dengan `AI_BASE_URL`. Jika port API diganti, sesuaikan `--dart-define=API_BASE_URL=...` untuk Flutter. Web memakai port 8080 agar origin sesuai konfigurasi lokal API.

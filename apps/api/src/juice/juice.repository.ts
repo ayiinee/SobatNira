@@ -3,7 +3,7 @@ import { ACTIVE_ACCESS_SQL, FACTORY_SCOPE_CTE } from '../auth/access.sql';
 import { FactoryAccess } from '../auth/auth.types';
 import { DatabaseService, DatabaseSession } from '../database/database.service';
 import { found, scopeValues } from '../production/production.dto';
-import { compareDecimals } from '../production/decimal';
+import { compareDecimals, sumDecimals } from '../production/decimal';
 import { parseReservation, parseTransfer } from './juice.dto';
 
 type Balance = { onHandMl: string; reservedMl: string; availableMl: string };
@@ -36,8 +36,8 @@ export class JuiceRepository {
   mutate<T>(access: FactoryAccess, work: (tx: DatabaseSession) => Promise<T>) {
     return this.db.transaction(async (tx) => {
       const membership = await tx.query(`${ACTIVE_ACCESS_SQL}
-        AND fm.tenant_id = $2::uuid AND fm.factory_id = $3::uuid AND fm.role IN ('admin', 'owner')
-        FOR SHARE OF fm, tm, f, t`, scopeValues(access));
+        AND fm.tenant_id = $2::uuid AND fm.factory_id = $3::uuid AND fm.role = $4
+        FOR SHARE OF fm, tm, f, t`, [...scopeValues(access), access.role]);
       if (!membership.rows.length) throw new ForbiddenException('Akses pabrik tidak lagi tersedia.');
       return work(tx);
     });
@@ -117,6 +117,16 @@ export class JuiceRepository {
         return existing;
       }
       await this.assertOpen(tx, access, [lotId], input.synthetic);
+      const { rows: [batch] } = await tx.query(`SELECT lot_id,status,is_synthetic,
+        quantity_ml::text AS volume, (SELECT trim_scale(COALESCE(sum(r.quantity_ml),0))::text
+          FROM sobatnira.juice_reservations r WHERE r.batch_id=b.id AND r.tenant_id=b.tenant_id
+            AND r.factory_id=b.factory_id AND r.state<>'released') AS reserved
+        FROM sobatnira.production_batches b WHERE b.tenant_id=$1 AND b.factory_id=$2 AND b.id=$3 FOR SHARE OF b`,
+        [...scope, input.batchId]);
+      if (batch && (batch.lot_id !== lotId || originLotId !== lotId || batch.is_synthetic !== input.synthetic ||
+          batch.status !== 'draft' || compareDecimals(sumDecimals([batch.reserved, input.quantityMl]), batch.volume) > 0)) {
+        throw new ConflictException('Reservasi harus sesuai draf, asal kloter, dan volume batch.');
+      }
       await this.assertAvailable(tx, access, lotId, input.synthetic, input.quantityMl, originLotId);
       return (await tx.query<Reservation>(`INSERT INTO sobatnira.juice_reservations
         (tenant_id, factory_id, lot_id, request_id, batch_id, quantity_ml, is_synthetic, created_by, origin_lot_id)
@@ -157,6 +167,11 @@ export class JuiceRepository {
         WHERE tenant_id = $1 AND factory_id = $2 AND lot_id = $3 AND request_id = $4`, values)).rows[0]);
       if (existing.state === state) return existing;
       if (existing.state !== 'reserved') throw new ConflictException('Reservasi sudah difinalisasi dengan aksi berbeda.');
+      const officialBatch = await tx.query(`SELECT 1 FROM sobatnira.production_batches
+        WHERE tenant_id=$1 AND factory_id=$2 AND id=$3`, [...this.scope(access), existing.batchId]);
+      if (officialBatch.rows.length) {
+        throw new ConflictException('Finalisasi reservasi melalui pengesahan atau pembatalan batch.');
+      }
       return (await tx.query<Reservation>(`UPDATE sobatnira.juice_reservations
         SET state = $5, finalized_by = $6, finalized_at = clock_timestamp()
         WHERE tenant_id = $1 AND factory_id = $2 AND lot_id = $3 AND request_id = $4 RETURNING ${reservationColumns}`,

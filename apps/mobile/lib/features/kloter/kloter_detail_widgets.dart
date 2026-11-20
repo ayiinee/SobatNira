@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
@@ -51,54 +53,6 @@ class KloterDetailBody extends StatelessWidget {
       );
     },
   );
-}
-
-class BatchReviewBadge extends StatelessWidget {
-  const BatchReviewBadge({required this.reviewed, super.key});
-
-  final bool reviewed;
-
-  @override
-  Widget build(BuildContext context) {
-    final foregroundColor = reviewed ? niraGreen : Colors.white;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(
-        NiraSpace.sm,
-        NiraSpace.xs,
-        NiraSpace.sm,
-        NiraSpace.xs,
-      ),
-      constraints: const BoxConstraints(maxWidth: 153),
-      decoration: BoxDecoration(
-        color: reviewed ? const Color(0xFFE6EFE5) : const Color(0xFFDCB95B),
-        borderRadius: BorderRadius.circular(niraRadius),
-        border: Border.all(
-          color: reviewed ? niraLeaf : const Color(0xFFB79845),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            reviewed ? Icons.check_circle : Icons.error,
-            size: 14,
-            color: foregroundColor,
-          ),
-          const SizedBox(width: NiraSpace.xs),
-          Flexible(
-            child: Text(
-              reviewed ? 'Tervalidasi' : 'Perlu ditinjau',
-              style: niraText(
-                NiraType.body,
-                color: foregroundColor,
-                weight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class DetailTitle extends StatelessWidget {
@@ -317,18 +271,22 @@ class DocumentLink extends StatelessWidget {
 }
 
 class DocumentPreview extends StatelessWidget {
-  const DocumentPreview({required this.batch, super.key});
+  const DocumentPreview({required this.batch, this.photo, super.key});
 
   final bool batch;
+  final ImageProvider? photo;
 
   static String asset(bool batch) =>
       'assets/sobatnira/art/nota-${batch ? 'batch' : 'tebu'}.jpg';
 
-  static Future<void> open(BuildContext context, {required bool batch}) =>
-      showDialog<void>(
-        context: context,
-        builder: (context) => _DocumentViewer(batch: batch),
-      );
+  static Future<void> open(
+    BuildContext context, {
+    required bool batch,
+    ImageProvider? photo,
+  }) => showDialog<void>(
+    context: context,
+    builder: (context) => _DocumentViewer(batch: batch, photo: photo),
+  );
 
   @override
   Widget build(BuildContext context) => Column(
@@ -338,15 +296,17 @@ class DocumentPreview extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         borderRadius: BorderRadius.circular(niraRadius),
         child: InkWell(
-          onTap: () => open(context, batch: batch),
+          onTap: () => open(context, batch: batch, photo: photo),
           child: Stack(
             children: [
               AspectRatio(
                 aspectRatio: 2.4,
-                child: Image.asset(
-                  asset(batch),
+                child: Image(
+                  image: photo ?? AssetImage(asset(batch)),
                   fit: BoxFit.cover,
-                  semanticLabel: 'Buka pratinjau nota sintetis',
+                  semanticLabel: photo == null
+                      ? 'Buka pratinjau nota sintetis'
+                      : 'Buka pratinjau nota sah',
                 ),
               ),
               Positioned(
@@ -354,7 +314,7 @@ class DocumentPreview extends StatelessWidget {
                 right: NiraSpace.xs,
                 child: IconButton(
                   tooltip: 'Perbesar foto',
-                  onPressed: () => open(context, batch: batch),
+                  onPressed: () => open(context, batch: batch, photo: photo),
                   style: IconButton.styleFrom(foregroundColor: Colors.white),
                   icon: const Icon(Icons.open_in_full, size: 20),
                 ),
@@ -367,9 +327,54 @@ class DocumentPreview extends StatelessWidget {
   );
 }
 
-class _DocumentViewer extends StatefulWidget {
-  const _DocumentViewer({required this.batch});
+class ApprovedDocumentPreview extends StatelessWidget {
+  const ApprovedDocumentPreview({
+    required this.photo,
+    required this.batch,
+    required this.fallback,
+    super.key,
+  });
+
+  final Future<Uint8List?>? photo;
   final bool batch;
+  final Widget fallback;
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Uint8List?>(
+    future: photo,
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return const AspectRatio(
+          aspectRatio: 2.4,
+          child: Center(child: LinearProgressIndicator()),
+        );
+      }
+      final bytes = snapshot.data;
+      if (bytes == null) {
+        return AspectRatio(
+          aspectRatio: 2.4,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0F3EF),
+              border: Border.all(color: niraLine),
+              borderRadius: BorderRadius.circular(niraRadius),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(NiraSpace.sm),
+              child: Center(child: fallback),
+            ),
+          ),
+        );
+      }
+      return DocumentPreview(batch: batch, photo: MemoryImage(bytes));
+    },
+  );
+}
+
+class _DocumentViewer extends StatefulWidget {
+  const _DocumentViewer({required this.batch, this.photo});
+  final bool batch;
+  final ImageProvider? photo;
 
   @override
   State<_DocumentViewer> createState() => _DocumentViewerState();
@@ -421,10 +426,14 @@ class _DocumentViewerState extends State<_DocumentViewer> {
               maxScale: 6,
               trackpadScrollCausesScale: true,
               child: Center(
-                child: Image.asset(
-                  DocumentPreview.asset(widget.batch),
+                child: Image(
+                  image:
+                      widget.photo ??
+                      AssetImage(DocumentPreview.asset(widget.batch)),
                   fit: BoxFit.contain,
-                  semanticLabel: 'Contoh nota sintetis',
+                  semanticLabel: widget.photo == null
+                      ? 'Contoh nota sintetis'
+                      : 'Foto nota sah',
                 ),
               ),
             ),
@@ -458,20 +467,25 @@ class _DocumentViewerState extends State<_DocumentViewer> {
 class BatchReviewActions extends StatelessWidget {
   const BatchReviewActions({
     required this.batchNumber,
+    this.batchCode,
     required this.label,
     required this.verified,
     required this.onVerify,
-    required this.onReopen,
+    this.enabled = true,
+    this.onReopen,
     super.key,
   });
   final int batchNumber;
+  final String? batchCode;
   final String label;
   final bool verified;
   final VoidCallback onVerify;
-  final VoidCallback onReopen;
+  final bool enabled;
+  final VoidCallback? onReopen;
 
   Future<void> _confirm(BuildContext context) async {
     final colors = Theme.of(context).colorScheme;
+    final batchTitle = batchCode ?? 'Batch $batchNumber';
     final cancelColor = verified ? colors.error : colors.primary;
     const buttonPadding = EdgeInsets.symmetric(horizontal: NiraSpace.sm);
     final navigator = Navigator.of(context, rootNavigator: true);
@@ -483,9 +497,7 @@ class BatchReviewActions extends StatelessWidget {
         scrollable: true,
         backgroundColor: niraPaper,
         title: Text(
-          verified
-              ? 'Batalkan validasi Batch $batchNumber?'
-              : 'Validasi Batch $batchNumber?',
+          verified ? 'Batalkan validasi $batchTitle?' : 'Validasi $batchTitle?',
           textAlign: TextAlign.center,
         ),
         content: Text(
@@ -535,7 +547,7 @@ class BatchReviewActions extends StatelessWidget {
     await route.completed;
     if (confirmed != true || !context.mounted) return;
     if (verified) {
-      onReopen();
+      onReopen?.call();
     } else {
       onVerify();
     }
@@ -547,24 +559,22 @@ class BatchReviewActions extends StatelessWidget {
       Expanded(
         child: NiraButton(
           label,
-          verified ? null : () => _confirm(context),
+          verified || !enabled ? null : () => _confirm(context),
           visualDensity: VisualDensity.standard,
           minimumHeight: verified ? reviewedActionHeight : reviewActionHeight,
         ),
       ),
-      if (verified) ...[
+      if (verified && onReopen != null) ...[
         const SizedBox(width: NiraSpace.sm),
-        IconButton.filled(
+        IconButton.outlined(
           tooltip: 'Batalkan validasi batch',
           onPressed: () => _confirm(context),
           style: IconButton.styleFrom(
-            backgroundColor: Theme.of(context).colorScheme.error,
-            foregroundColor: Colors.white,
+            foregroundColor: niraGreen,
+            side: const BorderSide(color: niraLeaf),
             minimumSize: const Size.square(reviewedActionHeight),
             iconSize: 20,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(niraRadius),
-            ),
+            shape: const CircleBorder(),
           ),
           icon: const Icon(Icons.close_rounded),
         ),

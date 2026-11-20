@@ -6,7 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:sobatnira/features/laporan/connected_reports.dart';
-import 'package:sobatnira/features/laporan/connected_report_view.dart';
+import 'package:sobatnira/features/laporan/demo_analytics.dart';
+import 'package:sobatnira/features/laporan/laporan_page.dart';
+import 'package:sobatnira/features/laporan/report_detail_page.dart';
 import 'package:sobatnira/features/laporan/printable_report.dart';
 import 'package:sobatnira/features/laporan/report_pdf.dart';
 import 'package:sobatnira/features/kloter/kloter_date_filter.dart';
@@ -198,31 +200,47 @@ void main() {
       );
       addTearDown(reports.dispose);
       await reports.refresh();
+      final analytics = DemoAnalytics();
+      addTearDown(analytics.dispose);
       await tester.pumpWidget(
         MaterialApp(
           theme: niraTheme(),
-          home: Scaffold(
-            body: ConnectedReportView(reports: reports, onNavigate: (_) {}),
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: LaporanPage(
+                analytics: analytics,
+                reports: reports,
+                onOpenDetail: (kind) {
+                  final row = analytics.selectedRow;
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute(
+                      builder: (_) => ReportDetailPage(
+                        kind: kind,
+                        row: row,
+                        onNavigate: (_) {},
+                        report: reports.data,
+                        officialLot: reports.lots
+                            .where((item) => item['lotId'] == row?.id)
+                            .firstOrNull,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
           ),
         ),
       );
       await tester.pumpAndSettle();
       expect(find.text('30,5 kg'), findsWidgets);
-      final productionPlot = find.byKey(
-        const ValueKey('production-chart-plot'),
-      );
-      expect(productionPlot, findsOneWidget);
-      final plot = tester.getRect(productionPlot);
-      await tester.tapAt(plot.topLeft + Offset(plot.width / 2, 110));
-      await tester.pumpAndSettle();
-      expect(find.text('19 November 2026'), findsOneWidget);
-      expect(find.text('Gula final: 30,5 kg'), findsOneWidget);
+      expect(find.text('Gula final per hari (Kg)'), findsOneWidget);
       await tester.tap(find.text('Margin').first);
       await tester.pumpAndSettle();
       expect(find.text('-Rp1'), findsWidgets);
       expect(find.text('Rp9.007.199.254.740.993'), findsOneWidget);
-      expect(find.byKey(const ValueKey('margin-chart-plot')), findsOneWidget);
-      await tester.tap(find.text('DUPLICATE').first);
+      expect(find.text('Margin per kloter (1000)'), findsOneWidget);
+      await tester.ensureVisible(find.text('Pemasok satu'));
+      await tester.tap(find.text('Pemasok satu'));
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(find.text('BATCH-REAL'), 400);
       await Scrollable.ensureVisible(
@@ -230,40 +248,23 @@ void main() {
         alignment: .4,
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('BATCH-REAL'));
-      await tester.pumpAndSettle();
-      expect(find.text('Nilai produksi batch'), findsOneWidget);
+      expect(find.text('Kontribusi Batch'), findsOneWidget);
       expect(find.text('Rp670.000'), findsNothing);
-      await tester.scrollUntilVisible(
-        find.text('Margin kumulatif kloter'),
-        300,
-      );
       expect(find.text('-Rp1'), findsWidgets);
-      await tester.tap(find.text('Masak'));
-      await tester.pumpAndSettle();
-      expect(find.text('Wajan 2'), findsOneWidget);
-      await tester.tap(find.text('Grade'));
-      await tester.pumpAndSettle();
-      expect(find.text('Grade A'), findsOneWidget);
-      tester.state<NavigatorState>(find.byType(Navigator).first).pop();
-      await tester.pumpAndSettle();
       tester.state<NavigatorState>(find.byType(Navigator).first).pop();
       await tester.pumpAndSettle();
       await tester.tap(find.text('Produksi').first);
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.byTooltip('Jenis grafik'));
-      await tester.tap(find.byTooltip('Jenis grafik'));
+      analytics.setVariant(ProductionVariant.grade);
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('chart-option-grade')));
+      final grade = find.text('Grade A').last;
+      await Scrollable.ensureVisible(tester.element(grade), alignment: .4);
       await tester.pumpAndSettle();
-      final gradeRow = find.widgetWithText(InkWell, 'Grade A').last;
-      await tester.scrollUntilVisible(gradeRow, 300);
-      await Scrollable.ensureVisible(tester.element(gradeRow), alignment: .4);
-      await tester.pumpAndSettle();
-      await tester.tap(gradeRow);
+      await tester.tap(grade);
       await tester.pumpAndSettle();
       expect(find.text('Detail Grade'), findsOneWidget);
-      expect(find.textContaining('Rp20.001/kg'), findsOneWidget);
+      expect(find.text('Rp9.007.199.254.740.993'), findsOneWidget);
+      expect(find.text('Kontribusi per kloter'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

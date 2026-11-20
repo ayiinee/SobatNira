@@ -112,10 +112,12 @@ DemoKloter connectedLot(Json row) {
   final milling = row['milling'] as Json?;
   DemoReview review(Json? approved, List<DemoField> fields) {
     final document = approved?['document'] as Json?;
-    final revision = document?['revisionNumber'];
+    final revision = document?['revisionNumber'] ?? document?['revisionId'];
+    final documentId = document?['documentId'];
     return DemoReview([
       DemoField('Status', approved == null ? 'Belum disahkan' : 'Disahkan'),
       ...fields,
+      if (documentId != null) DemoField('ID nota', '$documentId'),
       if (revision != null) DemoField('Revisi tercatat', '$revision'),
     ], verified: approved != null);
   }
@@ -125,7 +127,8 @@ DemoKloter connectedLot(Json row) {
     code: code,
     date: date,
     intake: review(intake, [
-      DemoField('Pemasok', row['supplierName'] as String),
+      DemoField('Tanggal masuk', formatDate(date)),
+      DemoField('Pengirim', row['supplierName'] as String),
       if (row['caneTypeCode'] case final String type)
         DemoField('Jenis tebu', type),
     ]),

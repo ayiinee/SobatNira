@@ -171,12 +171,10 @@ class _MarginPainter extends CustomPainter {
       0.0,
       (values.reduce(math.min) / 200).floor() * 200.0,
     );
-    double yFor(double value) =>
-        plot.bottom - (value - minimum) / (maximum - minimum) * plot.height;
-    final baseline = yFor(0);
+    final range = maximum - minimum;
+    final zero = plot.bottom + minimum / range * plot.height;
     for (var i = 0; i <= 2; i++) {
-      final value = minimum + (maximum - minimum) * i / 2;
-      final y = yFor(value);
+      final y = plot.bottom - plot.height * i / 2;
       canvas.drawLine(
         Offset(plot.left, y),
         Offset(plot.right, y),
@@ -184,31 +182,28 @@ class _MarginPainter extends CustomPainter {
           ..color = niraLine
           ..strokeWidth = 1,
       );
-      _text(canvas, value.toInt().toString(), Offset(plot.left - 20, y));
+      _text(
+        canvas,
+        (minimum + range * i / 2).toInt().toString(),
+        Offset(plot.left - 20, y),
+      );
     }
     final slot = plot.width / rows.length;
     for (var i = 0; i < rows.length; i++) {
       final x = plot.left + (i + .5) * slot;
-      final tip = yFor(values[i] * progress);
+      final h = values[i] / range * plot.height * progress;
       final w = math.min(36.0, slot * .55);
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(
-            x - w / 2,
-            math.min(tip, baseline),
-            w,
-            (tip - baseline).abs(),
-          ),
+          Rect.fromLTWH(x - w / 2, math.min(zero, zero - h), w, h.abs()),
           const Radius.circular(3),
         ),
         Paint()..color = i == selected ? niraGreenHover : niraGreen,
       );
       _text(
         canvas,
-        values[i].abs() < 1 && values[i] != 0
-            ? values[i].toStringAsFixed(3).replaceAll('.', ',')
-            : values[i].toInt().toString(),
-        Offset(x, tip + (values[i] < 0 ? 10 : -10)),
+        values[i].toInt().toString(),
+        Offset(x, zero - h + (h < 0 ? 10 : -10)),
         bold: true,
       );
       _text(canvas, rows[i].supplier, Offset(x, plot.bottom + 18));

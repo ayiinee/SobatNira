@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/page_frame.dart';
 import '../pekerjaan/review_api.dart';
 import '../pekerjaan/production_api.dart';
 import 'juice_volume.dart';
@@ -10,8 +11,10 @@ class JuiceTransferPage extends StatefulWidget {
     super.key,
     required this.api,
     required this.scope,
+    this.onNavigate,
     required this.lotId,
   });
+  final ValueChanged<NiraTab>? onNavigate;
   final ReviewApi api;
   final FactoryScope scope;
   final String lotId;
@@ -116,11 +119,9 @@ class _JuiceTransferPageState extends State<JuiceTransferPage> {
       _error = null;
     });
     try {
-      final receipt = await JuiceApi(widget.api).transfer(
-        widget.scope,
-        widget.lotId,
-        request,
-      );
+      final receipt = await JuiceApi(
+        widget.api,
+      ).transfer(widget.scope, widget.lotId, request);
       if (mounted) {
         setState(() {
           _receipt = receipt;
@@ -175,17 +176,20 @@ class _JuiceTransferPageState extends State<JuiceTransferPage> {
   @override
   Widget build(BuildContext context) => PopScope(
     canPop: !_working,
-    child: Scaffold(
-      appBar: AppBar(
-        title: const Text('Transfer nira'),
-        actions: [
-          IconButton(
-            tooltip: 'Muat ulang saldo',
-            onPressed: _working ? null : _reload,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
+    child: NiraPageScaffold(
+      onNavigate: widget.onNavigate == null
+          ? null
+          : (tab) {
+              if (!_working) widget.onNavigate!(tab);
+            },
+      title: const Text('Transfer nira'),
+      actions: [
+        IconButton(
+          tooltip: 'Muat ulang saldo',
+          onPressed: _working ? null : _reload,
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -400,8 +404,8 @@ class _TransferDestinationState extends State<_TransferDestination> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Pilih kloter tujuan')),
+  Widget build(BuildContext context) => NiraPageScaffold(
+    title: const Text('Pilih kloter tujuan'),
     body: SafeArea(
       child: ListView(
         padding: const EdgeInsets.all(16),
@@ -468,7 +472,9 @@ class _TransferDestinationState extends State<_TransferDestination> {
                       children: [
                         if (rows.isEmpty)
                           const ListTile(
-                            title: Text('Tidak ada kloter tujuan pada halaman ini.'),
+                            title: Text(
+                              'Tidak ada kloter tujuan pada halaman ini.',
+                            ),
                           ),
                         for (final lot in rows)
                           ListTile(

@@ -11,9 +11,11 @@ class PekerjaanPage extends StatefulWidget {
   const PekerjaanPage({
     this.api,
     this.factoryId,
+    this.onNavigate,
     required this.active,
     super.key,
   });
+  final ValueChanged<NiraTab>? onNavigate;
   final ReviewApi? api;
   final String? factoryId;
   final bool active;
@@ -146,8 +148,11 @@ class _PekerjaanPageState extends State<PekerjaanPage>
   Future<void> _open(Json task) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (_) =>
-            ReviewDetailPage(api: _api!, taskId: task['id'] as String),
+        builder: (_) => ReviewDetailPage(
+          api: _api!,
+          taskId: task['id'] as String,
+          onNavigate: widget.onNavigate,
+        ),
       ),
     );
     if (mounted) {

@@ -67,7 +67,7 @@ export class LotClosureService {
       }
 
       // Keep the lot locked until the read-only batch check and closure commit finish.
-      await this.batch.requireClear(access, lotId, synthetic, authorization);
+      await this.batch.requireClear(tx, access, lotId, synthetic, authorization);
       const closure = (await tx.query<Closure>(`INSERT INTO sobatnira.lot_closures
         (tenant_id, factory_id, lot_id, is_synthetic, closed_by) VALUES ($1, $2, $3, $4, $5)
         RETURNING ${closureColumns}`, [...values, access.userId])).rows[0];

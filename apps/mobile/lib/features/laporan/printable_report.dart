@@ -16,6 +16,7 @@ class PrintableReport {
     this.synthetic = true,
     this.totalDisplayOverride,
     this.connected = false,
+    this.provisional = false,
   }) : rows = List.unmodifiable(
          {for (final row in rows) (row.id ?? row.code): row}.values,
        ),
@@ -95,6 +96,7 @@ class PrintableReport {
   final List<AnalyticsRow> rows;
   final ProductionRecap? recap;
   final bool synthetic;
+  final bool provisional;
   final String? totalDisplayOverride;
 
   bool get isProfit => kind == PrintableReportKind.profit;

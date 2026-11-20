@@ -347,7 +347,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Status: VALIDATED'), findsOneWidget);
     expect(find.text('Stok tebu tercatat: 1250 kg'), findsOneWidget);
-    await tester.pageBack();
+    await tester.tap(find.byTooltip('Kembali'));
     await tester.pumpAndSettle();
     expect(find.text('Belum ada laporan pada status ini.'), findsOneWidget);
     expect(find.text('1 laporan baru'), findsNothing);

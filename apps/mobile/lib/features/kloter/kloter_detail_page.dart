@@ -1,8 +1,9 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
 import '../../widgets/kloter_cane_overlay.dart';
-import '../../widgets/review_status_label.dart';
 import 'batch_detail_page.dart';
 import 'demo_production.dart';
 import 'kloter_detail_widgets.dart';
@@ -13,28 +14,30 @@ class KloterDetailPage extends StatelessWidget {
     required this.kloter,
     required this.demo,
     required this.onNavigate,
-    this.stock,
+    this.loadStock,
     this.production,
     this.onEdit,
     this.onTransfer,
     this.onClosure,
     this.onOpenPekerjaan,
+    this.onReturnFromProcess,
+    this.approvedPhoto,
+    this.statusMessage,
     super.key,
   });
 
   final DemoKloter kloter;
   final DemoProduction demo;
   final ValueChanged<NiraTab> onNavigate;
-  final Widget? stock;
+  final Future<Map<String, dynamic>> Function()? loadStock;
   final Widget? production;
-  final VoidCallback? onEdit;
-  final VoidCallback? onTransfer;
-  final VoidCallback? onClosure;
+  final Future<bool> Function()? onEdit;
+  final Future<void> Function()? onTransfer;
+  final Future<void> Function()? onClosure;
   final VoidCallback? onOpenPekerjaan;
-
-  Widget _batchSection(Widget child) => stock != null
-      ? SliverToBoxAdapter(child: child)
-      : SliverFillRemaining(hasScrollBody: false, child: child);
+  final VoidCallback? onReturnFromProcess;
+  final Future<Uint8List?> Function(String)? approvedPhoto;
+  final Widget? statusMessage;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -58,39 +61,59 @@ class KloterDetailPage extends StatelessWidget {
                 child: Column(
                   children: [
                     DetailMetrics([
-                      ('Tebu bersih', kloter.weight),
-                      ('Brix tebu', formatQuantity(kloter.brix, '°Bx')),
+                      (
+                        'Tebu bersih',
+                        kloter.record != null && kloter.netWeightKg == null
+                            ? '—'
+                            : kloter.weight,
+                      ),
+                      (
+                        'Brix tebu',
+                        kloter.brix == null
+                            ? '—'
+                            : formatQuantity(kloter.brix, '°Bx'),
+                      ),
                       if (kloter.record == null)
                         (
-                          'Nira batch',
+                          'Nira tercatat',
                           formatQuantity(kloter.batchJuiceLiters, 'L'),
                         )
                       else
                         (
-                          'Nira dihasilkan',
-                          formatQuantity(kloter.juiceLiters, 'L'),
+                          'Nira tercatat',
+                          kloter.juiceLiters == null
+                              ? '—'
+                              : formatQuantity(kloter.juiceLiters, 'L'),
                         ),
                     ]),
+                    ?statusMessage,
                     const SizedBox(height: NiraSpace.lg),
-                    DocumentLink('Data tebu dan penggilingan', () {
-                      Navigator.of(context).push(
+                    DocumentLink('Data tebu dan penggilingan', () async {
+                      await Navigator.of(context).push(
                         MaterialPageRoute<void>(
                           builder: (_) => KloterProcessPage(
                             demo: demo,
                             kloter: kloter,
                             onNavigate: onNavigate,
                             onOpenPekerjaan: onOpenPekerjaan,
+                            approvedPhoto: approvedPhoto,
+                            loadStock: loadStock,
+                            onEdit: onEdit,
+                            onTransfer: onTransfer,
+                            onClosure: onClosure,
                           ),
                         ),
                       );
+                      onReturnFromProcess?.call();
                     }),
                   ],
                 ),
               ),
             ],
           ),
-          _batchSection(
-            DecoratedBox(
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: DecoratedBox(
               decoration: const BoxDecoration(
                 borderRadius: BorderRadius.vertical(top: Radius.circular(7)),
                 border: Border(
@@ -127,29 +150,6 @@ class KloterDetailPage extends StatelessWidget {
                               : niraOchre,
                         ),
                       ),
-                    if (stock != null ||
-                        onEdit != null ||
-                        onTransfer != null ||
-                        onClosure != null) ...[
-                      const SizedBox(height: NiraSpace.md),
-                      const DetailSectionTitle('Pengelolaan kloter'),
-                      if (stock != null) ...[
-                        const SizedBox(height: NiraSpace.sm),
-                        stock!,
-                      ],
-                      if (onEdit != null) ...[
-                        const SizedBox(height: NiraSpace.sm),
-                        DocumentLink('Edit kloter', onEdit!),
-                      ],
-                      if (onTransfer != null) ...[
-                        const SizedBox(height: NiraSpace.sm),
-                        DocumentLink('Transfer nira', onTransfer!),
-                      ],
-                      if (onClosure != null) ...[
-                        const SizedBox(height: NiraSpace.sm),
-                        DocumentLink('Penutupan dan riwayat', onClosure!),
-                      ],
-                    ],
                     const SizedBox(height: NiraSpace.md),
                     for (final batch in kloter.batches)
                       Padding(
@@ -189,6 +189,7 @@ class KloterBatchTile extends StatelessWidget {
     required this.physicalWeight,
     required this.pending,
     required this.onTap,
+    this.cancelled = false,
     super.key,
   });
 
@@ -197,59 +198,103 @@ class KloterBatchTile extends StatelessWidget {
   final String physicalWeight;
   final bool pending;
   final VoidCallback onTap;
+  final bool cancelled;
 
   @override
   Widget build(BuildContext context) {
     const foreground = Colors.white;
-    return Material(
-      color: pending ? niraGold : niraGreen,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(niraRadius),
-        side: BorderSide(color: pending ? niraOchre : niraGreen, width: 1),
+    final status = cancelled
+        ? 'Dibatalkan'
+        : pending
+        ? 'Perlu ditinjau'
+        : 'Tervalidasi';
+    final heading = Text(
+      title,
+      style: niraText(
+        NiraType.section,
+        color: pending ? foreground : niraYellow,
+        weight: FontWeight.w700,
       ),
-      child: InkWell(
-        onTap: onTap,
-        overlayColor: niraGreenOverlay,
-        child: Stack(
-          children: [
-            KloterCaneOverlay(pending: pending, batch: true),
-            ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 63),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: NiraSpace.md,
-                  vertical: NiraSpace.sm,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Wrap(
-                      alignment: WrapAlignment.spaceBetween,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: NiraSpace.sm,
-                      runSpacing: NiraSpace.xs,
-                      children: [
-                        Text(
-                          title,
-                          style: niraText(
-                            NiraType.section,
-                            color: pending ? foreground : niraYellow,
-                            weight: FontWeight.w700,
-                          ),
+    );
+    final details = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _info(context, 'Nira batch', juice, foreground),
+        const SizedBox(height: 2),
+        _info(context, 'Hasil fisik', physicalWeight, foreground),
+        if (cancelled)
+          Text(status, style: niraText(NiraType.caption, color: foreground)),
+      ],
+    );
+    return Semantics(
+      label: '$title, $status',
+      button: true,
+      child: Material(
+        color: pending ? niraGold : niraGreen,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(niraRadius),
+          side: BorderSide(color: pending ? niraOchre : niraGreen),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          overlayColor: niraGreenOverlay,
+          child: Stack(
+            children: [
+              KloterCaneOverlay(pending: pending, batch: true),
+              ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 63),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: NiraSpace.md,
+                    vertical: NiraSpace.sm,
+                  ),
+                  child:
+                      MediaQuery.sizeOf(context).width < 390 ||
+                          MediaQuery.textScalerOf(context).scale(14) > 18
+                      ? Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(child: heading),
+                                const Icon(
+                                  Icons.chevron_right,
+                                  color: foreground,
+                                  size: 20,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: NiraSpace.xs),
+                            details,
+                          ],
+                        )
+                      : Row(
+                          children: [
+                            SizedBox(
+                              width: 90,
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                  right: NiraSpace.sm,
+                                ),
+                                child: heading,
+                              ),
+                            ),
+                            Expanded(child: details),
+                            const SizedBox(width: NiraSpace.sm),
+                            const Icon(
+                              Icons.chevron_right,
+                              color: foreground,
+                              size: 20,
+                            ),
+                          ],
                         ),
-                        ReviewStatusLabel(pending: pending),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    _info(context, 'Nira batch', juice, foreground),
-                    const SizedBox(height: 2),
-                    _info(context, 'Hasil fisik', physicalWeight, foreground),
-                  ],
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -21,7 +21,7 @@ void main() {
         9,
       );
       demo.dispose();
-      await tester.pumpWidget(const SobatNiraApp());
+      await tester.pumpWidget(const SobatNiraApp(connected: false));
       await tester.pumpAndSettle();
       final analytics = DemoAnalytics();
       addTearDown(analytics.dispose);
@@ -74,7 +74,7 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(393, 853));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(const SobatNiraApp());
+    await tester.pumpWidget(const SobatNiraApp(connected: false));
     await tester.pumpAndSettle();
     for (final (label, key, tabLabel) in [
       ('Laporan', 'laporan-scroll', 'Produksi'),

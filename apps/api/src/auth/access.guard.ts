@@ -23,8 +23,12 @@ export class AccessGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<SecurityRequest>();
     const headers = request.headers as Record<string, string | undefined>;
     const devRole = headers['x-dev-role'];
-    if (this.config.environment === 'development' && headers['x-dev-user-id'] && headers['x-dev-tenant-id'] && headers['x-dev-factory-id'] && devRole) {
-      if (devRole !== 'admin' && devRole !== 'owner') throw new ForbiddenException('Role tidak memiliki akses.');
+    if (policy?.kind === 'factory' && this.config.environment === 'development' &&
+        !request.params.tenantId && !request.params.factoryId && headers['x-dev-user-id'] &&
+        headers['x-dev-tenant-id'] && headers['x-dev-factory-id'] && devRole) {
+      if ((devRole !== 'admin' && devRole !== 'owner') || !policy.roles.includes(devRole)) {
+        throw new ForbiddenException('Role tidak memiliki akses.');
+      }
       request.authUser = { id: headers['x-dev-user-id'] };
       request.factoryAccess = { userId: headers['x-dev-user-id'], tenantId: headers['x-dev-tenant-id'], tenantName: 'Development', factoryId: headers['x-dev-factory-id'], factoryName: 'Development', role: devRole };
       return true;

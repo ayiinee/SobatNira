@@ -4,40 +4,80 @@ Skema JSON dan contoh sintetis tersedia di [schemas](schemas/) dan [examples](ex
 
 ## Instalasi bersama
 
-Siapkan Node 24, uv, Flutter 3.44.6, dan Chrome. Gunakan Python 3.13 pada Windows/Linux x64 untuk PaddleOCR CPU. Dari root repositori, jalankan perintah per direktori.
+Untuk uji penerimaan tim, gunakan Flutter **3.44.6** (Dart **3.12.2**), Chrome, Node.js **24.14.1** (npm **11.11.0**), Python **3.13.18** x64, uv **0.13.8**, dan PostgreSQL **18.6**. Samakan zona waktu browser ke **Asia/Jakarta** karena tampilan tanggal dan filter menggunakan zona waktu perangkat. Dari clone bersih, checkout SHA yang disetujui tim, lalu jalankan perintah per direktori.
 
 | Direktori | Perintah |
 | --- | --- |
 | `apps/api` | `npm ci` dan `npm run build` |
-| `apps/ai` | `uv sync --locked --extra paddle --python 3.13` |
+| `apps/ai` | `uv sync --locked --extra paddle --python 3.13.18` |
 | `apps/mobile` | `flutter pub get --enforce-lockfile` |
 
 Panggilan pertama PaddleOCR mengunduh model. Gunakan `PADDLE_PDX_CACHE_HOME` untuk memilih direktori cache. Di PowerShell gunakan `npm.cmd` jika eksekusi `npm.ps1` diblokir.
 
 ## Mode lokal sintetis
 
-1. Siapkan PostgreSQL lokal. Jika memakai Docker, jalankan perintah berikut sekali. Pada sesi berikutnya gunakan `docker start sobatnira-local-db` bila berhenti. Untuk PostgreSQL yang sudah tersedia, set `LOCAL_DATABASE_URL` ke koneksi loopback milik pengembangan.
+1. Mulai dari `git clone https://github.com/ayiinee/SobatNira.git`, lalu `git checkout --detach <SHA-acuan>` di direktori clone. Simpan hasil `git rev-parse HEAD` dan pastikan `git status --short` kosong. Jalankan [instalasi bersama](#instalasi-bersama). Siapkan PostgreSQL lokal. Jika memakai Docker, jalankan `docker run` sekali dan buat database baru untuk setiap putaran. Untuk PostgreSQL yang sudah tersedia, gunakan `createdb` atau klien SQL untuk membuat database kosong yang setara.
 
    ```sh
-   docker run --name sobatnira-local-db -e POSTGRES_PASSWORD=sobatnira-local -p 127.0.0.1:55437:5432 -d postgres:17
+   docker run --name sobatnira-local-db -e POSTGRES_PASSWORD=sobatnira-local -p 127.0.0.1:55437:5432 -d postgres:18.6
+   docker exec sobatnira-local-db createdb -U postgres sobatnira_accept_a
+   docker exec sobatnira-local-db createdb -U postgres sobatnira_accept_b
    ```
 
-2. Jalankan `npm run local:stack -- --smoke` dari `apps/api`. Bootstrap membuat schema `sobatnira_local`, menjalankan migration berulang dengan aman, memasang operator/admin sintetis, membuat fixture foto ke `.tmp/local-ai`, dan menyalakan NestJS, worker, FastAPI dan stub Supabase Auth. Media asli sintetis tersimpan privat di `.tmp/local-ai/media`. Plugin OpenClaw yang sama menerima payload sintetis dan mengirim lewat batas WhatsApp simulasi. PaddleOCR menjalankan model CPU dengan foto hasil generasi fixture.
-3. Dari `apps/mobile` jalankan Flutter web dan buka `http://127.0.0.1:8080`. Untuk melihat aplikasi release, gunakan `flutter build web` dengan ketiga `--dart-define` yang sama, lalu sajikan `build/web` pada port 8080.
+   Mulai ulang kontainer dengan `docker start sobatnira-local-db` bila sebelumnya dihentikan. Untuk putaran berikutnya gunakan nama database baru. Pertahankan database demo tim dan data uji terdahulu.
+
+2. Dari `apps/mobile`, buat build dari entry point utama dengan satu origin lokal.
 
    ```sh
-   flutter run -d web-server --web-hostname 127.0.0.1 --web-port 8080 --dart-define=API_BASE_URL=http://127.0.0.1:3000 --dart-define=SUPABASE_URL=http://127.0.0.1:8077 --dart-define=SUPABASE_PUBLISHABLE_KEY=local-synthetic-publishable
+   flutter build web --no-web-resources-cdn -t lib/main.dart --dart-define=SOBATNIRA_MODE=local --dart-define=API_BASE_URL=http://127.0.0.1:8000 --dart-define=SUPABASE_URL=http://127.0.0.1:8000 --dart-define=SUPABASE_PUBLISHABLE_KEY=local-synthetic-publishable
    ```
+
+3. Dari `apps/api`, jalankan perintah berikut dengan database A. Pada checkout B gunakan `sobatnira_accept_b` setelah proses checkout A dihentikan. Di Bash gunakan `export LOCAL_DATABASE_URL='…'` dan `npm`.
+
+   ```powershell
+   $env:LOCAL_DATABASE_URL = 'postgres://postgres:sobatnira-local@127.0.0.1:55437/sobatnira_accept_a'
+   npm.cmd run local:stack -- --web --acceptance
+   ```
+
+   Buka `http://127.0.0.1:8000/` di profil browser bersih. Alamat ini menyajikan Flutter beserta CanvasKit lokal, NestJS, dan login sintetis. Bootstrap menerapkan migrasi dengan urutan produksi kemudian OCR (`sobatnira_local`), menyiapkan akun serta dua kloter uji, dan menjalankan worker NestJS serta FastAPI OCR internal (port loopback 8001). `--acceptance` memakai empat PNG sintetis dari [`apps/ai/fixtures/acceptance`](../../apps/ai/fixtures/acceptance) sehingga input OCR identik walaupun font sistem berbeda. Foto dibuat dengan `apps/ai/synthetic_notes.py`. Adapter simulasi memanggil PaddleOCR CPU dan menyimpan salinan privat di `.tmp/local-ai/media`. Tunggu terminal menampilkan tiga tugas siap diproses.
+
+   Gateway preview membatasi koneksi browser dan pemuatan font ke origin lokal. Tampilan uji memakai font yang ikut di build, termasuk saat mesin terhubung ke internet.
 
 4. Masuk dengan `admin@example.invalid` / `sobatnira-demo`, buka **Pekerjaan** dari Beranda **Pabrik Demo**. Gunakan ID tugas dan kode kloter yang dicetak terminal.
 
-   - Buka **Nota Kedatangan Truk**, periksa foto dan riwayat, pilih **Validasi revisi ini**, pilih kloter `OCR-A-…`, lalu pilih **Sahkan dan catat stok**.
-   - Buka tugas dari **Perlu tinjauan manual**. Lengkapi tanggal `2026-11-16`, pemasok `PEMASOK DEMO`, jenis tebu `BL`, berat `1250` dan catatan pemeriksaan. Simpan draf dan sahkan ke kloter `OCR-B-…`.
+   - Buka **Nota Kedatangan Truk**, periksa foto dan riwayat, pilih **Validasi revisi ini**, pilih kloter `OCR-A-UJI`, lalu pilih **Sahkan dan catat stok**.
+   - Buka tugas dari **Perlu tinjauan manual**. Lengkapi tanggal `2026-11-16`, pemasok `PEMASOK DEMO`, jenis tebu `BL`, berat `1250` dan catatan pemeriksaan. Simpan draf dan sahkan ke kloter `OCR-B-UJI`.
    - Buka **Nota Produksi** revisi kedua. Validasi blok `DEMO-A` ke kloter A dengan `90` L dan blok `DEMO-B` ke kloter B dengan `85` L. Isi waktu penggilingan `2026-11-16T09:00:00+07:00` pada kedua blok. Angka liter berasal dari input eksplisit pengujian.
 
-   Terminal memeriksa PostgreSQL untuk kedua kredit penerimaan 1250 kg, debit penggilingan 1250 kg per kloter, serta kredit nira 90 L dan 85 L yang terikat ke revisi produksi. Kembali ke **Kloter**, cari kode yang tampil di terminal dan buka detailnya. Periksa berat 1250000 g, nira tersedia 90000 mL atau 85000 mL, dan ID kedua nota beserta revisinya. Gunakan database lokal khusus demo. Tekan Ctrl+C untuk menghentikan proses.
+5. Buka **Kloter** dan pilih kloter A. Periksa berat 1250 kg, nira tersedia 90 L, serta referensi dan foto kedua nota sah. Pilih **Tambah batch**, kode `SMOKE-UJI`, wajan 1, waktu masak `2026-11-16T10:00:00+07:00`, 40000 mL nira, hasil fisik 26 kg, grade A 25 kg dan Rp20000/kg. Isi biaya tebu, operasional, bahan dan lainnya masing-masing Rp100000, Rp20000, Rp5000 dan Rp0. Pilih **Reservasi nira**, lalu **Validasi** di Detail Batch.
+6. Di **Laporan**, pilih semua tanggal atau 16 November 2026 dan cocokkan angka pada tabel. Dari **Beranda → Rekap**, gunakan **Simpan PDF** dan periksa periode, `SMOKE-UJI` dan 25 kg gula final. Simpan bukti visual Detail Kloter, Laporan, dan Pengaturan pada ukuran 418 × 966. Bandingkan dengan build acuan UI tim pada ukuran yang sama, dengan memperhitungkan data fixture dan aksi yang bergantung pada akun. Simpan PDF serta hasil terminal `Smoke Flutter dan PostgreSQL lulus` dari setiap checkout. Tekan Ctrl+C sebelum menjalankan checkout berikutnya.
 
-Uji memeriksa dua tipe nota, kutipan pesan bot pada foto produksi lanjutan, kiriman duplikat, operator nonaktif, revisi lama, akses lintas pabrik dan foto ulang. Tes PostgreSQL komponen juga memeriksa lease kedaluwarsa akibat restart dan kegagalan provider yang menuju antrean **Perlu tinjauan manual**. Untuk menjalankan layanan tanpa memasukkan kiriman uji, hilangkan `--smoke`. Gunakan tugas baru dengan status menunggu validasi pada setiap percobaan.
+   | Pemeriksaan | Hasil yang diharapkan |
+   | --- | --- |
+   | Adapter WhatsApp simulasi | Foto diterima segera, OCR membaca 1250 kg pada nota truk dan dua blok pada nota produksi. Pengiriman ulang nota truk memakai revisi yang sama. Revisi produksi kedua membaca hasil 26 kg. Konfirmasi revisi lama ditolak. |
+   | Pembukuan PostgreSQL | Penerimaan 1250 kg per kloter, penggilingan sebesar −1250 kg per kloter, nira A 90 L dan B 85 L. Satu reservasi dikonsumsi 40 L, tersisa 50 L di A setelah replay pengesahan dan reservasi. |
+   | Laporan resmi kloter A | 25 kg gula final, Rp500.000 nilai produksi, Rp125.000 biaya, dan Rp375.000 margin sementara. ID snapshot API rekap dan laba sama dengan PostgreSQL pada putaran itu. ID yang dibuat server dapat berbeda antar-putaran. |
+   | Keanggotaan | `admin@example.invalid` mengesahkan. `owner@example.invalid` membaca batch dan laporan dengan penolakan pengesahan batch (`403`). `other@example.invalid` membaca laporan kosong pabriknya sendiri dengan penolakan batch pabrik A (`403`) dan tugas review pabrik A (`404`). Ketiga akun sintetis menggunakan kata sandi `sobatnira-demo`. |
+   | WhatsApp perangkat | Catat terpisah mengikuti [uji WhatsApp nyata](#smoke-test-setelah-pairing). Simulasi menguji adapter, balasan dan OCR lokal. Status pengiriman dan waktu tampil pada perangkat memerlukan uji gateway WhatsApp. |
+
+Jika port web diubah melalui `LOCAL_WEB_PORT`, buat ulang build dengan port yang sama pada kedua definisi URL. Di preview lokal, formulir Pengaturan tanpa kontrak API memakai data sesi sintetis. Pengelolaan operator WhatsApp, pemasok, dan jenis tebu memakai API pabrik. Event `whatsapp_photo_accepted`, `ocr_attempt` dan `whatsapp_notice_delivery` dapat dicocokkan lewat `revisionId`. Catat waktu penerimaan, waktu sejak revisi dibuat sampai percobaan OCR (`queueMs`), durasi ekstraksi (`extractionMs`) dan durasi pengiriman per jenis nota. Ukur persentil dan hasil tinjauan manual di staging dengan sampel yang sudah dianonimkan.
+
+Untuk menjalankan layanan dengan data yang sudah tersedia, gunakan `npm run local:stack -- --web`. Untuk menguji tambahan foto ambigu dan foto ulang, ganti `--acceptance` dengan `--smoke`. Mode `--smoke` mencetak kode kloter dan batch yang dibuat untuk putaran tersebut. Tes PostgreSQL komponen juga memeriksa lease kedaluwarsa akibat restart dan kegagalan provider yang menuju antrean **Perlu tinjauan manual**.
+
+Untuk menguji sampai antrean **Pekerjaan** dengan PaddleOCR CPU lokal tanpa membuka Flutter, jalankan `npm run local:stack -- --ocr-smoke` dari `apps/api` memakai database pengembangan sintetis. Perintah memeriksa foto truk, dua revisi produksi, penolakan konfirmasi saat klarifikasi masih terbuka, penolakan format angka ambigu, foto ulang, dan tinjauan manual. Layanan yang dimulai oleh perintah ini ditutup setelah tes selesai.
+
+### Percakapan operator
+
+- Balasan **“Foto diterima. Sedang membaca nota…”** dikirim setelah API menyimpan foto dan pekerjaan OCR. Gunakan **STATUS** untuk cek progres. Jika ada beberapa nota dalam satu chat, balas foto atau ringkasan nota yang dimaksud dengan **STATUS**.
+- Balas pesan otomatis yang memuat pertanyaan dengan **JAWAB** diikuti nilai pada nota. Gunakan `1250` untuk berat 1.250 kg dan `12,5` untuk desimal. Bot mengirim ringkasan revisi terbaru setelah koreksi. Balas **KONFIRMASI** hanya ketika data pada ringkasan terbaru sudah sesuai.
+- `workflow_status` dan `can_confirm` pada status internal menunjukkan tahap dan kesiapan operator. `pending_question` merujuk pada pertanyaan aktif. Tanda terima pengiriman mengikat pertanyaan ke pesan WhatsApp yang menampilkannya. **STATUS** dapat meminta pengiriman ulang jika pengiriman gagal atau ringkasan lama belum menyimpan ikatan pertanyaan.
+- Jalankan `npm run db:migrate:ocr` sebelum memperbarui API dan plugin OpenClaw bersama-sama. Migrasi tambahan mempertahankan tanda terima lama. Untuk draf yang dibuat sebelumnya, pertanyaan wajib dilengkapi sewaktu operator memeriksa status.
+
+### Pengukuran
+
+Ambil median dan p95 per tipe nota. `whatsapp_photo_reply_dispatch` mengukur waktu dari event masuk hingga balasan masuk antrean pengiriman gateway. Bandingkan dengan waktu balasan terlihat pada perangkat operator saat smoke WhatsApp live. Untuk hasil awal setiap foto, `whatsapp_notice_delivery` dengan hasil `SENT` mencatat `photoRecordedToProviderAckMs` dari pencatatan foto sampai tanda terima provider. Gunakan `ocr_attempt` untuk memisahkan waktu antrean dan inferensi. Koreksi operator serta foto ulang dapat dihitung dari `OPERATOR_CORRECTED`, `CLARIFICATION_ANSWERED`, dan `PHOTO_RETAKE_QUEUED` pada audit.
+
+Dari `apps/ai`, jalankan `uv run --locked --extra paddle python benchmark_ocr.py <manifest-privat.json>` terhadap sampel anonim berlabel. Statistik agregat membedakan kolom yang kosong, salah baca, serta nilai salah yang diterima sebagai `READ`. Bagian kalibrasi membandingkan bacaan yang akan lolos pada beberapa ambang untuk berat bersih dan berat hasil. Hasil ini belum menerapkan ambang baru pada OCR. Gunakan baseline nota lapangan sebelum menetapkan ambang atau target waktu.
 
 ## Mode terhubung
 
@@ -49,7 +89,7 @@ Jalankan gateway, NestJS dan FastAPI pada host yang sama untuk memakai alamat lo
    | --- | --- |
    | PostgreSQL | `DATABASE_URL` dari session pooler atau koneksi langsung. Isi `DATABASE_SSL_CA_FILE` dengan path CA proyek Supabase dari dashboard. Koneksi jarak jauh memverifikasi TLS. |
    | Supabase Auth | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`. Buat akun administrator dengan metode email/password dan salin UUID akun. |
-   | Backend B | Isi `BATCH_API_BASE_URL` dengan origin HTTPS layanan tim untuk mengaktifkan penutupan kloter. `BATCH_CLOSURE_TIMEOUT_MS` opsional. [Kontrak Backend B](../backend-juice-and-closure.md#penutupan-kloter). |
+   | Penutupan kloter | Biarkan `BATCH_API_BASE_URL` kosong agar NestJS membaca status batch resmi dari PostgreSQL yang sama. [Pemeriksaan penutupan](../backend-production-implementation.md#penutupan-kloter). |
    | R2 | `R2_ENDPOINT` berupa endpoint S3 akun, `R2_BUCKET_NAME`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`. Nonaktifkan akses melalui `r2.dev` dan custom domain publik di dashboard bucket. Jika terdapat hostname publik lama, isi `R2_PUBLIC_BASE_URL` untuk probe dengan satu marker sintetis. Probe membutuhkan izin PutObject dan DeleteObject. |
    | Gemini | `GEMINI_API_KEY`, `GEMINI_VISION_MODEL` berisi ID model Gemini yang dapat memproses gambar dan mengembalikan JSON. |
    | OpenRouter | `OPENROUTER_API_KEY`, `OPENROUTER_AGENT_MODEL`, `OPENROUTER_ALLOWED_PROVIDERS` berupa slug yang disetujui dan dipisah koma. Pilih endpoint zero data retention yang mendukung function calling. ID model eksplisit boleh memakai akhiran `:free`. `OPENROUTER_AGENT_FALLBACK_MODEL` opsional. Set `OPENROUTER_AGENT_DISABLE_REASONING=true` bila model yang dipilih mendukung `reasoning.effort=none`. |

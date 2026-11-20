@@ -6,7 +6,7 @@ import 'package:sobatnira/features/kloter/kloter_detail_page.dart';
 import 'package:sobatnira/sobatnira_ui.dart';
 
 void main() {
-  testWidgets('kloter cards display status text and fit enlarged text', (
+  testWidgets('kloter cards expose status and fit enlarged text', (
     tester,
   ) async {
     final demo = DemoProduction();
@@ -28,8 +28,15 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(
-        find.text(
-          status == KloterStatus.review ? 'Perlu ditinjau' : 'Tervalidasi',
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is Semantics &&
+              (widget.properties.label?.contains(
+                    status == KloterStatus.review
+                        ? 'Perlu ditinjau'
+                        : 'Tervalidasi',
+                  ) ??
+                  false),
         ),
         findsOneWidget,
       );
@@ -37,32 +44,50 @@ void main() {
     }
   });
 
-  testWidgets('batch status labels follow validation and cancellation', (
-    tester,
-  ) async {
-    final demo = DemoProduction();
-    addTearDown(demo.dispose);
-    final lot = demo.kloter.firstWhere(
-      (lot) => lot.status == KloterStatus.review,
-    );
-    await tester.binding.setSurfaceSize(const Size(393, 1100));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: niraTheme(),
-        home: KloterDetailPage(kloter: lot, demo: demo, onNavigate: (_) {}),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Perlu ditinjau'), findsOneWidget);
-    expect(find.text('Tervalidasi'), findsNWidgets(lot.batches.length - 1));
-    demo.verify(lot.batches.last.review);
-    await tester.pumpAndSettle();
-    expect(find.text('Perlu ditinjau'), findsNothing);
-    expect(find.text('Tervalidasi'), findsNWidgets(lot.batches.length));
-    demo.reopenBatch(lot.batches.first);
-    await tester.pumpAndSettle();
-    expect(find.text('Perlu ditinjau'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'batch semantics follow validation without changing card layout',
+    (tester) async {
+      final demo = DemoProduction();
+      final semantics = tester.ensureSemantics();
+      addTearDown(demo.dispose);
+      final lot = demo.kloter.firstWhere(
+        (lot) => lot.status == KloterStatus.review,
+      );
+      await tester.binding.setSurfaceSize(const Size(393, 1100));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: niraTheme(),
+          home: KloterDetailPage(kloter: lot, demo: demo, onNavigate: (_) {}),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.bySemanticsLabel(RegExp(r'^Batch \d+, Perlu ditinjau')),
+        findsOneWidget,
+      );
+      expect(
+        find.bySemanticsLabel(RegExp(r'^Batch \d+, Tervalidasi')),
+        findsNWidgets(lot.batches.length - 1),
+      );
+      demo.verify(lot.batches.last.review);
+      await tester.pumpAndSettle();
+      expect(
+        find.bySemanticsLabel(RegExp(r'^Batch \d+, Perlu ditinjau')),
+        findsNothing,
+      );
+      expect(
+        find.bySemanticsLabel(RegExp(r'^Batch \d+, Tervalidasi')),
+        findsNWidgets(lot.batches.length),
+      );
+      demo.reopenBatch(lot.batches.first);
+      await tester.pumpAndSettle();
+      expect(
+        find.bySemanticsLabel(RegExp(r'^Batch \d+, Perlu ditinjau')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      semantics.dispose();
+    },
+  );
 }

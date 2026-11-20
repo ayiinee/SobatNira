@@ -30,7 +30,7 @@ void main() {
       addTearDown(tester.view.reset);
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
 
-      await tester.pumpWidget(const SobatNiraApp());
+      await tester.pumpWidget(const SobatNiraApp(connected: false));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
 

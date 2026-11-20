@@ -27,7 +27,7 @@ void main() {
   }) async {
     await tester.binding.setSurfaceSize(size);
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(const SobatNiraApp());
+    await tester.pumpWidget(const SobatNiraApp(connected: false));
     await tester.pumpAndSettle();
   }
 
@@ -490,7 +490,7 @@ void main() {
           .descendant(of: find.byWidget(card), matching: find.byType(Material))
           .first,
     );
-    expect(material.color, const Color(0xFFCFA331));
+    expect(material.color, niraGold);
   });
 
   testWidgets('pratinjau foto bisa diperbesar, dizoom dan ditutup', (
@@ -526,7 +526,7 @@ void main() {
           size: Size(360, 720),
           textScaler: TextScaler.linear(2),
         ),
-        child: SobatNiraApp(),
+        child: SobatNiraApp(connected: false),
       ),
     );
     await tester.pumpAndSettle();

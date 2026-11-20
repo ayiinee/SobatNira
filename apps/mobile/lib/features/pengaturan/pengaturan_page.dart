@@ -14,6 +14,7 @@ class PengaturanPage extends StatelessWidget {
     this.connectedProfile,
     this.onConnectedEntry,
     this.onOpenPekerjaan,
+    this.allowSessionSettings = false,
     this.onSignOut,
     this.catalogLinks = const {},
     super.key,
@@ -24,6 +25,7 @@ class PengaturanPage extends StatelessWidget {
   final String? connectedProfile;
   final Map<SettingSection, VoidCallback>? onConnectedEntry;
   final VoidCallback? onOpenPekerjaan;
+  final bool allowSessionSettings;
   final VoidCallback? onSignOut;
   final Map<String, VoidCallback> catalogLinks;
 
@@ -99,9 +101,11 @@ class PengaturanPage extends StatelessWidget {
 
   Widget _row(SettingEntry entry, BuildContext context) {
     final callbacks = onConnectedEntry;
-    final VoidCallback? open = callbacks == null
-        ? () => _open(context, entry)
-        : callbacks[entry.section];
+    final open =
+        callbacks?[entry.section] ??
+        (callbacks == null || allowSessionSettings
+            ? () => _open(context, entry)
+            : null);
     return _menuRow(entry.title, entry.subtitle, entry.icon, open);
   }
 
