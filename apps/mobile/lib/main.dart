@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'features/beranda/beranda_page.dart';
 import 'features/bantuan/bantuan_page.dart';
 import 'features/beranda/quick_action_icon.dart';
-import 'features/kloter/connected_kloter_page.dart';
+import 'features/auth/connected_session_gate.dart';
 import 'features/kloter/connected_production.dart';
 import 'features/kloter/official_batch_workflow.dart';
 import 'features/kloter/juice_transfer_page.dart';
@@ -59,7 +59,7 @@ class SobatNiraApp extends StatelessWidget {
       ),
     ),
     home: connected
-        ? ConnectedKloterPage(
+        ? ConnectedSessionGate(
             invalidConfiguration:
                 configurationErrors ?? ReviewApi.invalidConfiguration,
             signIn: signIn,

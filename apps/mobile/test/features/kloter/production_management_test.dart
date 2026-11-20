@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:sobatnira/features/kloter/connected_kloter_page.dart';
 import 'package:sobatnira/features/kloter/production_catalog_page.dart';
 import 'package:sobatnira/features/kloter/production_lot_editor.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
+import 'package:sobatnira/main.dart';
 
 final scope = FactoryScope.fromJson({
   'tenantId': 'tenant',
@@ -369,6 +369,8 @@ void main() {
   testWidgets(
     'connected home opens master data with the same factory and reloads lots',
     (tester) async {
+      await tester.binding.setSurfaceSize(const Size(418, 1200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       final paths = <String>[];
       final api = ReviewApi(
         'fixture',
@@ -383,9 +385,16 @@ void main() {
                     'tenantName': 'Tenant',
                     'factoryId': 'factory',
                     'factoryName': 'Pabrik Uji',
+                    'role': 'admin',
                   },
                 ],
               }),
+              200,
+            );
+          }
+          if (request.url.path.endsWith('/production-report')) {
+            return http.Response(
+              jsonEncode({'items': [], 'totals': {}, 'grades': []}),
               200,
             );
           }
@@ -396,7 +405,10 @@ void main() {
         }),
       );
       await tester.pumpWidget(
-        MaterialApp(home: ConnectedKloterPage(signIn: (_, _) async => api)),
+        SobatNiraApp(
+          configurationErrors: const [],
+          signIn: (_, _) async => api,
+        ),
       );
       await press(tester, 'Masuk');
       await tester.enterText(
@@ -405,7 +417,10 @@ void main() {
       );
       await tester.enterText(find.byType(TextField).last, 'fixture');
       await press(tester, 'Masuk');
+      await tester.tap(find.bySemanticsLabel('Pengaturan'));
+      await tester.pumpAndSettle();
       for (final label in ['Pemasok', 'Jenis tebu']) {
+        await tester.scrollUntilVisible(find.text(label), 240);
         await press(tester, label);
         expect(
           paths.last,
@@ -415,7 +430,9 @@ void main() {
         await tester.pumpAndSettle();
         expect(paths.last, '/tenants/tenant/factories/factory/lots');
       }
-      await press(tester, 'Tambah kloter');
+      await tester.tap(find.bySemanticsLabel('Kloter'));
+      await tester.pumpAndSettle();
+      await press(tester, 'Tambah kloter', tooltip: true);
       expect(find.byType(ProductionLotEditor), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
     },

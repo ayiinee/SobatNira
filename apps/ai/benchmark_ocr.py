@@ -18,6 +18,7 @@ MIME_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
 GROUND_TRUTH_KEYS = {"status", "raw_value", "normalized_value", "unit"}
 CRITICAL_FIELDS = {"net_weight_kg", "isi_kg", "hasil_kg", "cane_label", "grade"}
 UNSCORABLE = {"NOT_PRESENT", "ILLEGIBLE", "AMBIGUOUS"}
+FIELD_STATUSES = UNSCORABLE | {"READ", "BLANK", "NOT_YET_FILLED", "NOT_APPLICABLE", "UNMAPPED"}
 SPLITS = {"tuning", "test"}
 THRESHOLDS = (0.80, 0.85, 0.90, 0.95)
 
@@ -30,6 +31,7 @@ class Case:
     fields: dict
     required_fields: tuple[str, ...]
     document_group: str
+    row_group_sizes: tuple[int, ...] | None = None
 
 
 def load_cases(manifest, split=None):
@@ -51,13 +53,17 @@ def load_cases(manifest, split=None):
         fields = case.get("fields", {})
         if not isinstance(fields, dict) or any(
             not path or not isinstance(expected, dict) or not expected or not expected.keys() <= GROUND_TRUTH_KEYS
-            or ("status" in expected and expected["status"] not in ("READ", "NOT_PRESENT", "ILLEGIBLE", "AMBIGUOUS"))
+            or ("status" in expected and (not isinstance(expected["status"], str) or expected["status"] not in FIELD_STATUSES))
             for path, expected in fields.items()
         ):
             raise ValueError(f"Anotasi field kasus {index} tidak valid")
         required = case.get("required_fields", [])
         if not isinstance(required, list) or any(not isinstance(path, str) or path not in fields for path in required):
             raise ValueError(f"Field wajib kasus {index} belum diberi anotasi")
+        row_groups = case.get("row_group_sizes")
+        if row_groups is not None and (case["document_type"] != "PRODUCTION_NOTE" or not isinstance(row_groups, list)
+                                      or any(type(count) is not int or count < 0 for count in row_groups)):
+            raise ValueError(f"Anotasi kelompok baris kasus {index} tidak valid")
         group = case.get("document_group")
         partition = case.get("split")
         if partition is not None or group is not None or split is not None:
@@ -66,7 +72,8 @@ def load_cases(manifest, split=None):
             if groups.setdefault(group, partition) != partition or images.setdefault(image, partition) != partition:
                 raise ValueError(f"Foto atau grup nota kasus {index} muncul di lebih dari satu split")
         if split is None or split == partition:
-            selected.append(Case(image, mime, case["document_type"], fields, tuple(dict.fromkeys(required)), group or str(image)))
+            selected.append(Case(image, mime, case["document_type"], fields, tuple(dict.fromkeys(required)),
+                                 group or str(image), None if row_groups is None else tuple(row_groups)))
     if split is None and len(set(groups.values())) > 1:
         raise ValueError("Pilih --split tuning atau --split test untuk manifest dengan dua split")
     if not selected:
@@ -90,6 +97,8 @@ def evaluate(cases, infer=None):
     confidence = defaultdict(list)
     latencies = defaultdict(list)
     whole_note = defaultdict(Counter)
+    statuses = defaultdict(Counter)
+    grouping = Counter(total=0, correct=0)
     for index, case in enumerate(cases, 1):
         expected_type = case.document_type
         start = monotonic()
@@ -101,12 +110,18 @@ def evaluate(cases, infer=None):
         latencies[expected_type].append(((monotonic() - start) * 1000, case.document_group))
         predicted = note["document_type"] if note else "UNKNOWN"
         classes[expected_type][predicted] += 1
+        if case.row_group_sizes is not None:
+            observed = tuple(len(block["batches"]) for block in note["cane_blocks"]) if predicted == "PRODUCTION_NOTE" else None
+            grouping["total"] += 1
+            grouping["correct"] += int(observed == case.row_group_sizes)
         actual = dict(extracted_fields(note))
         matched = set()
         for path, expected in case.fields.items():
             metric = f"{expected_type}.{path}"
             tally = metrics[metric]
             found = actual.get(path) if expected_type == predicted else None
+            if "status" in expected:
+                statuses[expected["status"]][found["status"] if found else "FIELD_MISSING"] += 1
             if expected.get("status") in UNSCORABLE:
                 tally["unscorable"] += 1
                 if found and found["status"] == "READ" and found["normalized_value"] is not None:
@@ -145,6 +160,7 @@ def evaluate(cases, infer=None):
         }
     summary = timing([value for samples in latencies.values() for value in samples])
     return {"images": summary["samples"], "classification": dict(classes), "fields": dict(metrics),
+            "field_status_confusion": dict(statuses), "production_row_grouping": dict(grouping),
             "required_fields_per_note": dict(whole_note),
             "median_processing_ms": summary["median_ms"], "p95_processing_ms": summary["p95_ms"],
             "processing_by_document_type": {kind: timing(samples) for kind, samples in latencies.items()},

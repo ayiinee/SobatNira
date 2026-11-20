@@ -136,11 +136,12 @@ export class DocumentProcessor implements OnModuleInit, OnModuleDestroy {
       await audit(db, work, status, null, { attempt: job.attempts, request_id: requestId });
       return status;
     });
-    if (outcome) this.logger.log({ event: 'ocr_attempt', revisionId: work.id, attempt: job.attempts,
+    if (outcome) this.logger.log({ event: 'ocr_attempt', revisionId: work.id, requestId, attempt: job.attempts,
       queueMs, eligibleWaitMs, extractionMs, outcome, errorCode, documentType: result?.extraction?.document_type ?? work.document_type,
       mediaMs: result?.processing.media_duration_ms, inferParseMs: result?.processing.infer_parse_duration_ms,
       serviceMs: result?.processing.duration_ms, rereadAttempts: result?.processing.reread_attempts,
-      rereadMs: result?.processing.reread_duration_ms });
+      rereadMs: result?.processing.reread_duration_ms, visionModel: result?.processing.vision_model,
+      visionPromptVersion: result?.processing.prompt_version });
     return true;
   }
 

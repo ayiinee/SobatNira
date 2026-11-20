@@ -88,7 +88,13 @@ export function summary(revision, page = 1, { fromStatus = false, retryQueued = 
     return `${heading}\n*Menunggu pengesahan admin.*`;
   }
   if (revision.issues?.some(({ code }) => code === 'DOCUMENT_REFERENCE_REQUIRED')) {
-    return 'Apakah ini lanjutan nota produksi? Balas foto atau ringkasan nota sebelumnya dengan foto terbaru. Jika ini nota baru, kirim foto terpisah dengan caption BARU.';
+    const candidates = (revision.candidate_documents ?? []).filter(id =>
+      typeof id === 'string' && /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(id)).slice(0, 5);
+    return ['Pilih nota tujuan sebelum foto dipakai sebagai revisi.',
+      'Balas foto atau ringkasan nota tujuan dengan foto terbaru.',
+      ...(candidates.length ? ['Anda juga bisa kirim ulang foto dengan caption pilihan sesuai nota tujuan:',
+        ...candidates.map(id => `• ${reference(id)} — REVISI ${id}`)] : []),
+      'Jika ini nota baru, kirim foto terpisah dengan caption BARU.'].join('\n');
   }
   const followUp = revision.follow_up?.comment ? `Catatan admin — ${clean(revision.follow_up.comment)}` : null;
   const returned = revision.workflow_status === 'RETURNED_FOR_CORRECTION';

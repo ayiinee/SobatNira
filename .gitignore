@@ -7,6 +7,7 @@ __pycache__/
 !.env.example
 !.env.connected.example
 .tmp/
+/output/playwright/
 /docs/internal/
 /docs.zip
 *.log

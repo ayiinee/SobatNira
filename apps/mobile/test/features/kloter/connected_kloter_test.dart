@@ -4,13 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:sobatnira/features/kloter/connected_kloter_page.dart';
+import 'package:sobatnira/main.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
 
 void main() {
   testWidgets(
     'uses the selected factory and shares its authenticated review session',
     (tester) async {
+      await tester.binding.setSurfaceSize(const Size(418, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       const lot = {
         'id': 'lot-b',
         'displayCode': 'OCR-B',
@@ -32,6 +34,7 @@ void main() {
                     'tenantName': 'Tenant',
                     'factoryId': factory,
                     'factoryName': 'Pabrik $factory',
+                    'role': 'admin',
                   },
               ],
             },
@@ -71,6 +74,16 @@ void main() {
               'offset': 0,
               'limit': 20,
             },
+            '/tenants/tenant/factories/A/production/production-report' ||
+            '/tenants/tenant/factories/B/production/production-report' => {
+              'items': [],
+              'totals': {},
+              'grades': [],
+            },
+            '/tenants/tenant/factories/B/production/batches' => {
+              'items': [],
+              'total': 0,
+            },
             '/api/v1/mobile/review-tasks' => {'items': []},
             '/api/v1/mobile/review-notifications' => {'unread_count': 1},
             _ => throw StateError('Unexpected route ${request.url.path}'),
@@ -80,14 +93,13 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: ConnectedKloterPage(
-            signIn: (email, password) async {
-              expect(email, 'admin@example.invalid');
-              expect(password, 'fixture-password');
-              return api;
-            },
-          ),
+        SobatNiraApp(
+          configurationErrors: const [],
+          signIn: (email, password) async {
+            expect(email, 'admin@example.invalid');
+            expect(password, 'fixture-password');
+            return api;
+          },
         ),
       );
       expect(requests, isEmpty);
@@ -100,20 +112,45 @@ void main() {
       await tester.enterText(find.byType(TextField).last, 'fixture-password');
       await tester.tap(find.text('Masuk'));
       await tester.pumpAndSettle();
-      expect(find.text('Belum ada kloter yang ditemukan.'), findsOneWidget);
-      await tester.tap(find.text('Pabrik A · Tenant'));
+      expect(
+        requests.any((uri) => uri.path.endsWith('/factories/A/lots')),
+        isTrue,
+      );
+      await tester.tap(find.byTooltip('Pilih pabrik'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Pabrik B · Tenant').last);
+      await tester.tap(find.text('Pabrik B'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), 'A & B');
-      await tester.tap(find.byTooltip('Cari kloter'));
+      await tester.tap(find.bySemanticsLabel('Kloter'));
       await tester.pumpAndSettle();
-      expect(requests.last.queryParameters['q'], 'A & B');
 
+      final sent = requests.length;
+      await tester.enterText(find.byType(TextField), 'A & B');
+      await tester.pumpAndSettle();
+      expect(find.text('OCR-B'), findsNothing);
+      await tester.enterText(find.byType(TextField), 'OCR');
+      await tester.pumpAndSettle();
+      expect(requests, hasLength(sent));
       await tester.tap(find.text('OCR-B'));
       await tester.pumpAndSettle();
-      expect(find.text('1250010 g'), findsOneWidget);
-      await tester.scrollUntilVisible(find.text('Penutupan dan riwayat'), 100);
+      expect(find.text('1.250,01 kg'), findsOneWidget);
+
+      await tester.tap(find.text('Data tebu dan penggilingan'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Penggilingan'));
+      await tester.pumpAndSettle();
+      final scrollable = find.byType(Scrollable).first;
+      await tester.scrollUntilVisible(
+        find.text('revisi-b'),
+        150,
+        scrollable: scrollable,
+      );
+      expect(find.text('revisi-b'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Penutupan dan riwayat'),
+        150,
+        scrollable: scrollable,
+      );
+      expect(find.text('80,00025 L'), findsOneWidget);
       await tester.tap(find.text('Penutupan dan riwayat'));
       await tester.pumpAndSettle();
       expect(find.text('Tutup kloter'), findsOneWidget);
@@ -126,34 +163,13 @@ void main() {
       );
       await tester.pageBack();
       await tester.pumpAndSettle();
-      expect(
-        requests.where(
-          (uri) => uri.path == '/tenants/tenant/factories/B/lots/lot-b',
-        ),
-        hasLength(2),
-      );
-      await tester.scrollUntilVisible(find.text('80000.25 mL'), 200);
-      expect(find.text('80000.25 mL'), findsOneWidget);
-      await tester.scrollUntilVisible(find.text('Transfer nira'), 100);
       await tester.tap(find.text('Transfer nira'));
       await tester.pumpAndSettle();
       expect(find.text('Kirim transfer'), findsOneWidget);
       expect(find.text('80.00025 L'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('Nota Produksi'), 200);
-      await tester.tap(find.text('Nota Produksi'));
-      await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(
-        find.text('revisi-b'),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
-      expect(find.text('revisi-b'), findsOneWidget);
-
-      await tester.pageBack();
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Pekerjaan'));
+      await tester.tap(find.text('Buka Pekerjaan'));
       await tester.pumpAndSettle();
       final review = requests
           .where((uri) => uri.path.startsWith('/api/v1/mobile/'))
@@ -165,6 +181,12 @@ void main() {
       expect(
         review.every((uri) => uri.queryParameters['factory_id'] == 'B'),
         isTrue,
+      );
+      expect(
+        requests
+            .where((uri) => uri.path.endsWith('/juice/availability'))
+            .length,
+        greaterThan(1),
       );
       await tester.pumpWidget(const SizedBox.shrink());
     },

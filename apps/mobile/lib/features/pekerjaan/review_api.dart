@@ -301,21 +301,6 @@ class ReviewApi {
     },
   );
 
-  Future<Json> profitReport(
-    FactoryScope scope, {
-    DateTime? from,
-    DateTime? before,
-    bool synthetic = false,
-    bool recap = false,
-  }) => _productionGet(
-    [...scope._base, 'production', recap ? 'recap' : 'profit-report'],
-    query: {
-      'synthetic': '$synthetic',
-      if (from != null) 'from': from.toUtc().toIso8601String(),
-      if (before != null) 'before': before.toUtc().toIso8601String(),
-    },
-  );
-
   Future<Json> factoryBatches(
     FactoryScope scope,
     String lotId, {

@@ -1,8 +1,8 @@
 import { createServer } from 'node:http';
 import { execFile, spawn } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
-import { copyFile, mkdir, readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
@@ -10,6 +10,7 @@ import plugin, { createBridge } from '../integrations/openclaw/index.mjs';
 import database from '../dist/documents/database.js';
 import migrations from '../dist/database/migrations.js';
 import { startLocalWeb } from './local-web.mjs';
+import { runAcceptanceBrowser } from './acceptance-browser.mjs';
 
 const root = resolve(import.meta.dirname, '../../..');
 const scratch = resolve(root, '.tmp/local-ai');
@@ -29,7 +30,10 @@ const tenant = '10000000-0000-4000-8000-000000000005';
 const supplier = '10000000-0000-4000-8000-000000000006';
 const owner = '10000000-0000-4000-8000-000000000007';
 const ocrOnly = process.argv.includes('--ocr-smoke');
-const acceptance = process.argv.includes('--acceptance');
+const acceptanceBrowser = process.argv.includes('--acceptance-browser');
+const acceptance = acceptanceBrowser || process.argv.includes('--acceptance');
+const acceptanceOutput = acceptanceBrowser ? resolve(root, process.env.LOCAL_ACCEPTANCE_OUTPUT_DIR ??
+  `output/playwright/acceptance-${randomUUID()}`) : null;
 const runSmoke = acceptance || ocrOnly || process.argv.includes('--smoke');
 const lotFixtures = (runSmoke ? ['A', 'B'] : []).map((label, index) => {
   const id = acceptance ? `10000000-0000-4000-8000-00000000001${index}` : randomUUID();
@@ -60,6 +64,10 @@ Object.assign(process.env, { SOBATNIRA_MODE: 'local', NODE_ENV: 'development', D
   AI_BASE_URL: url(ports.ai), AI_SERVICE_BASE_URL: url(ports.ai), OCR_MEDIA_BASE_URL: url(ports.api), DOCUMENT_MEDIA_DIR: resolve(scratch,'media'),
   SUPABASE_URL: url(ports.auth), SUPABASE_PUBLISHABLE_KEY: authKey, SOBATNIRA_API_URL: url(ports.api),
   AI_SERVICE_INTERNAL_TOKEN: randomBytes(32).toString('hex'), WHATSAPP_ADAPTER_INTERNAL_TOKEN: randomBytes(32).toString('hex') });
+if (acceptanceBrowser) {
+  process.env.OWNER_AGENT_ENABLED = 'true';
+  process.env.REPORT_EXPORT_ENABLED = 'true';
+}
 
 const db = new database.Database();
 const children = [];
@@ -306,6 +314,7 @@ async function smoke(ocrOnly = false) {
   console.log(`1. Nota Kedatangan Truk ${truckTask} → ${lotA.code}`);
   console.log(`2. Draf manual ${manualTask} → ${lotB.code}`);
   console.log(`3. Nota Produksi ${productionTask} → ${lotA.label} : ${lotA.code} : 90 L, ${lotB.label} : ${lotB.code} : 85 L`);
+  const browser = acceptanceOutput ? await runAcceptanceBrowser(browserOrigin, acceptanceOutput) : null;
   const approved = async (tasks, timeout) => waitFor(async () =>
     (await db.query("SELECT count(*)::int AS count FROM admin_review_tasks WHERE id=ANY($1::uuid[]) AND status='VALIDATED'",
       [tasks])).rows[0].count === tasks.length, 'Smoke menunggu validasi dari Flutter', timeout);
@@ -380,7 +389,8 @@ async function smoke(ocrOnly = false) {
     requestId: batch.id, batchId: batch.id, originLotId: lotA.id, quantityMl: '40000',
   });
   assert.equal(reservationReplay.data.state, 'consumed');
-  assert.equal((await scopedRequest(`/lots/${lotA.id}/juice/availability`)).data.onHandMl, '50000');
+  const availability = await scopedRequest(`/lots/${lotA.id}/juice/availability`);
+  assert.equal(availability.data.onHandMl, '50000');
   const ownerToken = userTokens['owner@example.invalid'];
   const outsideToken = userTokens['other@example.invalid'];
   assert.equal((await scopedRequest(batchPath, 'GET', undefined, ownerToken)).status, 200);
@@ -402,6 +412,78 @@ async function smoke(ocrOnly = false) {
   if (acceptance) {
     assert.equal(recap.data.totalSugarKg, '25');
     assert.equal(profit.data.totalMarginRupiah, '375000');
+    const tool = (operation, args, token = ownerToken) =>
+      scopedRequest('/capabilities/query', 'POST', { operation, arguments: args }, token);
+    const period = { from: '2026-11-16T00:00:00Z', before: '2026-11-17T00:00:00Z' };
+    const report = await tool('get_report_snapshot', period);
+    assert.equal(report.status, 200);
+    assert.equal(report.data.result.totals.finalSugarKg, '25');
+    assert.equal(report.data.result.totals.productionMarginRupiah, '375000');
+    assert.equal(report.data.sources.find(row => row.lotId === lotA.id).snapshotId, snapshot.data.id);
+    assert.equal((await tool('get_report_snapshot', period, userTokens['admin@example.invalid'])).status, 403);
+    assert.equal((await tool('get_report_snapshot', period, outsideToken)).status, 403);
+    const lineage = await tool('get_document_lineage', { documentId: updated.document });
+    assert.equal(lineage.status, 200);
+    assert.deepEqual(lineage.data.result.revisions.map(row => row.revision_id), [updated.revision, initial.revision]);
+    assert.ok(lineage.data.result.revisions[0].confirmed_at && lineage.data.result.revisions[0].approved_at);
+    const contribution = await tool('get_lot_contribution_summary', { lotId: lotA.id });
+    assert.equal(contribution.status, 200);
+    assert.equal(contribution.data.result.pageConsumedQuantityMl, '40000');
+    console.log('Capability owner, lineage nota, dan kontribusi nira cocok dengan snapshot dan PostgreSQL.');
+    if (acceptanceOutput) {
+      const ownerPhone = phone(105);
+      const ownerMessage = (value, id = randomUUID()) => receive(body(id, value, { SenderE164: ownerPhone }));
+      assert.match(await ownerMessage('ASISTEN total produksi 2026-11-16'), /Akses belum tersedia/);
+      const grant = await scopedRequest('/owner-agent/sessions', 'POST', { phone: ownerPhone }, ownerToken);
+      assert.equal(grant.status, 201);
+      assert.match(await ownerMessage(`SAMBUNG ${grant.data.code}`), /tersambung/);
+      assert.match(await ownerMessage('ASISTEN total produksi 2026-11-16'), /gula final: 25 kg/);
+      assert.match(await ownerMessage(`ASISTEN telusuri batch ${batch.id}`), /40000 mL/);
+      const question = 'ASISTEN berapa total produksi dan distribusi grade, serta kontribusi nira terbesar 2026-11-16';
+      const withoutBasis = await ownerMessage(question);
+      assert.match(withoutBasis, /Untuk peringkat, apakah yang dimaksud/);
+      assert.doesNotMatch(withoutBasis, /40000 mL/);
+      const insight = await ownerMessage(question + ' berdasarkan tanggal penerimaan kloter batch');
+      assert.match(insight, /gula final: 25 kg/);
+      assert.match(insight, /Grade A: 25 kg/);
+      assert.match(insight, /OCR-A-UJI .*40000 mL/);
+      const waId = randomUUID();
+      const requested = await ownerMessage('ASISTEN buat laporan 2026-11-16', waId);
+      assert.match(requested, /sedang diproses/);
+      const reportId = requested.match(/[a-f0-9-]{36}/)[0];
+      assert.match(await ownerMessage('ASISTEN buat laporan 2026-11-16', waId), new RegExp(reportId));
+      const exportPath = `/report-exports/${reportId}`;
+      await waitFor(async () => receipts.some(value => value.text.includes(reportId) && value.text.includes('siap')),
+        'Notifikasi ekspor simulasi belum terkirim', 65_000);
+      const frozen = await scopedRequest(`${exportPath}/snapshot`, 'GET', undefined, ownerToken);
+      assert.equal(frozen.data.status, 'READY');
+      assert.deepEqual(frozen.data.snapshot.totals, report.data.result.totals);
+      assert.equal((await scopedRequest(exportPath, 'GET', undefined, outsideToken)).status, 403);
+      for (const format of ['pdf', 'xlsx']) {
+        const artifact = await fetch(`${browserOrigin}/tenants/${tenant}/factories/${factory}${exportPath}/files/${format}`,
+          { headers: { Authorization: `Bearer ${ownerToken}` }, signal: AbortSignal.timeout(10_000) });
+        assert.equal(artifact.status, 200);
+        await writeFile(resolve(acceptanceOutput, `owner-rekap.${format}`), Buffer.from(await artifact.arrayBuffer()));
+      }
+      const script = resolve(root, 'apps/api/scripts/read-acceptance-pdf.py');
+      await requireExit(child(process.env.UV_BIN ?? 'uv',
+        ['run', '--locked', '--extra', 'paddle', 'python', script, acceptanceOutput], resolve(root, 'apps/ai')),
+      'PDF Rekap gagal diverifikasi.');
+      await writeFile(resolve(acceptanceOutput, 'acceptance.json'), JSON.stringify({
+        version: 1, browser,
+        intakeKg: [lotA, lotB].map(lot => intake.find(row => row.lot_id === lot.id).weight),
+        milledCaneKg: milling.map(row => row.cane),
+        producedJuiceLiters: milling.map(row => row.juice),
+        batch: { code, consumedMl: contribution.data.result.pageConsumedQuantityMl,
+          remainingMl: availability.data.onHandMl, source: 'approved-ledger' },
+        report: report.data.result.totals,
+        grades: report.data.result.grades,
+        lineageVersionCount: lineage.data.result.revisions.length,
+        checks: ['adapter-ocr', 'deduplication', 'replay', 'owner-admin-factory',
+          'report-snapshot', 'flutter-pdf', 'owner-agent', 'production-insight', 'pdf', 'xlsx', 'report-notice'],
+      }, null, 2) + '\n');
+      console.log(`Bukti acceptance disimpan di ${acceptanceOutput}.`);
+    }
   }
   console.log('Smoke Flutter dan PostgreSQL lulus. Batch, stok, pengiriman ulang, snapshot laporan, dan akses tiga akun cocok.');
 }
@@ -426,8 +508,12 @@ async function stop() {
 
 for (const signal of ['SIGINT','SIGTERM']) process.on(signal, () => { void stop().then(() => process.exit(0)); });
 try {
+  if (acceptanceOutput) {
+    await mkdir(dirname(acceptanceOutput), { recursive: true });
+    await mkdir(acceptanceOutput);
+  }
   await boot();
   if (runSmoke) await smoke(ocrOnly);
-  if (ocrOnly) await stop();
+  if (ocrOnly || acceptanceBrowser) await stop();
 }
 catch (error) { console.error(error.message); await stop(); process.exitCode = 1; }

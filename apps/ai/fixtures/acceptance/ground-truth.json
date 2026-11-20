@@ -15,6 +15,7 @@
   {
     "image": "production.png",
     "document_type": "PRODUCTION_NOTE",
+    "row_group_sizes": [1, 1],
     "document_group": "SYNTHETIC-PRODUCTION",
     "split": "test",
     "fields": {
@@ -26,6 +27,7 @@
   {
     "image": "update.png",
     "document_type": "PRODUCTION_NOTE",
+    "row_group_sizes": [1, 1],
     "document_group": "SYNTHETIC-PRODUCTION",
     "split": "test",
     "fields": {

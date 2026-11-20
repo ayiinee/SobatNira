@@ -33,6 +33,7 @@ MAX_BYTES = 10 * 1024 * 1024
 MAX_PIXELS = 20_000_000
 NOTE_SCHEMA_VERSION = "1.0.0"
 NOTE_TEMPLATE_VERSION = "1.0.0"
+VISION_PROMPT_VERSION = "crop-transcription-v1"
 PADDLE_WORKER = ThreadPoolExecutor(max_workers=1, thread_name_prefix="sobatnira-paddle")
 router = APIRouter()
 
@@ -194,9 +195,14 @@ def reread(image, bbox, model, key, *, supplier_name=False):
         }}},
     )
     response.raise_for_status()
-    raw = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+    payload = response.json()
+    raw = payload["candidates"][0]["content"]["parts"][0]["text"]
     candidate = json.loads(raw)["value"]
-    return candidate if isinstance(candidate, str) and 0 < len(candidate) <= 300 else None
+    usage = payload.get("usageMetadata")
+    measured = {name: usage[key] for name, key in {
+        "prompt_tokens": "promptTokenCount", "total_tokens": "totalTokenCount",
+    }.items() if isinstance(usage, dict) and type(usage.get(key)) is int and 0 <= usage[key] <= 10_000_000}
+    return candidate if isinstance(candidate, str) and 0 < len(candidate) <= 300 else None, measured
 
 
 def resolve_ambiguities(note, image, options, processing):
@@ -216,7 +222,7 @@ def resolve_ambiguities(note, image, options, processing):
         if not enabled or not value["evidence"] or attempt_count >= 3:
             continue
         attempt_count += 1
-        processing.update(vision_provider="GEMINI_DIRECT", vision_model=model)
+        processing.update(vision_provider="GEMINI_DIRECT", vision_model=model, prompt_version=VISION_PROMPT_VERSION)
         started = monotonic()
         try:
             bbox = value["evidence"][0]["bbox"]
@@ -230,7 +236,12 @@ def resolve_ambiguities(note, image, options, processing):
                 right = max(x + w for x, _, w, _ in same_line)
                 bottom = max(y + h for _, y, _, h in same_line)
                 bbox = (left, top, right - left, bottom - top)
-            candidate = reread(image, bbox, model, key, supplier_name=supplier_name)
+            candidate, measured = reread(image, bbox, model, key, supplier_name=supplier_name)
+            if measured:
+                usage = processing.setdefault("token_usage", {})
+                for name, count in measured.items():
+                    usage[name] = usage.get(name, 0) + count
+                usage["responses_measured"] = usage.get("responses_measured", 0) + 1
         except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
             issues.append({"code": "VISION_UNAVAILABLE", "severity": "WARNING", "message": "Pembacaan ulang belum tersedia.", "field_path": path})
             continue

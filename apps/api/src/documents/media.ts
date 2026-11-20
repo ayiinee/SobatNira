@@ -1,8 +1,9 @@
 import { BadRequestException, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { GetObjectCommand, HeadBucketCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { mkdir, readFile, link, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, link, stat, unlink, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { Readable } from 'node:stream';
 import { MAX_IMAGE_BYTES } from './contracts';
 import { r2Settings } from './config';
 import { loadConfiguration } from '../config/backend.config';
@@ -29,17 +30,18 @@ export function imageMime(buffer: Buffer, declared: string) {
 export class MediaStorage {
   private s3?: S3Client;
 
-  private storage(key: string) {
+  private storage(key: string, namespace: 'originals' | 'reports' = 'originals') {
     if (!/^[a-f0-9]{64}$/.test(key)) throw new BadRequestException('Referensi media tidak valid');
     if (process.env.R2_ENDPOINT || process.env.R2_ACCOUNT_ID || process.env.R2_ACCESS_KEY_ID || process.env.R2_SECRET_ACCESS_KEY) {
       const { bucket, endpoint, region, accessKeyId, secretAccessKey } = r2Settings();
       this.s3 ??= new S3Client({ endpoint, region, forcePathStyle: true, credentials: { accessKeyId, secretAccessKey } });
-      return { bucket, s3: this.s3, key: `originals/${key}` };
+      return { bucket, s3: this.s3, key: `${namespace}/${key}` };
     }
     if (process.env.NODE_ENV === 'production' || process.env.SOBATNIRA_MODE === 'connected' || !process.env.DOCUMENT_MEDIA_DIR) {
       throw new ServiceUnavailableException('Penyimpanan dokumen belum dikonfigurasi');
     }
-    const directory = resolve(process.env.DOCUMENT_MEDIA_DIR);
+    const directory = namespace === 'originals' ? resolve(process.env.DOCUMENT_MEDIA_DIR) :
+      resolve(process.env.DOCUMENT_MEDIA_DIR, namespace);
     return { directory, key: resolve(directory, key) };
   }
 
@@ -52,8 +54,9 @@ export class MediaStorage {
     await storage.s3.send(new HeadBucketCommand({ Bucket: storage.bucket }), { abortSignal: AbortSignal.timeout(5_000) });
   }
 
-  async put(key: string, mime: string, bytes: Buffer) {
-    const storage = this.storage(key);
+  async put(key: string, mime: string, bytes: Buffer, namespace?: 'reports') {
+    if (!bytes.length || bytes.length > MAX_IMAGE_BYTES) throw new BadRequestException('Ukuran media tidak valid');
+    const storage = this.storage(key, namespace);
     if (storage.s3) {
       try {
         await storage.s3.send(new PutObjectCommand({ Bucket: storage.bucket, Key: storage.key,
@@ -76,14 +79,35 @@ export class MediaStorage {
     }
   }
 
-  async read(key: string) {
-    const storage = this.storage(key);
-    if (!storage.s3) return readFile(storage.key);
+  async read(key: string, namespace?: 'reports') {
+    const storage = this.storage(key, namespace);
+    if (!storage.s3) {
+      const info = await stat(storage.key);
+      if (!info.isFile() || !info.size || info.size > MAX_IMAGE_BYTES) throw invalidStoredMedia();
+      const bytes = await readFile(storage.key);
+      if (bytes.length !== info.size) throw invalidStoredMedia();
+      return bytes;
+    }
     const { Body, ContentLength } = await storage.s3.send(new GetObjectCommand({ Bucket: storage.bucket, Key: storage.key }),
       { abortSignal: AbortSignal.timeout(12_000) });
-    if (!Body || ContentLength === undefined || ContentLength > MAX_IMAGE_BYTES) {
-      throw new ServiceUnavailableException('Ukuran media tersimpan tidak valid');
+    if (!(Body instanceof Readable)) throw invalidStoredMedia();
+    if (!ContentLength || ContentLength < 1 || ContentLength > MAX_IMAGE_BYTES) {
+      Body.destroy();
+      throw invalidStoredMedia();
     }
-    return Buffer.from(await Body.transformToByteArray());
+    const chunks: Buffer[] = [];
+    let size = 0;
+    for await (const chunk of Body) {
+      const bytes = Buffer.from(chunk);
+      size += bytes.length;
+      if (size > ContentLength) throw invalidStoredMedia();
+      chunks.push(bytes);
+    }
+    if (size !== ContentLength) throw invalidStoredMedia();
+    return Buffer.concat(chunks, size);
   }
+}
+
+function invalidStoredMedia() {
+  return new ServiceUnavailableException('Ukuran media tersimpan tidak valid');
 }

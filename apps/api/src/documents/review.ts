@@ -18,6 +18,33 @@ export class Review {
   constructor(private readonly db: Database, private readonly truckIntake: TruckIntake,
     private readonly productionMilling: ProductionMilling, private readonly stockReconciliation: StockReconciliation) {}
 
+  async lineage(user: string, factory: string, document: string, beforeVersion: number | null) {
+    const { rows: [result] } = await this.db.query<{ document_id: string; document_type: string;
+      current_revision_id: string | null; revisions: Array<{version: number}> }>(`SELECT d.id AS document_id,
+      d.document_type,d.current_revision_id,COALESCE(history.revisions,'[]'::jsonb) AS revisions
+      FROM source_documents d
+      JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1
+        AND a.active AND a.role='OWNER' AND ${ACTIVE_REVIEW_ACCESS_SQL}
+      LEFT JOIN LATERAL (
+        SELECT jsonb_agg(to_jsonb(entry) ORDER BY entry.version DESC) AS revisions FROM (
+          SELECT r.id AS revision_id,r.parent_revision_id,r.submission_id,s.media_asset_id,r.version,
+            r.processing_status,r.operator_status,r.created_at,o.confirmed_at,p.approved_at,j.id AS job_id,
+            j.status AS job_status,j.attempts AS attempts_count,
+            (SELECT t.status FROM admin_review_tasks t WHERE t.revision_id=r.id
+             ORDER BY t.created_at DESC,t.id LIMIT 1) AS review_status
+          FROM document_revisions r JOIN document_submissions s ON (s.document_id,s.id)=(r.document_id,r.submission_id)
+          LEFT JOIN operator_confirmations o ON o.revision_id=r.id
+          LEFT JOIN document_approvals p ON (p.document_id,p.revision_id)=(r.document_id,r.id)
+          LEFT JOIN document_jobs j ON j.revision_id=r.id
+          WHERE r.document_id=d.id AND ($4::int IS NULL OR r.version<$4)
+          ORDER BY r.version DESC LIMIT 101
+        ) entry
+      ) history ON true WHERE d.factory_id=$2 AND d.id=$3`, [user, factory, document, beforeVersion]);
+    if (!result) throw new NotFoundException('Dokumen tidak ditemukan.');
+    const revisions = result.revisions.slice(0, 100);
+    return { ...result, revisions, nextBeforeVersion: result.revisions.length > 100 ? revisions[99].version : null };
+  }
+
   async user(authorization?: string) {
     if (!authorization || !/^Bearer \S{1,8192}$/.test(authorization)) throw new UnauthorizedException();
     const project = process.env.SUPABASE_URL;

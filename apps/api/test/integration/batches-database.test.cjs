@@ -50,6 +50,36 @@ test('batch approval freezes costs, consumes once, isolates scope and produces a
   assert.equal(production.body.totals.productionMarginRupiah,'475000');
   assert.equal(production.body.items[0].batches[0].grades[0].code,'A');
   assert.equal(production.body.grades[0].exactValueRupiah,'600000');
+  const capabilityPath = f.root + '/capabilities/query';
+  const range = {from:'2026-11-16T00:00:00Z',before:'2026-11-17T00:00:00Z'};
+  const tool = (operation, args, token = 'fixture-owner', path = capabilityPath) =>
+    f.request(path,'POST',{operation,arguments:args},token);
+  assert.equal((await tool('get_production_summary',range,'fixture-admin')).status,403);
+  assert.equal((await tool('get_production_summary',{...range,userId:f.ids.admin})).status,400);
+  const snapshot = await tool('get_report_snapshot',range);
+  assert.equal(snapshot.status,200,JSON.stringify(snapshot.body));
+  assert.deepEqual(snapshot.body.result.totals,production.body.totals);
+  assert.deepEqual(snapshot.body.result.grades,production.body.grades);
+  assert.deepEqual(snapshot.body.result.items,production.body.items);
+  assert.equal(snapshot.body.sources[0].snapshotId,approved.body.id);
+  assert.equal(snapshot.body.scope.factoryId,f.ids.factory);
+  assert.equal((await tool('get_lot_traceability',{lotId:f.ids.lot})).body.result.id,f.ids.lot);
+  assert.equal((await tool('get_grade_distribution',range)).body.result.grades[0].code,'A');
+  assert.equal((await tool('get_production_metrics',range)).body.result.lotMetrics[0].productionMarginRupiah,'475000');
+  const comparison = await tool('compare_production_periods',{first:range,
+    second:{from:range.before,before:'2026-11-18T00:00:00Z'}});
+  assert.equal(comparison.status,200,JSON.stringify(comparison.body));
+  assert.equal(comparison.body.result.first.totals.finalSugarKg,'30');
+  assert.equal(comparison.body.result.second.totals.lotCount,0);
+  const traces = await tool('get_batch_traceability',{batchId:batch});
+  const material = await tool('get_material_contributions',{batchId:batch});
+  assert.equal(traces.status,200,JSON.stringify(traces.body));
+  assert.deepEqual(traces.body.result.items,material.body.result.items);
+  assert.deepEqual(material.body.result.items,[{reservationId:requestId,batchId:batch,
+    originLotId:f.ids.lot,stockLotId:f.ids.lot,quantityMl:'100000'}]);
+  assert.equal((await tool('get_lot_contribution_summary',{lotId:f.ids.lot})).body.result.pageConsumedQuantityMl,'100000');
+  assert.equal((await tool('get_batch_traceability',{batchId:batch},'fixture-owner',
+    f.siblingRoot+'/capabilities/query')).status,403);
   assert.equal((await f.request(root+'/production-report?synthetic=true')).body.totals.lotCount,0);
   assert.equal((await f.request(root+'/production-report?before=2026-11-16T01:00:00Z')).body.totals.lotCount,0);
   assert.equal((await f.request(root+'/production-report?from=2026-11-16T01:00:00Z')).body.totals.lotCount,1);

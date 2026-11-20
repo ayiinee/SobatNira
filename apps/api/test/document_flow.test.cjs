@@ -845,6 +845,11 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     const ambiguousResult = await db.query('SELECT processing_status,issues FROM document_revisions WHERE id=$1', [ambiguous.revision_id]);
     assert.equal(ambiguousResult.rows[0].processing_status, 'NEEDS_CLARIFICATION');
     assert.equal(ambiguousResult.rows[0].issues[0].code, 'DOCUMENT_REFERENCE_REQUIRED');
+    assert.ok(!(await status(ambiguous)).candidate_documents.includes(stage2.document_id));
+    assert.equal((await photo(event('reference-outside-operator', 'IMAGE', phone(101), null,
+      `REVISI ${stage2.document_id}`))).status, 404);
+    assert.equal((await photo({ ...event('reference-outside-chat', 'IMAGE', phone(102), null,
+      `REVISI ${stage2.document_id}`), chat_id: 'OTHER-SYNTHETIC-CHAT' })).status, 404);
     assert.equal((await action(event('ambiguous-confirm', 'TEXT'), ambiguous)).status, 409);
 
     const failure = await photo(event('failure')).then((response) => response.json());

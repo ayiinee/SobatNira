@@ -18,7 +18,7 @@ import { StockReconciliation } from './stock-reconciliation';
 import { Operators, OperatorsController } from './operators';
 
 @Injectable()
-class AdapterGuard implements CanActivate {
+export class AdapterGuard implements CanActivate {
   canActivate(context: ExecutionContext) {
     requireServiceToken(context.switchToHttp().getRequest().headers['x-internal-service-token'], process.env.WHATSAPP_ADAPTER_INTERNAL_TOKEN);
     return true;
@@ -225,5 +225,6 @@ class MobileReviewController {
   controllers: [WhatsAppController, OcrMediaController, MobileReviewController, OperatorsController],
   providers: [AdapterGuard, Database, DocumentProcessor, Intake, MediaStorage, Notices, Review, TruckIntake,
     ProductionMilling, StockReconciliation, Operators],
+  exports: [MediaStorage, Review],
 })
 export class OcrDocumentsModule {}

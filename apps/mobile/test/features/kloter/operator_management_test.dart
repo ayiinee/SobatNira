@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:sobatnira/features/kloter/connected_kloter_page.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
+import 'package:sobatnira/main.dart';
 
 Future<void> tap(WidgetTester tester, Finder finder) async {
   await tester.ensureVisible(finder);
@@ -60,6 +60,12 @@ void main() {
           );
         }
         if (path.endsWith('/lots')) return page([]);
+        if (path.endsWith('/production-report')) {
+          return http.Response(
+            jsonEncode({'items': [], 'totals': {}, 'grades': []}),
+            200,
+          );
+        }
         if (path == base && request.method == 'GET') {
           return page([
             if (operator != null &&
@@ -103,7 +109,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(home: ConnectedKloterPage(signIn: (_, _) async => api)),
+      SobatNiraApp(configurationErrors: const [], signIn: (_, _) async => api),
     );
     await tap(tester, find.text('Masuk'));
     await tester.enterText(
@@ -112,9 +118,10 @@ void main() {
     );
     await tester.enterText(find.byType(TextField).last, 'fixture-password');
     await tap(tester, find.text('Masuk'));
-    await tap(tester, find.text('Pabrik A · Tenant'));
-    await tap(tester, find.text('Pabrik B · Tenant').last);
-    await tap(tester, find.text('Operator WhatsApp'));
+    await tap(tester, find.byTooltip('Pilih pabrik'));
+    await tap(tester, find.text('Pabrik B'));
+    await tap(tester, find.bySemanticsLabel('Pengaturan'));
+    await tap(tester, find.bySemanticsLabel('Pegawai & WhatsApp'));
     expect(requests.last.url.path, base);
     expect(find.text('Data tidak ditemukan.'), findsOneWidget);
     await tap(tester, find.text('Tambah operator WhatsApp'));
