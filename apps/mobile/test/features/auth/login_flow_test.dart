@@ -9,6 +9,7 @@ import 'package:http/testing.dart';
 import 'package:sobatnira/features/auth/login_pages.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
 import 'package:sobatnira/main.dart';
+import 'package:sobatnira/widgets/adaptive_value.dart';
 import 'package:sobatnira/sobatnira_ui.dart';
 
 void main() {
@@ -37,7 +38,12 @@ void main() {
     await tester.pumpAndSettle();
     final caneSummary = find.text('Tebu diterima');
     expect(caneSummary, findsOneWidget);
-    expect(find.text('17.990 kg'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is NiraValue && widget.value == '17.990 kg',
+      ),
+      findsOneWidget,
+    );
     expect(find.byType(LoginWelcomePage), findsNothing);
     expect(find.byType(LoginFormPage), findsNothing);
     expect(Navigator.of(tester.element(caneSummary)).canPop(), isFalse);
@@ -249,6 +255,8 @@ void main() {
   testWidgets(
     '403 mempertahankan sesi dan 401 dari Pekerjaan kembali ke form masuk',
     (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 853));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       final api = ReviewApi(
         'fixture',
         client: MockClient((request) async {
@@ -263,12 +271,25 @@ void main() {
                 },
               ],
             }),
+            '/tenants/tenant/factories/factory/production/production-report' =>
+              _json({
+                'items': [],
+                'grades': [],
+                'totals': {
+                  'lotCount': 0,
+                  'producedLotCount': 0,
+                  'batchCount': 0,
+                  'caneNetKg': '0',
+                  'finalSugarKg': '0',
+                  'productionValueRupiah': '0',
+                  'totalCostRupiah': '0',
+                  'productionMarginRupiah': '0',
+                },
+              }),
             '/tenants/tenant/factories/factory/lots' => http.Response(
               '{}',
               403,
             ),
-            '/tenants/tenant/factories/factory/production/production-report' =>
-              _json({'items': [], 'totals': {}, 'grades': []}),
             '/api/v1/mobile/review-tasks' => http.Response('{}', 401),
             '/api/v1/mobile/review-notifications' => _json({'unread_count': 0}),
             _ => throw StateError('Unexpected route ${request.url.path}'),
@@ -285,11 +306,10 @@ void main() {
       await _fillCredentials(tester);
       await tester.tap(find.text('Masuk'));
       await tester.pumpAndSettle();
-      await tester.tap(find.bySemanticsLabel('Kloter'));
-      await tester.pumpAndSettle();
       expect(find.text('Data tidak tersedia untuk akun ini.'), findsOneWidget);
-      await tester.tap(find.bySemanticsLabel('Beranda'));
+      await tester.tap(find.bySemanticsLabel('Pengaturan'));
       await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('Pekerjaan'), 200);
       await tester.tap(find.text('Pekerjaan'));
       await tester.pumpAndSettle();
       expect(find.text('Sesi berakhir. Masuk kembali.'), findsOneWidget);

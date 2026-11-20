@@ -19,6 +19,8 @@ void main() {
   testWidgets('manages WhatsApp operators in the selected factory', (
     tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 950));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     const base = '/tenants/tenant/factories/pabrik-b/operators';
     const phone = '+12025550742';
     const original = {'displayName': 'Operator Uji', 'isActive': true};
@@ -59,13 +61,26 @@ void main() {
             200,
           );
         }
-        if (path.endsWith('/lots')) return page([]);
         if (path.endsWith('/production-report')) {
           return http.Response(
-            jsonEncode({'items': [], 'totals': {}, 'grades': []}),
+            jsonEncode({
+              'items': [],
+              'grades': [],
+              'totals': {
+                'lotCount': 0,
+                'producedLotCount': 0,
+                'batchCount': 0,
+                'caneNetKg': '0',
+                'finalSugarKg': '0',
+                'productionValueRupiah': '0',
+                'totalCostRupiah': '0',
+                'productionMarginRupiah': '0',
+              },
+            }),
             200,
           );
         }
+        if (path.endsWith('/lots')) return page([]);
         if (path == base && request.method == 'GET') {
           return page([
             if (operator != null &&
@@ -121,7 +136,7 @@ void main() {
     await tap(tester, find.byTooltip('Pilih pabrik'));
     await tap(tester, find.text('Pabrik B'));
     await tap(tester, find.bySemanticsLabel('Pengaturan'));
-    await tap(tester, find.bySemanticsLabel('Pegawai & WhatsApp'));
+    await tap(tester, find.text('Pegawai & WhatsApp'));
     expect(requests.last.url.path, base);
     expect(find.text('Data tidak ditemukan.'), findsOneWidget);
     await tap(tester, find.text('Tambah operator WhatsApp'));
@@ -157,7 +172,7 @@ void main() {
     await tap(tester, find.byTooltip('Berikutnya'));
     expect(requests.last.url.queryParameters, containsPair('offset', '20'));
     expect(find.text('Operator ditambahkan'), findsOneWidget);
-    await tester.pageBack();
+    await tester.tap(find.byTooltip('Kembali'));
     await tester.pumpAndSettle();
     await tap(tester, find.text('Semua status'));
     await tap(tester, find.text('Nonaktif').last);

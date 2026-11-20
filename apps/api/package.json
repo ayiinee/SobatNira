@@ -23,6 +23,7 @@
     "db:migrate:ocr": "npm run build && node --env-file-if-exists=../../.env dist/documents/migrate.js",
     "local:stack": "npm run build && node scripts/local-stack.mjs",
     "seed:production": "npm run build --silent && node scripts/seed-production.cjs",
+    "seed:flutter-demo": "npm run build --silent && node scripts/seed-flutter-demo.cjs",
     "test:batches-db": "npm run build && node --test test/integration/batches-database.test.cjs"
   },
   "dependencies": {

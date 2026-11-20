@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/page_frame.dart';
 import '../pekerjaan/review_api.dart';
 import '../pekerjaan/production_api.dart';
 import '../pengaturan/operator_history_page.dart';
+import '../pengaturan/settings_widgets.dart';
 
 class ProductionCatalogPage extends StatefulWidget {
   const ProductionCatalogPage({
@@ -13,12 +15,14 @@ class ProductionCatalogPage extends StatefulWidget {
     required this.kind,
     this.selectSupplier = false,
     this.masterKind,
+    this.onNavigate,
   });
   final ReviewApi api;
   final FactoryScope scope;
   final ProductionCatalog kind;
   final bool selectSupplier;
   final String? masterKind;
+  final ValueChanged<NiraTab>? onNavigate;
 
   @override
   State<ProductionCatalogPage> createState() => _ProductionCatalogPageState();
@@ -35,11 +39,11 @@ class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
   Future<Json> _fetch() => widget.masterKind != null
       ? MasterDataApi(widget.api).list(widget.scope, widget.masterKind!)
       : widget.api.catalog(
-    widget.scope,
-    widget.kind,
-    offset: _offset,
-    search: _query,
-    active: widget.selectSupplier ? true : _active,
+          widget.scope,
+          widget.kind,
+          offset: _offset,
+          search: _query,
+          active: widget.selectSupplier ? true : _active,
         );
 
   @override
@@ -59,6 +63,7 @@ class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
           scope: widget.scope,
           operatorId: item['id'] as String,
           phone: item['phoneE164'] as String,
+          onNavigate: widget.onNavigate,
         ),
       ),
     );
@@ -85,171 +90,190 @@ class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: Text(
-        widget.selectSupplier ? 'Pilih pemasok aktif' : widget.kind.label,
-      ),
-    ),
-    body: SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text('${widget.scope.factoryName} · ${widget.scope.tenantName}'),
-          TextField(
-            controller: _search,
-            maxLength: 100,
-            decoration: InputDecoration(
-              labelText: 'Cari ${widget.kind.itemLabel}',
-              suffixIcon: IconButton(
-                tooltip: 'Cari',
-                icon: const Icon(Icons.search),
-                onPressed: () {
-                  _query = _search.text.trim();
-                  _reload(reset: true);
-                },
-              ),
-            ),
-            onSubmitted: (value) {
-              _query = value.trim();
+  Widget build(BuildContext context) {
+    final title = widget.selectSupplier
+        ? 'Pilih pemasok aktif'
+        : widget.kind.label;
+    final subtitle =
+        '${widget.scope.factoryName} \u00b7 ${widget.scope.tenantName}';
+    final children = <Widget>[
+      TextField(
+        controller: _search,
+        maxLength: 100,
+        decoration: InputDecoration(
+          labelText: 'Cari ${widget.kind.itemLabel}',
+          suffixIcon: IconButton(
+            tooltip: 'Cari',
+            icon: const Icon(Icons.search),
+            onPressed: () {
+              _query = _search.text.trim();
               _reload(reset: true);
             },
           ),
-          if (!widget.selectSupplier)
-            DropdownButtonFormField<String>(
-              initialValue: 'all',
-              decoration: const InputDecoration(labelText: 'Status'),
-              items: const [
-                DropdownMenuItem(value: 'all', child: Text('Semua status')),
-                DropdownMenuItem(value: 'active', child: Text('Aktif')),
-                DropdownMenuItem(value: 'inactive', child: Text('Nonaktif')),
-              ],
-              onChanged: (value) {
-                _active = switch (value) {
-                  'active' => true,
-                  'inactive' => false,
-                  _ => null,
-                };
-                _reload(reset: true);
-              },
-            ),
-          if (!widget.selectSupplier)
-            FilledButton.icon(
-              onPressed: () => _edit(),
-              icon: const Icon(Icons.add),
-              label: Text('Tambah ${widget.kind.itemLabel}'),
-            ),
-          NiraPagedFutureBuilder<Json>(
-            future: _page,
-            page: _offset,
-            dataset: (widget.scope.factoryId, widget.kind, _query),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState != ConnectionState.done) {
-                return const LinearProgressIndicator();
-              }
-              if (snapshot.hasError) {
-                return Column(
-                  children: [
-                    Text(
-                      snapshot.error is ReviewApiError
-                          ? (snapshot.error as ReviewApiError).message
-                          : 'Data gagal dimuat.',
-                    ),
-                    TextButton(
-                      onPressed: _reload,
-                      child: const Text('Coba lagi'),
-                    ),
-                  ],
-                );
-              }
-              final page = snapshot.requireData;
-              final items = (page['items'] as List).cast<Json>();
-              final limit = page['limit'] as int;
-              final total = page['total'] as int;
-              return Column(
-                children: [
-                  NiraPageBody(
-                    height: _pageHeight,
-                    firstPage: _offset == 0,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (items.isEmpty)
-                          const ListTile(title: Text('Data tidak ditemukan.')),
-                        for (final item in items)
-                          ListTile(
-                            title: Text(
-                              item[_isOperator ? 'displayName' : 'name'] as String,
-                            ),
-                            subtitle: Text(
-                              [
-                                if (_isOperator) item['phoneE164'] as String,
-                                if (item['code'] != null) '${item['code']}',
-                                item['isActive'] == true ? 'Aktif' : 'Nonaktif',
-                              ].join(' · '),
-                            ),
-                            trailing: _isOperator
-                                ? Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        tooltip: 'Edit operator',
-                                        onPressed: () => _edit(item),
-                                        icon: const Icon(Icons.edit_outlined),
-                                      ),
-                                      IconButton(
-                                        tooltip: 'Riwayat operator',
-                                        onPressed: () => _openHistory(item),
-                                        icon: const Icon(Icons.history),
-                                      ),
-                                    ],
-                                  )
-                                : Icon(
-                                    widget.selectSupplier
-                                        ? Icons.chevron_right
-                                        : Icons.edit_outlined,
-                                  ),
-                            onTap: () {
-                              if (widget.selectSupplier) {
-                                Navigator.pop(context, item);
-                              } else {
-                                _edit(item);
-                              }
-                            },
-                          ),
-                      ],
-                    ),
-                  ),
-                  if (_offset > 0 || total > limit)
-                    NiraPagination(
-                      page: _offset ~/ limit + 1,
-                      pageCount: (total / limit).ceil(),
-                      onPrevious: _offset > 0
-                          ? () {
-                              _offset -= limit;
-                              _reload();
-                            }
-                          : null,
-                      onNext: _offset + limit < total
-                          ? () {
-                              _offset += limit;
-                              _reload();
-                            }
-                          : null,
-                    ),
-                ],
-              );
-            },
-          ),
-          TextButton.icon(
-            onPressed: _reload,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Muat ulang'),
-          ),
-        ],
+        ),
+        onSubmitted: (value) {
+          _query = value.trim();
+          _reload(reset: true);
+        },
       ),
-    ),
-  );
+      if (!widget.selectSupplier)
+        DropdownButtonFormField<String>(
+          initialValue: 'all',
+          decoration: const InputDecoration(labelText: 'Status'),
+          items: const [
+            DropdownMenuItem(value: 'all', child: Text('Semua status')),
+            DropdownMenuItem(value: 'active', child: Text('Aktif')),
+            DropdownMenuItem(value: 'inactive', child: Text('Nonaktif')),
+          ],
+          onChanged: (value) {
+            _active = switch (value) {
+              'active' => true,
+              'inactive' => false,
+              _ => null,
+            };
+            _reload(reset: true);
+          },
+        ),
+      if (!widget.selectSupplier)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: () => _edit(),
+            icon: const Icon(Icons.add, size: 18),
+            label: Text('Tambah ${widget.kind.itemLabel}'),
+          ),
+        ),
+      NiraPagedFutureBuilder<Json>(
+        future: _page,
+        page: _offset,
+        dataset: (widget.scope.factoryId, widget.kind, _query),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const LinearProgressIndicator();
+          }
+          if (snapshot.hasError) {
+            return Column(
+              children: [
+                Text(
+                  snapshot.error is ReviewApiError
+                      ? (snapshot.error as ReviewApiError).message
+                      : 'Data gagal dimuat.',
+                ),
+                TextButton(onPressed: _reload, child: const Text('Coba lagi')),
+              ],
+            );
+          }
+          final page = snapshot.requireData;
+          final items = (page['items'] as List).cast<Json>();
+          final limit = page['limit'] as int;
+          final total = page['total'] as int;
+          return Column(
+            children: [
+              NiraPageBody(
+                height: _pageHeight,
+                firstPage: _offset == 0,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (items.isEmpty)
+                      const ListTile(title: Text('Data tidak ditemukan.')),
+                    for (final item in items) ...[
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(
+                          item[_isOperator ? 'displayName' : 'name'] as String,
+                          style: niraText(
+                            NiraType.section,
+                            weight: FontWeight.w700,
+                          ),
+                        ),
+                        subtitle: Text(
+                          [
+                            if (_isOperator) item['phoneE164'] as String,
+                            if (item['code'] != null) '${item['code']}',
+                            item['isActive'] == true ? 'Aktif' : 'Nonaktif',
+                          ].join(' · '),
+                          style: niraText(NiraType.caption, color: niraLeaf),
+                        ),
+                        trailing: _isOperator
+                            ? Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    tooltip: 'Edit operator',
+                                    onPressed: () => _edit(item),
+                                    icon: const Icon(Icons.edit_outlined),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Riwayat operator',
+                                    onPressed: () => _openHistory(item),
+                                    icon: const Icon(Icons.history),
+                                  ),
+                                ],
+                              )
+                            : Icon(
+                                widget.selectSupplier
+                                    ? Icons.chevron_right
+                                    : Icons.edit_outlined,
+                              ),
+                        onTap: () {
+                          if (widget.selectSupplier) {
+                            Navigator.pop(context, item);
+                          } else {
+                            _edit(item);
+                          }
+                        },
+                      ),
+                      const Divider(height: 1, color: niraLine),
+                    ],
+                  ],
+                ),
+              ),
+              if (_offset > 0 || total > limit)
+                NiraPagination(
+                  page: _offset ~/ limit + 1,
+                  pageCount: (total / limit).ceil(),
+                  onPrevious: _offset > 0
+                      ? () {
+                          _offset -= limit;
+                          _reload();
+                        }
+                      : null,
+                  onNext: _offset + limit < total
+                      ? () {
+                          _offset += limit;
+                          _reload();
+                        }
+                      : null,
+                ),
+            ],
+          );
+        },
+      ),
+      TextButton.icon(
+        onPressed: _reload,
+        icon: const Icon(Icons.refresh),
+        label: const Text('Muat ulang'),
+      ),
+    ];
+    if (widget.onNavigate case final navigate?) {
+      return SettingsPageFrame(
+        title: title,
+        subtitle: subtitle,
+        onNavigate: navigate,
+        children: children,
+      );
+    }
+    return NiraPageScaffold(
+      title: Text(title),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [Text(subtitle), ...children],
+        ),
+      ),
+    );
+  }
 }
 
 class _CatalogEditor extends StatefulWidget {
@@ -315,9 +339,16 @@ class _CatalogEditorState extends State<_CatalogEditor> {
     });
     try {
       if (widget.masterKind != null) {
-        await MasterDataApi(widget.api).create(widget.scope, widget.masterKind!, values);
+        await MasterDataApi(
+          widget.api,
+        ).create(widget.scope, widget.masterKind!, values);
       } else {
-        await widget.api.saveCatalog(widget.scope, widget.kind, values, id: item?['id'] as String?);
+        await widget.api.saveCatalog(
+          widget.scope,
+          widget.kind,
+          values,
+          id: item?['id'] as String?,
+        );
       }
       if (mounted) Navigator.pop(context, true);
     } catch (error) {

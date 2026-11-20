@@ -27,11 +27,11 @@ String reportMoney(Object? value) {
 }
 
 class ConnectedReports extends ChangeNotifier {
-  ConnectedReports(this.api, this.scope);
+  ConnectedReports(this.api, this.scope, {this.synthetic = false});
   final ReviewApi api;
   final FactoryScope scope;
   KloterDateFilter? filter;
-  bool synthetic = false;
+  bool synthetic;
   bool loading = true;
   Object? error;
   Json? data;

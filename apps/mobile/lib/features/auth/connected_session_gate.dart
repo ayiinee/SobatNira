@@ -3,8 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
-import '../pekerjaan/review_api.dart';
+import '../../widgets/page_frame.dart';
 import 'login_pages.dart';
+import '../pekerjaan/review_api.dart';
 
 typedef FactoryHomeBuilder =
     Widget Function(
@@ -13,6 +14,8 @@ typedef FactoryHomeBuilder =
       FactoryScope scope,
       ValueChanged<FactoryScope> selectFactory,
       VoidCallback signOut,
+      bool synthetic,
+      ValueChanged<bool> onSyntheticChanged,
     );
 
 class ConnectedSessionGate extends StatefulWidget {
@@ -31,6 +34,7 @@ class ConnectedSessionGate extends StatefulWidget {
 }
 
 class _ConnectedSessionGateState extends State<ConnectedSessionGate> {
+  final _syntheticTenants = <String>{};
   ReviewApi? _api;
   List<FactoryScope>? _factories;
   FactoryScope? _scope;
@@ -92,6 +96,13 @@ class _ConnectedSessionGateState extends State<ConnectedSessionGate> {
       final factories = await api.factories();
       if (!mounted || !identical(_api, api)) return;
       setState(() {
+        if (_factories == null) {
+          _syntheticTenants.addAll(
+            factories
+                .where((scope) => scope.tenantName == 'SobatNira Uji')
+                .map((scope) => scope.tenantId),
+          );
+        }
         _factories = factories;
         _scope = factories.firstOrNull;
       });
@@ -106,6 +117,7 @@ class _ConnectedSessionGateState extends State<ConnectedSessionGate> {
   }
 
   void _endSession({bool expired = false}) {
+    _syntheticTenants.clear();
     Navigator.of(context).popUntil((route) => route.isFirst);
     _api?.close();
     setState(() {
@@ -122,8 +134,8 @@ class _ConnectedSessionGateState extends State<ConnectedSessionGate> {
   Widget build(BuildContext context) {
     final api = _api;
     if (widget.invalidConfiguration.isNotEmpty) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('SobatNira')),
+      return NiraPageScaffold(
+        title: const Text('SobatNira'),
         body: SafeArea(
           child: ListView(
             padding: const EdgeInsets.all(NiraSpace.lg),
@@ -153,36 +165,40 @@ class _ConnectedSessionGateState extends State<ConnectedSessionGate> {
     }
     final scope = _scope;
     if (scope != null) {
-      return widget.homeBuilder(api, _factories!, scope, (selected) {
+      void selectFactory(FactoryScope selected) {
         if (selected != _scope && _factories!.contains(selected)) {
           setState(() => _scope = selected);
         }
-      }, _endSession);
+      }
+
+      final synthetic = _syntheticTenants.contains(scope.tenantId);
+      void changeSynthetic(bool value) {
+        if (value) {
+          _syntheticTenants.add(scope.tenantId);
+        } else {
+          _syntheticTenants.remove(scope.tenantId);
+        }
+      }
+
+      return widget.homeBuilder(
+        api,
+        _factories!,
+        scope,
+        selectFactory,
+        _endSession,
+        synthetic,
+        changeSynthetic,
+      );
     }
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Akses pabrik'),
-        actions: [
-          TextButton(onPressed: _endSession, child: const Text('Keluar')),
-        ],
-      ),
+    return NiraPageScaffold(
+      title: const Text('Akses pabrik'),
+      actions: [
+        TextButton(onPressed: _endSession, child: const Text('Keluar')),
+      ],
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(NiraSpace.lg),
-          children: _factories == null
-              ? _accessPending(api)
-              : [
-                  Semantics(
-                    liveRegion: true,
-                    child: const Text(
-                      'Akun ini belum memiliki akses pabrik aktif.',
-                    ),
-                  ),
-                  const SizedBox(height: NiraSpace.sm),
-                  const Text(
-                    'Hubungi pengelola pabrik untuk mendapatkan akses.',
-                  ),
-                ],
+          children: _factories == null ? _accessPending(api) : _noAccess(),
         ),
       ),
     );
@@ -207,4 +223,13 @@ class _ConnectedSessionGateState extends State<ConnectedSessionGate> {
           const SizedBox(height: NiraSpace.lg),
           NiraButton('Coba lagi', () => _checkAccess(api), shadow: false),
         ];
+
+  List<Widget> _noAccess() => [
+    Semantics(
+      liveRegion: true,
+      child: const Text('Akun ini belum memiliki akses pabrik aktif.'),
+    ),
+    const SizedBox(height: NiraSpace.sm),
+    const Text('Hubungi pengelola pabrik untuk mendapatkan akses.'),
+  ];
 }

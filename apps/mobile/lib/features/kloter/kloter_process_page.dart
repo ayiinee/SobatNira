@@ -6,6 +6,7 @@ import '../../sobatnira_ui.dart';
 import '../laporan/connected_reports.dart' show reportNumber;
 import '../pekerjaan/review_api.dart';
 import 'demo_production.dart';
+import 'detail_fields.dart';
 import 'juice_volume.dart';
 import 'kloter_detail_widgets.dart';
 
@@ -53,7 +54,9 @@ class _KloterProcessPageState extends State<KloterProcessPage> {
 
   void _reloadStock() {
     final stock = widget.loadStock?.call();
-    setState(() { _stock = stock; });
+    setState(() {
+      _stock = stock;
+    });
   }
 
   Widget _stockDetails() => FutureBuilder<Json>(
@@ -165,10 +168,23 @@ class _KloterProcessPageState extends State<KloterProcessPage> {
             const SizedBox(height: NiraSpace.sm),
             DetailMetrics([
               if (intake) ...[
-                ('Tebu bersih', kloter.weight),
-                ('Brix tebu', formatQuantity(kloter.brix, '°Bx')),
+                (
+                  'Tebu bersih',
+                  connected && kloter.netWeightKg == null ? '—' : kloter.weight,
+                ),
+                (
+                  'Brix tebu',
+                  kloter.brix == null
+                      ? '—'
+                      : formatQuantity(kloter.brix, '°Bx'),
+                ),
               ] else if (connected)
-                ('Nira dihasilkan', formatQuantity(kloter.juiceLiters, 'L'))
+                (
+                  'Nira dihasilkan',
+                  kloter.juiceLiters == null
+                      ? '—'
+                      : formatQuantity(kloter.juiceLiters, 'L'),
+                )
               else
                 (
                   'Nira batch tercatat',
@@ -177,7 +193,10 @@ class _KloterProcessPageState extends State<KloterProcessPage> {
             ]),
             const SizedBox(height: NiraSpace.lg),
             EditableFields(
-              fields: review.fields,
+              fields: detailFields(
+                intake ? intakeDetailLabels : millingDetailLabels,
+                review.fields,
+              ),
               onEdit: connected
                   ? null
                   : (field) async {

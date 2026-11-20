@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/adaptive_value.dart';
 import '../../widgets/kloter_cane_overlay.dart';
 import '../../widgets/review_status_label.dart';
 import 'batch_detail_page.dart';
@@ -204,64 +205,73 @@ class KloterBatchTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const foreground = Colors.white;
-    return Material(
-      color: pending ? niraGold : niraGreen,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(niraRadius),
-        side: BorderSide(color: pending ? niraOchre : niraGreen, width: 1),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        overlayColor: niraGreenOverlay,
-        child: Stack(
-          children: [
-            KloterCaneOverlay(pending: pending, batch: true),
-            ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 63),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: NiraSpace.md,
-                  vertical: NiraSpace.sm,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Wrap(
-                      alignment: WrapAlignment.spaceBetween,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: NiraSpace.sm,
-                      runSpacing: NiraSpace.xs,
-                      children: [
-                        Text(
-                          title,
-                          style: niraText(
-                            NiraType.section,
-                            color: pending ? foreground : niraYellow,
-                            weight: FontWeight.w700,
-                          ),
-                        ),
-                        if (cancelled)
+    final status = cancelled
+        ? 'Dibatalkan'
+        : pending
+        ? 'Perlu ditinjau'
+        : 'Tervalidasi';
+    return Semantics(
+      label: '$title, $status',
+      button: true,
+      child: Material(
+        color: pending ? niraGold : niraGreen,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(niraRadius),
+          side: BorderSide(color: pending ? niraOchre : niraGreen, width: 1),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          overlayColor: niraGreenOverlay,
+          child: Stack(
+            children: [
+              KloterCaneOverlay(pending: pending, batch: true),
+              ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 63),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: NiraSpace.md,
+                    vertical: NiraSpace.sm,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: NiraSpace.sm,
+                        runSpacing: NiraSpace.xs,
+                        children: [
                           Text(
-                            'Dibatalkan',
+                            title,
                             style: niraText(
-                              NiraType.caption,
-                              color: foreground,
+                              NiraType.section,
+                              color: pending ? foreground : niraYellow,
+                              weight: FontWeight.w700,
                             ),
-                          )
-                        else
-                          ReviewStatusLabel(pending: pending),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    _info(context, 'Nira batch', juice, foreground),
-                    const SizedBox(height: 2),
-                    _info(context, 'Hasil fisik', physicalWeight, foreground),
-                  ],
+                          ),
+                          if (cancelled)
+                            Text(
+                              'Dibatalkan',
+                              style: niraText(
+                                NiraType.caption,
+                                color: foreground,
+                              ),
+                            )
+                          else
+                            ReviewStatusLabel(pending: pending),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      _info(context, 'Nira batch', juice, foreground),
+                      const SizedBox(height: 2),
+                      _info(context, 'Hasil fisik', physicalWeight, foreground),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -283,7 +293,11 @@ class KloterBatchTile extends StatelessWidget {
       Text(':', style: niraText(NiraType.body, color: foreground)),
       const SizedBox(width: NiraSpace.xs),
       Expanded(
-        child: Text(value, style: niraText(NiraType.body, color: foreground)),
+        child: NiraValue(
+          value,
+          label: label,
+          style: niraText(NiraType.body, color: foreground),
+        ),
       ),
     ],
   );

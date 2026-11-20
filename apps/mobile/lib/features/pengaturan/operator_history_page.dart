@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/page_frame.dart';
 import '../pekerjaan/review_api.dart';
 
 class OperatorHistoryPage extends StatefulWidget {
@@ -10,8 +11,10 @@ class OperatorHistoryPage extends StatefulWidget {
     required this.scope,
     required this.operatorId,
     required this.phone,
+    this.onNavigate,
   });
 
+  final ValueChanged<NiraTab>? onNavigate;
   final ReviewApi api;
   final FactoryScope scope;
   final String operatorId;
@@ -38,17 +41,17 @@ class _OperatorHistoryPageState extends State<OperatorHistoryPage> {
   });
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('Riwayat operator'),
-      actions: [
-        IconButton(
-          tooltip: 'Muat ulang riwayat',
-          onPressed: () => _load(_offset),
-          icon: const Icon(Icons.refresh),
-        ),
-      ],
-    ),
+  Widget build(BuildContext context) => NiraPageScaffold(
+    onNavigate: widget.onNavigate,
+    tab: NiraTab.pengaturan,
+    title: const Text('Riwayat operator'),
+    actions: [
+      IconButton(
+        tooltip: 'Muat ulang riwayat',
+        onPressed: () => _load(_offset),
+        icon: const Icon(Icons.refresh),
+      ),
+    ],
     body: SafeArea(
       child: NiraPagedFutureBuilder<Json>(
         future: _page,
@@ -97,7 +100,9 @@ class _OperatorHistoryPageState extends State<OperatorHistoryPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     if (entries.isEmpty)
-                      const ListTile(title: Text('Belum ada riwayat operator.')),
+                      const ListTile(
+                        title: Text('Belum ada riwayat operator.'),
+                      ),
                     for (final entry in entries) _event(context, entry),
                   ],
                 ),

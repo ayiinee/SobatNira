@@ -45,7 +45,7 @@ Panggilan pertama PaddleOCR mengunduh model. Gunakan `PADDLE_PDX_CACHE_HOME` unt
 
    Gateway preview membatasi koneksi browser dan pemuatan font ke origin lokal. Tampilan uji memakai font yang ikut di build, termasuk saat mesin terhubung ke internet.
 
-4. Masuk dengan `admin@example.invalid` / `sobatnira-demo`, buka **Pekerjaan** dari Beranda **Pabrik Demo**. Gunakan ID tugas dan kode kloter yang dicetak terminal.
+4. Masuk dengan `admin@example.invalid` / `sobatnira-demo`, lalu buka **Pengaturan → Pekerjaan** di **Pabrik Demo**. Gunakan ID tugas dan kode kloter yang dicetak terminal.
 
    - Buka **Nota Kedatangan Truk**, periksa foto dan riwayat, pilih **Validasi revisi ini**, pilih kloter `OCR-A-UJI`, lalu pilih **Sahkan dan catat stok**.
    - Buka tugas dari **Perlu tinjauan manual**. Lengkapi tanggal `2026-11-16`, pemasok `PEMASOK DEMO`, jenis tebu `BL`, berat `1250` dan catatan pemeriksaan. Simpan draf dan sahkan ke kloter `OCR-B-UJI`.

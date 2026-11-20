@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/adaptive_value.dart';
 import '../../widgets/summary_card.dart';
 import '../kloter/kloter_date_filter.dart';
 import 'connected_report_controls.dart'
@@ -253,18 +254,19 @@ class _LaporanPageState extends State<LaporanPage> {
                     ),
                     Expanded(
                       flex: 3,
-                      child: Text(
+                      child: NiraValue(
                         row.value,
-                        textAlign: TextAlign.center,
+                        label: row.supplier,
+                        alignment: Alignment.center,
                         style: niraText(NiraType.body),
                       ),
                     ),
                     if (columns.length > 2)
                       Expanded(
                         flex: 3,
-                        child: Text(
+                        child: NiraValue(
                           row.secondary,
-                          textAlign: TextAlign.center,
+                          alignment: Alignment.center,
                           style: niraText(NiraType.body),
                         ),
                       ),

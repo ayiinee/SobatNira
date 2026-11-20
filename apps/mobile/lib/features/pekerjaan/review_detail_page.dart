@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/page_frame.dart';
 
 import 'review_api.dart';
 import 'manual_note_form.dart';
@@ -13,7 +14,13 @@ import 'intake_lot_dialog.dart';
 import 'stock_reconciliation_dialog.dart';
 
 class ReviewDetailPage extends StatefulWidget {
-  const ReviewDetailPage({required this.api, required this.taskId, super.key});
+  const ReviewDetailPage({
+    required this.api,
+    required this.taskId,
+    this.onNavigate,
+    super.key,
+  });
+  final ValueChanged<NiraTab>? onNavigate;
   final ReviewApi api;
   final String taskId;
 
@@ -235,21 +242,25 @@ class _ReviewDetailPageState extends State<ReviewDetailPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('Detail nota'),
-      actions: [
-        IconButton(
-          tooltip: 'Muat ulang',
-          onPressed: _saving
-              ? null
-              : () => setState(() {
-                  _task = _load();
-                }),
-          icon: const Icon(Icons.refresh),
-        ),
-      ],
-    ),
+  Widget build(BuildContext context) => NiraPageScaffold(
+    onNavigate: widget.onNavigate == null
+        ? null
+        : (tab) {
+            if (!_saving) widget.onNavigate!(tab);
+          },
+    tab: NiraTab.pengaturan,
+    title: const Text('Detail nota'),
+    actions: [
+      IconButton(
+        tooltip: 'Muat ulang',
+        onPressed: _saving
+            ? null
+            : () => setState(() {
+                _task = _load();
+              }),
+        icon: const Icon(Icons.refresh),
+      ),
+    ],
     body: FutureBuilder<Json>(
       future: _task,
       builder: (context, snapshot) {

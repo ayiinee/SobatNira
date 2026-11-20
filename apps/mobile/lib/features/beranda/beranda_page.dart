@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
 import '../../widgets/summary_card.dart';
+import '../../widgets/adaptive_value.dart';
 import '../kloter/demo_production.dart';
 import '../kloter/kloter_card.dart';
 import 'quick_action_icon.dart';
@@ -12,7 +13,6 @@ class BerandaPage extends StatefulWidget {
     required this.kloter,
     required this.onOpenKloter,
     this.onQuickAction,
-    this.onOpenPekerjaan,
     this.factoryId,
     this.factories = const {},
     this.onFactoryChanged,
@@ -29,7 +29,6 @@ class BerandaPage extends StatefulWidget {
   final List<DemoKloter> kloter;
   final ValueChanged<DemoKloter> onOpenKloter;
   final ValueChanged<QuickActionKind>? onQuickAction;
-  final VoidCallback? onOpenPekerjaan;
   final String? factoryId;
   final Map<String, String> factories;
   final ValueChanged<String>? onFactoryChanged;
@@ -72,6 +71,7 @@ class _BerandaPageState extends State<BerandaPage> {
   Widget build(BuildContext context) {
     final status = _selected == 0 ? KloterStatus.review : KloterStatus.done;
     final items = widget.kloter.where((item) => item.status == status).toList();
+    final showEmpty = items.isEmpty && widget.statusMessage == null;
     return LayoutBuilder(
       builder: (context, constraints) {
         _measureHeader();
@@ -100,8 +100,9 @@ class _BerandaPageState extends State<BerandaPage> {
                   NiraSpace.lg,
                 ),
                 sliver: SliverList.builder(
-                  itemCount: items.length,
-                  itemBuilder: (context, index) => _card(items[index]),
+                  itemCount: showEmpty ? 1 : items.length,
+                  itemBuilder: (context, index) =>
+                      showEmpty ? _emptyList() : _card(items[index]),
                 ),
               ),
             ],
@@ -212,8 +213,9 @@ class _BerandaPageState extends State<BerandaPage> {
                           inset,
                           NiraSpace.lg,
                         ),
-                        itemCount: items.length,
-                        itemBuilder: (context, index) => _card(items[index]),
+                        itemCount: showEmpty ? 1 : items.length,
+                        itemBuilder: (context, index) =>
+                            showEmpty ? _emptyList() : _card(items[index]),
                       ),
                     ),
                   ],
@@ -250,14 +252,6 @@ class _BerandaPageState extends State<BerandaPage> {
           if (widget.reportStatus != null) widget.reportStatus!,
           const SizedBox(height: NiraSpace.md),
           _QuickActions(onSelected: widget.onQuickAction),
-          if (widget.onOpenPekerjaan case final open?) ...[
-            const SizedBox(height: NiraSpace.md),
-            OutlinedButton.icon(
-              onPressed: open,
-              icon: const Icon(Icons.assignment_outlined),
-              label: const Text('Pekerjaan'),
-            ),
-          ],
         ],
       ),
     ),
@@ -277,6 +271,18 @@ class _BerandaPageState extends State<BerandaPage> {
   Widget _card(DemoKloter item) => Padding(
     padding: const EdgeInsets.only(bottom: NiraSpace.sm),
     child: KloterCard(kloter: item, onTap: () => widget.onOpenKloter(item)),
+  );
+  Widget _emptyList() => Padding(
+    padding: const EdgeInsets.symmetric(vertical: NiraSpace.lg),
+    child: Text(
+      widget.kloter.isEmpty
+          ? 'Belum ada kloter di pabrik ini.'
+          : _selected == 0
+          ? 'Tidak ada kloter yang perlu ditinjau.'
+          : 'Belum ada kloter tuntas.',
+      textAlign: TextAlign.center,
+      style: niraText(NiraType.body, color: niraLeaf),
+    ),
   );
 }
 
@@ -445,18 +451,13 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Flexible(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              _showProfit
-                                  ? (widget.profit ?? '—')
-                                  : 'Rp ••••••',
-                              style: niraText(
-                                NiraType.hero,
-                                color: niraYellow,
-                                weight: FontWeight.w700,
-                              ),
+                          child: NiraValue(
+                            _showProfit ? (widget.profit ?? '—') : 'Rp ••••••',
+                            label: 'Keuntungan',
+                            style: niraText(
+                              NiraType.hero,
+                              color: niraYellow,
+                              weight: FontWeight.w700,
                             ),
                           ),
                         ),

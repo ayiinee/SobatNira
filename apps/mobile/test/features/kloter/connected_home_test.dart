@@ -13,6 +13,7 @@ import 'package:sobatnira/features/laporan/laporan_page.dart';
 import 'package:sobatnira/features/laporan/report_pdf.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
 import 'package:sobatnira/main.dart';
+import 'package:sobatnira/widgets/adaptive_value.dart';
 
 import '../../support/demo_login.dart';
 
@@ -47,6 +48,129 @@ http.Response _json(Object result) => http.Response(
 );
 
 void main() {
+  test('legacy API batch pages are filtered before lot pagination', () async {
+    final rows = [
+      for (var i = 0; i < 112; i++)
+        {
+          'id': i,
+          'lot_id': i.isEven ? 'selected' : 'other',
+          'is_synthetic': i % 4 == 0,
+        },
+    ];
+    final api = ReviewApi(
+      'fixture',
+      client: MockClient((request) async {
+        expect(
+          request.url.path,
+          '/tenants/tenant/factories/A/production/batches',
+        );
+        final query = request.url.queryParameters;
+        if (query.containsKey('lotId')) {
+          return http.Response(
+            jsonEncode({'message': 'Terdapat field yang tidak didukung.'}),
+            400,
+          );
+        }
+        expect(query.keys, unorderedEquals(['limit', 'offset']));
+        return _json({
+          'items': rows
+              .skip(int.parse(query['offset']!))
+              .take(int.parse(query['limit']!))
+              .toList(),
+        });
+      }),
+    );
+    addTearDown(api.close);
+    final result = await api.factoryBatches(
+      FactoryScope.fromJson(_factory('A')),
+      'selected',
+      offset: 20,
+      synthetic: true,
+    );
+    expect((result['items'] as List).map((row) => row['id']), [
+      80,
+      84,
+      88,
+      92,
+      96,
+      100,
+      104,
+      108,
+    ]);
+  });
+
+  test(
+    'changing report source keeps lots and batch requests in factory scope',
+    () async {
+      final requests = <Uri>[];
+      final api = ReviewApi(
+        'fixture',
+        client: MockClient((request) async {
+          final uri = request.url;
+          requests.add(uri);
+          expect(uri.path, startsWith('/tenants/tenant/factories/A/'));
+          if (uri.path.endsWith('/production-report')) {
+            return _json({
+              'items': uri.queryParameters['synthetic'] == 'true'
+                  ? [
+                      {'lotId': 'example'},
+                    ]
+                  : [],
+              'grades': [],
+              'totals': {'lotCount': 1},
+            });
+          }
+          if (uri.path.endsWith('/lots/example')) {
+            expect(uri.queryParameters['synthetic'], 'true');
+            return _json({..._lot('example'), 'synthetic': true});
+          }
+          if (uri.path.endsWith('/production/batches')) {
+            expect(uri.queryParameters, {
+              'lotId': 'example',
+              'synthetic': 'true',
+              'limit': '20',
+              'offset': '20',
+            });
+            return _json({'items': []});
+          }
+          expect(uri.path, endsWith('/lots'));
+          return _json({
+            'items': [_lot('official')],
+            'total': 1,
+          });
+        }),
+      );
+      final scope = FactoryScope.fromJson(_factory('A'));
+      final changes = <bool>[];
+      final live = ConnectedProduction(
+        api,
+        scope,
+        synthetic: true,
+        onSyntheticChanged: changes.add,
+      );
+      addTearDown(live.dispose);
+      addTearDown(api.close);
+      await live.refresh();
+      expect(live.error, isNull);
+      expect(live.reports.error, isNull);
+      expect(live.lots.single.id, 'example');
+      expect(requests.any((uri) => uri.path.endsWith('/lots')), isFalse);
+      await api.factoryBatches(scope, 'example', synthetic: true, offset: 20);
+      final changed = Completer<void>();
+      live.addListener(() {
+        if (!live.loading &&
+            live.lots.single.id == 'official' &&
+            !changed.isCompleted) {
+          changed.complete();
+        }
+      });
+      await live.reports.setSynthetic(false);
+      await changed.future;
+      expect(changes, [false]);
+      expect(live.lots.single.id, 'official');
+    },
+  );
+
   testWidgets(
     'login opens the team home and isolates data when switching factory',
     (tester) async {
@@ -180,7 +304,10 @@ void main() {
       await tester.tap(find.bySemanticsLabel('Beranda'));
       await tester.pumpAndSettle();
       final pekerjaan = find.text('Pekerjaan');
-      await tester.ensureVisible(pekerjaan);
+      expect(pekerjaan, findsNothing);
+      await tester.tap(find.bySemanticsLabel('Pengaturan'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(pekerjaan, 150);
       await tester.tap(pekerjaan);
       await tester.pumpAndSettle();
       expect(find.text('Sesi berakhir. Masuk kembali.'), findsOneWidget);
@@ -303,9 +430,19 @@ void main() {
       }
 
       await tap(find.bySemanticsLabel('Kloter'));
-      expect(find.text('1.250,01 kg'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) => widget is NiraValue && widget.value == '1.250,01 kg',
+        ),
+        findsOneWidget,
+      );
       await tap(find.text('Pemasok first'));
-      expect(find.text('1.250,01 kg'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) => widget is NiraValue && widget.value == '1.250,01 kg',
+        ),
+        findsOneWidget,
+      );
       expect(find.text('19,5 °Bx'), findsOneWidget);
       expect(find.text('90 L'), findsOneWidget);
       expect(find.text('83,5 L'), findsOneWidget);
@@ -331,7 +468,7 @@ void main() {
       await tap(find.byTooltip('Kembali'));
       await tap(find.text('BATCH-UJI-1'));
       expect(find.text('Detail batch'), findsOneWidget);
-      expect(find.text('83.500 mL'), findsOneWidget);
+      expect(find.text('83,5 L'), findsOneWidget);
       expect(find.text('29,25 kg'), findsOneWidget);
       await tap(find.byTooltip('Kembali'));
       await tap(find.byTooltip('Kembali'));

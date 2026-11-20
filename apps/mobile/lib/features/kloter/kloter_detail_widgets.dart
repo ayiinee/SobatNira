@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/adaptive_value.dart';
 import 'demo_production.dart';
 
 const reviewActionHeight = 52.0;
@@ -118,101 +119,131 @@ class KloterHeading extends StatelessWidget {
 
 class DetailMetrics extends StatelessWidget {
   const DetailMetrics(this.metrics, {this.separate = false, super.key});
-
   final List<(String, String)> metrics;
   final bool separate;
 
   @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final minWidth = MediaQuery.textScalerOf(context).scale(20) * 4.5 + 16;
-        final columns = (constraints.maxWidth / minWidth).floor().clamp(
-          1,
-          metrics.length,
-        );
-        if (columns < metrics.length) {
-          final width =
-              (constraints.maxWidth - NiraSpace.md * (columns - 1)) / columns;
-          return Wrap(
-            spacing: NiraSpace.md,
-            runSpacing: NiraSpace.md,
-            children: [
-              for (final metric in metrics)
-                SizedBox(
-                  width: width,
-                  child: NiraOutline(_metric(metric, center: false)),
-                ),
-            ],
-          );
-        }
-        return _row(context);
-      },
-    );
-  }
-
-  Widget _row(BuildContext context) {
-    if (separate) {
-      return Row(
-        spacing: 12,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final metric in metrics)
-            Expanded(child: NiraOutline(_metric(metric, center: true))),
-        ],
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final minWidth = MediaQuery.textScalerOf(context).scale(20) * 4.5 + 16;
+      final columns = (constraints.maxWidth / minWidth).floor().clamp(
+        1,
+        metrics.length,
       );
-    }
-    return NiraOutline(
-      IntrinsicHeight(
-        child: Row(
-          children: [
-            for (var index = 0; index < metrics.length; index++) ...[
-              if (index > 0)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: NiraSpace.md),
-                  child: VerticalDivider(
-                    width: 1,
-                    thickness: 1,
-                    color: niraLine,
-                  ),
-                ),
-              Expanded(child: _metric(metrics[index], center: index > 0)),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _metric((String, String) metric, {required bool center}) =>
-      ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 60),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: NiraSpace.sm,
-            vertical: NiraSpace.sm,
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: center
-                ? CrossAxisAlignment.center
-                : CrossAxisAlignment.start,
-            children: [
-              Text(
-                metric.$1,
-                textAlign: center ? TextAlign.center : TextAlign.start,
+      final gap = columns < metrics.length || separate ? NiraSpace.md : 1.0;
+      final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
+      var labelHeight = 0.0;
+      for (final metric in metrics) {
+        final painter =
+            TextPainter(
+              text: TextSpan(
+                text: metric.$1,
                 style: niraText(NiraType.caption, weight: FontWeight.w500),
               ),
-              const SizedBox(height: NiraSpace.xs),
-              Text(
-                metric.$2,
-                textAlign: center ? TextAlign.center : TextAlign.start,
-                style: niraText(NiraType.title, weight: FontWeight.w700),
+              textDirection: Directionality.of(context),
+              textScaler: MediaQuery.textScalerOf(context),
+            )..layout(
+              maxWidth: (width - NiraSpace.sm * 2 - 2).clamp(
+                1,
+                double.infinity,
               ),
-            ],
-          ),
-        ),
+            );
+        if (painter.height > labelHeight) labelHeight = painter.height;
+        painter.dispose();
+      }
+      final valueHeight = valueTextHeight(
+        context,
+        niraText(NiraType.title, weight: FontWeight.w700),
       );
+      final height =
+          (labelHeight + valueHeight + NiraSpace.xs + NiraSpace.sm * 2).clamp(
+            60.0,
+            double.infinity,
+          );
+      if (columns < metrics.length) {
+        return Wrap(
+          spacing: NiraSpace.md,
+          runSpacing: NiraSpace.md,
+          children: [
+            for (final metric in metrics)
+              SizedBox(
+                width: width,
+                child: NiraOutline(
+                  _metric(metric, height, labelHeight, center: false),
+                ),
+              ),
+          ],
+        );
+      }
+      final row = Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var i = 0; i < metrics.length; i++) ...[
+            if (i > 0)
+              separate
+                  ? const SizedBox(width: NiraSpace.md)
+                  : SizedBox(
+                      height: height,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: NiraSpace.md),
+                        child: VerticalDivider(
+                          width: 1,
+                          thickness: 1,
+                          color: niraLine,
+                        ),
+                      ),
+                    ),
+            Expanded(
+              child: separate
+                  ? NiraOutline(
+                      _metric(metrics[i], height, labelHeight, center: true),
+                    )
+                  : _metric(metrics[i], height, labelHeight, center: i > 0),
+            ),
+          ],
+        ],
+      );
+      return separate ? row : NiraOutline(row);
+    },
+  );
+
+  Widget _metric(
+    (String, String) metric,
+    double height,
+    double labelHeight, {
+    required bool center,
+  }) => SizedBox(
+    height: height,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: NiraSpace.sm,
+        vertical: NiraSpace.sm,
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: center
+            ? CrossAxisAlignment.center
+            : CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: labelHeight,
+            child: Text(
+              metric.$1,
+              textAlign: center ? TextAlign.center : TextAlign.start,
+              style: niraText(NiraType.caption, weight: FontWeight.w500),
+            ),
+          ),
+          const SizedBox(height: NiraSpace.xs),
+          NiraValue(
+            metric.$2,
+            label: metric.$1,
+            alignment: center ? Alignment.center : Alignment.centerLeft,
+            style: niraText(NiraType.title, weight: FontWeight.w700),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class DetailSectionTitle extends StatelessWidget {
@@ -350,7 +381,22 @@ class ApprovedDocumentPreview extends StatelessWidget {
         );
       }
       final bytes = snapshot.data;
-      if (bytes == null) return fallback;
+      if (bytes == null) {
+        return AspectRatio(
+          aspectRatio: 2.4,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0F3EF),
+              border: Border.all(color: niraLine),
+              borderRadius: BorderRadius.circular(niraRadius),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(NiraSpace.sm),
+              child: Center(child: fallback),
+            ),
+          ),
+        );
+      }
       return DocumentPreview(batch: batch, photo: MemoryImage(bytes));
     },
   );
@@ -456,6 +502,7 @@ class BatchReviewActions extends StatelessWidget {
     required this.label,
     required this.verified,
     required this.onVerify,
+    this.enabled = true,
     this.onReopen,
     super.key,
   });
@@ -464,6 +511,7 @@ class BatchReviewActions extends StatelessWidget {
   final String label;
   final bool verified;
   final VoidCallback onVerify;
+  final bool enabled;
   final VoidCallback? onReopen;
 
   Future<void> _confirm(BuildContext context) async {
@@ -542,7 +590,7 @@ class BatchReviewActions extends StatelessWidget {
       Expanded(
         child: NiraButton(
           label,
-          verified ? null : () => _confirm(context),
+          verified || !enabled ? null : () => _confirm(context),
           visualDensity: VisualDensity.standard,
           minimumHeight: verified ? reviewedActionHeight : reviewActionHeight,
         ),
@@ -624,10 +672,18 @@ class EditableFields extends StatelessWidget {
               const SizedBox(width: NiraSpace.sm),
               Expanded(
                 flex: 10,
-                child: Text(
-                  field.display,
-                  style: niraText(NiraType.body, weight: FontWeight.w600),
-                ),
+                child: isDisplayNumber(field.display)
+                    ? NiraValue(
+                        field.display,
+                        label: field.label,
+                        abbreviate: false,
+                        revealOnTap: onEdit == null,
+                        style: niraText(NiraType.body, weight: FontWeight.w600),
+                      )
+                    : Text(
+                        field.display,
+                        style: niraText(NiraType.body, weight: FontWeight.w600),
+                      ),
               ),
               const SizedBox(width: NiraSpace.xs),
               Icon(

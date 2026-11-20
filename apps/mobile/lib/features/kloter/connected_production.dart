@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../pekerjaan/review_api.dart';
@@ -5,26 +7,62 @@ import 'demo_production.dart';
 import '../laporan/connected_reports.dart';
 
 class ConnectedProduction extends ChangeNotifier {
-  ConnectedProduction(this.api, this.scope)
-    : reports = ConnectedReports(api, scope);
+  ConnectedProduction(
+    this.api,
+    this.scope, {
+    bool synthetic = false,
+    this.onSyntheticChanged,
+  }) : reports = ConnectedReports(api, scope, synthetic: synthetic),
+       _synthetic = synthetic {
+    reports.addListener(_sourceChanged);
+  }
 
   final ConnectedReports reports;
 
   final ReviewApi api;
   final FactoryScope scope;
+  final ValueChanged<bool>? onSyntheticChanged;
   List<DemoKloter> lots = const [];
   Object? error;
   bool loading = true;
   int _generation = 0;
+  bool _synthetic;
+
+  void _sourceChanged() {
+    if (_synthetic == reports.synthetic) return;
+    _synthetic = reports.synthetic;
+    onSyntheticChanged?.call(_synthetic);
+    unawaited(_refreshLots());
+  }
 
   Future<void> refresh() async {
-    final reportRequest = reports.refresh();
+    await Future.wait([reports.refresh(), _refreshLots()]);
+  }
+
+  Future<void> _refreshLots() async {
     final generation = ++_generation;
     loading = true;
     error = null;
     lots = const [];
     notifyListeners();
     try {
+      if (_synthetic) {
+        // The list endpoint summarizes official records. Use the unfiltered
+        // synthetic report as the index and load synthetic lot summaries.
+        final report = await api.productionReport(scope, synthetic: true);
+        final items = (report['items'] as List).cast<Json>();
+        final result = <DemoKloter>[];
+        for (var start = 0; start < items.length; start += 6) {
+          if (generation != _generation) return;
+          final details = await Future.wait([
+            for (final item in items.skip(start).take(6))
+              api.lot(scope, item['lotId'] as String, synthetic: true),
+          ]);
+          result.addAll(details.map(connectedLot));
+        }
+        if (generation == _generation) lots = List.unmodifiable(result);
+        return;
+      }
       final rows = <String, DemoKloter>{};
       var offset = 0;
       while (true) {
@@ -47,16 +85,18 @@ class ConnectedProduction extends ChangeNotifier {
     } catch (failure) {
       if (generation != _generation) return;
       error = failure;
+    } finally {
+      if (generation == _generation) {
+        loading = false;
+        notifyListeners();
+      }
     }
-    await reportRequest;
-    if (generation != _generation) return;
-    loading = false;
-    notifyListeners();
   }
 
   @override
   void dispose() {
     _generation++;
+    reports.removeListener(_sourceChanged);
     reports.dispose();
     super.dispose();
   }
@@ -87,7 +127,8 @@ DemoKloter connectedLot(Json row) {
     code: code,
     date: date,
     intake: review(intake, [
-      DemoField('Pemasok', row['supplierName'] as String),
+      DemoField('Tanggal masuk', formatDate(date)),
+      DemoField('Pengirim', row['supplierName'] as String),
       if (row['caneTypeCode'] case final String type)
         DemoField('Jenis tebu', type),
     ]),

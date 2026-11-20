@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
 import '../../widgets/chart_growth.dart';
+import '../../widgets/chart_label.dart';
 import '../kloter/demo_lot_fixture.dart';
 import '../kloter/demo_production.dart';
 import '../pekerjaan/review_api.dart';
@@ -16,14 +17,19 @@ const _barColor = niraGreen;
 const _gradeB = Color(0xFFD3A734);
 const _gradeC = Color(0xFFDCE6DE);
 
+Color _gradeColor(String code, int index) => switch (code) {
+  'A' => niraGreen,
+  'B' => _gradeB,
+  'C' => _gradeC,
+  _ => index.isEven ? niraLeaf : niraOchre,
+};
+
 class _ChartDay {
-  const _ChartDay(this.date, this.kg, this.rendemen, this.a, this.b, this.c);
+  const _ChartDay(this.date, this.kg, this.rendemen, this.grades);
   final DateTime date;
   final double kg;
   final double rendemen;
-  final double a;
-  final double b;
-  final double c;
+  final Map<String, double> grades;
 }
 
 class ProductionChart extends StatefulWidget {
@@ -64,9 +70,9 @@ class _ProductionChartState extends State<ProductionChart> {
       date,
       sugar.toDouble(),
       cane == 0 ? 0 : sugar / cane * 100,
-      grade('A'),
-      grade('B'),
-      grade('C'),
+      {
+        for (final code in ['A', 'B', 'C']) code: grade(code),
+      },
     );
   }
 
@@ -102,14 +108,7 @@ class _ProductionChartState extends State<ProductionChart> {
         }
       }
     }
-    return _ChartDay(
-      date,
-      sugar,
-      cane == 0 ? 0 : sugar / cane * 100,
-      grades['A'] ?? 0,
-      grades['B'] ?? 0,
-      grades['C'] ?? 0,
-    );
+    return _ChartDay(date, sugar, cane == 0 ? 0 : sugar / cane * 100, grades);
   }
 
   @override
@@ -122,6 +121,7 @@ class _ProductionChartState extends State<ProductionChart> {
     final days = reports == null
         ? [for (final day in dates) _chartDay(DateTime(2026, 10, day))]
         : _officialDays(reports);
+    final codes = {for (final day in days) ...day.grades.keys}.toList()..sort();
     final selected = days.indexWhere((day) => day.date == _selectedDay);
     return NiraOutline(
       Padding(
@@ -277,9 +277,8 @@ class _ProductionChartState extends State<ProductionChart> {
               runSpacing: NiraSpace.sm,
               children: grade
                   ? [
-                      _legend('Grade A', niraGreen),
-                      _legend('Grade B', _gradeB),
-                      _legend('Grade C', _gradeC),
+                      for (final (index, code) in codes.indexed)
+                        _legend('Grade $code', _gradeColor(code, index)),
                     ]
                   : [_legend('Gula final (kg)', _barColor)],
             ),
@@ -297,13 +296,13 @@ class _ProductionChartState extends State<ProductionChart> {
               LayoutBuilder(
                 builder: (context, constraints) {
                   final width = constraints.maxWidth;
-                  final plot = Rect.fromLTRB(32, 16, width - 8, 154);
-                  final detailWidth = selected < 0
-                      ? 0.0
-                      : math.min(
-                          width,
-                          _detailWidth(context, days[selected], grade),
-                        );
+                  final scaler = MediaQuery.textScalerOf(context);
+                  final plot = Rect.fromLTRB(
+                    math.max(48.0, scaler.scale(10) * 6),
+                    scaler.scale(16),
+                    width - 8,
+                    scaler.scale(154),
+                  );
                   void select(Offset position) {
                     if (!plot.contains(position)) return;
                     final index =
@@ -317,7 +316,7 @@ class _ProductionChartState extends State<ProductionChart> {
 
                   return Semantics(
                     label: grade
-                        ? 'Grafik batang grade A, B, C dalam kilogram.'
+                        ? 'Grafik batang grade ${codes.join(', ')} dalam kilogram.'
                         : 'Grafik batang gula dalam kilogram. Ketuk untuk detail gula dan rendemen.',
                     child: MouseRegion(
                       cursor: SystemMouseCursors.precise,
@@ -330,7 +329,7 @@ class _ProductionChartState extends State<ProductionChart> {
                             select(event.localPosition),
                         child: SizedBox(
                           key: const ValueKey('production-chart-plot'),
-                          height: 180,
+                          height: scaler.scale(180),
                           child: Stack(
                             children: [
                               Positioned.fill(
@@ -343,33 +342,17 @@ class _ProductionChartState extends State<ProductionChart> {
                                   builder: (context, progress) => CustomPaint(
                                     painter: _ProductionPainter(
                                       days: days,
+                                      codes: codes,
                                       grade: grade,
                                       selected: selected,
                                       plot: plot,
                                       textDirection: Directionality.of(context),
+                                      scaler: scaler,
                                       progress: progress,
                                     ),
                                   ),
                                 ),
                               ),
-                              if (selected >= 0)
-                                Positioned(
-                                  left:
-                                      ((plot.left +
-                                                  (selected + .5) *
-                                                      plot.width /
-                                                      days.length) -
-                                              detailWidth / 2)
-                                          .clamp(
-                                            0.0,
-                                            math.max(0.0, width - detailWidth),
-                                          ),
-                                  top: 0,
-                                  width: detailWidth,
-                                  child: IgnorePointer(
-                                    child: _detail(days[selected], grade),
-                                  ),
-                                ),
                             ],
                           ),
                         ),
@@ -378,6 +361,10 @@ class _ProductionChartState extends State<ProductionChart> {
                   );
                 },
               ),
+            if (selected >= 0) ...[
+              const SizedBox(height: NiraSpace.sm),
+              _detail(days[selected], grade),
+            ],
           ],
         ),
       ),
@@ -406,7 +393,7 @@ class _ProductionChartState extends State<ProductionChart> {
     formatDate(day.date),
     'Gula final: ${demoNumber(day.kg, decimals: day.kg % 1 == 0 ? 0 : 3)} kg',
     grade
-        ? 'A: ${_chartAmount(day.a)} · B: ${_chartAmount(day.b)} · C: ${_chartAmount(day.c)} kg'
+        ? '${(day.grades.keys.toList()..sort()).map((code) => '$code: ${_chartAmount(day.grades[code]!)}').join(' · ')} kg'
         : 'Rendemen: ${day.rendemen.toStringAsFixed(1).replaceAll('.', ',')}%',
   ];
 
@@ -419,21 +406,6 @@ class _ProductionChartState extends State<ProductionChart> {
     height: 1.3,
     weight: index == 0 ? FontWeight.w600 : FontWeight.w400,
   );
-
-  double _detailWidth(BuildContext context, _ChartDay day, bool grade) {
-    final lines = _detailLines(day, grade);
-    var widest = 0.0;
-    for (var i = 0; i < lines.length; i++) {
-      final text = TextPainter(
-        text: TextSpan(text: lines[i], style: _detailStyle(i)),
-        textDirection: Directionality.of(context),
-        textScaler: MediaQuery.textScalerOf(context),
-      )..layout();
-      widest = math.max(widest, text.width);
-      text.dispose();
-    }
-    return widest.ceilToDouble() + 20;
-  }
 
   Widget _detail(_ChartDay day, bool grade) => Container(
     key: const ValueKey('production-chart-detail'),
@@ -457,35 +429,31 @@ class _ProductionChartState extends State<ProductionChart> {
 class _ProductionPainter extends CustomPainter {
   const _ProductionPainter({
     required this.days,
+    required this.codes,
     required this.grade,
     required this.selected,
     required this.plot,
     required this.textDirection,
+    required this.scaler,
     required this.progress,
   });
   final List<_ChartDay> days;
+  final List<String> codes;
   final bool grade;
   final int selected;
   final Rect plot;
   final TextDirection textDirection;
+  final TextScaler scaler;
   final double progress;
 
-  void _text(
-    Canvas canvas,
-    String value,
-    Offset center, {
-    Color color = niraLeaf,
-  }) {
-    final text = TextPainter(
-      text: TextSpan(
-        text: value,
-        style: niraText(10, color: color, height: 1.2),
-      ),
-      textDirection: textDirection,
-    )..layout();
-    text.paint(canvas, center - Offset(text.width / 2, text.height / 2));
-    text.dispose();
-  }
+  void _text(Canvas canvas, String value, Rect bounds) => paintChartLabel(
+    canvas,
+    value,
+    bounds,
+    direction: textDirection,
+    scaler: scaler,
+    fontSize: 10,
+  );
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -503,8 +471,8 @@ class _ProductionPainter extends CustomPainter {
       canvas.drawLine(Offset(plot.left, y), Offset(plot.right, y), grid);
       _text(
         canvas,
-        '${(tick * maximum / 4).round()}',
-        Offset(plot.left - 18, y),
+        chartTick(tick * maximum / 4),
+        Rect.fromLTWH(0, y - scaler.scale(8), plot.left - 6, scaler.scale(16)),
       );
     }
     final slot = plot.width / days.length;
@@ -514,11 +482,9 @@ class _ProductionPainter extends CustomPainter {
       final x = plot.left + slot * (i + .5);
       if (grade) {
         var bottom = plot.bottom;
-        for (final (value, color) in [
-          (day.c, _gradeC),
-          (day.b, _gradeB),
-          (day.a, niraGreen),
-        ]) {
+        for (final (index, code) in codes.indexed.toList().reversed) {
+          final value = day.grades[code] ?? 0;
+          final color = _gradeColor(code, index);
           final h = value / maximum * plot.height * progress;
           canvas.drawRect(
             Rect.fromLTWH(x - barWidth / 2, bottom - h, barWidth, h),
@@ -545,7 +511,28 @@ class _ProductionPainter extends CustomPainter {
       final label = multiMonth
           ? '${day.date.day}/${day.date.month}'
           : '${day.date.day}';
-      _text(canvas, label, Offset(x, plot.bottom + 16));
+      // Keep a readable gap when a long period contains many dates.
+      final labelStep = math.max(
+        1,
+        (scaler.scale(multiMonth ? 32 : 20) / slot).ceil(),
+      );
+      if (i % labelStep == 0) {
+        final labelWidth = math.min(
+          scaler.scale(multiMonth ? 32 : 20),
+          slot * labelStep,
+        );
+        if (x - labelWidth / 2 < 0 || x + labelWidth / 2 > size.width) continue;
+        _text(
+          canvas,
+          label,
+          Rect.fromLTWH(
+            x - labelWidth / 2,
+            plot.bottom + scaler.scale(8),
+            labelWidth,
+            scaler.scale(16),
+          ),
+        );
+      }
     }
   }
 
@@ -555,5 +542,7 @@ class _ProductionPainter extends CustomPainter {
       old.grade != grade ||
       old.selected != selected ||
       old.plot != plot ||
+      old.scaler != scaler ||
+      !listEquals(old.codes, codes) ||
       !listEquals(old.days, days);
 }

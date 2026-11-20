@@ -4,8 +4,16 @@ import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
 import '../../widgets/chart_growth.dart';
+import '../../widgets/chart_label.dart';
+import '../../widgets/adaptive_value.dart';
 import 'demo_analytics.dart';
 import 'report_date_button.dart';
+
+/// Chart values are expressed in thousands of rupiah.
+String marginChartLabel(double thousands) =>
+    thousands.abs() < 1 && thousands != 0
+    ? thousands.toStringAsFixed(3).replaceAll('.', ',')
+    : chartTick(thousands);
 
 class MarginChart extends StatefulWidget {
   const MarginChart({required this.rows, required this.onFilter, super.key});
@@ -66,7 +74,14 @@ class _MarginChartState extends State<MarginChart> {
                   constraints.maxWidth,
                   widget.rows.length * step + 48,
                 );
-                final plot = Rect.fromLTRB(36, 24, width - 8, 148);
+                final scaler = MediaQuery.textScalerOf(context);
+                final left = math.max(52.0, scaler.scale(11) * 6);
+                final plot = Rect.fromLTRB(
+                  left,
+                  scaler.scale(24),
+                  width - 8,
+                  scaler.scale(148),
+                );
                 void select(Offset point) {
                   if (!plot.contains(point)) return;
                   final index =
@@ -95,7 +110,7 @@ class _MarginChartState extends State<MarginChart> {
                           child: SizedBox(
                             key: const ValueKey('margin-chart-plot'),
                             width: width,
-                            height: 186,
+                            height: scaler.scale(210),
                             child: ChartGrowth(
                               replayKey: widget.rows
                                   .map((row) => row.code)
@@ -107,6 +122,7 @@ class _MarginChartState extends State<MarginChart> {
                                   progress: progress,
                                   selected: _selected,
                                   textDirection: Directionality.of(context),
+                                  scaler: scaler,
                                 ),
                               ),
                             ),
@@ -118,6 +134,19 @@ class _MarginChartState extends State<MarginChart> {
                 );
               },
             ),
+          if (_selected != null && _selected! < widget.rows.length) ...[
+            const SizedBox(height: NiraSpace.sm),
+            Text(
+              widget.rows[_selected!].supplier,
+              style: niraText(NiraType.caption),
+            ),
+            NiraValue(
+              widget.rows[_selected!].value,
+              label: 'Margin kloter',
+              abbreviate: false,
+              style: niraText(NiraType.body, weight: FontWeight.w600),
+            ),
+          ],
         ],
       ),
     ),
@@ -131,34 +160,27 @@ class _MarginPainter extends CustomPainter {
     required this.progress,
     required this.selected,
     required this.textDirection,
+    required this.scaler,
   });
   final List<AnalyticsRow> rows;
   final Rect plot;
   final double progress;
   final int? selected;
   final TextDirection textDirection;
+  final TextScaler scaler;
 
   double _thousands(AnalyticsRow row) =>
       double.parse(row.value.replaceAll(RegExp(r'[^\d-]'), '')) / 1000;
 
-  void _text(Canvas canvas, String value, Offset center, {bool bold = false}) {
-    final painter = TextPainter(
-      text: TextSpan(
-        text: value,
-        style: niraText(
-          11,
-          height: 1.2,
-          weight: bold ? FontWeight.w600 : FontWeight.w400,
-        ),
-      ),
-      textDirection: textDirection,
-    )..layout();
-    painter.paint(
-      canvas,
-      center - Offset(painter.width / 2, painter.height / 2),
-    );
-    painter.dispose();
-  }
+  void _text(Canvas canvas, String value, Rect bounds, {bool bold = false}) =>
+      paintChartLabel(
+        canvas,
+        value,
+        bounds,
+        direction: textDirection,
+        scaler: scaler,
+        bold: bold,
+      );
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -184,8 +206,8 @@ class _MarginPainter extends CustomPainter {
       );
       _text(
         canvas,
-        (minimum + range * i / 2).toInt().toString(),
-        Offset(plot.left - 20, y),
+        chartTick(minimum + range * i / 2),
+        Rect.fromLTWH(0, y - scaler.scale(9), plot.left - 6, scaler.scale(18)),
       );
     }
     final slot = plot.width / rows.length;
@@ -202,11 +224,28 @@ class _MarginPainter extends CustomPainter {
       );
       _text(
         canvas,
-        values[i].toInt().toString(),
-        Offset(x, zero - h + (h < 0 ? 10 : -10)),
+        marginChartLabel(values[i]),
+        Rect.fromLTWH(
+          plot.left + i * slot,
+          (zero - h + (h < 0 ? scaler.scale(2) : -scaler.scale(18))).clamp(
+            0.0,
+            plot.bottom + scaler.scale(2),
+          ),
+          slot,
+          scaler.scale(18),
+        ),
         bold: true,
       );
-      _text(canvas, rows[i].supplier, Offset(x, plot.bottom + 18));
+      _text(
+        canvas,
+        rows[i].supplier,
+        Rect.fromLTWH(
+          plot.left + i * slot,
+          plot.bottom + scaler.scale(30),
+          slot,
+          scaler.scale(20),
+        ),
+      );
     }
   }
 
@@ -215,5 +254,6 @@ class _MarginPainter extends CustomPainter {
       old.progress != progress ||
       old.selected != selected ||
       old.rows != rows ||
-      old.plot != plot;
+      old.plot != plot ||
+      old.scaler != scaler;
 }

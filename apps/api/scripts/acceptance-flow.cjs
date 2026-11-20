@@ -52,11 +52,12 @@ async (page, { origin, output }) => {
   await field('Email', 'admin@example.invalid');
   await field('Kata sandi', 'sobatnira-demo');
   await button('Masuk').click();
-  await page.getByText('Pekerjaan', { exact: true }).click({ timeout: 30_000 });
+  await button('Pengaturan').click({ timeout: 30_000 });
+  await button('Pekerjaan').click({ timeout: 30_000 });
   await button(/Nota Kedatangan Truk Operator/).click();
   await validateIntake('A');
 
-  await button('Back').click();
+  await button('Kembali').click();
   await button('Menunggu validasi').click();
   await page.getByRole('menuitem', { name: 'Perlu tinjauan manual' }).click();
   await button(/Nota belum dikenali/).click();
@@ -71,7 +72,7 @@ async (page, { origin, output }) => {
   await page.getByText('Status: PENDING_VALIDATION', { exact: true }).waitFor({ timeout: 15_000 });
   await validateIntake('B');
 
-  await button('Back').click();
+  await button('Kembali').click();
   await button('Perlu tinjauan manual').click();
   await page.getByRole('menuitem', { name: 'Menunggu validasi' }).click();
   await button(/Nota Produksi Operator/).click();
@@ -87,8 +88,8 @@ async (page, { origin, output }) => {
     else await submit('Gunakan data penggilingan', '/validate', 200);
   }
 
-  await button('Back').click();
-  await button('Back').click();
+  await button('Kembali').click();
+  await button('Kembali').click();
   await button('Kloter').click();
   await button(/OCR-A-UJI/).click();
   await scroll(1800);
@@ -111,10 +112,10 @@ async (page, { origin, output }) => {
   await button('Kembali').click();
 
   await button('Laporan').click();
-  await page.getByRole('group', { name: /Gula final 25 kg/ }).first().waitFor({ timeout: 15_000 });
+  await page.getByText('25 kg', { exact: true }).first().waitFor({ timeout: 15_000 });
   await capture('laporan');
   await button('Margin').click();
-  await button(/Margin Produksi Rp375\.000/).first().waitFor({ timeout: 15_000 });
+  await page.getByText('Rp375.000', { exact: true }).first().waitFor({ timeout: 15_000 });
   const margin = await page.locator('body').ariaSnapshot();
   expectText(margin, 'Margin sementara');
   await button('Kloter').click();
@@ -134,14 +135,8 @@ async (page, { origin, output }) => {
 
   await button('Beranda').click();
   await button('Rekap').click();
-  const recapTotal = 'Total gula final 25 kg';
-  const deadline = Date.now() + 20_000;
-  let recap = await page.locator('body').ariaSnapshot();
-  while (!recap.includes(recapTotal) && Date.now() < deadline) {
-    await page.waitForTimeout(200);
-    recap = await page.locator('body').ariaSnapshot();
-  }
-  expectText(recap, recapTotal);
+  await page.getByText('Total gula final', { exact: true }).waitFor({ timeout: 20_000 });
+  await page.getByText('25 kg', { exact: true }).first().waitFor({ timeout: 20_000 });
   const [download] = await Promise.all([
     page.waitForEvent('download', { timeout: 20_000 }),
     button('Simpan PDF').click(),

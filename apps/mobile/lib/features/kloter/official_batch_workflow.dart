@@ -10,7 +10,7 @@ import 'kloter_detail_page.dart';
 import '../laporan/connected_reports.dart';
 
 String _errorText(Object? error) => error is ReviewApiError
-    ? error.detail ?? error.message
+    ? (error.status == 404 ? error.message : error.detail ?? error.message)
     : 'Hasil belum terkonfirmasi. Muat ulang atau coba permintaan yang sama.';
 
 class OfficialLotBatches extends StatefulWidget {
@@ -18,8 +18,10 @@ class OfficialLotBatches extends StatefulWidget {
     required this.api,
     required this.scope,
     required this.lotId,
+    this.synthetic = false,
     required this.kloterCode,
     required this.caneWeight,
+    this.kloter,
     required this.onOpenPekerjaan,
     required this.millingRevision,
     required this.canCreate,
@@ -32,8 +34,10 @@ class OfficialLotBatches extends StatefulWidget {
   final ReviewApi api;
   final FactoryScope scope;
   final String lotId;
+  final bool synthetic;
   final String kloterCode;
   final String caneWeight;
+  final DemoKloter? kloter;
   final VoidCallback onOpenPekerjaan;
   final String? millingRevision;
   final bool canCreate;
@@ -48,12 +52,18 @@ class OfficialLotBatches extends StatefulWidget {
 class _OfficialLotBatchesState extends State<OfficialLotBatches> {
   int _offset = 0;
   late Future<Json> _result = _load();
-  Future<Json> _load() =>
-      widget.api.factoryBatches(widget.scope, widget.lotId, offset: _offset);
+  Future<Json> _load() => widget.api.factoryBatches(
+    widget.scope,
+    widget.lotId,
+    offset: _offset,
+    synthetic: widget.synthetic,
+  );
 
   void _reload() {
     final result = _load();
-    setState(() { _result = result; });
+    setState(() {
+      _result = result;
+    });
   }
 
   Future<void> _create() async {
@@ -104,6 +114,7 @@ class _OfficialLotBatchesState extends State<OfficialLotBatches> {
           initial: batch,
           kloterCode: widget.kloterCode,
           caneWeight: widget.caneWeight,
+          kloter: widget.kloter,
           onOpenPekerjaan: widget.onOpenPekerjaan,
           millingRevision: widget.millingRevision,
           onNavigate: widget.onNavigate,
@@ -143,6 +154,18 @@ class _OfficialLotBatchesState extends State<OfficialLotBatches> {
             Text(
               'Belum ada batch',
               style: niraText(NiraType.caption, color: niraLeaf),
+            ),
+          if (batches.isNotEmpty)
+            Text(
+              batches.any((batch) => batch['status'] == 'draft')
+                  ? '${batches.where((batch) => batch['status'] == 'draft').length} Batch perlu ditinjau'
+                  : 'Semua batch telah ditinjau',
+              style: niraText(
+                NiraType.caption,
+                color: batches.any((batch) => batch['status'] == 'draft')
+                    ? niraOchre
+                    : niraLeaf,
+              ),
             ),
           const SizedBox(height: NiraSpace.md),
           for (final batch in batches)
@@ -197,6 +220,7 @@ class _OfficialBatchDetail extends StatefulWidget {
     required this.initial,
     required this.kloterCode,
     required this.caneWeight,
+    this.kloter,
     required this.onOpenPekerjaan,
     required this.millingRevision,
     required this.onNavigate,
@@ -208,6 +232,7 @@ class _OfficialBatchDetail extends StatefulWidget {
   final Json initial;
   final String kloterCode;
   final String caneWeight;
+  final DemoKloter? kloter;
   final VoidCallback onOpenPekerjaan;
   final String? millingRevision;
   final ValueChanged<NiraTab> onNavigate;
@@ -221,6 +246,7 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
   late final String _id = widget.initial['id'] as String;
   late final String _lot = widget.initial['lot_id'] as String;
   late Future<Json> _detail = _load();
+  late Future<Json?> _reportLot = _loadReportLot();
   late final _photo = widget.millingRevision == null
       ? null
       : widget.api
@@ -230,9 +256,26 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
   String? _error;
 
   Future<Json> _load() => widget.api.factoryBatch(widget.scope, _id);
+  Future<Json?> _loadReportLot() async {
+    try {
+      final report = await widget.api.productionReport(
+        widget.scope,
+        synthetic: widget.initial['is_synthetic'] == true,
+      );
+      return (report['items'] as List)
+          .cast<Json>()
+          .where((lot) => lot['lotId'] == _lot)
+          .firstOrNull;
+    } catch (_) {
+      return null;
+    }
+  }
+
   void _reload() {
-    final detail = _load();
-    setState(() { _detail = detail; });
+    setState(() {
+      _detail = _load();
+      _reportLot = _loadReportLot();
+    });
   }
 
   Future<void> _costs() async {
@@ -292,6 +335,7 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
         setState(() {
           _busy = false;
           _detail = _load();
+          _reportLot = _loadReportLot();
         });
       }
     }
@@ -299,24 +343,43 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
 
   BatchDetailData _data(Json batch) {
     final date = DateTime.parse(batch['occurred_at'] as String).toLocal();
-    final juice = '${reportNumber(batch['quantity_ml'])} mL';
+    final juice =
+        '${reportNumber(millilitersToLiters(batch['quantity_ml'] as String))} L';
     final physical = '${reportNumber(batch['physical_weight_kg'])} kg';
     final grades = (batch['grades'] as List? ?? const []).cast<Json>();
     return (
       summary: [
         DemoField('Nira yang dimasak', juice),
-        DemoField('Hasil fisik', physical),
+        DemoField(
+          'Brix tebu acuan',
+          widget.kloter?.brix == null
+              ? '—'
+              : formatQuantity(widget.kloter!.brix, '°Bx'),
+        ),
+        DemoField('Hasil timbang', physical),
       ],
       cooking: [
-        DemoField('Wajan', '${batch['wok_number']}'),
-        DemoField('Waktu pemasakan', date.toString()),
-        DemoField('Volume nira', juice),
+        DemoField('Tanggal masak', formatDate(date)),
+        DemoField(
+          'Jenis tebu',
+          widget.kloter?.record?['caneTypeCode']?.toString() ?? '—',
+        ),
+        DemoField(
+          'Asal nira',
+          batch['status'] == 'approved' ? widget.kloter?.supplier ?? '—' : '—',
+        ),
+        DemoField(
+          'Brix tebu acuan',
+          widget.kloter?.brix == null
+              ? '—'
+              : formatQuantity(widget.kloter!.brix, '°Bx'),
+        ),
       ],
       grades: [
         for (final grade in grades)
           (
             code: grade['code'] as String,
-            weight: '${reportNumber(grade['weightKg'])} kg',
+            weight: reportNumber(grade['weightKg']),
             price: reportMoney(grade['pricePerKgRupiah']),
           ),
       ],
@@ -336,13 +399,18 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
     final remaining = batch['remainingMl'] as String;
     return [
       const SizedBox(height: NiraSpace.md),
-      EditableFields(
-        onEdit: null,
-        fields: [
-          DemoField('Status biaya', costSaved ? 'Tercatat' : 'Belum diisi'),
-          DemoField('Nira yang masih perlu direservasi', '$remaining mL'),
-        ],
-      ),
+      if (batch['status'] == 'draft') ...[
+        EditableFields(
+          onEdit: null,
+          fields: [
+            DemoField('Status biaya', costSaved ? 'Tercatat' : 'Belum diisi'),
+            DemoField(
+              'Nira yang masih perlu direservasi',
+              '${reportNumber(millilitersToLiters(remaining))} L',
+            ),
+          ],
+        ),
+      ],
       if (_error != null) Text(_error!),
       if (_busy) const LinearProgressIndicator(),
       if (batch['status'] == 'approved')
@@ -352,6 +420,7 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
         ),
       if (batch['status'] == 'draft' &&
           !_busy &&
+          widget.initial['is_synthetic'] != true &&
           widget.scope.role == 'admin') ...[
         if (!costSaved) NiraButton('Isi biaya kloter', _costs),
         if (costSaved && remaining != '0')
@@ -382,6 +451,11 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
     future: _detail,
     builder: (_, snapshot) {
       final current = snapshot.data;
+      final failure = snapshot.error;
+      final legacy =
+          failure is ReviewApiError &&
+          failure.status == 404 &&
+          failure.detail?.startsWith('Cannot GET ') == true;
       final status = current?['status'] ?? widget.initial['status'];
       final approved = status == 'approved';
       final canApprove =
@@ -389,47 +463,78 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
           current?['costSaved'] == true &&
           current?['remainingMl'] == '0' &&
           widget.scope.role == 'admin' &&
+          widget.initial['is_synthetic'] != true &&
           !_busy &&
           snapshot.connectionState == ConnectionState.done;
-      return BatchDetailPage.official(
-        officialTitle: widget.initial['code'] as String,
-        kloterCode: widget.kloterCode,
-        officialReviewed: approved,
-        officialCancelled: status == 'cancelled',
-        officialData: current == null ? null : _data(current),
-        officialNumber: widget.initial['wok_number'] as int,
-        officialDocument: widget.onOpenPekerjaan,
-        officialPreview: ApprovedDocumentPreview(
-          batch: true,
-          photo: _photo,
-          fallback: DocumentLink(
-            'Foto nota produksi di Pekerjaan',
-            widget.onOpenPekerjaan,
-          ),
-        ),
-        officialActions: current == null ? const [] : _actions(current),
-        officialStatus: snapshot.hasError
-            ? Column(
-                children: [
-                  Text(_errorText(snapshot.error)),
-                  TextButton(
-                    onPressed: _reload,
-                    child: const Text('Muat ulang batch'),
-                  ),
-                ],
-              )
-            : const LinearProgressIndicator(),
-        officialAction: current != null && (approved || canApprove)
-            ? BatchReviewActions(
-                batchNumber: current['wok_number'] as int,
-                batchCode: widget.initial['code'] as String,
-                label: approved ? 'Batch tervalidasi' : 'Validasi',
-                verified: approved,
-                onVerify: () =>
-                    _run(() => widget.api.finishBatch(widget.scope, _id)),
-              )
-            : null,
-        onNavigate: widget.onNavigate,
+      return FutureBuilder<Json?>(
+        future: _reportLot,
+        builder: (_, report) {
+          final calculation = report.data?['calculation'] as Json?;
+          final margin = calculation?['productionMarginRupiah'];
+          final reportedBatch = legacy && approved
+              ? (report.data?['batches'] as List? ?? const [])
+                    .cast<Json>()
+                    .where((batch) => batch['id'] == _id)
+                    .firstOrNull
+              : null;
+          final batch = legacy
+              ? {...widget.initial, ...?reportedBatch}
+              : current;
+          return BatchDetailPage.official(
+            officialTitle: widget.initial['code'] as String,
+            kloterCode: widget.kloterCode,
+            officialReviewed: approved,
+            officialCancelled: status == 'cancelled',
+            officialData: batch == null ? null : _data(batch),
+            officialMargin: margin == null ? null : reportMoney(margin),
+            officialNumber: widget.initial['wok_number'] as int,
+            officialDocument: widget.onOpenPekerjaan,
+            officialPreview: ApprovedDocumentPreview(
+              batch: true,
+              photo: _photo,
+              fallback: DocumentLink(
+                'Foto nota produksi di Pekerjaan',
+                widget.onOpenPekerjaan,
+              ),
+            ),
+            officialActions: current != null
+                ? _actions(current)
+                : [
+                    if (legacy && reportedBatch == null)
+                      const Text(
+                        'Rincian grade dan harga batch belum tersedia.',
+                      ),
+                    if (legacy && approved)
+                      DocumentLink(
+                        'Nilai produksi dan margin kloter',
+                        () => widget.reportLink(_id),
+                      ),
+                  ],
+            officialStatus: snapshot.hasError
+                ? Column(
+                    children: [
+                      Text(_errorText(snapshot.error)),
+                      TextButton(
+                        onPressed: _reload,
+                        child: const Text('Muat ulang batch'),
+                      ),
+                    ],
+                  )
+                : const LinearProgressIndicator(),
+            officialAction: current != null && status != 'cancelled'
+                ? BatchReviewActions(
+                    batchNumber: current['wok_number'] as int,
+                    batchCode: widget.initial['code'] as String,
+                    label: approved ? 'Batch tervalidasi' : 'Validasi',
+                    verified: approved,
+                    enabled: canApprove,
+                    onVerify: () =>
+                        _run(() => widget.api.finishBatch(widget.scope, _id)),
+                  )
+                : null,
+            onNavigate: widget.onNavigate,
+          );
+        },
       );
     },
   );

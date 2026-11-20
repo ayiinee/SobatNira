@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sobatnira/main.dart';
+import 'package:sobatnira/widgets/adaptive_value.dart';
 import 'package:sobatnira/features/kloter/demo_lot_fixture.dart';
 import 'package:sobatnira/features/kloter/demo_production.dart';
 import 'package:sobatnira/features/laporan/demo_analytics.dart';
@@ -71,14 +72,24 @@ void main() {
       await tap(find.text('Slamet'));
       expect(find.text('MJT-260926-2A'), findsOneWidget);
       expect(find.text('Slamet'), findsOneWidget);
-      expect(find.text('1.240Kg'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) => widget is NiraValue && widget.value == '1.240Kg',
+        ),
+        findsOneWidget,
+      );
       expect(find.text('72Kg'), findsWidgets);
       expect(find.text('Batch 3'), findsOneWidget);
       expect(find.text('Batch 4'), findsNothing);
       await tap(find.byTooltip('Kembali'));
       await tap(find.text('Darto'));
       expect(find.text('MJT-260926-3A'), findsOneWidget);
-      expect(find.text('1.800Kg'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) => widget is NiraValue && widget.value == '1.800Kg',
+        ),
+        findsOneWidget,
+      );
       expect(find.text('126Kg'), findsWidgets);
       expect(find.text('Batch 4'), findsOneWidget);
       expect(tester.takeException(), isNull);
