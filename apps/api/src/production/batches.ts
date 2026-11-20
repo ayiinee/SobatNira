@@ -1,9 +1,8 @@
-import { BadRequestException, Body, ConflictException, Controller, Get, HttpCode, Inject, Injectable, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, Get, HttpCode, Injectable, Param, Patch, Post, Query } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { CurrentFactory, FactoryRoles } from '../auth/auth.decorators';
 import { FactoryAccess } from '../auth/auth.types';
 import { FACTORY_SCOPE_CTE } from '../auth/access.sql';
-import { BACKEND_CONFIG, BackendConfig } from '../config/backend.config';
 import { DatabaseService, DatabaseSession } from '../database/database.service';
 import { JuiceRepository } from '../juice/juice.repository';
 import { object, uuid, text, timestamp, scopeValues, found, parsePage } from './production.dto';
@@ -38,8 +37,7 @@ function correctionData(physicalWeight: unknown, grades: unknown) {
 }
 @Injectable()
 export class Batches {
-    constructor(private readonly db: DatabaseService, private readonly juice: JuiceRepository,
-        @Inject(BACKEND_CONFIG) private readonly config: BackendConfig) { }
+    constructor(private readonly db: DatabaseService, private readonly juice: JuiceRepository) { }
     async create(access: FactoryAccess, input: unknown) {
         const b = parseBatch(input);
         const hash = createHash('sha256').update(JSON.stringify(b)).digest('hex');
@@ -153,8 +151,7 @@ FROM sobatnira.batch_grade_results g JOIN sobatnira.production_batches pb ON pb.
           FROM sobatnira.production_batches b JOIN authorized_scope s
             ON s."tenantId"=b.tenant_id AND s."factoryId"=b.factory_id WHERE b.id=$4`, [...scopeValues(access), id]);
         const batch = found(row);
-        const canManage = access.role === 'admin' && !batch.lotClosed &&
-            (!batch.is_synthetic || this.config.environment !== 'production');
+        const canManage = access.role === 'admin' && !batch.lotClosed;
         return { ...batch, ...batchGradeTotals(batch.grades ?? []),
             canCorrect: canManage && batch.status === 'approved' };
     }
@@ -174,7 +171,7 @@ FROM sobatnira.batch_grade_results g JOIN sobatnira.production_batches pb ON pb.
             const scope = [access.tenantId, access.factoryId, initial.lot_id, initial.is_synthetic];
             const batch = found((await tx.query(`SELECT * FROM sobatnira.production_batches
               WHERE tenant_id=$1 AND factory_id=$2 AND id=$3 FOR UPDATE`, [scope[0], scope[1], id])).rows[0]);
-            if (batch.status !== 'approved' || (batch.is_synthetic && this.config.environment === 'production')) {
+            if (batch.status !== 'approved') {
                 throw new ConflictException('Batch tidak dapat dikoreksi.');
             }
             const existing = (await tx.query(`SELECT *, proposed_data=$3::jsonb AS same_data

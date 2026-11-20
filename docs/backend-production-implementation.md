@@ -64,7 +64,7 @@ Urutan: receipt dan milling sah → buat batch → simpan biaya kloter → reser
 
 Migrasi `023_batch_corrections.sql` menambahkan riwayat koreksi dan mengizinkan snapshot lanjutan per batch. Terapkan migrasi sebelum merilis API. Pada service Railway yang membangun `Dockerfile` akar repo, gunakan `node dist/database/migrate.js` sebagai **Pre-deploy Command** di pengaturan service. Perintah memakai `DATABASE_URL` milik service dan migrasi yang ada di image.
 
-Admin dapat membuka satu draf koreksi pada batch sah dari kloter terbuka. Selama proses koreksi, angka laporan tetap memakai hasil sah terakhir. Validasi ulang membekukan riwayat perubahan dan menyimpan snapshot kumulatif baru dalam satu transaksi. Konsumsi nira tetap mengikuti pengesahan asli. Kloter tidak dapat ditutup selama masih memiliki draf koreksi.
+Admin dapat membuka satu draf koreksi pada batch sah dari kloter terbuka, termasuk batch data contoh yang sudah disahkan. Koreksi data contoh hanya muncul di laporan sintetis. Selama proses koreksi, angka laporan tetap memakai hasil sah terakhir. Validasi ulang membekukan riwayat perubahan dan menyimpan snapshot kumulatif baru dalam satu transaksi. Konsumsi nira tetap mengikuti pengesahan asli. Kloter tidak dapat ditutup selama masih memiliki draf koreksi.
 
 Periode laporan mengikuti **waktu penerimaan kloter**, interval `from` inklusif dan `before` eksklusif. Laporan memakai snapshot terbaru dari batch sah pada setiap kloter dalam periode. Kloter terbuka memakai label margin sementara karena perhitungan kumulatif memasukkan seluruh biaya kloter.
 

@@ -3,6 +3,11 @@ const {randomUUID}=require('node:crypto');
 const {mobileClosureFixture}=require('./mobile-closure-fixture.cjs');
 const {ClosureCheckService}=require('../../dist/juice/closure-check.service');
 const {DatabaseService}=require('../../dist/database/database.service');
+const {BACKEND_CONFIG}=require('../../dist/config/backend.config');
+const {IntakeService}=require('../../dist/documents/intake.service');
+const {MillingService}=require('../../dist/milling/milling.service');
+const {Batches}=require('../../dist/production/batches');
+const {JuiceRepository}=require('../../dist/juice/juice.repository');
 test('batch approval freezes costs, consumes once, isolates scope and produces an exact report',async()=>{
  const f=await mobileClosureFixture({consume:false});
  try{
@@ -143,6 +148,66 @@ test('batch approval freezes costs, consumes once, isolates scope and produces a
   assert.equal((await f.request(f.siblingRoot+'/production/batches/'+batch+'/approve','POST')).status,404);
   assert.equal((await f.request(f.siblingRoot+'/production/recap')).body.total,0);
  }finally{await f.close();}
+});
+
+test('production admins can correct an existing sample batch without changing official reports or stock', async () => {
+ const f = await mobileClosureFixture({ consume: false });
+ try {
+  const { tenant: tenantId, factory: factoryId, admin: userId, secondLot: lotId } = f.ids;
+  const access = { tenantId, factoryId, userId, role: 'admin' };
+  const intake = f.app.get(IntakeService);
+  const milling = f.app.get(MillingService);
+  const batches = f.app.get(Batches);
+  const juice = f.app.get(JuiceRepository);
+  const reason = 'Fixture koreksi data contoh';
+  const receipt = await intake.createSynthetic(access, { lotId, requestId: randomUUID() });
+  const input = await intake.update(access, receipt.id, {
+   expectedRevision: receipt.currentRevision, reason, changes: { netWeightKg: '1250' },
+  });
+  await intake.confirmSynthetic(access, input.id, input.currentRevision);
+  await intake.approve(access, input.id, input.currentRevision);
+  const millingDraft = await milling.createSynthetic(access, { lotId, requestId: randomUUID() });
+  const milled = await milling.update(access, millingDraft.id, {
+   expectedRevision: millingDraft.currentRevision, reason,
+   changes: { occurredAt: '2026-11-16T02:00:00Z', juiceProducedLiters: '100', reportedBatches: [] },
+  });
+  await milling.confirmSynthetic(access, milled.id, milled.currentRevision);
+  await milling.approve(access, milled.id, milled.currentRevision);
+  const batchId = randomUUID();
+  await batches.create(access, {
+   id: batchId, lotId, code: 'CORRECTION-SAMPLE', wokNumber: 1, occurredAt: '2026-11-16T03:00:00Z',
+   quantityMl: '50000', physicalWeightKg: '30', synthetic: true,
+   grades: [{ code: 'A', weightKg: '28', pricePerKgRupiah: '20000' }],
+  });
+  await batches.costs(access, lotId, {
+   caneCostRupiah: '100000', operationalCostRupiah: '20000', ingredientCostRupiah: '5000', otherCostRupiah: '0',
+  });
+  await juice.reserve(access, lotId, { requestId: randomUUID(), batchId, quantityMl: '50000', synthetic: true });
+  await batches.approve(access, batchId);
+
+  f.app.get(BACKEND_CONFIG).environment = 'production';
+  const root = f.root + '/production';
+  const detail = root + '/batches/' + batchId;
+  const correction = detail + '/corrections/' + randomUUID();
+  const sampleReport = root + '/production-report?synthetic=true';
+  const officialReport = root + '/production-report';
+  const stock = f.root + '/lots/' + lotId + '/juice/availability?synthetic=true';
+  const before = (await f.request(officialReport)).body.totals;
+  const stockBefore = (await f.request(stock)).body;
+  assert.equal(stockBefore.onHandMl, '50000');
+  assert.equal((await f.request(detail)).body.canCorrect, true);
+  assert.equal((await f.request(detail, 'GET', undefined, 'fixture-owner')).body.canCorrect, false);
+  assert.equal((await f.request(correction, 'POST', { reason }, 'fixture-owner')).status, 403);
+  assert.equal((await f.request(correction, 'POST', { reason })).status, 201);
+  assert.equal((await f.request(correction, 'PATCH', {
+   version: 1, physicalWeightKg: '31', grades: [{ code: 'A', weightKg: '29', pricePerKgRupiah: '20000' }],
+  })).status, 200);
+  assert.equal((await f.request(sampleReport)).body.totals.finalSugarKg, '28');
+  assert.equal((await f.request(correction + '/approve', 'POST', { version: 2 })).status, 200);
+  assert.equal((await f.request(sampleReport)).body.totals.finalSugarKg, '29');
+  assert.deepEqual((await f.request(officialReport)).body.totals, before);
+  assert.deepEqual((await f.request(stock)).body, stockBefore);
+ } finally { await f.close(); }
 });
 
 test('cancelling a batch releases its reservation once and excludes it from official reports', async () => {
