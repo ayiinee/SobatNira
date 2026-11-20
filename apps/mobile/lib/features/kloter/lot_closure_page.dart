@@ -14,10 +14,12 @@ class LotClosurePage extends StatefulWidget {
     required this.scope,
     this.onNavigate,
     this.onChanged,
+    this.synthetic = false,
     required this.lotId,
   });
   final ValueChanged<NiraTab>? onNavigate;
   final VoidCallback? onChanged;
+  final bool synthetic;
   final ReviewApi api;
   final FactoryScope scope;
   final String lotId;
@@ -36,8 +38,17 @@ class _LotClosurePageState extends State<LotClosurePage> {
 
   Future<List<Json>> _load() {
     final request = Future.wait([
-      widget.api.lotClosure(widget.scope, widget.lotId),
-      widget.api.lotClosureHistory(widget.scope, widget.lotId, offset: _offset),
+      widget.api.lotClosure(
+        widget.scope,
+        widget.lotId,
+        synthetic: widget.synthetic,
+      ),
+      widget.api.lotClosureHistory(
+        widget.scope,
+        widget.lotId,
+        offset: _offset,
+        synthetic: widget.synthetic,
+      ),
     ]);
     // A refresh can fail before FutureBuilder subscribes on the next frame.
     request.ignore();
@@ -94,9 +105,14 @@ class _LotClosurePageState extends State<LotClosurePage> {
           widget.lotId,
           status['closureId'] as String,
           reason!,
+          synthetic: widget.synthetic,
         );
       } else {
-        await closure.close(widget.scope, widget.lotId);
+        await closure.close(
+          widget.scope,
+          widget.lotId,
+          synthetic: widget.synthetic,
+        );
       }
       widget.onChanged?.call();
       if (mounted) {

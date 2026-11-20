@@ -465,12 +465,13 @@ class _LotDetailState extends State<_LotDetail> {
                 ),
               )
             : null,
-        onClosure: snapshot.hasError || _synthetic
+        onClosure: snapshot.hasError || (_synthetic && _scope.role != 'admin')
             ? null
             : () => _open(
                 LotClosurePage(
                   api: _api,
                   scope: _scope,
+                  synthetic: _synthetic,
                   lotId: _id,
                   onNavigate: widget.onNavigate,
                   onChanged: widget.live.refresh,

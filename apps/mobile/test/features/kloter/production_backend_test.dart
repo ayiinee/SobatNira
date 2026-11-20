@@ -346,6 +346,29 @@ void main() {
         () => api.lotClosureHistory(scope, _closureLot),
       );
       expect(newLog['total'], 2);
+
+      final batches = await backend(
+        () => api.factoryBatches(scope, _closureLot),
+      );
+      final batchId =
+          ((batches['items'] as List).single as Json)['id'] as String;
+      final batch = await backend(() => api.factoryBatch(scope, batchId));
+      expect(batch['canCorrect'], isTrue);
+      expect(batch['lotClosureId'], reclosed['closureId']);
+      final draft = await backend(
+        () => api.openBatchCorrection(
+          scope,
+          batchId,
+          ReviewApi.requestUuid(),
+          'Koreksi batch dikonfirmasi melalui aplikasi.',
+          reopenClosureId: batch['lotClosureId'] as String,
+        ),
+      );
+      expect(
+        (await backend(() => api.lot(scope, _closureLot)))['status'],
+        'open',
+      );
+      expect(draft['status'], 'draft');
     }
     await tester.pumpWidget(const SizedBox.shrink());
     api.close();

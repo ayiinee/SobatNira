@@ -322,6 +322,7 @@ void main() {
       addTearDown(demo.dispose);
       var status = 'draft';
       Json? correction;
+      String? closureId;
       var physicalWeight = '29.25';
       final writes = <String>[];
       final api = ReviewApi(
@@ -353,7 +354,11 @@ void main() {
                 correction = null;
                 return detailResponse({});
               }
-              expect(values['reason'], 'Koreksi hasil timbang');
+              expect(values, {
+                'reason': 'Koreksi batch dikonfirmasi melalui aplikasi.',
+                'reopenClosureId': 'closure-fixture',
+              });
+              closureId = null;
               correction = {
                 'id': path.split('/').last,
                 'version': 1,
@@ -366,6 +371,7 @@ void main() {
               return http.Response(jsonEncode(correction), 201);
             }
             status = 'approved';
+            closureId = 'closure-fixture';
             return detailResponse({});
           }
           if (request.url.path.endsWith('/production-report')) {
@@ -374,12 +380,19 @@ void main() {
           return detailResponse(
             request.url.path.endsWith('/batches')
                 ? {
-                    'items': [detailBatchRecord(status: status)],
+                    'items': [
+                      {
+                        ...detailBatchRecord(status: status),
+                        'hasCorrection': correction != null,
+                      },
+                    ],
                   }
                 : {
                     ...detailBatchRecord(status: status),
                     'physical_weight_kg': physicalWeight,
                     'canCorrect': status == 'approved',
+                    'lotClosed': closureId != null,
+                    'lotClosureId': closureId,
                     'correction': correction,
                   },
           );
@@ -404,16 +417,50 @@ void main() {
       expect(find.text('BATCH-UJI berhasil divalidasi'), findsOneWidget);
       await tester.tap(find.byTooltip('Buka koreksi batch'));
       await tester.pumpAndSettle();
-      expect(find.text('Buka koreksi batch?'), findsOneWidget);
-      expect(writes, hasLength(1));
-      await tester.enterText(
-        find.byType(TextFormField),
-        'Koreksi hasil timbang',
+      final dialog = find.byType(AlertDialog);
+      final correctionDialog = tester.widget<AlertDialog>(dialog);
+      expect(correctionDialog.backgroundColor, Colors.white);
+      expect(correctionDialog.surfaceTintColor, Colors.transparent);
+      expect((correctionDialog.title as Text).data, 'Buka koreksi batch?');
+      expect((correctionDialog.title as Text).textAlign, TextAlign.center);
+      expect((correctionDialog.content as Text).textAlign, TextAlign.center);
+      expect(
+        (correctionDialog.content as Text).data,
+        contains('Kloter akan dibuka kembali'),
       );
-      await tester.tap(find.text('Buka koreksi'));
+      expect(
+        find.descendant(of: dialog, matching: find.byType(TextFormField)),
+        findsNothing,
+      );
+      final cancel = find.widgetWithText(OutlinedButton, 'Batal');
+      final confirm = find.widgetWithText(FilledButton, 'Konfirmasi');
+      expect(tester.getSize(cancel), tester.getSize(confirm));
+      expect(tester.getCenter(cancel).dy, tester.getCenter(confirm).dy);
+      expect(
+        tester.getCenter(cancel).dx,
+        lessThan(tester.getCenter(confirm).dx),
+      );
+      expect(writes, hasLength(1));
+      expect(closureId, 'closure-fixture');
+      await tester.tap(cancel);
+      await tester.pumpAndSettle();
+      expect(dialog, findsNothing);
+      expect(writes, hasLength(1));
+      await tester.tap(find.byTooltip('Buka koreksi batch'));
+      await tester.pumpAndSettle();
+      await tester.tap(confirm);
       await tester.pumpAndSettle();
       expect(find.text('Draf koreksi dibuka'), findsOneWidget);
       expect(find.text('Validasi ulang'), findsOneWidget);
+      await tester.tap(find.byTooltip('Kembali'));
+      await tester.pumpAndSettle();
+      expect(find.text('1 Batch perlu ditinjau'), findsOneWidget);
+      expect(
+        tester.widget<KloterBatchTile>(find.byType(KloterBatchTile)).pending,
+        isTrue,
+      );
+      await tester.tap(find.text('BATCH-UJI'));
+      await tester.pumpAndSettle();
       final weight = find.text('Berat hasil: 29,25 kg');
       await tester.scrollUntilVisible(weight, 150);
       await tester.tap(weight);

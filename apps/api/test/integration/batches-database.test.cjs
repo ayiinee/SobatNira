@@ -245,7 +245,7 @@ test('cancelling a batch releases its reservation once and excludes it from offi
  } finally { await f.close(); }
 });
 
-test('operational closure checks an approved batch in the same database', async () => {
+test('batch correction reopens the confirmed closure atomically and keeps the approved report', async () => {
  const f = await mobileClosureFixture();
  try {
   const closure = await f.request(f.root + '/lots/' + f.closureLotId + '/closure', 'POST', {synthetic:false});
@@ -254,8 +254,45 @@ test('operational closure checks an approved batch in the same database', async 
   const report = await f.request(f.root + '/production/recap');
   assert.equal(report.body.items[0].closed,true);
   const batchId = report.body.items[0].batches[0].id;
-  const correction = await f.request(f.root+'/production/batches/'+batchId+'/corrections/'+randomUUID(),
-    'POST',{reason:'Uji kloter tertutup'});
-  assert.equal(correction.status,409);
+  const detail = f.root+'/production/batches/'+batchId;
+  const correction = detail+'/corrections/'+randomUUID();
+  const lot = f.root+'/lots/'+f.closureLotId;
+  const reason = 'Uji kloter tertutup';
+  assert.equal((await f.request(detail)).body.canCorrect,true);
+  assert.equal((await f.request(detail)).body.lotClosureId,closure.body.closureId);
+  assert.equal((await f.request(correction,'POST',{reason})).status,409);
+  assert.equal((await f.request(correction,'POST',{reason,reopenClosureId:randomUUID()})).status,409);
+  const consent = {reason,reopenClosureId:closure.body.closureId};
+  assert.equal((await f.request(correction,'POST',consent,'fixture-owner')).status,403);
+  await f.client.query(`CREATE FUNCTION pg_temp.reject_reopening() RETURNS trigger LANGUAGE plpgsql
+    AS $$ BEGIN RAISE EXCEPTION 'synthetic reopening failure'; END $$;
+    CREATE TRIGGER reject_reopening BEFORE UPDATE ON sobatnira.lot_closures
+    FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_reopening()`);
+  assert.equal((await f.request(correction,'POST',consent)).status,500);
+  await f.client.query('DROP TRIGGER reject_reopening ON sobatnira.lot_closures');
+  assert.equal((await f.request(lot)).body.status,'closed');
+  assert.equal((await f.request(detail)).body.correction,null);
+
+  const opened = await f.request(correction,'POST',consent);
+  assert.equal(opened.status,201,JSON.stringify(opened.body));
+  assert.equal((await f.request(correction,'POST',consent)).body.id,opened.body.id);
+  assert.equal((await f.request(lot)).body.status,'open');
+  const history = (await f.request(lot+'/closure/history')).body;
+  assert.equal(history.total,1);
+  assert.equal(history.items[0].reason,'Koreksi batch CLOSURE-FIXTURE.');
+  assert.equal(history.items[0].reopenedBy,f.ids.admin);
+  const batchPage = (await f.request(f.root+'/production/batches?lotId='+f.closureLotId)).body;
+  assert.equal(batchPage.items[0].hasCorrection,true);
+  assert.equal(batchPage.items[0].status,'approved');
+  const whileOpen = (await f.request(f.root+'/production/recap')).body;
+  assert.equal(whileOpen.totalMarginRupiah,report.body.totalMarginRupiah);
+  assert.equal(whileOpen.items[0].closed,false);
+  assert.equal((await f.request(lot+'/closure','POST',{synthetic:false})).status,409);
+  assert.equal((await f.request(correction+'/approve','POST',{version:1})).status,200);
+  const closedAgain = await f.request(lot+'/closure','POST',{synthetic:false});
+  assert.equal(closedAgain.body.status,'closed');
+  assert.notEqual(closedAgain.body.closureId,closure.body.closureId);
+  assert.equal((await f.request(correction,'POST',consent)).body.id,opened.body.id);
+  assert.equal((await f.request(lot)).body.status,'closed');
  } finally { await f.close(); }
 });

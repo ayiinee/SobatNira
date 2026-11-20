@@ -5,6 +5,7 @@ import { FactoryAccess } from '../auth/auth.types';
 import { FACTORY_SCOPE_CTE } from '../auth/access.sql';
 import { DatabaseService, DatabaseSession } from '../database/database.service';
 import { JuiceRepository } from '../juice/juice.repository';
+import { reopenActiveClosure } from '../juice/lot-closure.service';
 import { object, uuid, text, timestamp, scopeValues, found, parsePage } from './production.dto';
 import { decimal, sumDecimals, compareDecimals } from './decimal';
 import { calculateProductionPreview } from './calculation';
@@ -132,13 +133,13 @@ FROM sobatnira.batch_grade_results g JOIN sobatnira.production_batches pb ON pb.
     }
     async detail(access: FactoryAccess, id: string) {
         const { rows: [row] } = await this.db.query<{ id: string; code: string; lot_id: string; wok_number: number;
-          occurred_at: string; status: string; is_synthetic: boolean; lotClosed: boolean; grades: Grade[] | null }>(`WITH ${FACTORY_SCOPE_CTE}
+          occurred_at: string; status: string; is_synthetic: boolean; lotClosureId: string | null; grades: Grade[] | null }>(`WITH ${FACTORY_SCOPE_CTE}
           SELECT b.*,
             (SELECT to_jsonb(c) - ARRAY['before_data','created_by','updated_by']
              FROM sobatnira.production_batch_corrections c WHERE c.batch_id=b.id AND c.status='draft') AS correction,
-            EXISTS(SELECT 1 FROM sobatnira.lot_closures c
+            (SELECT c.id FROM sobatnira.lot_closures c
               WHERE (c.tenant_id,c.factory_id,c.lot_id,c.is_synthetic)=(b.tenant_id,b.factory_id,b.lot_id,b.is_synthetic)
-              AND c.reopened_at IS NULL) AS "lotClosed",
+              AND c.reopened_at IS NULL) AS "lotClosureId",
             (SELECT jsonb_agg(jsonb_build_object('code',g.code,'weightKg',g.weight_kg::text,
               'pricePerKgRupiah',g.price_per_kg_rupiah::text) ORDER BY g.code)
              FROM sobatnira.batch_grade_results g WHERE g.batch_id=b.id) AS grades,
@@ -151,15 +152,16 @@ FROM sobatnira.batch_grade_results g JOIN sobatnira.production_batches pb ON pb.
           FROM sobatnira.production_batches b JOIN authorized_scope s
             ON s."tenantId"=b.tenant_id AND s."factoryId"=b.factory_id WHERE b.id=$4`, [...scopeValues(access), id]);
         const batch = found(row);
-        const canManage = access.role === 'admin' && !batch.lotClosed;
         return { ...batch, ...batchGradeTotals(batch.grades ?? []),
-            canCorrect: canManage && batch.status === 'approved' };
+            lotClosed: batch.lotClosureId !== null,
+            canCorrect: access.role === 'admin' && batch.status === 'approved' };
     }
 
     async correct(access: FactoryAccess, id: string, correctionId: string, action: 'open' | 'save' | 'approve' | 'discard', input: unknown) {
-        const body = object(input, action === 'open' ? ['reason'] :
+        const body = object(input, action === 'open' ? ['reason', 'reopenClosureId'] :
             action === 'save' ? ['version', 'physicalWeightKg', 'grades'] : ['version']);
         const reason = action === 'open' ? text(body.reason, 'Alasan koreksi', 500) : null;
+        const reopenClosureId = body.reopenClosureId === undefined ? null : uuid(body.reopenClosureId, 'reopenClosureId');
         const version = body.version as number;
         if (action !== 'open' && (!Number.isSafeInteger(version) || version < 1)) {
             throw new BadRequestException('Versi koreksi tidak valid.');
@@ -189,9 +191,10 @@ FROM sobatnira.batch_grade_results g JOIN sobatnira.production_batches pb ON pb.
                     throw new ConflictException('Koreksi sudah berubah. Muat ulang batch.');
                 }
             }
-            if ((await tx.query(`SELECT 1 FROM sobatnira.lot_closures
-              WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3 AND is_synthetic=$4 AND reopened_at IS NULL`, scope)).rows.length) {
-                throw new ConflictException('Kloter sudah ditutup.');
+            const { rows: [activeClosure] } = await tx.query<{id: string}>(`SELECT id FROM sobatnira.lot_closures
+              WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3 AND is_synthetic=$4 AND reopened_at IS NULL`, scope);
+            if (activeClosure && (action !== 'open' || reopenClosureId !== activeClosure.id)) {
+                throw new ConflictException('Konfirmasi pembukaan kembali kloter terbaru sebelum mengoreksi batch.');
             }
             if (action === 'open') {
                 const grades = (await tx.query<Grade>(`SELECT code, weight_kg::text AS "weightKg",
@@ -204,6 +207,10 @@ FROM sobatnira.batch_grade_results g JOIN sobatnira.production_batches pb ON pb.
                   ON CONFLICT DO NOTHING RETURNING *`, [correctionId, id, reason,
                     JSON.stringify(correctionData(String(batch.physical_weight_kg), grades)), access.userId]);
                 if (!result.rows.length) throw new ConflictException('Batch sudah memiliki draf koreksi atau ID koreksi telah dipakai.');
+                if (activeClosure && !(await reopenActiveClosure(tx, access, batch.lot_id, batch.is_synthetic,
+                  activeClosure.id, `Koreksi batch ${batch.code}.`))) {
+                    throw new ConflictException('Penutupan kloter sudah berubah.');
+                }
                 return result.rows[0];
             }
             if (action === 'save') {
@@ -258,7 +265,9 @@ FROM sobatnira.batch_grade_results g JOIN sobatnira.production_batches pb ON pb.
         if (synthetic !== null && synthetic !== 'true' && synthetic !== 'false') {
             throw new BadRequestException('synthetic tidak valid.');
         }
-        const rows = await this.db.query(`WITH ${FACTORY_SCOPE_CTE} SELECT b.* FROM sobatnira.production_batches b
+        const rows = await this.db.query(`WITH ${FACTORY_SCOPE_CTE} SELECT b.*, EXISTS(
+          SELECT 1 FROM sobatnira.production_batch_corrections c WHERE c.batch_id=b.id AND c.status='draft'
+        ) AS "hasCorrection" FROM sobatnira.production_batches b
           JOIN authorized_scope s ON s."tenantId"=b.tenant_id AND s."factoryId"=b.factory_id
           WHERE ($6::uuid IS NULL OR b.lot_id=$6) AND ($7::boolean IS NULL OR b.is_synthetic=$7)
           ORDER BY b.occurred_at DESC,b.id LIMIT $4 OFFSET $5`,

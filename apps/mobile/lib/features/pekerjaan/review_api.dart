@@ -384,10 +384,11 @@ class ReviewApi {
     FactoryScope scope,
     String batch,
     String correction,
-    String reason,
-  ) => writeProduction(
+    String reason, {
+    String? reopenClosureId,
+  }) => writeProduction(
     [...scope._base, 'production', 'batches', batch, 'corrections', correction],
-    {'reason': reason},
+    {'reason': reason, 'reopenClosureId': ?reopenClosureId},
   );
 
   Future<Json> saveBatchCorrection(
@@ -580,16 +581,27 @@ class ReviewApi {
   Future<Json> saveLot(FactoryScope scope, Json values, {String? id}) =>
       _productionWrite(scope._lots, values, id: id);
 
-  Future<Json> lotClosure(FactoryScope scope, String lotId) =>
-      _productionGet([...scope._lots, lotId, 'closure']);
+  Future<Json> lotClosure(
+    FactoryScope scope,
+    String lotId, {
+    bool synthetic = false,
+  }) => _productionGet(
+    [...scope._lots, lotId, 'closure'],
+    query: {if (synthetic) 'synthetic': 'true'},
+  );
 
   Future<Json> lotClosureHistory(
     FactoryScope scope,
     String lotId, {
     int offset = 0,
+    bool synthetic = false,
   }) => _productionGet(
     [...scope._lots, lotId, 'closure', 'history'],
-    query: {'limit': '20', 'offset': '$offset'},
+    query: {
+      'limit': '20',
+      'offset': '$offset',
+      if (synthetic) 'synthetic': 'true',
+    },
   );
 
   Future<Json> changeLotClosure(
@@ -597,6 +609,7 @@ class ReviewApi {
     String lotId, {
     String? closureId,
     String? reason,
+    bool synthetic = false,
   }) async {
     final request = http.Request(
       'POST',
@@ -611,11 +624,10 @@ class ReviewApi {
       ),
     );
     request.headers.addAll({..._headers, 'Content-Type': 'application/json'});
-    request.body = jsonEncode(
-      closureId == null
-          ? <String, dynamic>{}
-          : {'closureId': closureId, 'reason': reason},
-    );
+    request.body = jsonEncode({
+      if (closureId != null) ...{'closureId': closureId, 'reason': reason},
+      if (synthetic) 'synthetic': true,
+    });
     return _json(_client.send(request).then(http.Response.fromStream));
   }
 

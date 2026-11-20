@@ -1,7 +1,7 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { FACTORY_SCOPE_CTE } from '../auth/access.sql';
 import { FactoryAccess } from '../auth/auth.types';
-import { DatabaseService } from '../database/database.service';
+import { DatabaseService, DatabaseSession } from '../database/database.service';
 import { found, scopeValues } from '../production/production.dto';
 import { queryPage } from '../production/production.repository';
 import { ClosureCheckService } from './closure-check.service';
@@ -21,6 +21,15 @@ interface ClosureHistoryEntry {
 const closureColumns = 'id AS "closureId", closed_by AS "closedBy", closed_at AS "closedAt"';
 const reopeningColumns = 'reopened_by AS "reopenedBy", reopened_at AS "reopenedAt", reopen_reason AS reason';
 const closureScope = 'tenant_id = $1 AND factory_id = $2 AND lot_id = $3 AND is_synthetic = $4';
+
+export async function reopenActiveClosure(tx: DatabaseSession, access: FactoryAccess, lotId: string,
+  synthetic: boolean, closureId: string, reason: string) {
+  const { rows: [changed] } = await tx.query<Reopening>(`UPDATE sobatnira.lot_closures
+    SET reopened_by = $6, reopened_at = clock_timestamp(), reopen_reason = $7
+    WHERE ${closureScope} AND id = $5 AND reopened_at IS NULL RETURNING ${reopeningColumns}`,
+  [access.tenantId, access.factoryId, lotId, synthetic, closureId, access.userId, reason]);
+  return changed;
+}
 
 @Injectable()
 export class LotClosureService {
@@ -79,10 +88,7 @@ export class LotClosureService {
     return this.juice.mutate(access, async (tx) => {
       await this.juice.lockLots(tx, access, [lotId]);
       const values = [access.tenantId, access.factoryId, lotId, synthetic, closureId];
-      const { rows: [changed] } = await tx.query<Reopening>(`UPDATE sobatnira.lot_closures
-        SET reopened_by = $6, reopened_at = clock_timestamp(), reopen_reason = $7
-        WHERE ${closureScope} AND id = $5 AND reopened_at IS NULL RETURNING ${reopeningColumns}`,
-      [...values, access.userId, reason]);
+      const changed = await reopenActiveClosure(tx, access, lotId, synthetic, closureId, reason);
       if (changed) return { lotId, synthetic, closureId, ...changed };
 
       const { rows: [previous] } = await tx.query<Reopening>(`SELECT ${reopeningColumns} FROM sobatnira.lot_closures

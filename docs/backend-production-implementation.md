@@ -116,7 +116,7 @@ Mode Flutter tanpa konfigurasi Supabase tetap membuka demo lokal lama. Seed data
 
 ## Batasan dan pekerjaan yang belum selesai
 
-Batch baru memakai satu asal kloter dan satu grade. Koreksi batch sah mencakup berat hasil dan data grade. Alokasi campuran, koreksi volume nira batch sah, serta katalog harga historis membutuhkan keputusan lanjutan. Master wajan/shift/BTP, retensi media dan latihan backup/restore tetap tercatat di backlog.
+Batch baru memakai satu asal kloter dan satu grade. Koreksi batch sah mencakup berat hasil dan data grade. Untuk batch di kloter Tuntas, admin mengonfirmasi `reopenClosureId` saat membuka koreksi. Backend membuka kembali penutupan yang dikonfirmasi dan membuat draf dalam satu transaksi. Kloter kembali ke Perlu ditinjau. Stok dan laporan memakai hasil sah terakhir selama draf aktif. Setelah draf diselesaikan, admin dapat menutup kloter lagi melalui pemeriksaan penutupan yang berlaku. Alokasi campuran, koreksi volume nira batch sah, serta katalog harga historis membutuhkan keputusan lanjutan. Master wajan/shift/BTP, retensi media dan latihan backup/restore tetap tercatat di backlog.
 
 Hasil fisik dan berat grade disimpan terpisah; toleransi/kesamaan keduanya belum ditetapkan. Harga draf berasal dari input eksplisit berizin, bukan lookup katalog historis. Kehadiran snapshot tidak berarti katalog harga historis sudah selesai.
 

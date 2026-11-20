@@ -151,6 +151,9 @@ class _OfficialLotBatchesState extends State<OfficialLotBatches> {
         );
       }
       final batches = (snapshot.requireData['items'] as List).cast<Json>();
+      bool needsReview(Json batch) =>
+          batch['status'] == 'draft' || batch['hasCorrection'] == true;
+      final pendingCount = batches.where(needsReview).length;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -161,14 +164,12 @@ class _OfficialLotBatchesState extends State<OfficialLotBatches> {
             ),
           if (batches.isNotEmpty)
             Text(
-              batches.any((batch) => batch['status'] == 'draft')
-                  ? '${batches.where((batch) => batch['status'] == 'draft').length} Batch perlu ditinjau'
+              pendingCount > 0
+                  ? '$pendingCount Batch perlu ditinjau'
                   : 'Semua batch telah ditinjau',
               style: niraText(
                 NiraType.caption,
-                color: batches.any((batch) => batch['status'] == 'draft')
-                    ? niraOchre
-                    : niraLeaf,
+                color: pendingCount > 0 ? niraOchre : niraLeaf,
               ),
             ),
           const SizedBox(height: NiraSpace.md),
@@ -177,7 +178,7 @@ class _OfficialLotBatchesState extends State<OfficialLotBatches> {
               padding: const EdgeInsets.only(bottom: NiraSpace.md),
               child: KloterBatchTile(
                 title: batch['code'] as String,
-                pending: batch['status'] != 'approved',
+                pending: needsReview(batch) || batch['status'] == 'cancelled',
                 cancelled: batch['status'] == 'cancelled',
                 juice:
                     '${reportNumber(millilitersToLiters(batch['quantity_ml'] as String))} L',
@@ -259,6 +260,7 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
             .approvedPhoto(widget.scope, widget.millingRevision!)
             .then((photo) => photo, onError: (Object _) => null);
   bool _busy = false;
+  String? _openCorrectionId;
   String? _error;
   String? _notice;
 
@@ -344,26 +346,28 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
     }
   }
 
-  Future<void> _openCorrection() async {
-    final correctionId = ReviewApi.requestUuid();
-    final result = await _form(
+  Future<void> _openCorrection(String? closureId) async {
+    if (_busy) return;
+    final confirmed = await confirmBatchAction(
       context,
-      'Buka koreksi batch?',
-      const [_Field('Alasan koreksi')],
-      (values) => widget.api.openBatchCorrection(
+      title: 'Buka koreksi batch?',
+      message: closureId == null
+          ? 'Stok dan laporan tetap memakai data sah terakhir sampai koreksi divalidasi.'
+          : 'Kloter akan dibuka kembali dan masuk Perlu ditinjau. Stok dan laporan tetap memakai data sah terakhir sampai koreksi divalidasi.',
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+    await _run(() async {
+      final correction = await widget.api.openBatchCorrection(
         widget.scope,
         _id,
-        correctionId,
-        values.single,
-      ),
-      description:
-          'Stok dan laporan tetap memakai data sah terakhir sampai koreksi divalidasi.',
-      destructive: true,
-      saveLabel: 'Buka koreksi',
-    );
-    if (!mounted || result == null) return;
-    _notice = 'Draf koreksi dibuka';
-    _reload();
+        _openCorrectionId ??= ReviewApi.requestUuid(),
+        'Koreksi batch dikonfirmasi melalui aplikasi.',
+        reopenClosureId: closureId,
+      );
+      _openCorrectionId = null;
+      return correction;
+    }, notice: 'Draf koreksi dibuka');
   }
 
   Future<void> _editCorrection(Json correction, {int? gradeIndex}) async {
@@ -427,20 +431,23 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
     if (mounted && result != null) _reload();
   }
 
-  Future<void> _finishCorrection(Json correction, {bool discard = false}) =>
-      _run(
-        () => widget.api.finishBatchCorrection(
-          widget.scope,
-          _id,
-          correction['id'] as String,
-          correction['version'] as int,
-          discard: discard,
-        ),
-        confirmation: discard
-            ? 'Buang draf koreksi? Data sah tetap berlaku.'
-            : null,
-        notice: discard ? null : 'Koreksi batch berhasil divalidasi',
-      );
+  Future<void> _finishCorrection(Json correction, {bool discard = false}) {
+    final correctionId = correction['id'] as String;
+    if (_openCorrectionId == correctionId) _openCorrectionId = null;
+    return _run(
+      () => widget.api.finishBatchCorrection(
+        widget.scope,
+        _id,
+        correctionId,
+        correction['version'] as int,
+        discard: discard,
+      ),
+      confirmation: discard
+          ? 'Buang draf koreksi? Data sah tetap berlaku.'
+          : null,
+      notice: discard ? null : 'Koreksi batch berhasil divalidasi',
+    );
+  }
 
   List<Widget> _correctionActions(Json correction, bool editable) {
     final data = correction['proposed_data'] as Json;
@@ -742,7 +749,9 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
                           verified: approved && correction == null,
                           enabled: correction != null ? canCorrect : canApprove,
                           onCorrection: canCorrect && correction == null
-                              ? _openCorrection
+                              ? () => _openCorrection(
+                                  current?['lotClosureId'] as String?,
+                                )
                               : null,
                           revalidating: correction != null,
                           onVerify: correction != null
@@ -799,21 +808,11 @@ Future<Json?> _form(
   BuildContext context,
   String title,
   List<_Field> fields,
-  Future<Json> Function(List<String>) save, {
-  String? description,
-  bool destructive = false,
-  String? saveLabel,
-}) => showDialog<Json>(
+  Future<Json> Function(List<String>) save,
+) => showDialog<Json>(
   context: context,
   barrierDismissible: false,
-  builder: (_) => _ProductionForm(
-    title: title,
-    fields: fields,
-    save: save,
-    description: description,
-    destructive: destructive,
-    saveLabel: saveLabel,
-  ),
+  builder: (_) => _ProductionForm(title: title, fields: fields, save: save),
 );
 
 class _ProductionForm extends StatefulWidget {
@@ -821,16 +820,10 @@ class _ProductionForm extends StatefulWidget {
     required this.title,
     required this.fields,
     required this.save,
-    this.description,
-    required this.destructive,
-    this.saveLabel,
   });
   final String title;
   final List<_Field> fields;
   final Future<Json> Function(List<String>) save;
-  final String? description;
-  final bool destructive;
-  final String? saveLabel;
 
   @override
   State<_ProductionForm> createState() => _ProductionFormState();
@@ -916,8 +909,6 @@ class _ProductionFormState extends State<_ProductionForm> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (widget.description case final description?)
-                  Text(description),
                 for (final (i, field) in widget.fields.indexed)
                   TextFormField(
                     controller: _inputs[i],
@@ -949,19 +940,13 @@ class _ProductionFormState extends State<_ProductionForm> {
           child: const Text('Tutup'),
         ),
         FilledButton(
-          style: widget.destructive
-              ? FilledButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.error,
-                  foregroundColor: Theme.of(context).colorScheme.onError,
-                )
-              : null,
           onPressed: _busy ? null : _submit,
           child: Text(
             _busy
                 ? 'Menyimpan…'
                 : _pending != null
                 ? 'Coba lagi'
-                : widget.saveLabel ?? 'Simpan',
+                : 'Simpan',
           ),
         ),
       ],

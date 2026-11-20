@@ -50,14 +50,24 @@ class ClosureApi {
       api.lotClosure(scope, lotId);
   Future<Json> history(FactoryScope scope, String lotId, {int offset = 0}) =>
       api.lotClosureHistory(scope, lotId, offset: offset);
-  Future<Json> close(FactoryScope scope, String lotId) =>
-      api.changeLotClosure(scope, lotId);
+  Future<Json> close(
+    FactoryScope scope,
+    String lotId, {
+    bool synthetic = false,
+  }) => api.changeLotClosure(scope, lotId, synthetic: synthetic);
   Future<Json> reopen(
     FactoryScope scope,
     String lotId,
     String closureId,
-    String reason,
-  ) => api.changeLotClosure(scope, lotId, closureId: closureId, reason: reason);
+    String reason, {
+    bool synthetic = false,
+  }) => api.changeLotClosure(
+    scope,
+    lotId,
+    closureId: closureId,
+    reason: reason,
+    synthetic: synthetic,
+  );
 }
 
 class EconomicsApi {

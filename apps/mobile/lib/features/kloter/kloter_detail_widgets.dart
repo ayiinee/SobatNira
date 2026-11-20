@@ -524,6 +524,69 @@ class _DocumentViewerState extends State<_DocumentViewer> {
   );
 }
 
+Future<bool> confirmBatchAction(
+  BuildContext context, {
+  required String title,
+  required String message,
+  bool destructive = false,
+}) async {
+  final colors = Theme.of(context).colorScheme;
+  final cancelColor = destructive ? colors.error : colors.primary;
+  const buttonPadding = EdgeInsets.symmetric(horizontal: NiraSpace.sm);
+  final navigator = Navigator.of(context, rootNavigator: true);
+  final route = DialogRoute<bool>(
+    context: context,
+    themes: InheritedTheme.capture(from: context, to: navigator.context),
+    barrierColor: const Color(0x66000000),
+    builder: (dialogContext) => AlertDialog(
+      scrollable: true,
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.transparent,
+      title: Text(title, textAlign: TextAlign.center),
+      content: Text(message, textAlign: TextAlign.center),
+      actions: [
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: cancelColor,
+                  side: BorderSide(color: cancelColor),
+                  minimumSize: const Size(0, 48),
+                  padding: buttonPadding,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(niraRadius),
+                  ),
+                ),
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Batal', textAlign: TextAlign.center),
+              ),
+            ),
+            const SizedBox(width: NiraSpace.sm),
+            Expanded(
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: destructive ? colors.error : null,
+                  foregroundColor: destructive ? Colors.white : null,
+                  minimumSize: const Size(0, 48),
+                  padding: buttonPadding,
+                ),
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Konfirmasi', textAlign: TextAlign.center),
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+  final confirmed = await navigator.push(route);
+  // Let the dialog and its scrim finish leaving before the notice slides in.
+  await route.completed;
+  return confirmed == true && context.mounted;
+}
+
 class BatchReviewActions extends StatelessWidget {
   const BatchReviewActions({
     required this.batchNumber,
@@ -548,74 +611,22 @@ class BatchReviewActions extends StatelessWidget {
   final bool revalidating;
 
   Future<void> _confirm(BuildContext context) async {
-    final colors = Theme.of(context).colorScheme;
     final batchTitle = batchCode ?? 'Batch $batchNumber';
-    final cancelColor = verified ? colors.error : colors.primary;
-    const buttonPadding = EdgeInsets.symmetric(horizontal: NiraSpace.sm);
-    final navigator = Navigator.of(context, rootNavigator: true);
-    final route = DialogRoute<bool>(
-      context: context,
-      themes: InheritedTheme.capture(from: context, to: navigator.context),
-      barrierColor: const Color(0x66000000),
-      builder: (dialogContext) => AlertDialog(
-        scrollable: true,
-        backgroundColor: niraPaper,
-        title: Text(
-          verified
-              ? 'Batalkan validasi $batchTitle?'
-              : revalidating
-              ? 'Validasi ulang $batchTitle?'
-              : 'Validasi $batchTitle?',
-          textAlign: TextAlign.center,
-        ),
-        content: Text(
-          verified
-              ? 'Batch kembali ke status Perlu ditinjau dan datanya bisa diedit lagi.'
-              : revalidating
-              ? 'Hasil koreksi akan dipakai dalam laporan setelah divalidasi.'
-              : 'Pastikan data batch sudah benar. Data akan terkunci setelah divalidasi.',
-          textAlign: TextAlign.center,
-        ),
-        actions: [
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: cancelColor,
-                    side: BorderSide(color: cancelColor),
-                    minimumSize: const Size(0, 48),
-                    padding: buttonPadding,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(niraRadius),
-                    ),
-                  ),
-                  onPressed: () => Navigator.pop(dialogContext, false),
-                  child: const Text('Batal', textAlign: TextAlign.center),
-                ),
-              ),
-              const SizedBox(width: NiraSpace.sm),
-              Expanded(
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: verified ? colors.error : null,
-                    foregroundColor: verified ? Colors.white : null,
-                    padding: buttonPadding,
-                  ),
-                  onPressed: () => Navigator.pop(dialogContext, true),
-                  child: const Text('Konfirmasi', textAlign: TextAlign.center),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+    final confirmed = await confirmBatchAction(
+      context,
+      title: verified
+          ? 'Batalkan validasi $batchTitle?'
+          : revalidating
+          ? 'Validasi ulang $batchTitle?'
+          : 'Validasi $batchTitle?',
+      message: verified
+          ? 'Batch kembali ke status Perlu ditinjau dan datanya bisa diedit lagi.'
+          : revalidating
+          ? 'Hasil koreksi akan dipakai dalam laporan setelah divalidasi.'
+          : 'Pastikan data batch sudah benar. Data akan terkunci setelah divalidasi.',
+      destructive: verified,
     );
-    final confirmed = await navigator.push(route);
-    // Let the dialog and its scrim finish leaving before the notice slides in.
-    await route.completed;
-    if (confirmed != true || !context.mounted) return;
+    if (!confirmed || !context.mounted) return;
     if (verified) {
       onReopen?.call();
     } else {
