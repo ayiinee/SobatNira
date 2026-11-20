@@ -10,6 +10,8 @@ import { enqueueNotice } from './notices';
 import { operatorChecks } from './operator-readiness';
 
 type Operator = { id: string; factory_id: string };
+type PhotoPreparation = { factoryId: string; key: string | null; documentId?: string; revisionId?: string };
+type PhotoAttempt = { outcome: Record<string, unknown> } | { pending: PhotoPreparation };
 export type Revision = { id: string; document_id: string; submission_id: string; version: number;
   processing_status: string; operator_status: string; extraction: Note | null; issues: Issue[] };
 type Action = { action: 'CONFIRM' | 'CORRECT' | 'ANSWER' | 'RETRY_OCR'; document_id: string; revision_id: string;
@@ -75,7 +77,7 @@ export class Intake {
     return operator;
   }
 
-  private async inbound(db: PoolClient, operator: Operator, event: Inbound, fingerprint: string) {
+  private async inbound(db: PoolClient, operator: Operator, event: Inbound, fingerprint: string, record = true) {
     await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`inbound:${event.provider_message_id}`]);
     const { rows: [existing] } = await db.query(`SELECT * FROM whatsapp_inbound_messages WHERE provider_message_id=$1`, [event.provider_message_id]);
     if (existing) {
@@ -86,6 +88,7 @@ export class Intake {
       WHERE operator_id=$1 AND received_at>now()-interval '1 minute'`, [operator.id]);
     const limit = Number(process.env.WHATSAPP_MAX_INBOUND_PER_MINUTE ?? 30);
     if (window.count >= (Number.isSafeInteger(limit) && limit > 0 ? limit : 30)) throw new HttpException('OPERATOR_RATE_LIMIT', 429);
+    if (!record) return { id: '', duplicate: false, outcome: null };
     const { rows: [created] } = await db.query<{ id: string }>(`INSERT INTO whatsapp_inbound_messages
       (operator_id, provider_message_id, event, fingerprint) VALUES ($1,$2,$3,$4) RETURNING id`,
     [operator.id, event.provider_message_id, json(event), fingerprint]);
@@ -93,6 +96,16 @@ export class Intake {
   }
 
   async photo(event: Inbound, mime: string, media: Buffer) {
+    const prepared = await this.photoAttempt(event, mime, media);
+    if ('outcome' in prepared) return prepared.outcome;
+    // No database connection or row lock is held while storage is uploading.
+    if (prepared.pending.key) await this.media.put(prepared.pending.key, mime, media);
+    const accepted = await this.photoAttempt(event, mime, media, prepared.pending);
+    if ('outcome' in accepted) return accepted.outcome;
+    throw new ConflictException('Upload belum dapat ditautkan; ulangi pengiriman.');
+  }
+
+  private async photoAttempt(event: Inbound, mime: string, media: Buffer, prepared?: PhotoPreparation): Promise<PhotoAttempt> {
     const sha = digest(media);
     const command = event.caption?.trim() ?? '';
     const reference = /^REVISI\s+(.+)$/i.exec(command)?.[1];
@@ -103,9 +116,10 @@ export class Intake {
     const explicitNew = /^BARU$/i.test(command);
     return this.db.transaction(async (db) => {
       const operator = await this.operator(db, event);
+      if (prepared && prepared.factoryId !== operator.factory_id) throw new ConflictException('Pabrik operator berubah; ulangi pengiriman.');
       const fingerprint = digest(json([event.chat_id, event.provider_timestamp, event.quoted_message_id ?? null, command, mime, sha]));
-      const inbound = await this.inbound(db, operator, event, fingerprint);
-      if (inbound.duplicate) return { ...inbound.outcome, duplicate: true };
+      const inbound = await this.inbound(db, operator, event, fingerprint, !!prepared);
+      if (inbound.duplicate) return { outcome: { ...inbound.outcome, duplicate: true } };
 
       const { rows: quotes } = await db.query<{ document_id: string }>(`SELECT DISTINCT s.document_id FROM (${quotedSubmission}) s
         JOIN source_documents d ON d.id=s.document_id WHERE d.factory_id=$3`,
@@ -124,18 +138,23 @@ export class Intake {
             AND ($5::uuid IS NULL OR s.document_id=$5)
           ORDER BY m.received_at DESC,m.id LIMIT 1`, [operator.factory_id, sha, operator.id, event.chat_id, target ?? null]);
         if (prior?.outcome) {
+          // The final transaction records the new provider message as an alias.
+          if (!prepared) return { pending: { factoryId: operator.factory_id, key: null } };
           const outcome = { ...prior.outcome, duplicate: true };
           await db.query('UPDATE whatsapp_inbound_messages SET outcome=$2 WHERE id=$1', [inbound.id, json(outcome)]);
-          return outcome;
+          return { outcome };
         }
       }
-      let docId: string;
+      let docId: string | undefined;
       let previous: Revision | undefined;
       let submissionExplicitNew = explicitNew;
       if (target) {
         const { rows: [document] } = await db.query(`SELECT * FROM source_documents WHERE id=$1 AND factory_id=$2 FOR UPDATE`,
           [target, operator.factory_id]);
         if (!document) throw new NotFoundException('Dokumen tidak ditemukan');
+        if (prepared?.key && (prepared.documentId !== document.id || prepared.revisionId !== document.current_revision_id)) {
+          throw new ConflictException('Revisi dokumen berubah selama upload; ulangi pengiriman.');
+        }
         docId = document.id;
         const result = await db.query<Revision>('SELECT * FROM document_revisions WHERE id=$1', [document.current_revision_id]);
         previous = result.rows[0];
@@ -154,14 +173,26 @@ export class Intake {
           if (!previous?.extraction || previous.issues.some(({ code }) => code === 'DOCUMENT_REFERENCE_REQUIRED') ||
               ['QUEUED', 'PROCESSING'].includes(previous.processing_status)) throw new ConflictException('Revisi sebelumnya belum siap');
         }
-      } else {
+      }
+      const key = digest(json([operator.factory_id, event.provider_message_id, sha]));
+      if (!prepared) {
+        // A durable manifest survives upload failures, crashes and ambiguous COMMITs.
+        // It is not an accepted message and never queues OCR by itself.
+        await db.query(`INSERT INTO media_uploads (object_key,factory_id,mime_type,size_bytes,sha256)
+          VALUES ($1,$2,$3,$4,$5) ON CONFLICT (object_key)
+          DO UPDATE SET last_attempt_at=clock_timestamp()`, [key, operator.factory_id, mime, media.length, sha]);
+        return { pending: { factoryId: operator.factory_id, key, documentId: docId, revisionId: previous?.id } };
+      }
+      if (prepared.key !== key) throw new ConflictException('Foto berubah; ulangi pengiriman.');
+      if (prepared.documentId !== docId) throw new ConflictException('Rujukan dokumen berubah selama upload; ulangi pengiriman.');
+      if (!docId) {
         const { rows: [document] } = await db.query(`INSERT INTO source_documents (factory_id) VALUES ($1) RETURNING id`, [operator.factory_id]);
         docId = document.id;
       }
-      const key = digest(json([operator.factory_id, event.provider_message_id, sha]));
-      await this.media.put(key, mime, media);
       const { rows: [asset] } = await db.query(`INSERT INTO media_assets (factory_id, object_key, mime_type, size_bytes, sha256)
         VALUES ($1,$2,$3,$4,$5) RETURNING id`, [operator.factory_id, key, mime, media.length, sha]);
+      await db.query(`UPDATE media_uploads SET attached_asset_id=$2,attached_at=clock_timestamp()
+        WHERE object_key=$1`, [key, asset.id]);
       const { rows: [submission] } = await db.query(`INSERT INTO document_submissions (document_id, inbound_message_id, media_asset_id, explicit_new)
         VALUES ($1,$2,$3,$4) RETURNING id`, [docId, inbound.id, asset.id, submissionExplicitNew]);
       const { rows: [revision] } = await db.query<Revision>(`INSERT INTO document_revisions
@@ -178,7 +209,7 @@ export class Intake {
       const { rows: [recorded] } = await db.query(`UPDATE whatsapp_inbound_messages
         SET outcome=$2::jsonb || jsonb_build_object('recorded_at', clock_timestamp()) WHERE id=$1 RETURNING outcome`,
       [inbound.id, json(outcome)]);
-      return recorded.outcome;
+      return { outcome: recorded.outcome };
     });
   }
 
