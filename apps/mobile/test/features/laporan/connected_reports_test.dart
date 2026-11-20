@@ -98,6 +98,81 @@ Json fixture() => {
 http.Response response(Json value) => http.Response(jsonEncode(value), 200);
 
 void main() {
+  testWidgets(
+    'both connected charts filter against the synthetic factory dates',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(430, 950));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final receipt = DateTime(2025, 10, 15, 12);
+      final report = fixture();
+      final lot = (report['items'] as List).cast<Json>().first;
+      Uri? filteredRequest;
+      final api = ReviewApi(
+        'token',
+        client: MockClient((request) async {
+          final query = request.url.queryParameters;
+          expect(query['synthetic'], 'true');
+          if (query.containsKey('from')) {
+            filteredRequest = request.url;
+            final start = DateTime.parse(query['from']!);
+            final before = DateTime.parse(query['before']!);
+            if (receipt.isBefore(start) || !receipt.isBefore(before)) {
+              return response({...report, 'items': []});
+            }
+          }
+          return response({
+            ...report,
+            'items': [
+              {...lot, 'receivedAt': receipt.toIso8601String()},
+            ],
+          });
+        }),
+      );
+      final reports = ConnectedReports(api, scope, synthetic: true);
+      final analytics = DemoAnalytics();
+      addTearDown(api.close);
+      addTearDown(reports.dispose);
+      addTearDown(analytics.dispose);
+      await reports.refresh();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: niraTheme(),
+          home: Scaffold(
+            body: LaporanPage(
+              analytics: analytics,
+              reports: reports,
+              onOpenDetail: (_) {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      for (final (tab, plot) in [
+        ('Produksi', 'production-chart-plot'),
+        ('Margin', 'margin-chart-plot'),
+      ]) {
+        await tester.tap(find.text(tab).first);
+        await tester.pumpAndSettle();
+        for (final (label, start, before) in [
+          ('Minggu ini', DateTime(2025, 10, 13), DateTime(2025, 10, 20)),
+          ('Bulan ini', DateTime(2025, 10), DateTime(2025, 11)),
+          ('Tahun ini', DateTime(2025), DateTime(2026)),
+        ]) {
+          final calendar = find.byTooltip('Filter tanggal laporan');
+          await tester.ensureVisible(calendar);
+          await tester.tap(calendar);
+          await tester.pumpAndSettle();
+          await tester.tap(find.text(label));
+          await tester.pumpAndSettle();
+          final query = filteredRequest!.queryParameters;
+          expect(DateTime.parse(query['from']!), start.toUtc());
+          expect(DateTime.parse(query['before']!), before.toUtc());
+          expect(find.byKey(ValueKey(plot)), findsOneWidget);
+        }
+      }
+    },
+  );
+
   test(
     'one backend snapshot feeds totals, unique recap identities and PDF without floating point money',
     () async {

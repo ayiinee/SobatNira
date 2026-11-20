@@ -117,10 +117,16 @@ class KloterHeading extends StatelessWidget {
 }
 
 class DetailMetrics extends StatelessWidget {
-  const DetailMetrics(this.metrics, {this.separate = false, super.key});
+  const DetailMetrics(
+    this.metrics, {
+    this.separate = false,
+    this.centerAll = false,
+    super.key,
+  });
 
   final List<(String, String)> metrics;
   final bool separate;
+  final bool centerAll;
 
   @override
   Widget build(BuildContext context) {
@@ -141,7 +147,7 @@ class DetailMetrics extends StatelessWidget {
               for (final metric in metrics)
                 SizedBox(
                   width: width,
-                  child: NiraOutline(_metric(metric, center: false)),
+                  child: NiraOutline(_metric(metric, center: centerAll)),
                 ),
             ],
           );
@@ -176,7 +182,9 @@ class DetailMetrics extends StatelessWidget {
                     color: niraLine,
                   ),
                 ),
-              Expanded(child: _metric(metrics[index], center: index > 0)),
+              Expanded(
+                child: _metric(metrics[index], center: centerAll || index > 0),
+              ),
             ],
           ],
         ),

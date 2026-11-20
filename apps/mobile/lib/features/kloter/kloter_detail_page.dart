@@ -86,7 +86,7 @@ class KloterDetailPage extends StatelessWidget {
                               ? '—'
                               : formatQuantity(kloter.juiceLiters, 'L'),
                         ),
-                    ]),
+                    ], centerAll: true),
                     ?statusMessage,
                     const SizedBox(height: NiraSpace.lg),
                     DocumentLink('Data tebu dan penggilingan', () async {
