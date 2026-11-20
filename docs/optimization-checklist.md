@@ -273,6 +273,7 @@ pengganti pembacaan resmi pada transaksi stok/pengesahan.
 - [x] **QA-05G** Suite Flutter penuh sesudah preview: 138 tes lulus, 3 fixture skip; analyzer sebelumnya bersih. Hasil ini sebelum perbaikan RPT-08, yang memerlukan regresi tersendiri.
 - [x] **QA-05H** RPT-08: analyzer bersih dan 29 tes state/widget login–Beranda–laporan–PDF lulus. Meliputi kembali ke Beranda setelah detail 101 kloter gagal, navigasi laporan yang sudah tersimpan, penggabungan request dan pembatalan hasil lama sesudah refresh.
 - [x] **QA-05I** Preview nota sah: 19 tes Pekerjaan/Detail Kloter/Batch/Beranda lulus setelah perbaikan retry. Uji memastikan asli tidak dimuat sebelum zoom, error berulang dapat dicoba lagi dan filter pabrik/revisi tetap dikirim.
+- [x] **QA-05J** Perintah standar `npm test -- --test-concurrency=1` lulus 110 tes tanpa skip, diikuti uji cache PostgreSQL lulus. Tujuh tes pada step CI optimisasi yang baru juga lulus lokal; pemeriksaan CI remote pada revisi akhir menyusul.
 - [ ] **QA-06** Jalankan tes FastAPI dari `apps/ai` dengan `uv run --locked python -m unittest` bila kontrak/pemrosesan AI berubah.
 - [ ] **QA-07** Uji satu skenario sintetis dari foto → OCR → revisi → pengesahan → stok → laporan/PDF; pastikan angka dan status konsisten.
 - [ ] **QA-08** Uji R2 nyata dengan fixture sintetis terpisah; catat dan bersihkan hanya objek fixture yang dibuat tes.
@@ -312,6 +313,7 @@ Branch kerja: `perf/api-staged-photo-upload`.
 | 21 November 2026 | `6650bbd` | Nomor migrasi cache 025, rekonsiliasi lokal dan penjagaan tabrakan baru |
 | 21 November 2026 | `a3436d8` | Histogram HTTP/query/pool, penghitung error/byte dan dokumentasi terpadu |
 | 21 November 2026 | `c0e1de2` | State ringkasan Beranda terpisah, pembatalan respons detail lama dan regresi navigasi |
+| 21 November 2026 | `7c73382` | Preview Kloter/Batch dan pemuatan asli saat zoom dengan retry |
 
 Riwayat ini mencatat commit lokal. Status sinkronisasi remote dapat diperiksa dengan
 `git status -sb`; commit tidak berarti perubahan sudah digabung ke main atau dirilis.

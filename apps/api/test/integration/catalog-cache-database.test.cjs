@@ -7,6 +7,8 @@ const { redisFixture } = require('../helpers/redis-fixture.cjs');
 const { CatalogCache } = require('../../dist/cache/catalog-cache');
 
 test('catalog cache wire protocol, committed invalidation, rollback, isolation and Redis recovery keep HTTP results current', async () => {
+  assert.ok(process.env.TEST_DATABASE_URL, 'Use an explicit synthetic test database');
+  assert.ok(['127.0.0.1', 'localhost'].includes(new URL(process.env.TEST_DATABASE_URL).hostname), 'This committed fixture is local only');
   const redis = await redisFixture();
   const f = await intakeFixture(true, { CATALOG_CACHE_ENABLED: 'true', REDIS_URL: redis.url,
     CATALOG_CACHE_TTL_SECONDS: '1', CATALOG_CACHE_TIMEOUT_MS: '1000' });
@@ -59,7 +61,11 @@ test('catalog cache wire protocol, committed invalidation, rollback, isolation a
     await f.client.query('CREATE TEMP TABLE cache_truncate_probe (tenant_id uuid)');
     await f.client.query(`CREATE TRIGGER cache_truncate_test AFTER TRUNCATE ON cache_truncate_probe
       FOR EACH STATEMENT EXECUTE FUNCTION sobatnira.bump_catalog_cache_truncate('suppliers')`);
-    await f.client.query('TRUNCATE cache_truncate_probe'); assert.notEqual(await version(), beforeTruncate);
+    await f.client.query('BEGIN');
+    try {
+      await f.client.query('TRUNCATE cache_truncate_probe'); assert.notEqual(await version(), beforeTruncate);
+    } finally { await f.client.query('ROLLBACK'); }
+    assert.equal(await version(), beforeTruncate);
     const disposableSupplier = randomUUID();
     await f.client.query("INSERT INTO sobatnira.suppliers(id,tenant_id,name) VALUES($1,$2,'Disposable synthetic')", [disposableSupplier, f.ids.tenant]);
     const beforeDelete = await version();
