@@ -10,7 +10,7 @@ import 'kloter_detail_page.dart';
 import '../laporan/connected_reports.dart';
 
 String _errorText(Object? error) => error is ReviewApiError
-    ? error.detail ?? error.message
+    ? (error.status == 404 ? error.message : error.detail ?? error.message)
     : 'Hasil belum terkonfirmasi. Muat ulang atau coba permintaan yang sama.';
 
 class OfficialLotBatches extends StatefulWidget {
@@ -246,7 +246,7 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
   late final String _id = widget.initial['id'] as String;
   late final String _lot = widget.initial['lot_id'] as String;
   late Future<Json> _detail = _load();
-  late Future<String?> _margin = _loadMargin();
+  late Future<Json?> _reportLot = _loadReportLot();
   late final _photo = widget.millingRevision == null
       ? null
       : widget.api
@@ -256,28 +256,25 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
   String? _error;
 
   Future<Json> _load() => widget.api.factoryBatch(widget.scope, _id);
-  Future<String?> _loadMargin() async {
+  Future<Json?> _loadReportLot() async {
     try {
       final report = await widget.api.productionReport(
         widget.scope,
         synthetic: widget.initial['is_synthetic'] == true,
       );
-      final lot = (report['items'] as List)
+      return (report['items'] as List)
           .cast<Json>()
           .where((lot) => lot['lotId'] == _lot)
           .firstOrNull;
-      final calculation = lot?['calculation'] as Json?;
-      final value = calculation?['productionMarginRupiah'];
-      return value == null ? null : reportMoney(value);
     } catch (_) {
       return null;
     }
   }
 
   void _reload() {
-    final detail = _load();
     setState(() {
-      _detail = detail;
+      _detail = _load();
+      _reportLot = _loadReportLot();
     });
   }
 
@@ -338,7 +335,7 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
         setState(() {
           _busy = false;
           _detail = _load();
-          _margin = _loadMargin();
+          _reportLot = _loadReportLot();
         });
       }
     }
@@ -454,6 +451,11 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
     future: _detail,
     builder: (_, snapshot) {
       final current = snapshot.data;
+      final failure = snapshot.error;
+      final legacy =
+          failure is ReviewApiError &&
+          failure.status == 404 &&
+          failure.detail?.startsWith('Cannot GET ') == true;
       final status = current?['status'] ?? widget.initial['status'];
       final approved = status == 'approved';
       final canApprove =
@@ -464,50 +466,75 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
           widget.initial['is_synthetic'] != true &&
           !_busy &&
           snapshot.connectionState == ConnectionState.done;
-      return FutureBuilder<String?>(
-        future: _margin,
-        builder: (_, margin) => BatchDetailPage.official(
-          officialTitle: widget.initial['code'] as String,
-          kloterCode: widget.kloterCode,
-          officialReviewed: approved,
-          officialCancelled: status == 'cancelled',
-          officialData: current == null ? null : _data(current),
-          officialMargin: margin.data,
-          officialNumber: widget.initial['wok_number'] as int,
-          officialDocument: widget.onOpenPekerjaan,
-          officialPreview: ApprovedDocumentPreview(
-            batch: true,
-            photo: _photo,
-            fallback: DocumentLink(
-              'Foto nota produksi di Pekerjaan',
-              widget.onOpenPekerjaan,
+      return FutureBuilder<Json?>(
+        future: _reportLot,
+        builder: (_, report) {
+          final calculation = report.data?['calculation'] as Json?;
+          final margin = calculation?['productionMarginRupiah'];
+          final reportedBatch = legacy && approved
+              ? (report.data?['batches'] as List? ?? const [])
+                    .cast<Json>()
+                    .where((batch) => batch['id'] == _id)
+                    .firstOrNull
+              : null;
+          final batch = legacy
+              ? {...widget.initial, ...?reportedBatch}
+              : current;
+          return BatchDetailPage.official(
+            officialTitle: widget.initial['code'] as String,
+            kloterCode: widget.kloterCode,
+            officialReviewed: approved,
+            officialCancelled: status == 'cancelled',
+            officialData: batch == null ? null : _data(batch),
+            officialMargin: margin == null ? null : reportMoney(margin),
+            officialNumber: widget.initial['wok_number'] as int,
+            officialDocument: widget.onOpenPekerjaan,
+            officialPreview: ApprovedDocumentPreview(
+              batch: true,
+              photo: _photo,
+              fallback: DocumentLink(
+                'Foto nota produksi di Pekerjaan',
+                widget.onOpenPekerjaan,
+              ),
             ),
-          ),
-          officialActions: current == null ? const [] : _actions(current),
-          officialStatus: snapshot.hasError
-              ? Column(
-                  children: [
-                    Text(_errorText(snapshot.error)),
-                    TextButton(
-                      onPressed: _reload,
-                      child: const Text('Muat ulang batch'),
-                    ),
+            officialActions: current != null
+                ? _actions(current)
+                : [
+                    if (legacy && reportedBatch == null)
+                      const Text(
+                        'Rincian grade dan harga batch belum tersedia.',
+                      ),
+                    if (legacy && approved)
+                      DocumentLink(
+                        'Nilai produksi dan margin kloter',
+                        () => widget.reportLink(_id),
+                      ),
                   ],
-                )
-              : const LinearProgressIndicator(),
-          officialAction: current != null && status != 'cancelled'
-              ? BatchReviewActions(
-                  batchNumber: current['wok_number'] as int,
-                  batchCode: widget.initial['code'] as String,
-                  label: approved ? 'Batch tervalidasi' : 'Validasi',
-                  verified: approved,
-                  enabled: canApprove,
-                  onVerify: () =>
-                      _run(() => widget.api.finishBatch(widget.scope, _id)),
-                )
-              : null,
-          onNavigate: widget.onNavigate,
-        ),
+            officialStatus: snapshot.hasError
+                ? Column(
+                    children: [
+                      Text(_errorText(snapshot.error)),
+                      TextButton(
+                        onPressed: _reload,
+                        child: const Text('Muat ulang batch'),
+                      ),
+                    ],
+                  )
+                : const LinearProgressIndicator(),
+            officialAction: current != null && status != 'cancelled'
+                ? BatchReviewActions(
+                    batchNumber: current['wok_number'] as int,
+                    batchCode: widget.initial['code'] as String,
+                    label: approved ? 'Batch tervalidasi' : 'Validasi',
+                    verified: approved,
+                    enabled: canApprove,
+                    onVerify: () =>
+                        _run(() => widget.api.finishBatch(widget.scope, _id)),
+                  )
+                : null,
+            onNavigate: widget.onNavigate,
+          );
+        },
       );
     },
   );

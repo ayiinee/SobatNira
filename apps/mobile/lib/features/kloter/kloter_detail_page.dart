@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
 import '../../widgets/kloter_cane_overlay.dart';
+import '../../widgets/review_status_label.dart';
 import 'batch_detail_page.dart';
 import 'demo_production.dart';
 import 'kloter_detail_widgets.dart';
@@ -223,8 +224,6 @@ class KloterBatchTile extends StatelessWidget {
         _info(context, 'Nira batch', juice, foreground),
         const SizedBox(height: 2),
         _info(context, 'Hasil fisik', physicalWeight, foreground),
-        if (cancelled)
-          Text(status, style: niraText(NiraType.caption, color: foreground)),
       ],
     );
     return Semantics(
@@ -250,47 +249,32 @@ class KloterBatchTile extends StatelessWidget {
                     horizontal: NiraSpace.md,
                     vertical: NiraSpace.sm,
                   ),
-                  child:
-                      MediaQuery.sizeOf(context).width < 390 ||
-                          MediaQuery.textScalerOf(context).scale(14) > 18
-                      ? Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(child: heading),
-                                const Icon(
-                                  Icons.chevron_right,
-                                  color: foreground,
-                                  size: 20,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: NiraSpace.xs),
-                            details,
-                          ],
-                        )
-                      : Row(
-                          children: [
-                            SizedBox(
-                              width: 90,
-                              child: Padding(
-                                padding: const EdgeInsets.only(
-                                  right: NiraSpace.sm,
-                                ),
-                                child: heading,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(flex: 3, child: heading),
+                          const SizedBox(width: NiraSpace.sm),
+                          Expanded(
+                            flex: 2,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerRight,
+                              child: ReviewStatusLabel(
+                                pending: pending || cancelled,
+                                label: status,
                               ),
                             ),
-                            Expanded(child: details),
-                            const SizedBox(width: NiraSpace.sm),
-                            const Icon(
-                              Icons.chevron_right,
-                              color: foreground,
-                              size: 20,
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: NiraSpace.xs / 2),
+                      details,
+                    ],
+                  ),
                 ),
               ),
             ],

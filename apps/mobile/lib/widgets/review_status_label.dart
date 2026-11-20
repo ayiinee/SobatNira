@@ -4,12 +4,16 @@ import '../sobatnira_ui.dart';
 
 class ReviewStatusLabel extends StatelessWidget {
   const ReviewStatusLabel({required this.pending, this.label, super.key});
+  static const horizontalPadding = 6.0;
   final bool pending;
   final String? label;
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+    padding: const EdgeInsets.symmetric(
+      horizontal: horizontalPadding,
+      vertical: 3,
+    ),
     decoration: BoxDecoration(
       color: const Color(0x26000000),
       borderRadius: BorderRadius.circular(4),
@@ -19,7 +23,7 @@ class ReviewStatusLabel extends StatelessWidget {
       children: [
         ExcludeSemantics(
           child: Icon(
-            pending ? Icons.schedule_rounded : Icons.check_circle_rounded,
+            pending ? Icons.error_rounded : Icons.check_circle_rounded,
             color: Colors.white,
             size: 12,
           ),

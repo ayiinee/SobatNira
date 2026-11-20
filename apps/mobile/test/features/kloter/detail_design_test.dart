@@ -100,7 +100,7 @@ void main() {
     }
     await inter.load();
   });
-  testWidgets('batch cards keep the reference horizontal arrangement', (
+  testWidgets('batch cards put the metrics on separate rows below the ID', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(430, 950));
@@ -114,7 +114,7 @@ void main() {
             child: Align(
               alignment: Alignment.topCenter,
               child: KloterBatchTile(
-                title: 'Batch 1',
+                title: 'MJT-260926-2A-B3',
                 juice: '83,5 L',
                 physicalWeight: '29,25 kg',
                 pending: false,
@@ -126,13 +126,17 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(
-      tester.getTopLeft(find.text('Batch 1')).dx,
-      lessThan(tester.getTopLeft(find.text('Nira batch')).dx),
-    );
-    expect(tester.getSize(find.byType(KloterBatchTile)).height, 63);
-    expect(find.text('Tervalidasi'), findsNothing);
-    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+    final id = tester.getRect(find.text('MJT-260926-2A-B3'));
+    final juice = tester.getRect(find.text('Nira batch'));
+    final physical = tester.getRect(find.text('Hasil fisik'));
+    expect(id.left, juice.left);
+    expect(juice.left, physical.left);
+    expect(id.bottom, lessThan(juice.top));
+    expect(juice.bottom, lessThan(physical.top));
+    final status = tester.getRect(find.text('Tervalidasi'));
+    expect(status.left, greaterThan(id.left));
+    expect(status.top, lessThan(juice.top));
+    expect(find.byIcon(Icons.chevron_right), findsNothing);
   });
 
   testWidgets(
@@ -225,6 +229,71 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
+
+  for (final status in ['draft', 'approved']) {
+    testWidgets('legacy API opens $status batch detail without write actions', (
+      tester,
+    ) async {
+      final demo = DemoProduction.empty();
+      addTearDown(demo.dispose);
+      final batch = detailBatchRecord(status: status)
+        ..remove('grades')
+        ..remove('finalSugarKg')
+        ..remove('exactValueRupiah')
+        ..remove('costSaved')
+        ..remove('remainingMl');
+      final api = ReviewApi(
+        'fixture',
+        client: MockClient((request) async {
+          expect(request.method, 'GET');
+          if (request.url.path.endsWith('/batches')) {
+            return detailResponse({
+              'items': [batch],
+            });
+          }
+          if (request.url.path.endsWith('/production-report')) {
+            return detailResponse({
+              'items': [
+                {
+                  'lotId': 'lot',
+                  'batches': [
+                    {...detailBatchRecord(), 'id': 'other'},
+                    if (status == 'approved') detailBatchRecord(),
+                  ],
+                },
+              ],
+            });
+          }
+          expect(request.url.path, endsWith('/production/batches/batch'));
+          return http.Response(
+            jsonEncode({'message': 'Cannot GET ${request.url.path}'}),
+            404,
+          );
+        }),
+      );
+      addTearDown(api.close);
+      await tester.pumpWidget(
+        MaterialApp(theme: niraTheme(), home: detailLotPage(api, demo)),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('BATCH-UJI'));
+      await tester.pumpAndSettle();
+      expect(find.text('83,500125 L'), findsOneWidget);
+      expect(find.text('29,25 kg'), findsOneWidget);
+      expect(find.text('Muat ulang batch'), findsNothing);
+      expect(find.text('Validasi'), findsNothing);
+      expect(find.text('Isi biaya kloter'), findsNothing);
+      await tester.tap(find.text('Masak'));
+      await tester.pumpAndSettle();
+      expect(find.text('10 November 2026'), findsOneWidget);
+      await tester.tap(find.text('Grade'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Rp540.000'),
+        status == 'approved' ? findsOneWidget : findsNothing,
+      );
+    });
+  }
 
   testWidgets(
     'validation still uses the scoped backend after changing the design',
@@ -328,9 +397,9 @@ void main() {
       'fixture',
       client: MockClient((request) async {
         expect(request.method, 'GET');
-          if (request.url.path.endsWith('/production-report')) {
+        if (request.url.path.endsWith('/production-report')) {
           return detailResponse({'items': []});
-          }
+        }
         return detailResponse(
           request.url.path.endsWith('/batches')
               ? {

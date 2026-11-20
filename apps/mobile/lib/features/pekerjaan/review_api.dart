@@ -252,7 +252,7 @@ class ReviewApi {
     if (status == expectedStatus) return;
     if (status == 401) onSessionExpired?.call();
     String? detail;
-    if (status == 400 || status == 409) {
+    if (status == 400 || status == 404 || status == 409) {
       try {
         final body = jsonDecode(response.body);
         final message = body is Json ? body['message'] : null;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
+import '../../widgets/review_status_label.dart';
 import 'demo_production.dart';
 
 double caneOverlayOpacity(bool pending) => pending ? .82 : .55;
@@ -69,81 +70,67 @@ class KloterCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Builder(
-                          builder: (context) {
-                            if (MediaQuery.textScalerOf(
-                                  context,
-                                ).scale(NiraType.section) >
-                                19) {
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    kloter.code,
-                                    style: niraText(
-                                      NiraType.section,
-                                      color: titleColor,
-                                      weight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  const SizedBox(height: NiraSpace.xs),
-                                  Text(
-                                    formatDate(kloter.date),
-                                    style: niraText(
-                                      NiraType.caption,
-                                      color: foreground,
-                                    ),
-                                  ),
-                                ],
-                              );
-                            }
-                            return Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  flex: 3,
-                                  child: Text(
-                                    kloter.code,
-                                    style: niraText(
-                                      NiraType.section,
-                                      color: titleColor,
-                                      weight: FontWeight.w700,
-                                    ),
-                                  ),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: Text(
+                                kloter.code,
+                                style: niraText(
+                                  NiraType.section,
+                                  color: titleColor,
+                                  weight: FontWeight.w700,
                                 ),
-                                const SizedBox(width: NiraSpace.xs),
-                                Flexible(
-                                  flex: 2,
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(
-                                      top: NiraSpace.xs,
-                                    ),
-                                    child: Align(
-                                      alignment: Alignment.centerRight,
-                                      child: Text(
-                                        formatDate(kloter.date),
-                                        textAlign: TextAlign.end,
-                                        style: niraText(
-                                          NiraType.caption,
-                                          color: foreground,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            );
-                          },
+                              ),
+                            ),
+                            const SizedBox(width: NiraSpace.sm),
+                            Expanded(
+                              flex: 2,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerRight,
+                                child: ReviewStatusLabel(pending: pending),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: NiraSpace.xs),
+                        const SizedBox(height: NiraSpace.xs / 2),
                         Text(
                           kloter.supplier,
                           style: niraText(NiraType.body, color: foreground),
                         ),
-                        const SizedBox(height: NiraSpace.xs),
-                        Text(
-                          kloter.weight,
-                          style: niraText(NiraType.body, color: foreground),
+                        const SizedBox(height: NiraSpace.xs / 2),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                kloter.weight,
+                                style: niraText(
+                                  NiraType.body,
+                                  color: foreground,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: NiraSpace.sm),
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                  right: ReviewStatusLabel.horizontalPadding,
+                                ),
+                                child: Text(
+                                  formatDate(kloter.date),
+                                  textAlign: TextAlign.end,
+                                  style: niraText(
+                                    NiraType.caption,
+                                    color: foreground,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
