@@ -19,6 +19,7 @@ export interface BackendConfig {
   batchClosure?: { baseUrl: string; timeoutMs: number };
   supabase?: { url: string; publishableKey: string; secretKey?: string };
   postgres?: { url: string; caFile?: string; caPem?: string };
+  databasePool?: { businessMax: number; documentsMax: number; idleMs: number; connectMs: number; statementMs: number };
   redis?: { url: string };
   r2?: {
     endpoint: string;
@@ -115,6 +116,13 @@ export function loadConfiguration(options: ConfigOptions = {}): BackendConfig {
     timeoutMs: integer('CONNECTION_TIMEOUT_MS', 8000, 100, 60000),
     aiTimeoutMs: integer('AI_TIMEOUT_MS', 3000, 100, 60000),
     aiBaseUrl,
+  };
+  config.databasePool = {
+    businessMax: integer('DB_POOL_BUSINESS_MAX', 5, 1, 100),
+    documentsMax: integer('DB_POOL_DOCUMENTS_MAX', 5, 1, 100),
+    idleMs: integer('DB_POOL_IDLE_MS', 30000, 1000, 600000),
+    connectMs: integer('DB_POOL_CONNECT_MS', config.timeoutMs, 100, 60000),
+    statementMs: integer('DB_STATEMENT_TIMEOUT_MS', config.timeoutMs, 100, 600000),
   };
 
   if (value('BATCH_API_BASE_URL')) {

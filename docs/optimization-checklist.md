@@ -25,7 +25,7 @@ berarti perubahan sudah di-commit, digabung, atau diterapkan ke database tim/pro
 | 2. Query dan pagination | Pagination kloter dan Flutter selesai: cursor, filter, ranking, badge, lazy loading dan refresh | Ringkasan, pagination rincian dan batas laporan selesai di bagian D |
 | 3. Retensi storage | Inventaris dan simulasi lokal selesai; tanpa penghapusan sesuai keputusan pengguna | Review staging, metadata lifecycle dan keputusan masa simpan; worker hapus ditunda |
 | 4. Optimisasi foto | Belum diimplementasikan | Validasi seragam, preview, thumbnail, pengukuran kualitas/ukuran |
-| 5. Database dan kapasitas | Indeks kloter lama sudah dimanfaatkan | Profil laporan/antrean, anggaran pool, observabilitas |
+| 5. Database dan kapasitas | Pool terkonfigurasi, metrik akuisisi/transaksi dan diagnostik tersedia; indeks lama dimanfaatkan | Profil antrean/review/pencarian, sizing produksi, beban/staging |
 | 6. Caching | Belum diimplementasikan | Cache-aside, invalidasi, isolasi dan fallback |
 | 7. Verifikasi dan rilis | Tes lokal tahap 1–2 selesai | Uji Flutter, beban, staging dan rilis |
 
@@ -128,9 +128,20 @@ Profil sintetis 30 kloter, 120 batch/grade dan 150 snapshot: median lengkap 65,5
 - [ ] **DB-05** Ukur dampak setiap kandidat indeks pada baca, INSERT/UPDATE, ukuran index dan pemeliharaan sebelum membuat migrasi.
 - [ ] **DB-06** Tinjau biaya `COUNT(*)`, deep OFFSET, proyeksi kolom dan agregasi JSON; perbaiki hanya jalur yang terbukti mahal.
 - [ ] **DB-07** Tetapkan anggaran koneksi gabungan pool bisnis, OCR, worker dan seluruh replika sesuai kapasitas database.
-- [ ] **DB-08** Jadikan batas pool/timeout/idle terkonfigurasi dan konsisten; ukur waktu menunggu koneksi sebelum menaikkan batas.
+- [x] **DB-08** Jadikan batas pool/timeout/idle terkonfigurasi dan konsisten; ukur waktu menunggu koneksi sebelum menaikkan batas.
 - [ ] **DB-09** Tinjau statistik planner, autovacuum, bloat dan indeks tidak terpakai menggunakan lingkungan representatif.
 - [ ] **DB-10** Uji migrasi, konkurensi dan rollback strategi indeks/pool di staging sebelum penerapan produksi.
+
+Bukti pool: [konfigurasi, anggaran dan rollback](database-capacity.md),
+[instrumentasi](../apps/api/src/database/pool.ts),
+[diagnostik SELECT](../apps/api/scripts/database-diagnostics.sql),
+[tes pool PostgreSQL](../apps/api/test/integration/database-pool.test.cjs).
+Dua pool kini eksplisit 5+5 per proses; waktu akuisisi dan durasi transaksi dicatat,
+termasuk log debug tiap 30 detik. Tes antrean pool satu koneksi, rollback, timeout
+server dan pemulihan lulus pada kedua jalur. Diagnostik lokal membaca 47 tabel/131
+index; ini bukan penilaian kapasitas atau bloat produksi. DB-07 tetap terbuka sampai
+jumlah replika dan kapasitas provider dikonfirmasi; DB-03/04/05/06/09/10 belum
+dianggap selesai oleh perubahan pool.
 
 ## F. Retensi storage dan rekonsiliasi
 
@@ -218,6 +229,7 @@ merupakan kandidat pengujian. Redis saat audit baru dipakai untuk pemeriksaan ko
 - [x] **QA-04** Dokumentasikan keterbatasan baseline: satu koneksi, lima sampel query hangat, belum HTTP/Auth, beban bersamaan atau nota padat.
 - [ ] **QA-05** Jalankan `flutter analyze` dan `flutter test` setelah integrasi pagination/preview; uji aplikasi hingga API terkait.
 - [x] **QA-05A** Pagination: analyzer Flutter bersih, suite standar 131 tes lulus (3 tes fixture dilewati); pengujian terarah dependensi Beranda/Biaya Ops lulus, lalu 22 tes regresi lulus setelah perbaikan terakhir, termasuk posisi scroll dan layar 320 px dengan teks 2x. Tes end-to-end pagination dijalankan terpisah dan lulus dengan PostgreSQL sintetis.
+- [x] **QA-04A** Tahap laporan/storage/pool: 100 tes backend/integrasi lulus tanpa skip pada PostgreSQL sintetis. Sesudah penambahan sampling metrik, build dan 8 tes pool/storage terarah kembali lulus. Tidak ada uji bucket produksi atau deployment.
 - [x] **QA-05B** Laporan: analyzer bersih dan suite Flutter 136 tes lulus, 3 tes fixture dilewati (runner berurutan). Build API serta regresi PostgreSQL summary/page, koreksi, PDF/XLSX dan batas 101 kloter lulus; detail bukti ada di bagian D.
 - [ ] **QA-06** Jalankan tes FastAPI dari `apps/ai` dengan `uv run --locked python -m unittest` bila kontrak/pemrosesan AI berubah.
 - [ ] **QA-07** Uji satu skenario sintetis dari foto → OCR → revisi → pengesahan → stok → laporan/PDF; pastikan angka dan status konsisten.
@@ -250,6 +262,7 @@ Branch kerja: `perf/api-staged-photo-upload`.
 | 20 November 2026 | `596a0ac` | Transaksi upload foto, manifest, migrasi dan tes regresi |
 | 20 November 2026 | `c490482` | Cursor API, counts, ranking saran, pager Flutter, profiler dan tes integrasi |
 | 21 November 2026 | `eddeab9` | Ringkasan laporan, batas respons, rincian per halaman, jalur ekspor Flutter dan profil sintetis |
+| 21 November 2026 | `b7911a9` | Inventaris dan simulasi cleanup tanpa penghapusan |
 
 Riwayat ini mencatat commit lokal. Status sinkronisasi remote dapat diperiksa dengan
 `git status -sb`; commit tidak berarti perubahan sudah digabung ke main atau dirilis.
