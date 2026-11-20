@@ -37,6 +37,9 @@ test('one-slot pools expose contention, release on rollback and recover after se
       const stats = service.poolStatistics();
       assert.equal(stats.waiting, 0); assert.equal(stats.transactions, 1); assert.ok(stats.acquired >= 4);
       assert.ok(stats.waitTotalMs > 0); assert.ok(stats.transactionTotalMs > 0);
+      assert.equal(stats.transactionFailures, 1); assert.equal(stats.directQueryErrors, 1);
+      assert.equal(stats.directQueryDurationMs.count, 3); assert.equal(stats.transactionDurationMs.count, 1);
+      assert.equal(stats.waitDurationMs.count, 4);
     }
   } finally {
     await business.onModuleDestroy(); await documents.onModuleDestroy();

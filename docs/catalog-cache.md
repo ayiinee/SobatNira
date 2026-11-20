@@ -68,7 +68,7 @@ Redis timeout/mati, SET gagal atau lock menggantung tidak mengganti data databas
 dengan salinan stale. Setelah Redis pulih, generasi PostgreSQL tetap diperiksa.
 
 Log debug setiap 30 detik (`event=catalog_cache`) mencatat hit/miss, error, invalid,
-coalesced, skipped, lock wait dan jumlah fill. `statistics()` tersedia internal.
+coalesced, skipped, lock wait, jumlah fill dan status koneksi. `statistics()` tersedia internal.
 Pantau memory/eviction di Redis/provider (misalnya INFO memory/stats bila diizinkan);
 metrik server tersebut belum dipungut otomatis oleh API. Jangan mengaktifkan Redis
 publik tanpa autentikasi atau menyimpan connection string pada laporan/Git.

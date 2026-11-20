@@ -42,7 +42,7 @@ export class DatabaseService implements OnModuleDestroy {
     let failed = false;
     try {
       client = await this.measurements.connect(this.getPool());
-      return await client.query<T>(text, values);
+      return await this.measurements.directQuery(() => client!.query<T>(text, values));
     } catch (error) { failed = true; return databaseFailure(error); }
     finally { client?.release(failed); }
   }
@@ -50,6 +50,7 @@ export class DatabaseService implements OnModuleDestroy {
   async transaction<T>(work: (session: DatabaseSession) => Promise<T>): Promise<T> {
     let client: PoolClient | undefined;
     let started: number | undefined;
+    let failed = false;
     try {
       client = await this.measurements.connect(this.getPool());
       started = performance.now();
@@ -58,12 +59,13 @@ export class DatabaseService implements OnModuleDestroy {
       await client.query('COMMIT');
       return result;
     } catch (error) {
+      failed = true;
       if (client) {
         try { await client.query('ROLLBACK'); }
         catch { client.release(true); client = undefined; }
       }
       return databaseFailure(error);
-    } finally { if (started !== undefined) this.measurements.transactionFinished(started); client?.release(); }
+    } finally { if (started !== undefined) this.measurements.transactionFinished(started, failed); client?.release(); }
   }
 
   async onModuleDestroy() {

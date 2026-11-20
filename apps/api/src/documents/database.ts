@@ -34,7 +34,7 @@ export class Database implements OnModuleDestroy {
   async query<T extends QueryResultRow = QueryResultRow>(sql: string, args?: unknown[]): Promise<QueryResult<T>> {
     const client = await this.measurements.connect(this.connection());
     let failed = false;
-    try { return await client.query<T>(sql, args); }
+    try { return await this.measurements.directQuery(() => client.query<T>(sql, args)); }
     catch (error) { failed = true; throw error; }
     finally { client.release(failed); }
   }
@@ -43,16 +43,18 @@ export class Database implements OnModuleDestroy {
     const client = await this.measurements.connect(this.connection());
     const started = performance.now();
     let broken = false;
+    let failed = false;
     try {
       await client.query('BEGIN');
       const result = await operation(client);
       await client.query('COMMIT');
       return result;
     } catch (error) {
+      failed = true;
       await client.query('ROLLBACK').catch(() => { broken = true; });
       throw error;
     } finally {
-      this.measurements.transactionFinished(started);
+      this.measurements.transactionFinished(started, failed);
       client.release(broken);
     }
   }

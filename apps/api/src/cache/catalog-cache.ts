@@ -34,7 +34,7 @@ export class CatalogCache implements OnModuleDestroy {
   private readonly flights = new Map<string, Promise<unknown>>();
   private readonly counts = { hit: 0, miss: 0, error: 0, invalid: 0, coalesced: 0, skipped: 0, lockWait: 0 };
   constructor(@Inject(BACKEND_CONFIG) private readonly config: BackendConfig, private readonly db: DatabaseService) {}
-  statistics() { return { ...this.counts, filling: this.flights.size }; }
+  statistics() { return { ...this.counts, filling: this.flights.size, connection: this.client?.status ?? 'unused' }; }
 
   private async redis() {
     if (!this.client) {

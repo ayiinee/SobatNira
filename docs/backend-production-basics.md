@@ -2,6 +2,9 @@
 
 Modul ini menyediakan metadata pemasok, katalog jenis tebu, dan identitas kloter. Pengujian modul menggunakan identitas dan data sintetis.
 
+[Cache katalog opt-in](catalog-cache.md) memakai migrasi 025 untuk invalidasi pada
+commit. Indeks snapshot kloter tetap berada pada migrasi 024; keduanya berbeda.
+
 ## Cakupan
 
 - Pemasok berada pada tingkat tenant dan dapat dipakai oleh beberapa pabrik dalam tenant tersebut.

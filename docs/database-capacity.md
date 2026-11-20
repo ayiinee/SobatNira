@@ -53,7 +53,9 @@ lebih ketat, log debug tidak ditampilkan. Tidak ada endpoint publik baru.
 Metrik mencakup total/idle/waiting, jumlah akuisisi berhasil/gagal, total/maksimum
 waktu akuisisi, serta jumlah/total/maksimum durasi transaksi sejak koneksi diperoleh
 hingga commit/rollback. Waktu akuisisi juga mencakup pembukaan koneksi dan TLS; bukan
-pengukuran murni antrean. Angka kumulatif di-reset saat restart, bukan histogram p95.
+pengukuran murni antrean. Angka kumulatif di-reset saat restart. Histogram tambahan
+memberikan batas atas bucket p50/p95/p99, dijelaskan pada
+[observabilitas performa](performance-observability.md).
 Tidak ada SQL, parameter query atau connection string dalam metrik.
 
 Gunakan antrean, timeout, CPU/RAM database dan lock wait untuk menilai kapasitas;

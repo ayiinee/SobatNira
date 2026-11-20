@@ -2,6 +2,12 @@
 
 Skema JSON dan contoh sintetis tersedia di [schemas](schemas/) dan [examples](examples/). Status pengujian tercatat di [log implementasi](IMPLEMENTATION_LOG.md). PRD dan register keputusan tim disimpan secara privat di `docs/internal/ai/`.
 
+Panduan optimisasi terbaru: [foto dan preview privat](../photo-optimization.md),
+[worker/review](../worker-queue-optimization.md),
+[pool/kapasitas](../database-capacity.md),
+[simulasi inventaris storage tanpa penghapusan](../storage-audit.md), dan
+[ceklis seluruh tahap](../optimization-checklist.md).
+
 Lihat [hasil Implementation Pack](IMPLEMENTATION_PROGRESS.md) untuk status terkini dan [kontrak capability owner](CAPABILITY_API.md) untuk membaca data resmi melalui NestJS.
 
 ## Optimisasi upload WhatsApp (tahap 1)

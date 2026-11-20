@@ -27,7 +27,7 @@ berarti perubahan sudah di-commit, digabung, atau diterapkan ke database tim/pro
 | 4. Optimisasi foto | Validasi bersama, preview/thumbnail dan unduh asli sesuai kebutuhan tersedia | Metadata turunan persisten, kualitas tulisan tangan/foto besar, peak RAM dan latensi perangkat |
 | 5. Database dan kapasitas | Pool terkonfigurasi, metrik akuisisi/transaksi dan diagnostik tersedia; indeks lama dimanfaatkan | Profil antrean/review/pencarian, sizing produksi, beban/staging |
 | 6. Caching | Cache katalog opt-in, generasi PostgreSQL, isolasi, penggabungan request dan fallback selesai lokal | Server Redis nyata, beban/staging; laporan belum dicache |
-| 7. Verifikasi dan rilis | Tes lokal tahap 1–2 selesai | Uji Flutter, beban, staging dan rilis |
+| 7. Verifikasi dan rilis | API 120 tes lulus, Flutter 138 lulus/3 skip; belum deployment | Regresi ringkasan setelah detail gagal, beban, layanan nyata, staging dan rilis |
 
 ## A. Baseline dan observabilitas
 
@@ -38,7 +38,9 @@ berarti perubahan sudah di-commit, digabung, atau diterapkan ke database tim/pro
 - [ ] **OBS-05** Profilkan laporan, daftar review, pencarian teks, saldo/reservasi dan pengambilan snapshot terbaru dengan kepadatan nota/batch realistis.
 - [ ] **OBS-06** Ukur waktu dari klik Konfirmasi sampai hasil tampil dan jumlah request pada jaringan normal/lambat; catat build, perangkat, pabrik sintetis dan kondisi jaringan.
 - [ ] **OBS-07** Tambahkan metrik HTTP/query p50/p95/p99, error, ukuran respons dan jumlah request per aksi.
+- [x] **OBS-07A** Tambahkan histogram berbatas untuk HTTP/query langsung, hitungan error/abort, ukuran body yang diketahui dan jumlah respons per route pattern; correlation aksi/perangkat serta SLO produksi tetap terbuka.
 - [ ] **OBS-08** Pantau waktu menunggu pool, koneksi aktif/idle/menunggu, durasi transaksi, lock wait dan timeout.
+- [x] **OBS-08A** Histogram akuisisi/query/transaksi, hitungan kegagalan dan log pool tersedia; diagnostik lock wait melalui SQL tersedia. Histogram menunjukkan batas atas bucket, bukan percentile presisi.
 - [ ] **OBS-09** Ukur ukuran tabel/index, pertumbuhan JSON ekstraksi/revisi/audit, jumlah objek dan byte storage per kategori.
 - [ ] **OBS-10** Tetapkan target performa dan anggaran resource berdasarkan baseline; verifikasi dengan beban bersamaan dan cache dingin/hangat.
 
@@ -114,6 +116,7 @@ atau produksi tetap merupakan pekerjaan rilis, bukan bagian centang implementasi
 - [x] **RPT-05** Pertahankan konsistensi snapshot, periode penerimaan kloter, angka presisi dan aturan biaya satu kali per kloter.
 - [x] **RPT-06** Uji koreksi aktif/disahkan/dibuang, margin negatif dan isolasi pabrik antara detail, Beranda, laporan dan PDF/XLSX.
 - [x] **RPT-07** Verifikasi pembatasan baru tidak memotong laporan secara diam-diam atau menghasilkan total dari data parsial.
+- [ ] **RPT-08** Pisahkan state ringkasan Beranda dari rincian agar penolakan detail besar, refresh dan kembali ke Beranda tidak menghilangkan total; tambahkan regresi state/navigasi.
 
 Lihat [kontrak dan baseline laporan](backend-report-optimization.md). Endpoint lengkap/laba/rekap dibatasi 100 kloter dan respons 5 MiB, rincian 1000 batch per kloter; interval eksplisit maksimal 366 hari. Summary dan halaman mempertahankan total seluruh filter. Ekspor owner memakai worker yang sudah tersedia (maksimal 500 kloter), dengan kontrol Flutter baru.
 
@@ -258,13 +261,15 @@ pengganti pembacaan resmi pada transaksi stok/pengesahan.
 - [x] **QA-03** Tahap cursor: 86 tes backend/integrasi lulus tanpa skip, termasuk tes HTTP kloter.
 - [x] **QA-03A** Tahap filter/counts: build dan 87 tes backend/integrasi lulus tanpa skip pada PostgreSQL sintetis; mencakup penutupan/pembukaan kembali, pemisahan sintetis/resmi, filter, akses anonim dan pencabutan membership.
 - [x] **QA-04** Dokumentasikan keterbatasan baseline: satu koneksi, lima sampel query hangat, belum HTTP/Auth, beban bersamaan atau nota padat.
-- [ ] **QA-05** Jalankan `flutter analyze` dan `flutter test` setelah integrasi pagination/preview; uji aplikasi hingga API terkait.
+- [x] **QA-05** Jalankan `flutter analyze` dan `flutter test` setelah integrasi pagination/preview; uji aplikasi hingga API terkait.
 - [x] **QA-05A** Pagination: analyzer Flutter bersih, suite standar 131 tes lulus (3 tes fixture dilewati); pengujian terarah dependensi Beranda/Biaya Ops lulus, lalu 22 tes regresi lulus setelah perbaikan terakhir, termasuk posisi scroll dan layar 320 px dengan teks 2x. Tes end-to-end pagination dijalankan terpisah dan lulus dengan PostgreSQL sintetis.
 - [x] **QA-04A** Tahap laporan/storage/pool: 100 tes backend/integrasi lulus tanpa skip pada PostgreSQL sintetis. Sesudah penambahan sampling metrik, build dan 8 tes pool/storage terarah kembali lulus. Tidak ada uji bucket produksi atau deployment.
 - [x] **QA-05B** Laporan: analyzer bersih dan suite Flutter 136 tes lulus, 3 tes fixture dilewati (runner berurutan). Build API serta regresi PostgreSQL summary/page, koreksi, PDF/XLSX dan batas 101 kloter lulus; detail bukti ada di bagian D.
 - [x] **QA-05C** Foto: build dan 107 tes backend/integrasi lulus tanpa skip; analyzer Flutter bersih dan 5 tes Pekerjaan/varian lulus. Mencakup foto rusak, WebP animasi/APNG, hash, orientasi/bbox, antrean transformasi, akses pabrik dan pembukaan asli setelah preview gagal. Suite Flutter penuh belum diulang setelah tahap foto; hasil 136 tes di atas berasal dari tahap laporan.
 - [x] **QA-05D** Worker/review: build dan 13 tes timer/alur OCR PostgreSQL lulus tanpa skip. Profiler 30.000 task/job memverifikasi hasil query lama/baru identik dan merekam biaya baca/tulis kandidat index yang akhirnya ditolak.
 - [x] **QA-05E** Katalog/cache: migrasi cache diterapkan pada database sintetis, build dan suite 117 tes backend/integrasi lulus tanpa skip. Nomor cache diperbaiki dari 024 menjadi 025 agar tidak bertabrakan dengan indeks snapshot; rekonsiliasi catatan lokal mempertahankan checksum/DDL. Redis diuji melalui fixture protokol lokal, belum server/provider nyata; flag cache tetap nonaktif secara default.
+- [x] **QA-05F** Observabilitas: build dan 120 tes backend/integrasi lulus tanpa skip; 19 tes HTTP/Auth/pool terarah juga lulus. Sesudah perbaikan nomor migrasi, 11 tes migrasi/alur OCR kembali lulus dan migrator dua kali tanpa perubahan pada tiga database sintetis.
+- [x] **QA-05G** Suite Flutter penuh sesudah preview: 138 tes lulus, 3 fixture skip; analyzer sebelumnya bersih. Hasil ini sebelum perbaikan RPT-08, yang memerlukan regresi tersendiri.
 - [ ] **QA-06** Jalankan tes FastAPI dari `apps/ai` dengan `uv run --locked python -m unittest` bila kontrak/pemrosesan AI berubah.
 - [ ] **QA-07** Uji satu skenario sintetis dari foto → OCR → revisi → pengesahan → stok → laporan/PDF; pastikan angka dan status konsisten.
 - [ ] **QA-08** Uji R2 nyata dengan fixture sintetis terpisah; catat dan bersihkan hanya objek fixture yang dibuat tes.
@@ -300,6 +305,8 @@ Branch kerja: `perf/api-staged-photo-upload`.
 | 21 November 2026 | `0e11c3f` | Konfigurasi pool, metrik akuisisi/transaksi dan diagnostik database |
 | 21 November 2026 | `553beb0` | Validasi bersama dan varian foto privat, overlay serta pembukaan asli di Flutter |
 | 21 November 2026 | `5470202` | Query review sesudah pagination, metrik antrean dan opsi polling adaptif |
+| 21 November 2026 | `f894172` | Cache katalog dengan generasi transaksi, profil pencarian dan pengujian outage |
+| 21 November 2026 | `6650bbd` | Nomor migrasi cache 025, rekonsiliasi lokal dan penjagaan tabrakan baru |
 
 Riwayat ini mencatat commit lokal. Status sinkronisasi remote dapat diperiksa dengan
 `git status -sb`; commit tidak berarti perubahan sudah digabung ke main atau dirilis.
@@ -309,7 +316,13 @@ Riwayat ini mencatat commit lokal. Status sinkronisasi remote dapat diperiksa de
 - [x] **NEXT-01** Selesaikan kontrak filter status dan hitungan lengkap, lalu migrasikan Flutter ke cursor (PAG-06 sampai PAG-12).
 - [x] **NEXT-02** Profil dan batasi laporan (OBS-05, RPT-01 sampai RPT-07) sebelum menentukan indeks tambahan.
 - [ ] **NEXT-03** Putuskan kebijakan retensi dan buat inventaris/simulasi cleanup sebelum penghapusan diaktifkan (RET-01 sampai RET-17).
+- [x] **NEXT-03A** Selesaikan cakupan yang disetujui pengguna: inventaris dan simulasi tanpa penghapusan; keputusan masa simpan/worker hapus tetap ditunda.
 - [ ] **NEXT-04** Lanjutkan preview foto, kapasitas worker/pool dan cache berdasarkan hasil pengukuran.
+- [x] **NEXT-04A** Selesaikan implementasi lokal preview, konfigurasi pool, worker/review, cache katalog dan metrik; sizing/staging serta perluasan foto masih terbuka.
+
+Panduan metrik: [HTTP/query/pool](performance-observability.md). Verifikasi staging
+memerlukan alamat lingkungan, kapasitas koneksi dan jumlah replika. Informasi itu
+belum tersedia pada sesi ini; tidak ada pemakaian kredensial atau data produksi.
 
 Panduan tugas kloter/loading/seeder/OCR yang diberikan pengguna menjadi konteks
 verifikasi; checklist ini tidak menandai seluruh pekerjaan produk di panduan itu
