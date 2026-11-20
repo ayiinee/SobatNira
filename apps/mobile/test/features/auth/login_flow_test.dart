@@ -216,6 +216,9 @@ void main() {
   testWidgets(
     'ulang pemeriksaan akses memakai sesi yang sama dan akun tanpa akses bisa keluar',
     (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 853));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final firstCheck = Completer<http.Response>();
       var checks = 0;
       var signIns = 0;
       final api = ReviewApi(
@@ -223,7 +226,7 @@ void main() {
         client: MockClient((request) async {
           expect(request.url.path, '/auth/me');
           checks++;
-          return checks == 1 ? http.Response('{}', 503) : _json({'access': []});
+          return checks == 1 ? firstCheck.future : _json({'access': []});
         }),
       );
       await tester.pumpWidget(
@@ -236,10 +239,30 @@ void main() {
         ),
       );
       await _openLogin(tester);
+      expect(
+        find.textContaining('untuk bantuan akun atau kata sandi'),
+        findsNothing,
+      );
       await _fillCredentials(tester);
       await tester.tap(find.text('Masuk'));
+      await tester.pump();
+      expect(find.text('Memeriksa akses pabrik…'), findsOneWidget);
+      expect(find.text('Akses pabrik'), findsNothing);
+      expect(find.text('Keluar'), findsNothing);
+      firstCheck.complete(http.Response('{}', 503));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Coba lagi'));
+      final message = find.text(
+        'Akses pabrik belum dapat diperiksa. Periksa koneksi dan coba lagi.',
+      );
+      final retry = find.widgetWithText(FilledButton, 'Coba lagi');
+      expect(find.text('Akses pabrik'), findsNothing);
+      expect(find.text('Keluar'), findsNothing);
+      expect(tester.getCenter(retry).dx, closeTo(393 / 2, 1));
+      expect(
+        (tester.getTopLeft(message).dy + tester.getBottomLeft(retry).dy) / 2,
+        closeTo(853 / 2, 2),
+      );
+      await tester.tap(retry);
       await tester.pumpAndSettle();
       expect(checks, 2);
       expect(signIns, 1);

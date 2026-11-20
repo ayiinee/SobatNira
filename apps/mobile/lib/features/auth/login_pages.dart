@@ -173,11 +173,6 @@ class _LoginFormPageState extends State<LoginFormPage> {
             shadow: false,
           ),
         ),
-        const SizedBox(height: NiraSpace.lg),
-        Text(
-          'Hubungi pengelola pabrik untuk bantuan akun atau kata sandi.',
-          style: niraText(NiraType.body, color: niraLeaf),
-        ),
       ],
     ),
   );

@@ -69,12 +69,18 @@ void main() {
       const message = 'Halo, gula & biaya?\nTolong cek #kloter 😊';
       await tester.enterText(find.byType(TextFormField), message);
       await tap(tester, find.text('Kirim via WhatsApp'));
-      final uri = Uri.parse((calls.single.arguments as Map)['url'] as String);
+      final app = Uri.parse((calls.first.arguments as Map)['url'] as String);
+      expect(app.scheme, 'whatsapp');
+      expect(app.host, 'send');
+      expect(app.queryParameters, {'phone': '6285337236836', 'text': message});
+      expect(app.query, contains('%20'));
+      expect(calls, hasLength(2));
+      final uri = Uri.parse((calls.last.arguments as Map)['url'] as String);
       expect(uri.scheme, 'https');
       expect(uri.host, 'wa.me');
       expect(uri.path, '/6285337236836');
       expect(uri.queryParameters['text'], message);
-      expect((calls.single.arguments as Map)['useWebView'], isFalse);
+      expect((calls.last.arguments as Map)['useWebView'], isFalse);
       expect(
         find.text(
           'WhatsApp belum bisa dibuka. Coba lagi atau hubungi nomor di atas.',
@@ -90,7 +96,8 @@ void main() {
       );
       opened = true;
       await tap(tester, find.text('Kirim via WhatsApp'));
-      expect(calls.length, 2);
+      expect(calls, hasLength(3));
+      expect((calls.last.arguments as Map)['url'], app.toString());
       expect(
         find.text(
           'WhatsApp belum bisa dibuka. Coba lagi atau hubungi nomor di atas.',

@@ -178,7 +178,7 @@ class _ConnectedSessionGateState extends State<ConnectedSessionGate> {
       busy: _checkingAccess,
       finish: _scope != null,
       label: 'Memeriksa akses pabrik…',
-      loadingBuilder: (_, indicator) => _accessScaffold(indicator),
+      loadingBuilder: (_, indicator) => _centerAccess(indicator),
       child: _authenticated(api),
     );
   }
@@ -211,30 +211,52 @@ class _ConnectedSessionGateState extends State<ConnectedSessionGate> {
         changeSynthetic,
       );
     }
-    return _accessScaffold(
-      ListView(
-        padding: const EdgeInsets.all(NiraSpace.lg),
-        children: _factories == null ? _accessPending(api) : _noAccess(),
+    if (_factories == null) return _accessPending(api);
+    return NiraPageScaffold(
+      title: const Text('Akses pabrik'),
+      actions: [
+        TextButton(onPressed: _endSession, child: const Text('Keluar')),
+      ],
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(NiraSpace.lg),
+          children: _noAccess(),
+        ),
       ),
     );
   }
 
-  Widget _accessScaffold(Widget body) => NiraPageScaffold(
-    title: const Text('Akses pabrik'),
-    actions: [TextButton(onPressed: _endSession, child: const Text('Keluar'))],
-    body: SafeArea(child: body),
-  );
-
-  List<Widget> _accessPending(ReviewApi api) => [
-    Semantics(
-      liveRegion: true,
-      child: const Text(
-        'Akses pabrik belum dapat diperiksa. Periksa koneksi dan coba lagi.',
+  Widget _centerAccess(Widget body) => Scaffold(
+    backgroundColor: niraPaper,
+    body: SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: niraMaxContentWidth),
+          child: body,
+        ),
       ),
     ),
-    const SizedBox(height: NiraSpace.lg),
-    NiraButton('Coba lagi', () => _checkAccess(api), shadow: false),
-  ];
+  );
+
+  Widget _accessPending(ReviewApi api) => _centerAccess(
+    SingleChildScrollView(
+      padding: const EdgeInsets.all(NiraSpace.lg),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Semantics(
+            liveRegion: true,
+            child: const Text(
+              'Akses pabrik belum dapat diperiksa. Periksa koneksi dan coba lagi.',
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: NiraSpace.lg),
+          NiraButton('Coba lagi', () => _checkAccess(api), shadow: false),
+        ],
+      ),
+    ),
+  );
 
   List<Widget> _noAccess() => [
     Semantics(
