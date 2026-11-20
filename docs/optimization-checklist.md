@@ -24,7 +24,7 @@ berarti perubahan sudah di-commit, digabung, atau diterapkan ke database tim/pro
 | 1. Transaksi upload WhatsApp | Implementasi dan pengujian lokal selesai | Pengukuran latensi upload, rekonsiliasi, penerapan lingkungan tim |
 | 2. Query dan pagination | Pagination kloter dan Flutter selesai: cursor, filter, ranking, badge, lazy loading dan refresh | Ringkasan, pagination rincian dan batas laporan selesai di bagian D |
 | 3. Retensi storage | Inventaris dan simulasi lokal selesai; tanpa penghapusan sesuai keputusan pengguna | Review staging, metadata lifecycle dan keputusan masa simpan; worker hapus ditunda |
-| 4. Optimisasi foto | Belum diimplementasikan | Validasi seragam, preview, thumbnail, pengukuran kualitas/ukuran |
+| 4. Optimisasi foto | Validasi bersama, preview/thumbnail dan unduh asli sesuai kebutuhan tersedia | Metadata turunan persisten, kualitas tulisan tangan/foto besar, peak RAM dan latensi perangkat |
 | 5. Database dan kapasitas | Pool terkonfigurasi, metrik akuisisi/transaksi dan diagnostik tersedia; indeks lama dimanfaatkan | Profil antrean/review/pencarian, sizing produksi, beban/staging |
 | 6. Caching | Belum diimplementasikan | Cache-aside, invalidasi, isolasi dan fallback |
 | 7. Verifikasi dan rilis | Tes lokal tahap 1–2 selesai | Uji Flutter, beban, staging dan rilis |
@@ -181,19 +181,28 @@ memerlukan keputusan aplikasi, bukan hanya umur objek.
 
 ## G. Optimisasi foto
 
-- [ ] **IMG-01** Seragamkan validasi signature, MIME, decode, dimensi, jumlah frame dan batas byte/piksel sebelum penyimpanan permanen.
-- [ ] **IMG-02** Pertahankan sumber asli sesuai retensi; gunakan varian terpisah untuk preview dan thumbnail.
-- [ ] **IMG-03** Tetapkan ukuran/format/kualitas berdasarkan nota sintetis; jangan mengganti asli dengan kompresi tanpa pembuktian keterbacaan.
+- [x] **IMG-01** Seragamkan validasi signature, MIME, decode, dimensi, jumlah frame dan batas byte/piksel sebelum penyimpanan permanen.
+- [x] **IMG-02** Pertahankan sumber asli sesuai retensi; gunakan varian terpisah untuk preview dan thumbnail.
+- [x] **IMG-03** Tetapkan ukuran/format/kualitas berdasarkan nota sintetis; jangan mengganti asli dengan kompresi tanpa pembuktian keterbacaan.
 - [ ] **IMG-04** Hilangkan metadata lokasi pada varian tampilan dan simpan hash, ukuran, dimensi serta versi transformasinya.
-- [ ] **IMG-05** Pertahankan hubungan koordinat evidence dengan gambar asli saat resize/rotasi; uji overlay dan orientasi.
-- [ ] **IMG-06** Layani thumbnail/preview melalui otorisasi tenant/pabrik yang sama dan unduh asli hanya ketika dibutuhkan.
-- [ ] **IMG-07** Batasi concurrency transformasi dan penggunaan memori pada upload/baca; evaluasi streaming tanpa melemahkan verifikasi integritas.
+- [x] **IMG-05** Pertahankan hubungan koordinat evidence dengan gambar asli saat resize/rotasi; uji overlay dan orientasi.
+- [x] **IMG-06** Layani thumbnail/preview melalui otorisasi tenant/pabrik yang sama dan unduh asli hanya ketika dibutuhkan.
+- [x] **IMG-07** Batasi concurrency transformasi dan penggunaan memori pada upload/baca; evaluasi streaming tanpa melemahkan verifikasi integritas.
 - [ ] **IMG-08** Ukur byte asli/turunan, waktu transformasi, RAM, latensi tampilan dan penghematan transfer/storage.
 - [ ] **IMG-09** Uji angka kecil, tulisan tangan, tanggal, foto buram/terpotong, JPEG/PNG/WebP yang didukung dan file rusak.
-- [ ] **IMG-10** Evaluasi dedup fisik per tenant/pabrik dengan referensi yang aman; bedakan file identik dari transaksi bisnis identik.
+- [x] **IMG-10** Evaluasi dedup fisik per tenant/pabrik dengan referensi yang aman; bedakan file identik dari transaksi bisnis identik.
 
-Validasi decode/hash jalur bukti penerimaan sudah tersedia sebelum optimisasi ini;
-penyamaan validasi dengan jalur WhatsApp masih belum selesai.
+Bukti: [kontrak varian, resource dan profil foto](photo-optimization.md).
+Validasi HTTP WhatsApp kini menggunakan decoder yang sama dengan bukti penerimaan;
+format WhatsApp tetap JPEG/PNG sesuai kontrak AI. Preview WebP lossless maksimal 2048,
+thumbnail 320, sumber asli tetap tersedia. Flutter Pekerjaan meminta preview dan
+mengunduh asli saat tombol ditekan; bbox mempertahankan sumbu piksel mentah.
+Satu slot aktif/empat antrean membatasi decode dan baca/transformasi per proses,
+dengan batas piksel/byte serta timeout native; ini bukan batas RAM keras seluruh HTTP.
+Empat fixture menghasilkan preview 31.346 dari 125.388 byte (sekitar 75% lebih kecil)
+dengan piksel identik pada fixture tanpa resize. Belum ada varian tersimpan di R2,
+jadi belum ada penghematan storage/R2 egress. IMG-04 dan IMG-08 masih parsial;
+IMG-09 menunggu perluasan fixture tulisan tangan/buram/terpotong.
 
 ## H. Worker dan antrean OCR
 
@@ -231,6 +240,7 @@ merupakan kandidat pengujian. Redis saat audit baru dipakai untuk pemeriksaan ko
 - [x] **QA-05A** Pagination: analyzer Flutter bersih, suite standar 131 tes lulus (3 tes fixture dilewati); pengujian terarah dependensi Beranda/Biaya Ops lulus, lalu 22 tes regresi lulus setelah perbaikan terakhir, termasuk posisi scroll dan layar 320 px dengan teks 2x. Tes end-to-end pagination dijalankan terpisah dan lulus dengan PostgreSQL sintetis.
 - [x] **QA-04A** Tahap laporan/storage/pool: 100 tes backend/integrasi lulus tanpa skip pada PostgreSQL sintetis. Sesudah penambahan sampling metrik, build dan 8 tes pool/storage terarah kembali lulus. Tidak ada uji bucket produksi atau deployment.
 - [x] **QA-05B** Laporan: analyzer bersih dan suite Flutter 136 tes lulus, 3 tes fixture dilewati (runner berurutan). Build API serta regresi PostgreSQL summary/page, koreksi, PDF/XLSX dan batas 101 kloter lulus; detail bukti ada di bagian D.
+- [x] **QA-05C** Foto: build dan 107 tes backend/integrasi lulus tanpa skip; analyzer Flutter bersih dan 5 tes Pekerjaan/varian lulus. Mencakup foto rusak, WebP animasi/APNG, hash, orientasi/bbox, antrean transformasi, akses pabrik dan pembukaan asli setelah preview gagal. Suite Flutter penuh belum diulang setelah tahap foto; hasil 136 tes di atas berasal dari tahap laporan.
 - [ ] **QA-06** Jalankan tes FastAPI dari `apps/ai` dengan `uv run --locked python -m unittest` bila kontrak/pemrosesan AI berubah.
 - [ ] **QA-07** Uji satu skenario sintetis dari foto → OCR → revisi → pengesahan → stok → laporan/PDF; pastikan angka dan status konsisten.
 - [ ] **QA-08** Uji R2 nyata dengan fixture sintetis terpisah; catat dan bersihkan hanya objek fixture yang dibuat tes.
@@ -263,6 +273,7 @@ Branch kerja: `perf/api-staged-photo-upload`.
 | 20 November 2026 | `c490482` | Cursor API, counts, ranking saran, pager Flutter, profiler dan tes integrasi |
 | 21 November 2026 | `eddeab9` | Ringkasan laporan, batas respons, rincian per halaman, jalur ekspor Flutter dan profil sintetis |
 | 21 November 2026 | `b7911a9` | Inventaris dan simulasi cleanup tanpa penghapusan |
+| 21 November 2026 | `0e11c3f` | Konfigurasi pool, metrik akuisisi/transaksi dan diagnostik database |
 
 Riwayat ini mencatat commit lokal. Status sinkronisasi remote dapat diperiksa dengan
 `git status -sb`; commit tidak berarti perubahan sudah digabung ke main atau dirilis.

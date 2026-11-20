@@ -774,9 +774,19 @@ class ReviewApi {
     );
   }
 
-  Future<Uint8List> photo(String id, String asset) async {
+  Future<Uint8List> photo(
+    String id,
+    String asset, {
+    String variant = 'original',
+  }) async {
     final response = await _client
-        .get(_url('review-tasks/$id/assets/$asset'), headers: _headers)
+        .get(
+          _url(
+            'review-tasks/$id/assets/$asset',
+            variant == 'original' ? null : {'variant': variant},
+          ),
+          headers: _headers,
+        )
         .timeout(const Duration(seconds: 12));
     _requireStatus(response, 200);
     return response.bodyBytes;
