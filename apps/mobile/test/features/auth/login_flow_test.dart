@@ -7,7 +7,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:sobatnira/features/auth/login_pages.dart';
-import 'package:sobatnira/features/kloter/connected_kloter_page.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
 import 'package:sobatnira/main.dart';
 import 'package:sobatnira/sobatnira_ui.dart';
@@ -83,7 +82,7 @@ void main() {
   testWidgets('mode terhubung membuka form dan bisa kembali ke sambutan', (
     tester,
   ) async {
-    await tester.pumpWidget(const MaterialApp(home: ConnectedKloterPage()));
+    await tester.pumpWidget(const SobatNiraApp(configurationErrors: []));
     expect(find.byType(LoginWelcomePage), findsOneWidget);
     await _openLogin(tester);
     await tester.tap(find.byIcon(Icons.arrow_back));
@@ -146,14 +145,13 @@ void main() {
   ) async {
     final attempts = <Completer<ReviewApi>>[];
     await tester.pumpWidget(
-      MaterialApp(
-        home: ConnectedKloterPage(
-          signIn: (_, _) {
-            final attempt = Completer<ReviewApi>();
-            attempts.add(attempt);
-            return attempt.future;
-          },
-        ),
+      SobatNiraApp(
+        configurationErrors: const [],
+        signIn: (_, _) {
+          final attempt = Completer<ReviewApi>();
+          attempts.add(attempt);
+          return attempt.future;
+        },
       ),
     );
     await _openLogin(tester);
@@ -220,13 +218,12 @@ void main() {
         }),
       );
       await tester.pumpWidget(
-        MaterialApp(
-          home: ConnectedKloterPage(
-            signIn: (_, _) async {
-              signIns++;
-              return api;
-            },
-          ),
+        SobatNiraApp(
+          configurationErrors: const [],
+          signIn: (_, _) async {
+            signIns++;
+            return api;
+          },
         ),
       );
       await _openLogin(tester);
@@ -294,7 +291,10 @@ void main() {
         }),
       );
       await tester.pumpWidget(
-        MaterialApp(home: ConnectedKloterPage(signIn: (_, _) async => api)),
+        SobatNiraApp(
+          configurationErrors: const [],
+          signIn: (_, _) async => api,
+        ),
       );
       await _openLogin(tester);
       await _fillCredentials(tester);

@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:sobatnira/features/kloter/connected_kloter_page.dart';
 import 'package:sobatnira/features/kloter/production_catalog_page.dart';
 import 'package:sobatnira/features/kloter/production_lot_editor.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
+import 'package:sobatnira/main.dart';
 
 final scope = FactoryScope.fromJson({
   'tenantId': 'tenant',
@@ -418,7 +418,10 @@ void main() {
         }),
       );
       await tester.pumpWidget(
-        MaterialApp(home: ConnectedKloterPage(signIn: (_, _) async => api)),
+        SobatNiraApp(
+          configurationErrors: const [],
+          signIn: (_, _) async => api,
+        ),
       );
       await press(tester, 'Masuk');
       await tester.enterText(

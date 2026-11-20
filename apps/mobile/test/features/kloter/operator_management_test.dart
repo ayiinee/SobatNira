@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:sobatnira/features/kloter/connected_kloter_page.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
+import 'package:sobatnira/main.dart';
 
 Future<void> tap(WidgetTester tester, Finder finder) async {
   await tester.ensureVisible(finder);
@@ -124,7 +124,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(home: ConnectedKloterPage(signIn: (_, _) async => api)),
+      SobatNiraApp(configurationErrors: const [], signIn: (_, _) async => api),
     );
     await tap(tester, find.text('Masuk'));
     await tester.enterText(

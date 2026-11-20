@@ -5,14 +5,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:sobatnira/features/beranda/home_page.dart';
-import 'package:sobatnira/features/kloter/connected_kloter_page.dart';
 import 'package:sobatnira/features/pekerjaan/review_api.dart';
-import 'package:sobatnira/sobatnira_ui.dart';
+import 'package:sobatnira/main.dart';
 import '../../support/demo_login.dart';
 
 void main() {
   testWidgets(
-    'standalone login opens the shared home and keeps factory scope in review',
+    'app login opens the shared home and keeps factory scope in review',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(430, 950));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -66,9 +65,9 @@ void main() {
         }),
       );
       await tester.pumpWidget(
-        MaterialApp(
-          theme: niraTheme(),
-          home: ConnectedKloterPage(signIn: (_, _) async => api),
+        SobatNiraApp(
+          configurationErrors: const [],
+          signIn: (_, _) async => api,
         ),
       );
       await openDemoLogin(tester);

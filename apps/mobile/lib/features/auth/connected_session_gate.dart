@@ -4,8 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
 import '../../widgets/page_frame.dart';
-import '../auth/login_pages.dart';
-import '../beranda/home_page.dart';
+import 'login_pages.dart';
 import '../pekerjaan/review_api.dart';
 
 typedef FactoryHomeBuilder =
@@ -19,22 +18,22 @@ typedef FactoryHomeBuilder =
       ValueChanged<bool> onSyntheticChanged,
     );
 
-class ConnectedKloterPage extends StatefulWidget {
-  const ConnectedKloterPage({
+class ConnectedSessionGate extends StatefulWidget {
+  const ConnectedSessionGate({
     super.key,
     this.signIn = ReviewApi.signIn,
     this.invalidConfiguration = const [],
-    this.homeBuilder,
+    required this.homeBuilder,
   });
   final Future<ReviewApi> Function(String email, String password) signIn;
   final List<String> invalidConfiguration;
-  final FactoryHomeBuilder? homeBuilder;
+  final FactoryHomeBuilder homeBuilder;
 
   @override
-  State<ConnectedKloterPage> createState() => _ConnectedKloterPageState();
+  State<ConnectedSessionGate> createState() => _ConnectedSessionGateState();
 }
 
-class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
+class _ConnectedSessionGateState extends State<ConnectedSessionGate> {
   final _syntheticTenants = <String>{};
   ReviewApi? _api;
   List<FactoryScope>? _factories;
@@ -181,27 +180,15 @@ class _ConnectedKloterPageState extends State<ConnectedKloterPage> {
         }
       }
 
-      final buildHome = widget.homeBuilder;
-      return buildHome != null
-          ? buildHome(
-              api,
-              _factories!,
-              scope,
-              selectFactory,
-              _endSession,
-              synthetic,
-              changeSynthetic,
-            )
-          : NiraHome(
-              key: ValueKey((api, scope.tenantId, scope.factoryId)),
-              api: api,
-              factories: _factories!,
-              scope: scope,
-              selectFactory: selectFactory,
-              signOut: _endSession,
-              synthetic: synthetic,
-              onSyntheticChanged: changeSynthetic,
-            );
+      return widget.homeBuilder(
+        api,
+        _factories!,
+        scope,
+        selectFactory,
+        _endSession,
+        synthetic,
+        changeSynthetic,
+      );
     }
     return NiraPageScaffold(
       title: const Text('Akses pabrik'),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'features/auth/connected_session_gate.dart';
 import 'features/beranda/home_page.dart';
-import 'features/kloter/connected_kloter_page.dart';
 import 'features/pekerjaan/review_api.dart';
 import 'sobatnira_ui.dart';
 
@@ -36,10 +36,29 @@ class SobatNiraApp extends StatelessWidget {
       ),
     ),
     home: connected
-        ? ConnectedKloterPage(
+        ? ConnectedSessionGate(
             invalidConfiguration:
                 configurationErrors ?? ReviewApi.invalidConfiguration,
             signIn: signIn,
+            homeBuilder:
+                (
+                  api,
+                  factories,
+                  scope,
+                  selectFactory,
+                  signOut,
+                  synthetic,
+                  onSyntheticChanged,
+                ) => NiraHome(
+                  key: ValueKey((api, scope.tenantId, scope.factoryId)),
+                  api: api,
+                  factories: factories,
+                  scope: scope,
+                  selectFactory: selectFactory,
+                  signOut: signOut,
+                  synthetic: synthetic,
+                  onSyntheticChanged: onSyntheticChanged,
+                ),
           )
         : const NiraHome(),
   );
