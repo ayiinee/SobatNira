@@ -62,7 +62,9 @@ Biaya menerima empat string rupiah integer: `caneCostRupiah`, `operationalCostRu
 
 Urutan: receipt dan milling sah → buat batch → simpan biaya kloter → reservasi nira menggunakan UUID batch melalui endpoint juice yang sudah ada → approve batch. Approval mengunci kloter dan batch, memeriksa asal/kategori/volume reservasi, lalu mengonsumsi reservasi dan membuat snapshot dalam transaksi yang sama. Retry approval mengembalikan snapshot yang sama.
 
-Migrasi `023_batch_corrections.sql` menambahkan riwayat koreksi dan mengizinkan snapshot lanjutan per batch. Terapkan migrasi sebelum merilis API. Admin dapat membuka satu draf koreksi pada batch sah dari kloter terbuka. Selama proses koreksi, angka laporan tetap memakai hasil sah terakhir. Validasi ulang membekukan riwayat perubahan dan menyimpan snapshot kumulatif baru dalam satu transaksi. Konsumsi nira tetap mengikuti pengesahan asli. Kloter tidak dapat ditutup selama masih memiliki draf koreksi.
+Migrasi `023_batch_corrections.sql` menambahkan riwayat koreksi dan mengizinkan snapshot lanjutan per batch. Terapkan migrasi sebelum merilis API. Pada service Railway yang membangun `Dockerfile` akar repo, gunakan `node dist/database/migrate.js` sebagai **Pre-deploy Command** di pengaturan service. Perintah memakai `DATABASE_URL` milik service dan migrasi yang ada di image.
+
+Admin dapat membuka satu draf koreksi pada batch sah dari kloter terbuka. Selama proses koreksi, angka laporan tetap memakai hasil sah terakhir. Validasi ulang membekukan riwayat perubahan dan menyimpan snapshot kumulatif baru dalam satu transaksi. Konsumsi nira tetap mengikuti pengesahan asli. Kloter tidak dapat ditutup selama masih memiliki draf koreksi.
 
 Periode laporan mengikuti **waktu penerimaan kloter**, interval `from` inklusif dan `before` eksklusif. Laporan memakai snapshot terbaru dari batch sah pada setiap kloter dalam periode. Kloter terbuka memakai label margin sementara karena perhitungan kumulatif memasukkan seluruh biaya kloter.
 
