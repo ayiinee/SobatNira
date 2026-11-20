@@ -7,6 +7,12 @@ import '../../widgets/chart_growth.dart';
 import 'demo_analytics.dart';
 import 'report_date_button.dart';
 
+/// Chart values are expressed in thousands of rupiah.
+String marginChartLabel(double thousands) =>
+    thousands.abs() < 1 && thousands != 0
+    ? thousands.toStringAsFixed(3).replaceAll('.', ',')
+    : thousands.toInt().toString();
+
 class MarginChart extends StatefulWidget {
   const MarginChart({required this.rows, required this.onFilter, super.key});
   final List<AnalyticsRow> rows;
@@ -202,7 +208,7 @@ class _MarginPainter extends CustomPainter {
       );
       _text(
         canvas,
-        values[i].toInt().toString(),
+        marginChartLabel(values[i]),
         Offset(x, zero - h + (h < 0 ? 10 : -10)),
         bold: true,
       );

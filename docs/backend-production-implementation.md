@@ -75,6 +75,30 @@ Dataset: 24 kloter, 62 batch, 48 batch sah. Termasuk penerimaan draft, penerimaa
 
 Fixture ini menggunakan `synthetic=true`. Ia tidak mengirim WhatsApp atau memanggil OCR/model. Fixture foto OCR, transfer, batch campuran dan koreksi berantai tetap terpisah dari dataset ini.
 
+### Impor fixture Flutter untuk Pabrik A, B, dan C
+
+Seeder `seed:flutter-demo` memakai tenant aktif **SobatNira Uji** yang sudah memiliki **Pabrik A** dan akun admin terkonfirmasi. Pabrik A mengikuti fixture Flutter. Pabrik B dan C dihasilkan deterministik dengan kode, pemasok, tanggal, grade, harga, volume, dan margin yang berbeda. ID dataset stabil. Seeder menolak kode kloter yang bertabrakan dengan ID lain dan tidak mengganti akun atau mengubah data milik tenant lain.
+
+Ekspor fixture dari `apps/mobile` dan buat build API dari `apps/api`:
+
+```powershell
+flutter test --no-pub --dart-define=DEMO_FIXTURE_OUTPUT=../../.tmp/mobile/flutter-demo-fixture.json tools/export_demo_fixture_test.dart
+```
+
+```powershell
+npm.cmd run build
+```
+
+Dari akar repo, isi variabel proses `SOBATNIRA_SEED_TENANT_ID` dan `SOBATNIRA_SEED_ACTOR_EMAIL` untuk tenant serta admin yang sudah ada. Jalankan dengan konfigurasi Supabase tujuan. Contoh untuk Railway CLI yang sudah terhubung ke service API:
+
+```powershell
+npx.cmd --yes @railway/cli run --no-local -- node apps/api/scripts/seed-flutter-demo.cjs --sample
+npx.cmd --yes @railway/cli run --no-local -- node apps/api/scripts/seed-flutter-demo.cjs --commit
+npx.cmd --yes @railway/cli run --no-local -- node apps/api/scripts/seed-flutter-demo.cjs --verify
+```
+
+`--sample` menguji dua kloter per pabrik dengan rollback. `--commit` menyimpan setiap kloter secara atomik dan bisa diteruskan dengan perintah yang sama bila proses berhenti. Untuk kloter seeder yang ditargetkan Tuntas dan sudah ada, perintah mengesahkan draf sintetis lewat layanan produksi sebelum menjalankan penutupan kloter. Pabrik A mengikuti status dari fixture Flutter. Pabrik B dan C memiliki campuran kloter tuntas dan kloter terbuka dengan batch sah serta draf. `--verify` memeriksa hasil secara baca-saja. Penerimaan, penggilingan, reservasi, grade, dan snapshot memakai layanan domain NestJS. Biaya kategori dibagi secara sintetis dari total biaya fixture. Laporan menghitung batch sah saja, sehingga margin dan total di Flutter demo lokal dapat berbeda dari angka agregat database.
+
 ## Flutter
 
 Pada build terhubung, login dan pilih pabrik. Sahkan nota di **Pekerjaan** dan buka **Detail Kloter** untuk melihat referensi dokumen serta menambah batch. **Detail Batch** memakai tab Ringkasan, Masak, dan Grade. Admin dapat mencatat biaya dan melanjutkan reservasi, pengesahan atau pembatalan draf. Dari Beranda atau Laporan, buka **Laba** atau **Rekap**. Aktifkan **Tampilkan data contoh** untuk membaca seed sintetis.

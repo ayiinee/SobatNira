@@ -40,11 +40,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int)
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--connected", action="store_true", help="Gunakan Supabase dan API dari .env akar repo (bawaan).")
-    mode.add_argument("--demo", action="store_true", help="Buka fixture desain offline.")
+    mode.add_argument("--connected", action="store_true", help="Gunakan Supabase dan API dari .env akar repo.")
+    mode.add_argument("--demo", dest="connected", action="store_false", help="Buka fixture desain offline (bawaan).")
+    parser.set_defaults(connected=False)
     args = parser.parse_args()
     if args.port is None:
-        args.port = 8085 if args.demo else 8080
+        args.port = 8080 if args.connected else 8085
     if not 1 <= args.port <= 65535:
         parser.error("Port harus antara 1 dan 65535.")
     flutter = shutil.which("flutter")
@@ -56,7 +57,7 @@ def main():
 
     command = [flutter, "run", "-t", "lib/main.dart", "-d", "chrome", "--web-hostname", "127.0.0.1",
                "--web-port", str(args.port), "--hot", "--machine"]
-    if args.demo:
+    if not args.connected:
         command.append("--dart-define=SOBATNIRA_MODE=demo")
     else:
         node = shutil.which("node")

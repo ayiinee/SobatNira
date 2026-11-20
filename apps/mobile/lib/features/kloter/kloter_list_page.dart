@@ -118,11 +118,6 @@ class _KloterListPageState extends State<KloterListPage> {
         final short = constraints.maxHeight < 180;
         return Column(
           children: [
-            if (widget.synthetic && !short)
-              Text(
-                'Data sintetis',
-                style: niraText(NiraType.caption, color: niraLeaf),
-              ),
             Padding(
               padding: EdgeInsets.fromLTRB(
                 inset,

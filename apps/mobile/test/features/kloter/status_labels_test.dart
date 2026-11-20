@@ -41,6 +41,12 @@ void main() {
         findsOneWidget,
       );
       expect(tester.takeException(), isNull);
+      expect(
+        find.text(
+          status == KloterStatus.review ? 'Perlu ditinjau' : 'Tervalidasi',
+        ),
+        findsOneWidget,
+      );
     }
   });
 

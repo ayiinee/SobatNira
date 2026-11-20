@@ -1,10 +1,14 @@
 # Penyelarasan tampilan mobile
 
-Penyelarasan ini mencakup Beranda, Kloter, detail kloter/batch, Laporan, Pengaturan, serta tema komponen pada Pekerjaan dan Detail Nota. Perubahan hanya menyentuh presentasi dan penyesuaian tes antarmuka.
+Penyelarasan ini mencakup Beranda, Kloter, detail kloter/batch, Laporan, Pengaturan, serta tema komponen pada Pekerjaan dan Detail Nota. Adapter mempertahankan kompatibilitas baca API batch lama tanpa menambahkan aksi tulis yang tidak didukung backend.
 
 ## Acuan demo dan sumber data
 
-Acuan desain detail adalah demo pada `feat/mobile-production-reports`, commit `919ebe5`. Kartu kloter menempatkan tanggal di sisi ID dan kartu batch menempatkan identitas di samping nira serta hasil fisik. Pada layar sempit atau teks besar, informasi dapat turun ke baris berikutnya. Status kartu tetap tersedia melalui semantik aksesibilitas; badge detail dan tindakan validasi tetap mengikuti status sumber data.
+Acuan visual adalah `feat/repair-connected-ui`, commit desain `e44730a` milik Putu Alvin. Perbaikan integrasi pada `59d9ba3` serta pembacaan detail batch API lama dari `97f044d` tetap dipertahankan. Kartu kloter menampilkan badge status di samping ID, kemudian pemasok, berat dan tanggal; kartu batch menampilkan judul serta badge di atas nira dan hasil fisik. Warna, ilustrasi, dan tombol pembatalan validasi berwarna merah mengikuti desain tersebut. Pada layar sempit atau teks besar, teks dapat membungkus. Status juga tersedia melalui semantik aksesibilitas.
+
+Akses Pekerjaan berada di Pengaturan. Beranda tidak menambah tombol kedua di bawah empat pintasan. Panel Tinjau/Tuntas menampilkan keterangan saat kosong, tanpa menampilkan keterangan kosong selama status pemuatan atau kegagalan masih aktif.
+
+Grafik Grade menggunakan seluruh kode dari data backend untuk legenda, batang bertumpuk, dan detail interaktif. Grafik Margin memakai skala ribuan rupiah: nilai nonnol di bawah Rp1.000 tetap ditulis sebagai pecahan, misalnya Rp500 menjadi `0,500`. Format nominal resmi pada kartu, tabel dan PDF tetap berasal dari string API.
 
 Demo dan Supabase memakai urutan field proses, ringkasan batch, tab Masak, serta tabel Grade yang sama melalui `detail_fields.dart`. Adapter hanya mengisi nilai yang tersedia dari API. Jam turun, bagian kloter, operator, takaran bahan, atau harga grade yang belum dikirim API ditampilkan sebagai `—`; angka demo tidak digunakan sebagai pengganti data backend. Margin kloter berasal dari snapshot laporan, dan volume batch dikonversi tepat dari mL ke L tanpa pembulatan tambahan.
 
@@ -36,16 +40,17 @@ Tinggi baris isi adalah 1,4 dan teks berukuran 20 ke atas adalah 1,2. Teks isi m
 
 ## Kartu dan ilustrasi
 
-Overlay kartu ringkasan Beranda tetap 80 × 80 dengan posisi yang sama. Gambar tebu kartu kloter menjadi 120 × 73; kartu batch memakai 104 × 63. Keduanya ditempatkan di kanan bawah dengan clipping. Opacity gambar dikurangi menjadi 0,65 pada kartu tinjauan dan 0,30 pada kartu tuntas. Teks kartu kloter tinjauan tetap putih di atas warna emas, sesuai arahan tampilan.
+Overlay kartu ringkasan Beranda tetap 80 × 80 dengan posisi yang sama. Gambar tebu kartu kloter menjadi 120 × 73; kartu batch memakai 104 × 63. Keduanya ditempatkan di kanan bawah dengan clipping. Opacity ilustrasi mengikuti komponen bersama `KloterCaneOverlay` (0,77 untuk tinjauan dan 0,50 untuk tuntas). Teks kartu kloter tinjauan tetap putih di atas warna emas, sesuai arahan tampilan.
 
 Saat teks diperbesar, kartu ringkasan dapat disusun vertikal, empat aksi Beranda berubah menjadi dua kolom, tanggal kloter berpindah ke bawah ID, dan informasi batch berpindah ke bawah judul. Kartu batch hanya menampilkan nira batch dan hasil fisik; baris bagian dari kloter dihapus dari ringkasan kartu. Panel metrik menambah baris berdasarkan lebar tersedia dan pembesaran teks. Nilai laporan tidak lagi dikecilkan memakai `FittedBox` agar muat dalam kartu sempit.
 
 ## Verifikasi
 
-- Seluruh 15 tes Flutter lulus, termasuk startup langsung ke Beranda, navigasi/state tab, filter, edit/verifikasi, Pekerjaan dengan API sintetis, serta penyimpanan harga lokal.
-- Render offline tujuh halaman pada lebar 360 dan 393, masing-masing dengan pembesaran teks 100% dan 150%: 28 kombinasi tanpa exception layout.
-- Hasil render normal dan pembesaran diperiksa secara visual. Pemeriksaan ini memakai renderer tes Flutter, bukan browser atau perangkat Android.
-- `flutter analyze` tidak menemukan error atau warning; SDK melaporkan info deprecation untuk impor `material.dart` yang sudah digunakan proyek.
+- Seluruh 103 tes Flutter lulus; dua tes integrasi memerlukan fixture layanan tersendiri. Cakupannya meliputi navigasi, detail kloter/batch, otorisasi aksi, status, pembesaran teks, panel kosong di layar normal/kecil, serta kompatibilitas pagination API lama.
+- Dua puluh skenario pada ukuran 430 × 950 dibandingkan dengan render commit desain `e44730a`: halaman utama, detail proses, tiga tab batch, laporan dan ekspor, termasuk grade tambahan serta margin Rp500. Tidak ada perbedaan piksel di atas ambang 10 per kanal warna. Pemeriksaan ini memakai renderer tes Flutter, bukan perangkat Android.
+- Tes grafik memeriksa segmen grade tambahan yang benar-benar digambar dan tooltip-nya, serta label margin pecahan.
+- `flutter analyze --no-pub` tidak menemukan masalah.
+- Integrasi laporan Flutter → NestJS → PostgreSQL lulus menggunakan fixture sintetis dalam transaksi yang di-rollback setelah tes.
 
 Ukuran ini menjadi dasar bersama. Penyesuaian berikutnya sebaiknya mengikuti fungsi teks/komponen, bukan menambahkan ukuran pecahan untuk tiap halaman.
 

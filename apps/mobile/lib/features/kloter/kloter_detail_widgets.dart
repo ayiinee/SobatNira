@@ -566,15 +566,17 @@ class BatchReviewActions extends StatelessWidget {
       ),
       if (verified && onReopen != null) ...[
         const SizedBox(width: NiraSpace.sm),
-        IconButton.outlined(
+        IconButton.filled(
           tooltip: 'Batalkan validasi batch',
           onPressed: () => _confirm(context),
           style: IconButton.styleFrom(
-            foregroundColor: niraGreen,
-            side: const BorderSide(color: niraLeaf),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            foregroundColor: Colors.white,
             minimumSize: const Size.square(reviewedActionHeight),
             iconSize: 20,
-            shape: const CircleBorder(),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(niraRadius),
+            ),
           ),
           icon: const Icon(Icons.close_rounded),
         ),
