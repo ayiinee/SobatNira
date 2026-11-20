@@ -51,11 +51,12 @@ class KloterDetailPage extends StatelessWidget {
           SliverList.list(
             children: [
               const DetailTitle('Detail kloter'),
+              const SizedBox(height: NiraSpace.md),
               KloterHeading(kloter),
               Padding(
                 padding: EdgeInsets.fromLTRB(
                   niraPageInset(context),
-                  NiraSpace.xl,
+                  NiraSpace.md,
                   niraPageInset(context),
                   NiraSpace.lg,
                 ),

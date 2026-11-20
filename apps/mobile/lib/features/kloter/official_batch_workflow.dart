@@ -254,6 +254,7 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
             .then((photo) => photo, onError: (Object _) => null);
   bool _busy = false;
   String? _error;
+  BatchValidationFeedback? _feedback;
 
   Future<Json> _load() => widget.api.factoryBatch(widget.scope, _id);
   Future<Json?> _loadReportLot() async {
@@ -300,34 +301,16 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
 
   Future<void> _run(
     Future<Json> Function() operation, {
-    String? confirmation,
+    BatchValidationFeedback? feedback,
   }) async {
     if (_busy) return;
-    if (confirmation != null) {
-      final accepted = await showDialog<bool>(
-        context: context,
-        builder: (dialog) => AlertDialog(
-          content: Text(confirmation),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialog, false),
-              child: const Text('Kembali'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialog, true),
-              child: const Text('Lanjutkan'),
-            ),
-          ],
-        ),
-      );
-      if (!mounted || accepted != true || _busy) return;
-    }
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
       await operation();
+      if (mounted) _feedback = feedback;
     } catch (error) {
       if (mounted) _error = _errorText(error);
     } finally {
@@ -435,13 +418,6 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
               ),
             ),
           ),
-        TextButton(
-          onPressed: () => _run(
-            () => widget.api.finishBatch(widget.scope, _id, cancel: true),
-            confirmation: 'Batalkan draf dan lepaskan reservasi aktif?',
-          ),
-          child: const Text('Batalkan draf'),
-        ),
       ],
     ];
   }
@@ -458,14 +434,16 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
           failure.detail?.startsWith('Cannot GET ') == true;
       final status = current?['status'] ?? widget.initial['status'];
       final approved = status == 'approved';
-      final canApprove =
+      final canManageDraft =
           current?['status'] == 'draft' &&
-          current?['costSaved'] == true &&
-          current?['remainingMl'] == '0' &&
           widget.scope.role == 'admin' &&
           widget.initial['is_synthetic'] != true &&
           !_busy &&
           snapshot.connectionState == ConnectionState.done;
+      final canApprove =
+          canManageDraft &&
+          current?['costSaved'] == true &&
+          current?['remainingMl'] == '0';
       return FutureBuilder<Json?>(
         future: _reportLot,
         builder: (_, report) {
@@ -485,6 +463,7 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
             kloterCode: widget.kloterCode,
             officialReviewed: approved,
             officialCancelled: status == 'cancelled',
+            officialFeedback: _feedback,
             officialData: batch == null ? null : _data(batch),
             officialMargin: margin == null ? null : reportMoney(margin),
             officialNumber: widget.initial['wok_number'] as int,
@@ -521,15 +500,32 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
                     ],
                   )
                 : const LinearProgressIndicator(),
-            officialAction: current != null && status != 'cancelled'
+            officialAction:
+                batch != null &&
+                    (approved || (current != null && status == 'draft'))
                 ? BatchReviewActions(
-                    batchNumber: current['wok_number'] as int,
+                    batchNumber: widget.initial['wok_number'] as int,
                     batchCode: widget.initial['code'] as String,
                     label: approved ? 'Batch tervalidasi' : 'Validasi',
                     verified: approved,
+                    reopenUnavailableReason: approved
+                        ? 'Pembatalan validasi batch resmi belum didukung oleh backend.'
+                        : null,
                     enabled: canApprove,
-                    onVerify: () =>
-                        _run(() => widget.api.finishBatch(widget.scope, _id)),
+                    onVerify: () => _run(
+                      () => widget.api.finishBatch(widget.scope, _id),
+                      feedback: BatchValidationFeedback.approved,
+                    ),
+                    onCancelDraft: canManageDraft
+                        ? () => _run(
+                            () => widget.api.finishBatch(
+                              widget.scope,
+                              _id,
+                              cancel: true,
+                            ),
+                            feedback: BatchValidationFeedback.draftCancelled,
+                          )
+                        : null,
                   )
                 : null,
             onNavigate: widget.onNavigate,

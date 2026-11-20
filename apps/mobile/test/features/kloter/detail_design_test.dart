@@ -283,6 +283,22 @@ void main() {
       expect(find.text('Muat ulang batch'), findsNothing);
       expect(find.text('Validasi'), findsNothing);
       expect(find.text('Isi biaya kloter'), findsNothing);
+      expect(
+        find.text('Batch tervalidasi'),
+        status == 'approved' ? findsOneWidget : findsNothing,
+      );
+      final reopen = find.byTooltip('Batalkan validasi batch');
+      if (status == 'approved') {
+        await tester.tap(reopen);
+        await tester.pumpAndSettle();
+        expect(find.text('Batalkan validasi BATCH-UJI?'), findsOneWidget);
+        expect(find.text('Konfirmasi'), findsNothing);
+        await tester.tap(find.text('Tutup'));
+        await tester.pumpAndSettle();
+        expect(find.text('Batch tervalidasi'), findsOneWidget);
+      } else {
+        expect(reopen, findsNothing);
+      }
       await tester.tap(find.text('Masak'));
       await tester.pumpAndSettle();
       expect(find.text('10 November 2026'), findsOneWidget);
@@ -341,6 +357,85 @@ void main() {
         '/tenants/tenant/factories/factory/production/batches/batch/approve',
       ]);
       expect(find.text('Batch tervalidasi'), findsOneWidget);
+      expect(find.text('Batch 1 berhasil divalidasi'), findsOneWidget);
+      expect(find.byTooltip('Batalkan validasi batch'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
+    'draft cancellation uses confirmation and shows the server result',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(430, 950));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final demo = DemoProduction.empty();
+      addTearDown(demo.dispose);
+      var status = 'draft';
+      var attempts = 0;
+      final api = ReviewApi(
+        'fixture',
+        client: MockClient((request) async {
+          if (request.method == 'POST') {
+            expect(
+              request.url.path,
+              '/tenants/tenant/factories/factory/production/batches/batch/cancel',
+            );
+            expect(request.headers['Authorization'], 'Bearer fixture');
+            if (++attempts == 1) {
+              return http.Response(
+                jsonEncode({'message': 'Reservasi belum dapat dilepas.'}),
+                409,
+              );
+            }
+            status = 'cancelled';
+            return detailResponse({'status': status});
+          }
+          if (request.url.path.endsWith('/production-report')) {
+            return detailResponse({'items': []});
+          }
+          final batch = detailBatchRecord(status: status);
+          return detailResponse(
+            request.url.path.endsWith('/batches')
+                ? {
+                    'items': [batch],
+                  }
+                : batch,
+          );
+        }),
+      );
+      addTearDown(api.close);
+      await tester.pumpWidget(
+        MaterialApp(theme: niraTheme(), home: detailLotPage(api, demo)),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('BATCH-UJI'));
+      await tester.pumpAndSettle();
+
+      final cancel = find.byTooltip('Batalkan draf batch');
+      final notice = find.text('Draf Batch 1 dibatalkan');
+      await tester.tap(cancel);
+      await tester.pumpAndSettle();
+      expect(find.text('Batalkan draf BATCH-UJI?'), findsOneWidget);
+      await tester.tap(find.text('Batal'));
+      await tester.pumpAndSettle();
+      expect(attempts, 0);
+
+      await tester.tap(cancel);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Konfirmasi'));
+      await tester.pumpAndSettle();
+      expect(attempts, 1);
+      expect(notice, findsNothing);
+      expect(cancel, findsOneWidget);
+
+      await tester.tap(cancel);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Konfirmasi'));
+      await tester.pumpAndSettle();
+      expect(attempts, 2);
+      expect(notice, findsOneWidget);
+      expect(cancel, findsNothing);
+      expect(find.text('Validasi'), findsNothing);
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );

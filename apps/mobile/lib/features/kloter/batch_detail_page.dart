@@ -20,6 +20,8 @@ typedef BatchDetailData = ({
   String caneWeight,
 });
 
+enum BatchValidationFeedback { approved, reopened, draftCancelled }
+
 class BatchDetailPage extends StatefulWidget {
   const BatchDetailPage({
     required this.batch,
@@ -37,7 +39,8 @@ class BatchDetailPage extends StatefulWidget {
        officialPreview = null,
        officialActions = const [],
        officialNumber = null,
-       officialMargin = null;
+       officialMargin = null,
+       officialFeedback = null;
 
   const BatchDetailPage.official({
     required this.officialTitle,
@@ -51,6 +54,7 @@ class BatchDetailPage extends StatefulWidget {
     this.officialActions = const [],
     this.officialAction,
     this.officialMargin,
+    this.officialFeedback,
     required this.kloterCode,
     required this.onNavigate,
     super.key,
@@ -72,6 +76,7 @@ class BatchDetailPage extends StatefulWidget {
   final int? officialNumber;
   final Widget? officialAction;
   final String? officialMargin;
+  final BatchValidationFeedback? officialFeedback;
 
   @override
   State<BatchDetailPage> createState() => _BatchDetailPageState();
@@ -87,7 +92,7 @@ class _BatchDetailPageState extends State<BatchDetailPage>
       _official ? widget.officialReviewed : _batch.review.verified;
   BatchDetailData? get _data => widget.officialData;
 
-  bool? _validationNotice;
+  BatchValidationFeedback? _validationNotice;
   Timer? _noticeTimer;
   late final AnimationController _noticeAnimation;
   late final _noticeSlide = _noticeAnimation.drive(
@@ -129,18 +134,23 @@ class _BatchDetailPageState extends State<BatchDetailPage>
       _demo.reopenBatch(_batch);
     }
 
-    _showValidation(validated);
+    _showValidation(
+      validated
+          ? BatchValidationFeedback.approved
+          : BatchValidationFeedback.reopened,
+    );
   }
 
   @override
   void didUpdateWidget(covariant BatchDetailPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_official && !oldWidget.officialReviewed && widget.officialReviewed) {
-      _showValidation(true);
+    final feedback = widget.officialFeedback;
+    if (feedback != null && feedback != oldWidget.officialFeedback) {
+      _showValidation(feedback);
     }
   }
 
-  void _showValidation(bool validated) {
+  void _showValidation(BatchValidationFeedback feedback) {
     _noticeTimer?.cancel();
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     _noticeAnimation
@@ -151,7 +161,7 @@ class _BatchDetailPageState extends State<BatchDetailPage>
           ? Duration.zero
           : const Duration(milliseconds: 240)
       ..forward(from: 0);
-    setState(() => _validationNotice = validated);
+    setState(() => _validationNotice = feedback);
   }
 
   @override
@@ -175,7 +185,7 @@ class _BatchDetailPageState extends State<BatchDetailPage>
             child: ColoredBox(color: niraGreen),
           ),
         ),
-        if (_validationNotice case final validated?)
+        if (_validationNotice case final feedback?)
           Positioned(
             top: safeInsets.top,
             left: 0,
@@ -194,7 +204,7 @@ class _BatchDetailPageState extends State<BatchDetailPage>
                     child: _BatchValidationNotice(
                       batchNumber: widget.officialNumber ?? _batch.number,
                       kloterCode: widget.kloterCode,
-                      validated: validated,
+                      feedback: feedback,
                     ),
                   ),
                 ),
@@ -490,19 +500,25 @@ class _BatchValidationNotice extends StatelessWidget {
   const _BatchValidationNotice({
     required this.batchNumber,
     required this.kloterCode,
-    required this.validated,
+    required this.feedback,
   });
 
   final int batchNumber;
   final String kloterCode;
-  final bool validated;
+  final BatchValidationFeedback feedback;
 
   @override
   Widget build(BuildContext context) {
-    final title = validated
-        ? 'Batch $batchNumber berhasil divalidasi'
-        : 'Validasi Batch $batchNumber dibatalkan';
+    final title = switch (feedback) {
+      BatchValidationFeedback.approved =>
+        'Batch $batchNumber berhasil divalidasi',
+      BatchValidationFeedback.reopened =>
+        'Validasi Batch $batchNumber dibatalkan',
+      BatchValidationFeedback.draftCancelled =>
+        'Draf Batch $batchNumber dibatalkan',
+    };
     final detail = 'Kloter $kloterCode';
+    final validated = feedback == BatchValidationFeedback.approved;
     final accent = validated ? niraGreen : niraOchre;
     return Semantics(
       liveRegion: true,

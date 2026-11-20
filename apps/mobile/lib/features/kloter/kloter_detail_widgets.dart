@@ -481,6 +481,8 @@ class BatchReviewActions extends StatelessWidget {
     required this.onVerify,
     this.enabled = true,
     this.onReopen,
+    this.onCancelDraft,
+    this.reopenUnavailableReason,
     super.key,
   });
   final int batchNumber;
@@ -490,11 +492,34 @@ class BatchReviewActions extends StatelessWidget {
   final VoidCallback onVerify;
   final bool enabled;
   final VoidCallback? onReopen;
+  final VoidCallback? onCancelDraft;
+  final String? reopenUnavailableReason;
 
-  Future<void> _confirm(BuildContext context) async {
+  Future<void> _confirm(
+    BuildContext context, {
+    bool cancelDraft = false,
+  }) async {
     final colors = Theme.of(context).colorScheme;
     final batchTitle = batchCode ?? 'Batch $batchNumber';
-    final cancelColor = verified ? colors.error : colors.primary;
+    if (reopenUnavailableReason case final String reason when verified) {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: niraPaper,
+          title: Text('Batalkan validasi $batchTitle?'),
+          content: Text(reason),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Tutup'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    final destructive = verified || cancelDraft;
+    final cancelColor = destructive ? colors.error : colors.primary;
     const buttonPadding = EdgeInsets.symmetric(horizontal: NiraSpace.sm);
     final navigator = Navigator.of(context, rootNavigator: true);
     final route = DialogRoute<bool>(
@@ -505,11 +530,17 @@ class BatchReviewActions extends StatelessWidget {
         scrollable: true,
         backgroundColor: niraPaper,
         title: Text(
-          verified ? 'Batalkan validasi $batchTitle?' : 'Validasi $batchTitle?',
+          cancelDraft
+              ? 'Batalkan draf $batchTitle?'
+              : verified
+              ? 'Batalkan validasi $batchTitle?'
+              : 'Validasi $batchTitle?',
           textAlign: TextAlign.center,
         ),
         content: Text(
-          verified
+          cancelDraft
+              ? 'Draf dibatalkan dan reservasi nira yang masih aktif dilepas.'
+              : verified
               ? 'Batch kembali ke status Perlu ditinjau dan datanya bisa diedit lagi.'
               : 'Pastikan data batch sudah benar. Data akan terkunci setelah divalidasi.',
           textAlign: TextAlign.center,
@@ -537,8 +568,8 @@ class BatchReviewActions extends StatelessWidget {
               Expanded(
                 child: FilledButton(
                   style: FilledButton.styleFrom(
-                    backgroundColor: verified ? colors.error : null,
-                    foregroundColor: verified ? Colors.white : null,
+                    backgroundColor: destructive ? colors.error : null,
+                    foregroundColor: destructive ? Colors.white : null,
                     padding: buttonPadding,
                   ),
                   onPressed: () => Navigator.pop(dialogContext, true),
@@ -554,7 +585,9 @@ class BatchReviewActions extends StatelessWidget {
     // Let the dialog and its scrim finish leaving before the notice slides in.
     await route.completed;
     if (confirmed != true || !context.mounted) return;
-    if (verified) {
+    if (cancelDraft) {
+      onCancelDraft?.call();
+    } else if (verified) {
       onReopen?.call();
     } else {
       onVerify();
@@ -572,15 +605,19 @@ class BatchReviewActions extends StatelessWidget {
           minimumHeight: verified ? reviewedActionHeight : reviewActionHeight,
         ),
       ),
-      if (verified && onReopen != null) ...[
+      if (verified
+          ? onReopen != null || reopenUnavailableReason != null
+          : onCancelDraft != null) ...[
         const SizedBox(width: NiraSpace.sm),
         IconButton.outlined(
-          tooltip: 'Batalkan validasi batch',
-          onPressed: () => _confirm(context),
+          tooltip: verified ? 'Batalkan validasi batch' : 'Batalkan draf batch',
+          onPressed: () => _confirm(context, cancelDraft: !verified),
           style: IconButton.styleFrom(
             foregroundColor: niraGreen,
             side: const BorderSide(color: niraLeaf),
-            minimumSize: const Size.square(reviewedActionHeight),
+            minimumSize: Size.square(
+              verified ? reviewedActionHeight : reviewActionHeight,
+            ),
             iconSize: 20,
             shape: const CircleBorder(),
           ),
