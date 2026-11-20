@@ -274,6 +274,7 @@ pengganti pembacaan resmi pada transaksi stok/pengesahan.
 - [x] **QA-05H** RPT-08: analyzer bersih dan 29 tes state/widget login–Beranda–laporan–PDF lulus. Meliputi kembali ke Beranda setelah detail 101 kloter gagal, navigasi laporan yang sudah tersimpan, penggabungan request dan pembatalan hasil lama sesudah refresh.
 - [x] **QA-05I** Preview nota sah: 19 tes Pekerjaan/Detail Kloter/Batch/Beranda lulus setelah perbaikan retry. Uji memastikan asli tidak dimuat sebelum zoom, error berulang dapat dicoba lagi dan filter pabrik/revisi tetap dikirim.
 - [x] **QA-05J** Perintah standar `npm test -- --test-concurrency=1` lulus 110 tes tanpa skip, diikuti uji cache PostgreSQL lulus. Tujuh tes pada step CI optimisasi yang baru juga lulus lokal; pemeriksaan CI remote pada revisi akhir menyusul.
+- [x] **QA-05K** Selaraskan lockfile dengan Flutter 3.44.6/Dart 3.12.2 yang dipatok CI. `flutter pub get --enforce-lockfile` lulus lokal; job Flutter semula berhenti pada instalasi karena lockfile lama membutuhkan Dart >=3.13 prerelease. CI backend/FastAPI pada PR #22 sudah lulus; seluruh job diulang setelah lockfile diperbaiki.
 - [ ] **QA-06** Jalankan tes FastAPI dari `apps/ai` dengan `uv run --locked python -m unittest` bila kontrak/pemrosesan AI berubah.
 - [ ] **QA-07** Uji satu skenario sintetis dari foto → OCR → revisi → pengesahan → stok → laporan/PDF; pastikan angka dan status konsisten.
 - [ ] **QA-08** Uji R2 nyata dengan fixture sintetis terpisah; catat dan bersihkan hanya objek fixture yang dibuat tes.
