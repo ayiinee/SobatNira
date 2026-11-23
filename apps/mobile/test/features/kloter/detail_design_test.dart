@@ -361,7 +361,7 @@ void main() {
                 return detailResponse({});
               }
               expect(values, {
-                'reason': 'Koreksi batch dikonfirmasi melalui aplikasi.',
+                'reason': 'Berat disesuaikan dengan nota timbang.',
                 'reopenClosureId': ?closureId,
               });
               closureId = null;
@@ -430,28 +430,14 @@ void main() {
       await tester.tap(find.byTooltip('Buka koreksi batch'));
       await tester.pumpAndSettle();
       final dialog = find.byType(AlertDialog);
-      final correctionDialog = tester.widget<AlertDialog>(dialog);
-      expect(correctionDialog.backgroundColor, Colors.white);
-      expect(correctionDialog.surfaceTintColor, Colors.transparent);
-      expect((correctionDialog.title as Text).data, 'Buka koreksi batch?');
-      expect((correctionDialog.title as Text).textAlign, TextAlign.center);
-      expect((correctionDialog.content as Text).textAlign, TextAlign.center);
-      expect(
-        (correctionDialog.content as Text).data,
-        contains('Kloter akan dibuka kembali'),
-      );
+      expect(find.text('Buka koreksi batch?'), findsOneWidget);
+      expect(find.textContaining('Kloter akan dibuka kembali'), findsOneWidget);
       expect(
         find.descendant(of: dialog, matching: find.byType(TextFormField)),
-        findsNothing,
+        findsOneWidget,
       );
-      final cancel = find.widgetWithText(OutlinedButton, 'Batal');
+      final cancel = find.widgetWithText(TextButton, 'Batal');
       final confirm = find.widgetWithText(FilledButton, 'Konfirmasi');
-      expect(tester.getSize(cancel), tester.getSize(confirm));
-      expect(tester.getCenter(cancel).dy, tester.getCenter(confirm).dy);
-      expect(
-        tester.getCenter(cancel).dx,
-        lessThan(tester.getCenter(confirm).dx),
-      );
       expect(writes, hasLength(1));
       expect(closureId, 'closure-fixture');
       await tester.tap(cancel);
@@ -461,6 +447,13 @@ void main() {
       await tester.tap(find.byTooltip('Buka koreksi batch'));
       await tester.pumpAndSettle();
       final readsBeforeOpen = detailReads;
+      await tester.tap(confirm);
+      await tester.pumpAndSettle();
+      expect(writes, hasLength(1));
+      await tester.enterText(
+        find.byType(TextFormField),
+        '  Berat disesuaikan dengan nota timbang.  ',
+      );
       await tester.tap(confirm);
       await tester.pumpAndSettle();
       expect(detailReads, readsBeforeOpen);
@@ -508,6 +501,10 @@ void main() {
 
       await tester.tap(find.byTooltip('Buka koreksi batch'));
       await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byType(TextFormField),
+        'Berat disesuaikan dengan nota timbang.',
+      );
       await tester.tap(confirm);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Grade').first);

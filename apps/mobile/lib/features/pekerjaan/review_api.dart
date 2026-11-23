@@ -636,6 +636,9 @@ class ReviewApi {
     int page, {
     String? factoryId,
     String? revisionId,
+    String? documentType,
+    DateTime? receivedFrom,
+    DateTime? receivedBefore,
   }) async {
     final response = await _json(
       _client.get(
@@ -645,6 +648,9 @@ class ReviewApi {
           'page_size': '20',
           'factory_id': ?factoryId,
           'revision_id': ?revisionId,
+          'document_type': ?documentType,
+          'received_from': ?receivedFrom?.toUtc().toIso8601String(),
+          'received_before': ?receivedBefore?.toUtc().toIso8601String(),
         }),
         headers: _headers,
       ),

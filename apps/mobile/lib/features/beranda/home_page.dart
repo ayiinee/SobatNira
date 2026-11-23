@@ -129,6 +129,13 @@ class _NiraHomeState extends State<NiraHome> {
           onFactoryChanged: _live == null ? null : _selectFactory,
           profile: _live == null ? null : _role,
           summary: _summary(),
+          period:
+              _live?.reports.period ??
+              switch (_analytics.dateFilter?.range) {
+                final range? =>
+                  '${formatDate(range.start)} – ${formatDate(range.end)}',
+                null => 'Semua tanggal',
+              },
           profit:
               _live?.reports.amount('productionMarginRupiah', money: true) ??
               demoMoney(_analytics.marginTotal),
