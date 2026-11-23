@@ -98,6 +98,8 @@ class _OwnerReportExportPageState extends State<OwnerReportExportPage> {
     }
     await _run(
       () async {
+        _poll?.cancel();
+        _job = null;
         _requestId ??= ReviewApi.requestUuid();
         try {
           final job = await _api.requestReportExport(
@@ -111,7 +113,12 @@ class _OwnerReportExportPageState extends State<OwnerReportExportPage> {
           _display(job);
           _requestId = null;
         } on ReviewApiError catch (error) {
-          if (error.status < 500) _requestId = null;
+          if (error.status >= 400 &&
+              error.status < 500 &&
+              error.status != 408 &&
+              error.status != 429) {
+            _requestId = null;
+          }
           rethrow;
         }
       },
