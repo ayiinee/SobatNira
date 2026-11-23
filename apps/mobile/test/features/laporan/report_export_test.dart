@@ -247,7 +247,16 @@ void main() {
     );
     expect(
       tester
-          .widget<TextButton>(find.widgetWithText(TextButton, 'Simpan PDF'))
+          .widget<TextButton>(
+            find
+                .ancestor(
+                  of: find.text('Simpan PDF'),
+                  matching: find.byWidgetPredicate(
+                    (widget) => widget is TextButton,
+                  ),
+                )
+                .first,
+          )
           .onPressed,
       isNull,
     );
