@@ -1,8 +1,18 @@
 async (page, { origin, output }) => {
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Emulation.setTimezoneOverride', { timezoneId: 'Asia/Jakarta' });
+  await page.clock.setFixedTime(new Date('2026-11-23T12:00:00+07:00'));
   await page.setViewportSize({ width: 418, height: 966 });
   const requests = new Set();
+  const blockedFonts = [];
+  await page.exposeFunction('recordBlockedFont', url => blockedFonts.push(url));
+  await page.addInitScript(() => {
+    document.addEventListener('securitypolicyviolation', event => {
+      if (event.violatedDirective === 'font-src' || event.blockedURI.includes('fonts.gstatic.com')) {
+        window.recordBlockedFont(event.blockedURI);
+      }
+    });
+  });
   page.on('request', request => {
     const url = new URL(request.url());
     if (['http:', 'https:'].includes(url.protocol)) requests.add(url.origin);
@@ -35,6 +45,7 @@ async (page, { origin, output }) => {
     if (response.status() !== status) {
       throw new Error(`${suffix} merespons ${response.status()}, diharapkan ${status}.`);
     }
+    return response;
   };
   const expectText = (text, marker) => {
     if (!text.includes(marker)) throw new Error(`Teks layar tidak memuat "${marker}".`);
@@ -124,6 +135,7 @@ async (page, { origin, output }) => {
 
   await button('Laporan').click();
   await waitForText('Gula final 25 kg');
+  if (await button('Ekspor laporan').count()) throw new Error('Ekspor owner terlihat untuk admin.');
   await capture('laporan');
   await button('Margin').click();
   const margin = await waitForText('Margin Produksi Rp375.000');
@@ -151,14 +163,49 @@ async (page, { origin, output }) => {
     button('Simpan PDF').click(),
   ]);
   await download.saveAs(`${output}/rekap.pdf`);
+
+  await button('Kembali').click();
+  await button('Pengaturan').click();
+  await scroll(1800);
+  await button('Keluar').click();
+  await field('Email', 'owner@example.invalid');
+  await field('Kata sandi', 'sobatnira-demo');
+  await button('Masuk').click();
+  await button('Laporan').click();
+  await button('Ekspor laporan').click();
+  await button('Pilih periode ekspor').click();
+  await button(/^Tahun ini /).click();
+  const created = await submit('Buat laporan', '/report-exports', 202);
+  const { id } = await created.json();
+  await waitForText('File siap diunduh', 30_000);
+  await button('Kembali').click();
+  await button('Ekspor laporan').click();
+  await field('ID ekspor', ` ${id} `);
+  await button('Cek status').click();
+  await waitForText('File siap diunduh');
+  for (const [format, signature] of [['pdf', '25504446'], ['xlsx', '504b0304']]) {
+    const [file, response] = await Promise.all([
+      page.waitForEvent('download', { timeout: 20_000 }),
+      page.waitForResponse(item => new URL(item.url()).pathname.endsWith(`/files/${format}`)),
+      button(`Unduh ${format.toUpperCase()}`).click(),
+    ]);
+    if (!response.ok() || (await response.body()).subarray(0, 4).toString('hex') !== signature) {
+      throw new Error(`File ekspor ${format} tidak valid.`);
+    }
+    if (!file.suggestedFilename().endsWith(`.${format}`)) throw new Error('Ekstensi unduhan tidak sesuai.');
+    await file.saveAs(`${output}/owner-flutter.${format}`);
+  }
+  await capture('ekspor-owner');
   if (requests.size !== 1 || !requests.has(origin)) {
     throw new Error(`Origin browser berbeda dari acceptance: ${[...requests].join(', ')}`);
   }
+  if (blockedFonts.length) throw new Error(`Font keluar dari origin lokal: ${blockedFonts.join(', ')}`);
   return {
     origin,
     timezone: await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone),
     notesValidated: 3,
     grade: 'A',
     publishedPhotos: ['penerimaan', 'penggilingan'],
+    ownerDownloads: ['pdf', 'xlsx'],
   };
 }

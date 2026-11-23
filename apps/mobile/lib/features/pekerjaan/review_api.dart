@@ -117,6 +117,14 @@ class ReviewApiError implements Exception {
   };
 }
 
+enum ReportFileFormat {
+  pdf('application/pdf'),
+  xlsx('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+  const ReportFileFormat(this.mimeType);
+  final String mimeType;
+}
+
 class ReviewApi {
   ReviewApi(this._token, {http.Client? client, this.baseUrl = reviewApiBase})
     : _client = client ?? http.Client();
@@ -283,6 +291,54 @@ class ReviewApi {
 
   Future<Json> getProduction(List<String> path, {Map<String, String>? query}) =>
       _productionGet(path, query: query);
+
+  Future<Json> requestReportExport(
+    FactoryScope scope, {
+    required DateTime from,
+    required DateTime before,
+    required bool synthetic,
+    required String requestId,
+  }) => writeProduction(
+    [...scope._base, 'report-exports'],
+    {
+      'from': from.toUtc().toIso8601String(),
+      'before': before.toUtc().toIso8601String(),
+      'synthetic': synthetic,
+    },
+    requestId: requestId,
+    expectedStatus: 202,
+  );
+
+  Future<Json> reportExportStatus(FactoryScope scope, String id) =>
+      _productionGet([...scope._base, 'report-exports', id]);
+
+  Future<Uint8List> reportExportFile(
+    FactoryScope scope,
+    String id,
+    ReportFileFormat format,
+  ) async {
+    final response = await _client
+        .get(
+          Uri.parse(baseUrl).replace(
+            pathSegments: [
+              '',
+              ...scope._base,
+              'report-exports',
+              id,
+              'files',
+              format.name,
+            ],
+          ),
+          headers: _headers,
+        )
+        .timeout(const Duration(seconds: 30));
+    _requireStatus(response, 200);
+    if (response.headers['content-type']?.split(';').first != format.mimeType ||
+        response.bodyBytes.isEmpty) {
+      throw const FormatException('Format file laporan tidak sesuai.');
+    }
+    return response.bodyBytes;
+  }
 
   Future<List<FactoryScope>> factories() async {
     final response = await _productionGet(['auth', 'me']);

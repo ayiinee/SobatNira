@@ -18,6 +18,7 @@ import '../kloter/kloter_detail_page.dart';
 import '../kloter/kloter_list_page.dart';
 import '../laporan/demo_analytics.dart';
 import '../laporan/laporan_page.dart';
+import '../laporan/owner_report_export_page.dart';
 import '../laporan/connected_report_controls.dart';
 import '../laporan/report_detail_page.dart';
 import '../laporan/report_export_page.dart';
@@ -163,6 +164,14 @@ class _NiraHomeState extends State<NiraHome> {
           analytics: _analytics,
           reports: _live?.reports,
           onOpenDetail: _openReportDetail,
+          onOpenExport: widget.scope?.role == 'owner' && _live != null
+              ? () => _navigator.push<void>(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        OwnerReportExportPage(reports: _live.reports),
+                  ),
+                )
+              : null,
         ),
         NiraTab.pengaturan => PengaturanPage(
           settings: _settings,
