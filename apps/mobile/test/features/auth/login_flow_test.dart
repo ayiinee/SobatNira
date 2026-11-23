@@ -39,7 +39,6 @@ void main() {
     final caneSummary = find.text('Tebu diterima (kg)');
     expect(caneSummary, findsOneWidget);
     expect(find.text('Semua tanggal'), findsOneWidget);
-    expect(find.textContaining('Semua tanggal'), findsNothing);
     expect(
       find.byWidgetPredicate(
         (widget) => widget is NiraValue && widget.value == '17.990',
