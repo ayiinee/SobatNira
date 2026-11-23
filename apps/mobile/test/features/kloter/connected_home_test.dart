@@ -324,7 +324,7 @@ void main() {
       await tester.tap(recap);
       await tester.pumpAndSettle();
       expect(find.text('Cetak laporan'), findsOneWidget);
-      expect(find.text('Simpan PDF'), findsNothing);
+      expect(find.text('Simpan PDF'), findsOneWidget);
       await tester.tap(find.bySemanticsLabel('Beranda'));
       await tester.pumpAndSettle();
       final expenses = find.text('Biaya Ops');
