@@ -92,7 +92,7 @@ docs(repo): document contribution workflow
 - [Workflow CI](../.github/workflows/ci.yml) berjalan saat ada pull request ke `main` dan saat ada push ke `main`. CI menjalankan analisis dan tes Flutter, build dan tes NestJS, serta unit test FastAPI. Periksa hasilnya pada PR sebelum merge.
 - Jalankan pemeriksaan komponen terkait dari [panduan setup](development.md#tes-sebelum-mengambil-tugas). Untuk perubahan antar layanan, cek alur dari aplikasi hingga API yang terdampak. Jika mengubah perilaku khusus Android, uji pada emulator atau HP dan sebutkan perangkat yang dipakai.
 - Saat kontrak berubah, perbarui fixture dan pemanggil terkait.
-- Perbarui lockfile komponen saat dependensi berubah. Gunakan fixture sintetis dan contoh konfigurasi tanpa rahasia. Periksa perubahan yang akan masuk Git agar kredensial, data mitra, cache, dan hasil build tetap tersimpan lokal.
+- Perbarui lockfile komponen saat dependensi berubah. Untuk Flutter, gunakan SDK yang dipasang CI (Flutter 3.44.6 dengan Dart 3.12.2) dan verifikasi dengan `flutter pub get --enforce-lockfile` dari salinan bersih. Gunakan fixture sintetis dan contoh konfigurasi tanpa rahasia. Periksa perubahan yang akan masuk Git agar kredensial, data mitra, cache, dan hasil build tetap tersimpan lokal.
 - Jika lokasi bisa dipilih di Windows dan drive D: tersedia, gunakan D: untuk workspace, cache, file sementara, emulator, dan hasil build.
 
 ## Saran saat pekerjaan tim bertambah
