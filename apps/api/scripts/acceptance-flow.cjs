@@ -1,6 +1,7 @@
 async (page, { origin, output }) => {
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Emulation.setTimezoneOverride', { timezoneId: 'Asia/Jakarta' });
+  await page.clock.setFixedTime(new Date('2026-11-23T12:00:00+07:00'));
   await page.setViewportSize({ width: 418, height: 966 });
   const requests = new Set();
   page.on('request', request => {
@@ -158,14 +159,13 @@ async (page, { origin, output }) => {
   await button('Pengaturan').click();
   await scroll(1800);
   await button('Keluar').click();
-  await button('Masuk').click();
   await field('Email', 'owner@example.invalid');
   await field('Kata sandi', 'sobatnira-demo');
   await button('Masuk').click();
   await button('Laporan').click();
   await button('Ekspor laporan').click();
   await button('Pilih periode ekspor').click();
-  await page.getByText('Tahun ini', { exact: true }).click();
+  await button(/^Tahun ini /).click();
   const created = await submit('Buat laporan', '/report-exports', 202);
   const { id } = await created.json();
   await waitForText('File siap diunduh', 30_000);
