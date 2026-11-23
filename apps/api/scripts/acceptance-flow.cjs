@@ -4,6 +4,15 @@ async (page, { origin, output }) => {
   await page.clock.setFixedTime(new Date('2026-11-23T12:00:00+07:00'));
   await page.setViewportSize({ width: 418, height: 966 });
   const requests = new Set();
+  const blockedFonts = [];
+  await page.exposeFunction('recordBlockedFont', url => blockedFonts.push(url));
+  await page.addInitScript(() => {
+    document.addEventListener('securitypolicyviolation', event => {
+      if (event.violatedDirective === 'font-src' || event.blockedURI.includes('fonts.gstatic.com')) {
+        window.recordBlockedFont(event.blockedURI);
+      }
+    });
+  });
   page.on('request', request => {
     const url = new URL(request.url());
     if (['http:', 'https:'].includes(url.protocol)) requests.add(url.origin);
@@ -190,6 +199,7 @@ async (page, { origin, output }) => {
   if (requests.size !== 1 || !requests.has(origin)) {
     throw new Error(`Origin browser berbeda dari acceptance: ${[...requests].join(', ')}`);
   }
+  if (blockedFonts.length) throw new Error(`Font keluar dari origin lokal: ${blockedFonts.join(', ')}`);
   return {
     origin,
     timezone: await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone),
