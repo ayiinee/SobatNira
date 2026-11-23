@@ -19,12 +19,14 @@ class LaporanPage extends StatefulWidget {
   const LaporanPage({
     required this.analytics,
     required this.onOpenDetail,
+    this.onOpenExport,
     this.reports,
     super.key,
   });
 
   final DemoAnalytics analytics;
   final ValueChanged<ReportDetailKind> onOpenDetail;
+  final VoidCallback? onOpenExport;
   final ConnectedReports? reports;
 
   @override
@@ -62,6 +64,18 @@ class _LaporanPageState extends State<LaporanPage> {
           onSelected: (index) =>
               widget.analytics.setTab(ReportTab.values[index]),
         ),
+        if (widget.onOpenExport case final onOpenExport?)
+          Align(
+            alignment: Alignment.centerRight,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: TextButton.icon(
+                icon: const Icon(Icons.download_outlined),
+                onPressed: onOpenExport,
+                label: const Text('Ekspor laporan'),
+              ),
+            ),
+          ),
         Expanded(
           child: NiraLoading(
             busy: _reports?.loading ?? false,

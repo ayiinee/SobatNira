@@ -79,6 +79,8 @@ Dari akar repo jalankan:
 
 Perintah ini membuka Chrome di `http://127.0.0.1:8080` dengan layar login Supabase. Setelah masuk memakai akun Supabase yang memiliki membership pabrik, Kloter dan Pekerjaan mengambil data dari NestJS. [Panduan akses backend](backend-authentication.md) menjelaskan migrasi dan pemberian akses pabrik. Beranda, Laporan, Laba dan Rekap pada mode connected memakai [laporan produksi terhubung](mobile-production-reports.md); mode demo tetap memakai fixture sintetis lokal.
 
+Owner dapat membuka **Laporan → Ekspor laporan**, memilih periode, atau menempelkan ID ekspor dari WhatsApp untuk mengecek statusnya. File PDF dan XLSX tersedia saat statusnya siap. Browser mengunduh file, sedangkan Android meminta lokasi penyimpanan. Fitur ini memakai [API ekspor owner](ai/CAPABILITY_API.md) dan memerlukan `REPORT_EXPORT_ENABLED=true` di backend.
+
 Launcher membaca `.env` menggunakan Node.js 24 dan membuat `.tmp/mobile/public-defines.json` yang diabaikan Git. Hanya `SOBATNIRA_MODE`, `API_BASE_URL`, `SUPABASE_URL`, dan publishable/anon key yang disertakan. Jangan memberikan `.env` backend langsung ke `--dart-define-from-file` karena semua nilainya dapat masuk ke aplikasi klien.
 
 Alamat API mengikuti `API_BASE_URL` bila diisi, atau `API_HOST` dan `API_PORT` (bawaan `http://127.0.0.1:3000`). Untuk mengganti port Flutter, daftarkan origin yang sesuai di `CORS_ORIGINS` dan mulai ulang NestJS. Perintah tanpa flag mode dan perintah dengan `--demo` sama-sama membuka fixture offline.
