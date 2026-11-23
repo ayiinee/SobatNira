@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../sobatnira_ui.dart';
 import '../../widgets/nira_loading.dart';
@@ -33,26 +34,52 @@ class _KloterListPageState extends State<KloterListPage> {
   final _searchFocus = FocusNode();
   final _searchGroup = Object();
   final _suggestions = OverlayPortalController();
+  final _suggestionKeys = List.generate(5, (_) => GlobalKey());
   final _scroll = ScrollController();
   final _expandedDates = <DateTime, bool>{};
   KloterDateFilter? _dateFilter;
   int _activeTab = 0;
   int _page = 0;
   String? _selectedId;
+  int? _highlighted;
 
   static const _statuses = [null, KloterStatus.review, KloterStatus.done];
   static const _datesPerPage = 10;
   static const _searchControlSize = 48.0;
 
-  @override
-  void initState() {
-    super.initState();
-    _searchFocus.addListener(() {
-      if (!_searchFocus.hasFocus && _suggestions.isShowing) {
-        _suggestions.hide();
-        setState(() {});
-      }
-    });
+  void _closeSuggestions() {
+    if (!_suggestions.isShowing) return;
+    _suggestions.hide();
+    setState(() => _highlighted = null);
+  }
+
+  KeyEventResult _suggestionKey(KeyEvent event, List<DemoKloter> items) {
+    if (event is KeyUpEvent || !_suggestions.isShowing || items.isEmpty) {
+      return KeyEventResult.ignored;
+    }
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.escape) {
+      _searchFocus.requestFocus();
+      _closeSuggestions();
+    } else if (_searchFocus.hasFocus &&
+        (key == LogicalKeyboardKey.arrowDown ||
+            key == LogicalKeyboardKey.arrowUp)) {
+      final step = key == LogicalKeyboardKey.arrowDown ? 1 : -1;
+      final index =
+          ((_highlighted ?? (step == 1 ? -1 : 0)) + step) % items.length;
+      setState(() => _highlighted = index);
+      final target = _suggestionKeys[index].currentContext;
+      if (target != null) Scrollable.ensureVisible(target);
+    } else if (_searchFocus.hasFocus &&
+        (key == LogicalKeyboardKey.enter ||
+            key == LogicalKeyboardKey.numpadEnter) &&
+        _highlighted != null &&
+        _highlighted! < items.length) {
+      _selectId(items[_highlighted!]);
+    } else {
+      return KeyEventResult.ignored;
+    }
+    return KeyEventResult.handled;
   }
 
   @override
@@ -102,6 +129,7 @@ class _KloterListPageState extends State<KloterListPage> {
 
   void _selectId(DemoKloter item) {
     _search.text = item.code;
+    _closeSuggestions();
     FocusScope.of(context).unfocus();
     _scrollToTop();
     setState(() {
@@ -207,35 +235,48 @@ class _KloterListPageState extends State<KloterListPage> {
                 spacing: 8,
                 children: [
                   Expanded(
-                    child: OverlayPortal.overlayChildLayoutBuilder(
-                      controller: _suggestions,
-                      child: _searchBox(showSuggestions),
-                      overlayChildBuilder: (context, anchor) {
-                        final height =
-                            constraints.maxHeight -
-                            searchTop -
-                            anchor.childSize.height;
-                        if (!showSuggestions || height <= 0) {
-                          return const SizedBox.shrink();
-                        }
-                        final origin = MatrixUtils.transformPoint(
-                          anchor.childPaintTransform,
-                          Offset(0, anchor.childSize.height - 1),
-                        );
-                        return Stack(
-                          children: [
-                            Positioned(
-                              left: origin.dx,
-                              top: origin.dy,
-                              width: anchor.childSize.width,
-                              child: _suggestionPanel(
-                                suggestions,
-                                maxHeight: math.min(height, 290),
-                              ),
-                            ),
-                          ],
-                        );
-                      },
+                    child: FocusTraversalGroup(
+                      policy: WidgetOrderTraversalPolicy(),
+                      child: Focus(
+                        canRequestFocus: false,
+                        onFocusChange: (focused) {
+                          if (!focused) _closeSuggestions();
+                        },
+                        onKeyEvent: (_, event) => _suggestionKey(
+                          event,
+                          showSuggestions ? suggestions : const [],
+                        ),
+                        child: OverlayPortal.overlayChildLayoutBuilder(
+                          controller: _suggestions,
+                          child: _searchBox(showSuggestions),
+                          overlayChildBuilder: (context, anchor) {
+                            final height =
+                                constraints.maxHeight -
+                                searchTop -
+                                anchor.childSize.height;
+                            if (!showSuggestions || height <= 0) {
+                              return const SizedBox.shrink();
+                            }
+                            final origin = MatrixUtils.transformPoint(
+                              anchor.childPaintTransform,
+                              Offset(0, anchor.childSize.height - 1),
+                            );
+                            return Stack(
+                              children: [
+                                Positioned(
+                                  left: origin.dx,
+                                  top: origin.dy,
+                                  width: anchor.childSize.width,
+                                  child: _suggestionPanel(
+                                    suggestions,
+                                    maxHeight: math.min(height, 290),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
                     ),
                   ),
                   _filterButton(context),
@@ -437,8 +478,11 @@ class _KloterListPageState extends State<KloterListPage> {
           padding: EdgeInsets.zero,
           shrinkWrap: true,
           children: [
-            for (final item in items)
+            for (final (index, item) in items.indexed)
               ListTile(
+                key: _suggestionKeys[index],
+                selected: index == _highlighted,
+                selectedTileColor: niraGreen.withValues(alpha: .12),
                 dense: true,
                 leading: const Icon(Icons.search, size: 20),
                 title: Text(item.code),
@@ -477,6 +521,7 @@ class _KloterListPageState extends State<KloterListPage> {
       cursorColor: niraGreen,
       onChanged: (_) {
         _selectedId = null;
+        _highlighted = null;
         _suggestions.show();
         _showPage(0);
       },

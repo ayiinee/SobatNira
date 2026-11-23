@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../../widgets/nira_loading.dart';
 
 import '../../sobatnira_ui.dart';
+import '../kloter/demo_production.dart';
+import '../kloter/kloter_date_filter.dart';
 
 import 'review_api.dart';
 import 'review_detail_page.dart';
@@ -34,6 +36,8 @@ class _PekerjaanPageState extends State<PekerjaanPage>
   ReviewApi? _session;
   Future<List<Json>>? _tasks;
   String _status = 'PENDING_VALIDATION';
+  String? _documentType;
+  KloterDateFilter? _received;
   int _page = 1;
   bool _signingIn = false;
   String? _error;
@@ -100,7 +104,40 @@ class _PekerjaanPageState extends State<PekerjaanPage>
   }
 
   void _load() {
-    _tasks = _api?.list(_status, _page, factoryId: widget.factoryId);
+    final range = _received?.range;
+    final end = range?.end;
+    _tasks = _api?.list(
+      _status,
+      _page,
+      factoryId: widget.factoryId,
+      documentType: _documentType,
+      receivedFrom: range?.start,
+      receivedBefore: end == null
+          ? null
+          : DateTime(end.year, end.month, end.day + 1),
+    );
+  }
+
+  Future<void> _pickReceived() async {
+    final result = await showKloterDateFilter(
+      context,
+      _received,
+      today: DateTime.now(),
+    );
+    if (!mounted || result == null) return;
+    setState(() {
+      _received = result.selection;
+      _page = 1;
+      _load();
+    });
+  }
+
+  String? _receivedLabel(Object? value) {
+    final date = value is String ? DateTime.tryParse(value)?.toLocal() : null;
+    if (date == null) return null;
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+    return 'Diterima ${formatDate(date)} · $hour:$minute';
   }
 
   Future<void> _signIn() async {
@@ -195,6 +232,8 @@ class _PekerjaanPageState extends State<PekerjaanPage>
               title: Text('$_unread laporan baru'),
               onTap: () => setState(() {
                 _status = 'PENDING_VALIDATION';
+                _documentType = null;
+                _received = null;
                 _page = 1;
                 _load();
               }),
@@ -224,10 +263,42 @@ class _PekerjaanPageState extends State<PekerjaanPage>
             _load();
           }),
         ),
+        DropdownButtonFormField<String>(
+          initialValue: _documentType,
+          key: ValueKey(_documentType),
+          isExpanded: true,
+          decoration: const InputDecoration(labelText: 'Jenis nota'),
+          items: const [
+            DropdownMenuItem(value: null, child: Text('Semua jenis nota')),
+            DropdownMenuItem(
+              value: 'TRUCK_ARRIVAL_NOTE',
+              child: Text('Nota Kedatangan Truk'),
+            ),
+            DropdownMenuItem(
+              value: 'PRODUCTION_NOTE',
+              child: Text('Nota Produksi'),
+            ),
+            DropdownMenuItem(value: 'UNKNOWN', child: Text('Belum dikenali')),
+          ],
+          onChanged: (value) => setState(() {
+            _documentType = value;
+            _page = 1;
+            _load();
+          }),
+        ),
+        TextButton.icon(
+          onPressed: _pickReceived,
+          icon: const Icon(Icons.calendar_today_outlined),
+          label: Text(switch (_received?.range) {
+            final range? =>
+              '${formatDate(range.start)} – ${formatDate(range.end)}',
+            null => 'Filter tanggal penerimaan',
+          }),
+        ),
         NiraPagedFutureBuilder<List<Json>>(
           future: _tasks,
           page: _page,
-          dataset: (_api, widget.factoryId, _status),
+          dataset: (_api, widget.factoryId, _status, _documentType, _received),
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
               return const NiraLoading(label: 'Memuat pekerjaan…');
@@ -264,13 +335,20 @@ class _PekerjaanPageState extends State<PekerjaanPage>
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       if (tasks.isEmpty)
-                        const Text('Belum ada laporan pada status ini.'),
+                        Text(
+                          _documentType == null && _received == null
+                              ? 'Belum ada laporan pada status ini.'
+                              : 'Belum ada laporan yang sesuai filter.',
+                        ),
                       for (final task in tasks)
                         Card(
                           child: ListTile(
                             title: Text(documentType(task['document_type'])),
                             subtitle: Text(
-                              '${task['sender_name']} · Revisi ${task['version']} · ${task['issue_count']} temuan',
+                              [
+                                '${task['sender_name']} · Revisi ${task['version']} · ${task['issue_count']} temuan',
+                                ?_receivedLabel(task['received_at']),
+                              ].join('\n'),
                             ),
                             trailing: const Icon(Icons.chevron_right),
                             onTap: () => _open(task),
