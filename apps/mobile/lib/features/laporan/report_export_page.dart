@@ -67,17 +67,21 @@ class _ReportExportPageState extends State<ReportExportPage> {
     }
   }
 
-  Future<void> _print(PrintableReport report) async {
+  Future<void> _export(PrintableReport report, {bool save = false}) async {
     if (_busy) return;
     setState(() => _busy = true);
     try {
       final bytes = await buildReportPdf(report);
       if (!mounted) return;
-      await Printing.layoutPdf(
-        onLayout: (_) async => bytes,
-        name: report.filename,
-        dynamicLayout: false,
-      );
+      if (save) {
+        await Printing.sharePdf(bytes: bytes, filename: report.filename);
+      } else {
+        await Printing.layoutPdf(
+          onLayout: (_) async => bytes,
+          name: report.filename,
+          dynamicLayout: false,
+        );
+      }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -123,9 +127,20 @@ class _ReportExportPageState extends State<ReportExportPage> {
       return NiraScaffold(
         tab: NiraTab.beranda,
         onNavigate: widget.onNavigate,
-        bottomAction: NiraButton(
-          _busy ? 'Menyiapkan laporan…' : 'Cetak laporan',
-          enabled ? () => _print(report) : null,
+        bottomAction: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            NiraButton(
+              _busy ? 'Menyiapkan laporan…' : 'Cetak laporan',
+              enabled ? () => _export(report) : null,
+            ),
+            TextButton.icon(
+              onPressed: enabled ? () => _export(report, save: true) : null,
+              icon: const Icon(Icons.file_download_outlined),
+              label: const Text('Simpan PDF'),
+            ),
+          ],
         ),
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

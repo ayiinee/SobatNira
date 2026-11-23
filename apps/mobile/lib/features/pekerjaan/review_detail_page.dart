@@ -481,8 +481,9 @@ class _PhotoState extends State<_Photo> {
     future: _image,
     builder: (context, snapshot) {
       if (snapshot.hasError) return const Text('Foto asli belum dapat dimuat.');
-      if (!snapshot.hasData)
+      if (!snapshot.hasData) {
         return const NiraLoading(label: 'Memuat foto nota…');
+      }
       final (bytes, ratio) = snapshot.requireData;
       return AspectRatio(
         aspectRatio: ratio,
