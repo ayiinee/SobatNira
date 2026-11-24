@@ -129,7 +129,7 @@ test('PostgreSQL enforces scoped roles, active memberships, foreign keys and bro
   }
 });
 
-test('live Supabase rejects an invalid access token through the configured NestJS backend', async () => {
+test('live Supabase rejects an invalid access token through the configured NestJS backend', { skip: process.env.TEST_LIVE_AUTH !== 'true' }, async () => {
   const app = await createApplication();
   try {
     await app.listen(0, '127.0.0.1');

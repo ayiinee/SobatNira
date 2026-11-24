@@ -175,6 +175,7 @@ export class Intake {
         }
       }
       const key = digest(json([operator.factory_id, event.provider_message_id, sha]));
+      await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', ['sobatnira:media:' + key]);
       if (!prepared) {
         // A durable manifest survives upload failures, crashes and ambiguous COMMITs.
         // It is not an accepted message and never queues OCR by itself.

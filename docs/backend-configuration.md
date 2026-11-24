@@ -34,7 +34,7 @@ Untuk setup baru, salin `.env.example` menjadi `.env` tanpa menimpa file lokal y
 | `R2_BUCKET_NAME` | Bucket yang diperiksa |
 | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Kredensial S3 untuk akses bucket |
 | `R2_SIGNED_URL_TTL_SECONDS` | Konfigurasi durasi URL sementara untuk integrasi storage berikutnya; bawaan 300 detik |
-| `R2_PUBLIC_BASE_URL` | Opsional; origin publik lama untuk memastikan akses anonim ditolak sebelum upload bukti; bukan alamat penyajian foto |
+| `R2_PUBLIC_BASE_URL` | Wajib jika worker ekspor aktif pada production/connected; origin probe untuk memastikan akses anonim ditolak, bukan alamat penyajian foto |
 
 `SUPABASE_PASSWORD` tidak dibaca terpisah: koneksi PostgreSQL mengambil password dari `DATABASE_URL`. Akses foto bukti menggunakan proxy berizin di API; `R2_SIGNED_URL_TTL_SECONDS` belum dipakai untuk jalur foto tersebut. `APP_ENV`, `APP_DEBUG`, `BACKEND_HOST`, `BACKEND_PORT`, dan `API_V1_PREFIX` belum didukung; gunakan nama pada tabel. Endpoint fixture tetap `/health` dan `/demo/draft`; demo dinonaktifkan dengan respons 404 pada production.
 

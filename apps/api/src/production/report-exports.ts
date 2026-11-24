@@ -8,9 +8,10 @@ import { FactoryAccess } from '../auth/auth.types';
 import { FACTORY_SCOPE_CTE } from '../auth/access.sql';
 import { DatabaseService } from '../database/database.service';
 import { assertR2Privacy, MediaStorage } from '../documents/media';
+import { loadConfiguration } from '../config/backend.config';
 import { Batches } from './batches';
 import { found, object, scopeValues, timestamp, uuid } from './production.dto';
-import { formats, renderReport, reportMime, ReportFormat, ReportSnapshot, verifyReport } from './report-formats';
+import { formats, renderReport, reportMime, ReportFormat, ReportSnapshot, UnsupportedReportCharacter, verifyReport } from './report-formats';
 import { ReportTarget, sealReportTarget } from './report-delivery';
 
 type Artifact = { key: string; sha256: string };
@@ -35,6 +36,7 @@ export class ReportExports implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit() {
     if (process.env.REPORT_EXPORT_ENABLED === 'true') {
+      loadConfiguration({ envFile: false });
       this.timer = setInterval(() => {
         this.running ??= this.processOne().catch(() => this.logger.warn('Antrean ekspor belum tersedia.'))
           .finally(() => { this.running = undefined; });
@@ -49,7 +51,7 @@ export class ReportExports implements OnModuleInit, OnModuleDestroy {
   }
 
   private authorize(access: FactoryAccess) {
-    if (access.role !== 'owner') throw new ForbiddenException('Akses owner diperlukan.');
+    if (!['admin', 'owner'].includes(access.role)) throw new ForbiddenException('Akses admin atau owner diperlukan.');
     if (process.env.REPORT_EXPORT_ENABLED !== 'true') throw new ServiceUnavailableException('Ekspor laporan belum aktif.');
   }
 
@@ -63,7 +65,7 @@ export class ReportExports implements OnModuleInit, OnModuleDestroy {
     const { rows: [job] } = await this.db.query<Job>(`WITH ${FACTORY_SCOPE_CTE}
       SELECT r.* FROM sobatnira.report_exports r JOIN authorized_scope a
       ON (r.tenant_id,r.factory_id,r.requested_by)=(a."tenantId",a."factoryId",a."userId")
-      WHERE a.role='owner' AND r.${field}=$4`, [...scopeValues(access), value]);
+      WHERE a.role IN ('admin','owner') AND r.${field}=$4`, [...scopeValues(access), value]);
     return job;
   }
 
@@ -87,11 +89,11 @@ export class ReportExports implements OnModuleInit, OnModuleDestroy {
     if (Buffer.byteLength(snapshot) > 5 * 1024 * 1024) throw new BadRequestException('Persempit periode laporan.');
     const { rows: [inserted] } = await this.db.query<Job>(`WITH ${FACTORY_SCOPE_CTE}
       INSERT INTO sobatnira.report_exports(tenant_id,factory_id,requested_by,idempotency_key,input_hash,snapshot,delivery_target)
-      SELECT "tenantId","factoryId","userId",$4,$5,$6,$7 FROM authorized_scope WHERE role='owner'
+      SELECT "tenantId","factoryId","userId",$4,$5,$6,$7 FROM authorized_scope WHERE role IN ('admin','owner')
       ON CONFLICT DO NOTHING RETURNING *`,
     [...scopeValues(access), idempotencyKey, hash, snapshot, target ? sealReportTarget(target) : null]);
     const job = inserted ?? await this.forActor(access, 'idempotency_key', idempotencyKey);
-    if (!job) throw new ForbiddenException('Akses owner diperlukan.');
+    if (!job) throw new ForbiddenException('Akses admin atau owner diperlukan.');
     if (job.input_hash !== hash) throw new ConflictException('Kunci sudah dipakai untuk permintaan lain.');
     return this.publicStatus(job);
   }
@@ -134,7 +136,7 @@ export class ReportExports implements OnModuleInit, OnModuleDestroy {
     if (!job) return false;
     try {
       const current = await this.memberships.findFactoryAccess(job.requested_by, job.tenant_id, job.factory_id);
-      if (!current || current.role !== 'owner') {
+      if (!current || !['admin', 'owner'].includes(current.role)) {
         await this.finish(job, null, true);
         return true;
       }
@@ -152,9 +154,11 @@ export class ReportExports implements OnModuleInit, OnModuleDestroy {
         artifacts[format] = { key, sha256: digest(stored) };
       }
       await this.finish(job, artifacts);
-    } catch {
-      this.logger.warn({ event: 'report_export_attempt_failed', reportId: job.id, attempt: job.attempts });
-      await this.finish(job, null);
+    } catch (error) {
+      const unsupported = error instanceof UnsupportedReportCharacter;
+      this.logger.warn({ event: 'report_export_attempt_failed', reportId: job.id, attempt: job.attempts,
+        reason: unsupported ? 'unsupported_pdf_character' : 'export_failed' });
+      await this.finish(job, null, unsupported);
     }
     return true;
   }
@@ -173,7 +177,7 @@ export class ReportExports implements OnModuleInit, OnModuleDestroy {
 }
 
 @Controller('tenants/:tenantId/factories/:factoryId/report-exports')
-@FactoryRoles('owner')
+@FactoryRoles('admin', 'owner')
 export class ReportExportsController {
   constructor(private readonly reports: ReportExports) {}
 

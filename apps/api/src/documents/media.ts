@@ -1,8 +1,8 @@
 import { BadRequestException, Injectable, ServiceUnavailableException } from '@nestjs/common';
-import { GetObjectCommand, HeadBucketCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { mkdir, readFile, link, stat, unlink, writeFile } from 'node:fs/promises';
+import { DeleteObjectCommand, GetObjectCommand, HeadBucketCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { mkdir, readFile, readdir, link, stat, unlink, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { MAX_IMAGE_BYTES } from './contracts';
 import { r2Settings } from './config';
@@ -79,7 +79,55 @@ export class MediaStorage {
     }
   }
 
-  async read(key: string, namespace?: 'reports') {
+  async verifiedRead(key: string, expected: { mime_type: string; size_bytes: string | number; sha256: string }) {
+    try {
+      const bytes = await this.read(key, undefined, expected);
+      if (bytes.length !== Number(expected.size_bytes) || createHash('sha256').update(bytes).digest('hex') !== expected.sha256)
+        throw invalidStoredMedia();
+      imageMime(bytes, expected.mime_type);
+      return bytes;
+    } catch { throw invalidStoredMedia(); }
+  }
+
+  async *originals(): AsyncGenerator<{ key: string; modified: Date }> {
+    const storage = this.storage('0'.repeat(64));
+    if (!storage.s3) {
+      for (const key of await readdir(storage.directory)) {
+        if (/^[a-f0-9]{64}$/.test(key)) yield { key, modified: (await stat(resolve(storage.directory, key))).mtime };
+      }
+      return;
+    }
+    let continuation: string | undefined;
+    do {
+      const page = await storage.s3.send(new ListObjectsV2Command({ Bucket: storage.bucket, Prefix: 'originals/', ContinuationToken: continuation }),
+        { abortSignal: AbortSignal.timeout(12_000) });
+      for (const item of page.Contents ?? []) {
+        const key = item.Key?.slice('originals/'.length);
+        if (key && /^[a-f0-9]{64}$/.test(key) && item.LastModified) yield { key, modified: item.LastModified };
+      }
+      continuation = page.IsTruncated ? page.NextContinuationToken : undefined;
+      if (page.IsTruncated && !continuation) throw new Error('Listing media tidak lengkap.');
+    } while (continuation);
+  }
+
+  async removeOldOriginal(key: string, cutoff: Date) {
+    const storage = this.storage(key);
+    if (!storage.s3) {
+      if ((await stat(storage.key)).mtime > cutoff) return false;
+      await unlink(storage.key);
+    } else {
+      const head = await storage.s3.send(new HeadObjectCommand({ Bucket: storage.bucket, Key: storage.key }),
+        { abortSignal: AbortSignal.timeout(12_000) });
+      if (!head.LastModified || head.LastModified > cutoff) return false;
+      await storage.s3.send(new DeleteObjectCommand({ Bucket: storage.bucket, Key: storage.key, IfMatch: head.ETag }),
+        { abortSignal: AbortSignal.timeout(12_000) });
+    }
+    return true;
+  }
+
+  onModuleDestroy() { this.s3?.destroy(); }
+
+  async read(key: string, namespace?: 'reports', expected?: { mime_type: string; size_bytes: string | number }) {
     const storage = this.storage(key, namespace);
     if (!storage.s3) {
       const info = await stat(storage.key);
@@ -88,21 +136,25 @@ export class MediaStorage {
       if (bytes.length !== info.size) throw invalidStoredMedia();
       return bytes;
     }
-    const { Body, ContentLength } = await storage.s3.send(new GetObjectCommand({ Bucket: storage.bucket, Key: storage.key }),
+    const { Body, ContentLength, ContentType } = await storage.s3.send(new GetObjectCommand({ Bucket: storage.bucket, Key: storage.key }),
       { abortSignal: AbortSignal.timeout(12_000) });
     if (!(Body instanceof Readable)) throw invalidStoredMedia();
-    if (!ContentLength || ContentLength < 1 || ContentLength > MAX_IMAGE_BYTES) {
+    if (!ContentLength || ContentLength < 1 || ContentLength > MAX_IMAGE_BYTES ||
+      (expected && (ContentType !== expected.mime_type || ContentLength !== Number(expected.size_bytes)))) {
       Body.destroy();
       throw invalidStoredMedia();
     }
     const chunks: Buffer[] = [];
     let size = 0;
-    for await (const chunk of Body) {
-      const bytes = Buffer.from(chunk);
-      size += bytes.length;
-      if (size > ContentLength) throw invalidStoredMedia();
-      chunks.push(bytes);
-    }
+    const timer = setTimeout(() => Body.destroy(new Error('Media read timeout')), 12_000);
+    try {
+      for await (const chunk of Body) {
+        const bytes = Buffer.from(chunk);
+        size += bytes.length;
+        if (size > ContentLength) throw invalidStoredMedia();
+        chunks.push(bytes);
+      }
+    } finally { clearTimeout(timer); Body.destroy(); }
     if (size !== ContentLength) throw invalidStoredMedia();
     return Buffer.concat(chunks, size);
   }

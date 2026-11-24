@@ -1,5 +1,10 @@
 # Keputusan yang dibutuhkan dari tim
 
+Keputusan tim 25 November 2026 tentang berat grade, nira campuran, alokasi hasil/biaya,
+koreksi biaya, serta akses sementara admin/owner dicatat pada
+[perbaikan backend](../backend-remediation.md). Butir di bawah tetap berlaku untuk
+bagian yang belum diputuskan, seperti harga efektif, pengelolaan master, dan pilot.
+
 | Prioritas | Keputusan | Perilaku selama terbuka |
 | --- | --- | --- |
 | P0 | Produk, tim UI, dan backend menyepakati visibilitas Laporan dan ekspor Flutter admin. PRD menempatkan laporan manajemen serta ekspor pada owner. Implementasi Flutter yang aktif memberi akses Laporan/Rekap/PDF bagi admin dalam alur penerimaan saat ini. Inventaris caller B1 CSV dan laporan B1 sebelum menyelaraskan akses. | Rute dan widget resmi yang sudah dipakai tetap berjalan. Capability baru menolak admin. Rute B1 tidak dipakai sebagai sumber angka capability. |

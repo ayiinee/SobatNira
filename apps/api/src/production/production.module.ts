@@ -1,4 +1,5 @@
 import { Batches, BatchesController } from './batches';
+import { CostCorrections, CostCorrectionsController } from './cost-corrections';
 import { JuiceRepository } from '../juice/juice.repository';
 import { Module } from '@nestjs/common';
 import { CaneTypesController } from '../cane-types/cane-types.controller';
@@ -20,9 +21,9 @@ import { CatalogCache } from '../cache/catalog-cache';
 
 @Module({
   imports: [DatabaseModule, AuthModule, OcrDocumentsModule],
-  controllers: [SuppliersController, LotsController, CaneTypesController, CalculationController, BatchesController,
+  controllers: [CostCorrectionsController, SuppliersController, LotsController, CaneTypesController, CalculationController, BatchesController,
     CapabilitiesController, OwnerAgentController, OwnerAgentSessionController, ReportExportsController],
-  providers: [SuppliersRepository, LotsRepository, CaneTypesRepository, ProductionHistoryRepository, Batches, JuiceRepository,
+  providers: [CostCorrections, SuppliersRepository, LotsRepository, CaneTypesRepository, ProductionHistoryRepository, Batches, JuiceRepository,
     Capabilities, OwnerAgentSessions, ReportExports, ReportDelivery, CatalogCache],
 })
 export class ProductionModule {}

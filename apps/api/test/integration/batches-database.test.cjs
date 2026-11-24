@@ -12,7 +12,7 @@ test('batch approval freezes costs, consumes once, isolates scope and produces a
  const f=await mobileClosureFixture({consume:false});
  try{
   const root=f.root+'/production',batch=randomUUID();
-  const body={id:batch,lotId:f.ids.lot,code:'BATCH-TEST',wokNumber:1,occurredAt:'2026-11-16T03:00:00Z',quantityMl:'100000',physicalWeightKg:'32',grades:[{code:'A',weightKg:'30',pricePerKgRupiah:'20000'}]};
+  const body={id:batch,lotId:f.ids.lot,code:'BATCH-TEST',wokNumber:1,occurredAt:'2026-11-16T03:00:00Z',quantityMl:'100000',physicalWeightKg:'30',grades:[{code:'A',weightKg:'30',pricePerKgRupiah:'20000'}]};
   assert.equal((await f.request(root+'/batches','POST',body)).status,201);
   assert.equal((await f.request(root+'/batches','POST',body)).body.id,batch);
   assert.equal((await f.request(root+'/batches','POST',{...body,quantityMl:'200000'})).status,409);
@@ -43,7 +43,7 @@ test('batch approval freezes costs, consumes once, isolates scope and produces a
   assert.equal(recap.body.totalMarginRupiah,report.body.totalMarginRupiah);
   assert.equal(recap.body.items[0].snapshotId,approved.body.id);
   assert.equal(recap.body.items[0].closed,false);
-  assert.deepEqual(recap.body.items[0].batches[0].grades,[{code:'A',weightKg:'30'}]);
+  assert.deepEqual(recap.body.items[0].batches[0].grades.map(({code,weightKg})=>({code,weightKg})),[{code:'A',weightKg:'30'}]);
   assert.equal((await f.request(root+'/batches?lotId='+f.ids.lot+'&synthetic=false')).body.items[0].id,batch);
   assert.equal((await f.request(root+'/batches?lotId='+f.ids.secondLot)).body.items.length,0);
   assert.equal((await f.request(root+'/profit-report?from=2026-12-01T00:00:00Z')).body.total,0);
@@ -111,20 +111,20 @@ test('batch approval freezes costs, consumes once, isolates scope and produces a
   assert.equal((await f.request(correction,'POST',reason)).body.version,1);
   assert.equal((await f.request(correctionPath+randomUUID(),'POST',reason)).status,409);
   await assert.rejects(()=>local.requireClear(session,access,f.ids.lot,false,'Bearer fixture-admin'),e=>e.getStatus()===409);
-  const changes = {version:1,physicalWeightKg:'31.25',grades:[{code:'B',weightKg:'29',pricePerKgRupiah:'18000'}]};
+  const changes = {version:1,physicalWeightKg:'29',grades:[{code:'B',weightKg:'29',pricePerKgRupiah:'18000'}]};
   assert.equal((await f.request(correction,'PATCH',{...changes,quantityMl:'99000'})).status,400);
   assert.equal((await f.request(correction,'PATCH',changes)).body.version,2);
   assert.equal((await f.request(correction,'PATCH',changes)).body.version,2);
   assert.equal((await f.request(correction+'/approve','POST',{version:1})).status,409);
   assert.equal((await f.request(root+'/production-report')).body.totals.finalSugarKg,'30');
-  assert.equal((await f.request(root+'/batches/'+batch)).body.correction.proposed_data.physicalWeightKg,'31.25');
+  assert.equal((await f.request(root+'/batches/'+batch)).body.correction.proposed_data.physicalWeightKg,'29');
   await f.client.query(`CREATE FUNCTION pg_temp.reject_correction_snapshot() RETURNS trigger LANGUAGE plpgsql
     AS $$ BEGIN RAISE EXCEPTION 'fixture snapshot failure'; END $$;
     CREATE TRIGGER fixture_snapshot_failure BEFORE INSERT ON sobatnira.production_calculation_snapshots
     FOR EACH ROW WHEN (NEW.correction_id IS NOT NULL) EXECUTE FUNCTION pg_temp.reject_correction_snapshot()`);
   assert.equal((await f.request(correction+'/approve','POST',{version:2})).status,500);
   const afterFailure = await f.request(root+'/batches/'+batch);
-  assert.equal(afterFailure.body.physical_weight_kg,'32');
+  assert.equal(afterFailure.body.physical_weight_kg,'30');
   assert.equal(afterFailure.body.grades[0].code,'A');
   assert.equal(afterFailure.body.correction.version,2);
   assert.equal((await f.request(root+'/production-report')).body.totals.finalSugarKg,'30');
@@ -143,7 +143,7 @@ test('batch approval freezes costs, consumes once, isolates scope and produces a
   assert.equal(snapshots.rows.filter(row=>row.correction_id===null).length,1);
   assert.equal((await f.request(root+'/batches/'+batch+'/approve','POST')).body.id,approved.body.id);
   const nextCorrection = correctionPath+randomUUID();
-  assert.equal((await f.request(nextCorrection,'POST',reason)).body.before_data.physicalWeightKg,'31.25');
+  assert.equal((await f.request(nextCorrection,'POST',reason)).body.before_data.physicalWeightKg,'29');
   assert.equal((await f.request(nextCorrection+'/discard','POST',{version:1})).body.status,'discarded');
   assert.equal((await f.request(root+'/batches/'+batch)).body.correction,null);
   await local.requireClear(session,access,f.ids.lot,false,'Bearer fixture-admin');
@@ -182,7 +182,7 @@ test('production admins can correct an existing sample batch without changing of
   const batchId = randomUUID();
   await batches.create(access, {
    id: batchId, lotId, code: 'CORRECTION-SAMPLE', wokNumber: 1, occurredAt: '2026-11-16T03:00:00Z',
-   quantityMl: '50000', physicalWeightKg: '30', synthetic: true,
+   quantityMl: '50000', physicalWeightKg: '28', synthetic: true,
    grades: [{ code: 'A', weightKg: '28', pricePerKgRupiah: '20000' }],
   });
   await batches.costs(access, lotId, {
@@ -206,7 +206,7 @@ test('production admins can correct an existing sample batch without changing of
   assert.equal((await f.request(correction, 'POST', { reason }, 'fixture-owner')).status, 403);
   assert.equal((await f.request(correction, 'POST', { reason })).status, 201);
   assert.equal((await f.request(correction, 'PATCH', {
-   version: 1, physicalWeightKg: '31', grades: [{ code: 'A', weightKg: '29', pricePerKgRupiah: '20000' }],
+   version: 1, physicalWeightKg: '29', grades: [{ code: 'A', weightKg: '29', pricePerKgRupiah: '20000' }],
   })).status, 200);
   assert.equal((await f.request(sampleReport)).body.totals.finalSugarKg, '28');
   assert.equal((await f.request(correction + '/approve', 'POST', { version: 2 })).status, 200);
@@ -225,7 +225,7 @@ test('cancelling a batch releases its reservation once and excludes it from offi
   const id = randomUUID();
   const grade = {code:'A',weightKg:'30',pricePerKgRupiah:'20000'};
   const draft = {id,lotId:f.ids.lot,code:'CANCEL-TEST',wokNumber:1,occurredAt:'2026-11-16T03:00:00Z',
-   quantityMl:'100000',physicalWeightKg:'32',grades:[grade]};
+   quantityMl:'100000',physicalWeightKg:'30',grades:[grade]};
   assert.equal((await f.request(batches,'POST',{...draft,grades:[grade,{...grade,code:'B'}]})).status,400);
   assert.equal((await f.request(batches,'POST',draft)).status,201);
   const input = {requestId:id,batchId:id,quantityMl:'100000'};

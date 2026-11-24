@@ -29,13 +29,13 @@ async function reportFixture(count = 3) {
       for (let b=0;b<4;b++) {
         const id=randomUUID(); batchIds.push(id);
         await batches.create(access,{id,lotId,code:`REPORT-${n}-${b}`,wokNumber:b%3+1,occurredAt:'2026-11-16T03:00:00Z',
-          quantityMl:'50000',physicalWeightKg:'16',grades:[{code:b%2?'B':'A',weightKg:'10.125',pricePerKgRupiah:b%2?'18000':'20000'}]});
+          quantityMl:'50000',physicalWeightKg:'10.125',grades:[{code:b%2?'B':'A',weightKg:'10.125',pricePerKgRupiah:b%2?'18000':'20000'}]});
         await f.app.get(JuiceRepository).reserve(access,lotId,parseReservation({requestId:id,batchId:id,quantityMl:'50000'}));
         await batches.approve(access,id);
       }
       const id= batchIds.at(-1), correction=randomUUID();
       await batches.correct(access,id,correction,'open',{reason:'Synthetic report correction'});
-      await batches.correct(access,id,correction,'save',{version:1,physicalWeightKg:'17',grades:[
+      await batches.correct(access,id,correction,'save',{version:1,physicalWeightKg:'11.125',grades:[
         {code:'B',weightKg:'11.125',pricePerKgRupiah:'18000'}]});
       await batches.correct(access,id,correction,'approve',{version:2});
     }

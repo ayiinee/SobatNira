@@ -23,7 +23,7 @@ export class AccessGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<SecurityRequest>();
     const headers = request.headers as Record<string, string | undefined>;
     const devRole = headers['x-dev-role'];
-    if (policy?.kind === 'factory' && this.config.environment === 'development' &&
+    if (policy?.kind === 'factory' && this.config.environment === 'development' && process.env.SOBATNIRA_MODE !== 'connected' &&
         !request.params.tenantId && !request.params.factoryId && headers['x-dev-user-id'] &&
         headers['x-dev-tenant-id'] && headers['x-dev-factory-id'] && devRole) {
       if ((devRole !== 'admin' && devRole !== 'owner') || !policy.roles.includes(devRole)) {

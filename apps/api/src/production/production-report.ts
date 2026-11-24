@@ -48,7 +48,7 @@ export function productionReport(items: ProductionReportLot[]) {
     produced.reduce((sum, row) => sum + BigInt(row[field]), 0n).toString();
   return { items: lots, grades: [...grades.values()].sort((a, b) => a.code.localeCompare(b.code)),
     totals: { lotCount: items.length, producedLotCount: produced.length,
-      batchCount: lots.reduce((sum, lot) => sum + lot.batches.length, 0),
+      batchCount: new Set(lots.flatMap(lot => lot.batches.map(batch => batch.id))).size,
       caneNetKg: sumDecimals(items.map(lot => lot.caneNetKg)),
       finalSugarKg: sumDecimals(produced.map(row => row.finalSugarKg)),
       productionValueRupiah: money('productionValueRupiah'), totalCostRupiah: money('totalCostRupiah'),
