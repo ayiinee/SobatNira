@@ -64,18 +64,6 @@ class _LaporanPageState extends State<LaporanPage> {
           onSelected: (index) =>
               widget.analytics.setTab(ReportTab.values[index]),
         ),
-        if (widget.onOpenExport case final onOpenExport?)
-          Align(
-            alignment: Alignment.centerRight,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: TextButton.icon(
-                icon: const Icon(Icons.download_outlined),
-                onPressed: onOpenExport,
-                label: const Text('Ekspor laporan'),
-              ),
-            ),
-          ),
         Expanded(
           child: NiraLoading(
             busy: _reports?.loading ?? false,
@@ -114,6 +102,7 @@ class _LaporanPageState extends State<LaporanPage> {
         ),
       ),
       if (_reports case final reports?) ConnectedReportStatus(reports: reports),
+      ..._exportAction(),
       const SizedBox(height: NiraSpace.md),
       _chartCard(),
       const SizedBox(height: NiraSpace.md),
@@ -154,11 +143,38 @@ class _LaporanPageState extends State<LaporanPage> {
           compactValue: true,
         ),
       ),
+      ..._exportAction(),
       const SizedBox(height: NiraSpace.md),
       _chartCard(margin: true),
       const SizedBox(height: NiraSpace.md),
     ],
   );
+
+  List<Widget> _exportAction() => [
+    if (widget.onOpenExport case final onOpenExport?) ...[
+      const SizedBox(height: NiraSpace.md),
+      OutlinedButton.icon(
+        onPressed: onOpenExport,
+        style: OutlinedButton.styleFrom(
+          alignment: Alignment.centerLeft,
+          minimumSize: const Size(0, 48),
+          padding: const EdgeInsets.symmetric(horizontal: NiraSpace.lg),
+          backgroundColor: niraGreen.withValues(alpha: .045),
+          side: const BorderSide(color: niraLine),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(niraRadius),
+          ),
+        ),
+        icon: const Icon(Icons.file_download_outlined, size: 20),
+        label: const Row(
+          children: [
+            Expanded(child: Text('Ekspor laporan')),
+            Icon(Icons.chevron_right, size: 20),
+          ],
+        ),
+      ),
+    ],
+  ];
 
   Widget _chartCard({bool margin = false}) => margin
       ? MarginChart(

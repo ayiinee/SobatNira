@@ -12,6 +12,7 @@ class SettingsPageFrame extends StatelessWidget {
     this.bottomAction,
     this.tab = NiraTab.pengaturan,
     this.hideNavigationWhileEditing = false,
+    this.keepTitleVisible = false,
     super.key,
   });
 
@@ -22,41 +23,191 @@ class SettingsPageFrame extends StatelessWidget {
   final Widget? bottomAction;
   final NiraTab tab;
   final bool hideNavigationWhileEditing;
+  final bool keepTitleVisible;
 
   @override
   Widget build(BuildContext context) {
+    final heading = DetailTitle(title);
+    final content = ListView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: const EdgeInsets.symmetric(vertical: NiraSpace.sm),
+      children: [
+        if (!keepTitleVisible) heading,
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: niraPageInset(context)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (subtitle != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: NiraSpace.xs),
+                  child: Text(
+                    subtitle!,
+                    style: niraText(
+                      keepTitleVisible ? NiraType.body : NiraType.caption,
+                      color: niraLeaf,
+                    ),
+                  ),
+                ),
+              SizedBox(
+                height: keepTitleVisible && subtitle == null
+                    ? NiraSpace.xs
+                    : NiraSpace.lg,
+              ),
+              ...children,
+            ],
+          ),
+        ),
+      ],
+    );
     return NiraScaffold(
       tab: tab,
       hideNavigationWhileEditing: hideNavigationWhileEditing,
       onNavigate: onNavigate,
       bottomAction: bottomAction,
-      body: ListView(
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        padding: const EdgeInsets.symmetric(vertical: NiraSpace.sm),
-        children: [
-          DetailTitle(title),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: niraPageInset(context)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: keepTitleVisible
+          ? Column(
               children: [
-                if (subtitle != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      subtitle!,
-                      style: niraText(NiraType.caption, color: niraLeaf),
-                    ),
-                  ),
-                const SizedBox(height: NiraSpace.lg),
-                ...children,
+                Padding(
+                  padding: const EdgeInsets.only(top: NiraSpace.sm),
+                  child: heading,
+                ),
+                Expanded(child: content),
               ],
-            ),
-          ),
-        ],
-      ),
+            )
+          : content,
     );
   }
+}
+
+class SettingsPanel extends StatelessWidget {
+  const SettingsPanel({
+    required this.child,
+    this.padding = const EdgeInsets.all(NiraSpace.lg),
+    super.key,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.all(Radius.circular(niraRadius * 1.5)),
+      side: BorderSide(color: niraLine),
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: Padding(padding: padding, child: child),
+  );
+}
+
+class SettingsInfoRow extends StatelessWidget {
+  const SettingsInfoRow({
+    required this.icon,
+    required this.title,
+    this.description,
+    this.status,
+    super.key,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? description;
+  final Widget? status;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      ExcludeSemantics(
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: niraGreen.withValues(alpha: .08),
+            borderRadius: BorderRadius.circular(niraRadius),
+          ),
+          child: Icon(icon, color: niraGreen, size: 20),
+        ),
+      ),
+      const SizedBox(width: NiraSpace.md),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: NiraSpace.sm,
+              runSpacing: NiraSpace.xs,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  title,
+                  style: niraText(NiraType.section, weight: FontWeight.w700),
+                ),
+                ?status,
+              ],
+            ),
+            if (description != null) ...[
+              const SizedBox(height: NiraSpace.xs),
+              Text(
+                description!,
+                style: niraText(NiraType.body, color: niraLeaf),
+              ),
+            ],
+          ],
+        ),
+      ),
+    ],
+  );
+}
+
+class SettingsMessage extends StatelessWidget {
+  const SettingsMessage({
+    required this.icon,
+    required this.message,
+    this.title,
+    this.pending = false,
+    super.key,
+  });
+
+  final IconData icon;
+  final String message;
+  final String? title;
+  final bool pending;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(NiraSpace.lg),
+    decoration: BoxDecoration(
+      color: pending
+          ? niraYellow.withValues(alpha: .17)
+          : niraGreen.withValues(alpha: .06),
+      borderRadius: BorderRadius.circular(niraRadius * 1.5),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ExcludeSemantics(child: Icon(icon, color: niraGreen, size: 20)),
+        const SizedBox(width: NiraSpace.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (title != null) ...[
+                Text(
+                  title!,
+                  style: niraText(NiraType.body, weight: FontWeight.w700),
+                ),
+                const SizedBox(height: NiraSpace.xs),
+              ],
+              Text(message, style: niraText(NiraType.body)),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class SettingsField {
@@ -234,6 +385,36 @@ class SettingsNote extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       Text(message, style: niraText(NiraType.caption, color: niraLeaf));
+}
+
+class SettingsLoadError extends StatelessWidget {
+  const SettingsLoadError({
+    required this.accessDenied,
+    required this.message,
+    required this.onRetry,
+    super.key,
+  });
+
+  final bool accessDenied;
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      SettingsMessage(
+        icon: accessDenied ? Icons.lock_outline : Icons.error_outline,
+        message: accessDenied
+            ? 'Akun ini tidak memiliki akses ke data ini.'
+            : message,
+      ),
+      if (!accessDenied) ...[
+        const SizedBox(height: NiraSpace.sm),
+        OutlinedButton(onPressed: onRetry, child: const Text('Coba lagi')),
+      ],
+    ],
+  );
 }
 
 void showSettingsSaved(BuildContext context, {String? message}) {

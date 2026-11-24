@@ -173,7 +173,19 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text(title), findsOneWidget);
         expect(find.text(row), findsOneWidget);
-        expect(find.text('Simpan PDF'), findsOneWidget);
+        final saveButton = find.ancestor(
+          of: find.text('Simpan PDF'),
+          matching: find.byWidgetPredicate(
+            (widget) => widget is OutlinedButton,
+          ),
+        );
+        expect(saveButton, findsOneWidget);
+        final printButton = find.widgetWithText(FilledButton, 'Cetak laporan');
+        expect(
+          tester.getTopLeft(saveButton).dy -
+              tester.getBottomLeft(printButton).dy,
+          greaterThanOrEqualTo(8),
+        );
         printing.completed = Completer<void>();
         await tester.tap(find.text('Cetak laporan'));
         await tester.runAsync(
@@ -247,12 +259,12 @@ void main() {
     );
     expect(
       tester
-          .widget<TextButton>(
+          .widget<OutlinedButton>(
             find
                 .ancestor(
                   of: find.text('Simpan PDF'),
                   matching: find.byWidgetPredicate(
-                    (widget) => widget is TextButton,
+                    (widget) => widget is OutlinedButton,
                   ),
                 )
                 .first,

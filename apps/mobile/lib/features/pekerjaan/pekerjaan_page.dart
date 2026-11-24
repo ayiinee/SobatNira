@@ -227,8 +227,15 @@ class _PekerjaanPageState extends State<PekerjaanPage>
       else ...[
         if (_unread > 0)
           Card(
+            margin: const EdgeInsets.only(bottom: NiraSpace.md),
+            color: niraGreen.withValues(alpha: .075),
+            elevation: 0,
             child: ListTile(
-              leading: const Icon(Icons.notifications_outlined),
+              leading: const Icon(
+                Icons.notifications_outlined,
+                color: niraGreen,
+              ),
+              trailing: const Icon(Icons.chevron_right, color: niraLeaf),
               title: Text('$_unread laporan baru'),
               onTap: () => setState(() {
                 _status = 'PENDING_VALIDATION';
@@ -239,9 +246,96 @@ class _PekerjaanPageState extends State<PekerjaanPage>
               }),
             ),
           ),
-        DropdownButton<String>(
-          value: _status,
+        _filters(),
+        const SizedBox(height: NiraSpace.xl),
+        NiraPagedFutureBuilder<List<Json>>(
+          future: _tasks,
+          page: _page,
+          dataset: (_api, widget.factoryId, _status, _documentType, _received),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const NiraLoading(label: 'Memuat pekerjaan…');
+            }
+            if (snapshot.hasError) {
+              final error = snapshot.error;
+              return _queueMessage(
+                icon: Icons.error_outline,
+                message: error is ReviewApiError
+                    ? error.message
+                    : 'Gagal memuat antrean.',
+                action: TextButton(
+                  onPressed:
+                      error is ReviewApiError &&
+                          error.status == 401 &&
+                          _session != null
+                      ? _signOut
+                      : () => setState(_load),
+                  child: const Text('Coba lagi'),
+                ),
+              );
+            }
+            final tasks = snapshot.data ?? [];
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                NiraPageBody(
+                  height: _pageHeight,
+                  firstPage: _page == 1,
+                  child: tasks.isEmpty
+                      ? _queueMessage(
+                          icon: Icons.inbox_outlined,
+                          message: _documentType == null && _received == null
+                              ? 'Belum ada laporan pada status ini.'
+                              : 'Belum ada laporan yang sesuai filter.',
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          spacing: NiraSpace.sm,
+                          children: [for (final task in tasks) _taskCard(task)],
+                        ),
+                ),
+                if (_page > 1 || tasks.length == 20) ...[
+                  const SizedBox(height: NiraSpace.md),
+                  NiraPagination(
+                    page: _page,
+                    onPrevious: _page > 1
+                        ? () => setState(() {
+                            _page--;
+                            _load();
+                          })
+                        : null,
+                    onNext: tasks.length == 20
+                        ? () => setState(() {
+                            _page++;
+                            _load();
+                          })
+                        : null,
+                  ),
+                ],
+              ],
+            );
+          },
+        ),
+      ],
+    ],
+  );
+
+  Widget _filters() => Container(
+    padding: const EdgeInsets.all(NiraSpace.md),
+    decoration: BoxDecoration(
+      color: niraGreen.withValues(alpha: .045),
+      border: Border.all(color: niraLine),
+      borderRadius: BorderRadius.circular(niraRadius * 2),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: NiraSpace.md,
+      children: [
+        DropdownButtonFormField<String>(
+          key: ValueKey(_status),
+          initialValue: _status,
           isExpanded: true,
+          decoration: const InputDecoration(labelText: 'Status nota'),
           items: const [
             DropdownMenuItem(
               value: 'PENDING_VALIDATION',
@@ -286,99 +380,99 @@ class _PekerjaanPageState extends State<PekerjaanPage>
             _load();
           }),
         ),
-        TextButton.icon(
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(0, 48),
+            padding: const EdgeInsets.symmetric(horizontal: NiraSpace.md),
+            backgroundColor: Colors.white,
+            side: const BorderSide(color: niraLine),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(niraRadius),
+            ),
+          ),
           onPressed: _pickReceived,
-          icon: const Icon(Icons.calendar_today_outlined),
+          icon: const Icon(Icons.calendar_today_outlined, size: 18),
           label: Text(switch (_received?.range) {
             final range? =>
               '${formatDate(range.start)} – ${formatDate(range.end)}',
             null => 'Filter tanggal penerimaan',
-          }),
-        ),
-        NiraPagedFutureBuilder<List<Json>>(
-          future: _tasks,
-          page: _page,
-          dataset: (_api, widget.factoryId, _status, _documentType, _received),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
-              return const NiraLoading(label: 'Memuat pekerjaan…');
-            }
-            if (snapshot.hasError) {
-              final error = snapshot.error;
-              return Column(
-                children: [
-                  Text(
-                    error is ReviewApiError
-                        ? error.message
-                        : 'Gagal memuat antrean.',
-                  ),
-                  TextButton(
-                    onPressed:
-                        error is ReviewApiError &&
-                            error.status == 401 &&
-                            _session != null
-                        ? _signOut
-                        : () => setState(_load),
-                    child: const Text('Coba lagi'),
-                  ),
-                ],
-              );
-            }
-            final tasks = snapshot.data ?? [];
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                NiraPageBody(
-                  height: _pageHeight,
-                  firstPage: _page == 1,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (tasks.isEmpty)
-                        Text(
-                          _documentType == null && _received == null
-                              ? 'Belum ada laporan pada status ini.'
-                              : 'Belum ada laporan yang sesuai filter.',
-                        ),
-                      for (final task in tasks)
-                        Card(
-                          child: ListTile(
-                            title: Text(documentType(task['document_type'])),
-                            subtitle: Text(
-                              [
-                                '${task['sender_name']} · Revisi ${task['version']} · ${task['issue_count']} temuan',
-                                ?_receivedLabel(task['received_at']),
-                              ].join('\n'),
-                            ),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: () => _open(task),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                if (_page > 1 || tasks.length == 20)
-                  NiraPagination(
-                    page: _page,
-                    onPrevious: _page > 1
-                        ? () => setState(() {
-                            _page--;
-                            _load();
-                          })
-                        : null,
-                    onNext: tasks.length == 20
-                        ? () => setState(() {
-                            _page++;
-                            _load();
-                          })
-                        : null,
-                  ),
-              ],
-            );
-          },
+          }, textAlign: TextAlign.center),
         ),
       ],
-    ],
+    ),
+  );
+
+  Widget _taskCard(Json task) => Card(
+    margin: EdgeInsets.zero,
+    elevation: 0,
+    color: Colors.white,
+    clipBehavior: Clip.antiAlias,
+    shape: RoundedRectangleBorder(
+      side: const BorderSide(color: niraLine),
+      borderRadius: BorderRadius.circular(niraRadius * 1.5),
+    ),
+    child: ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: NiraSpace.md),
+      minVerticalPadding: NiraSpace.md,
+      horizontalTitleGap: NiraSpace.md,
+      leading: Container(
+        padding: const EdgeInsets.all(NiraSpace.sm),
+        decoration: BoxDecoration(
+          color: niraGreen.withValues(alpha: .075),
+          borderRadius: BorderRadius.circular(niraRadius),
+        ),
+        child: Icon(
+          task['document_type'] == 'TRUCK_ARRIVAL_NOTE'
+              ? Icons.local_shipping_outlined
+              : Icons.description_outlined,
+          color: niraGreen,
+          size: 20,
+        ),
+      ),
+      title: Text(
+        documentType(task['document_type']),
+        style: niraText(NiraType.body, weight: FontWeight.w700),
+      ),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: NiraSpace.xs),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          spacing: NiraSpace.xs,
+          children: [
+            Text(
+              '${task['sender_name']} · Revisi ${task['version']} · ${task['issue_count']} temuan',
+              style: niraText(NiraType.caption, color: niraLeaf),
+            ),
+            if (_receivedLabel(task['received_at']) case final received?)
+              Text(
+                received,
+                style: niraText(NiraType.caption, color: niraLeaf),
+              ),
+          ],
+        ),
+      ),
+      trailing: const Icon(Icons.chevron_right, color: niraLeaf, size: 20),
+      onTap: () => _open(task),
+    ),
+  );
+
+  Widget _queueMessage({
+    required IconData icon,
+    required String message,
+    Widget? action,
+  }) => Semantics(
+    liveRegion: true,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: NiraSpace.xl),
+      child: Column(
+        spacing: NiraSpace.sm,
+        children: [
+          Icon(icon, color: niraLeaf),
+          Text(message, textAlign: TextAlign.center),
+          ?action,
+        ],
+      ),
+    ),
   );
 
   List<Widget> _login() {
@@ -393,6 +487,7 @@ class _PekerjaanPageState extends State<PekerjaanPage>
         keyboardType: TextInputType.emailAddress,
         decoration: const InputDecoration(labelText: 'Email'),
       ),
+      const SizedBox(height: NiraSpace.md),
       TextField(
         controller: _password,
         obscureText: true,

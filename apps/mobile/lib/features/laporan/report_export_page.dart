@@ -130,12 +130,21 @@ class _ReportExportPageState extends State<ReportExportPage> {
         bottomAction: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: NiraSpace.md,
           children: [
             NiraButton(
               _busy ? 'Menyiapkan laporan…' : 'Cetak laporan',
               enabled ? () => _export(report) : null,
             ),
-            TextButton.icon(
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 48),
+                backgroundColor: Colors.white,
+                side: const BorderSide(color: niraLine),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(niraRadius)),
+                ),
+              ),
               onPressed: enabled ? () => _export(report, save: true) : null,
               icon: const Icon(Icons.file_download_outlined),
               label: const Text('Simpan PDF'),
@@ -219,10 +228,13 @@ class _ReportExportPageState extends State<ReportExportPage> {
                   ],
                   const SizedBox(height: NiraSpace.md),
                   NiraSummaryCard(report.totalLabel, report.totalDisplay),
-                  if (report.provisional)
-                    const Text(
+                  if (report.provisional) ...[
+                    const SizedBox(height: NiraSpace.sm),
+                    Text(
                       'Margin sementara untuk kloter yang masih terbuka.',
+                      style: niraText(NiraType.caption, color: niraLeaf),
                     ),
+                  ],
                   if (widget.statusMessage case final status?) ...[
                     const SizedBox(height: NiraSpace.md),
                     status,

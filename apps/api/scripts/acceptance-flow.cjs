@@ -28,14 +28,14 @@ async (page, { origin, output }) => {
     await page.mouse.wheel(0, delta);
   };
   const field = async (name, value) => {
-    const control = page.getByRole('textbox', { name, exact: true });
+    const control = name === 'ID ekspor'
+      ? page.getByRole('textbox', { name: /^ID ekspor(?:\s|$)/ })
+      : page.getByRole('textbox', { name, exact: true });
     await control.click({ timeout: 15_000 });
-    if (name.startsWith('Tanggal kedatangan') || name.startsWith('Waktu penggilingan')) {
-      await page.keyboard.press('ControlOrMeta+A');
-      await page.keyboard.insertText(value);
-    } else {
-      await control.fill(value, { timeout: 15_000 });
-    }
+    await page.waitForTimeout(120);
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.type(value, { delay: 24 });
+    if (await control.inputValue() !== value) throw new Error('Input was not retained: ' + name);
   };
   const submit = async (label, suffix, status) => {
     const posting = page.waitForResponse(response =>
@@ -80,7 +80,7 @@ async (page, { origin, output }) => {
   await validateIntake('A');
 
   await button('Kembali').click();
-  await button('Menunggu validasi').click();
+  await button(/Menunggu validasi$/).click();
   await page.getByRole('menuitem', { name: 'Perlu tinjauan manual' }).click();
   await button(/Nota belum dikenali/).click();
   for (const [name, value] of [
@@ -90,12 +90,12 @@ async (page, { origin, output }) => {
     ['Jenis tebu', 'BL'],
     ['Catatan pemeriksaan foto', 'Pemeriksaan foto nota sintetis'],
   ]) await field(name, value);
-  await button('Simpan draf manual').click();
+  await submit('Simpan draf manual', '/manual-draft', 200);
   await page.getByText('Status: PENDING_VALIDATION', { exact: true }).waitFor({ timeout: 15_000 });
   await validateIntake('B');
 
   await button('Kembali').click();
-  await button('Perlu tinjauan manual').click();
+  await button(/Perlu tinjauan manual$/).click();
   await page.getByRole('menuitem', { name: 'Menunggu validasi' }).click();
   await button(/Nota Produksi Operator/).click();
   await page.getByText('Nota Produksi', { exact: true }).waitFor();
