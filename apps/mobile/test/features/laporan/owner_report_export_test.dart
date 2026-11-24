@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -139,4 +140,77 @@ void main() {
       expect(find.text('Unduh XLSX'), findsNothing);
     },
   );
+
+  testWidgets('hides old downloads while a new period fails to export', (
+    tester,
+  ) async {
+    final next = Completer<http.Response>();
+    final requests = <String>[];
+    await _open(
+      tester,
+      MockClient((request) {
+        expect(request.method, 'POST');
+        requests.add(request.body);
+        return requests.length == 1
+            ? Future.value(_job('READY', code: 202))
+            : next.future;
+      }),
+    );
+
+    await tester.tap(find.text('Buat laporan'));
+    await tester.pumpAndSettle();
+    expect(find.text('Unduh XLSX'), findsOneWidget);
+
+    await tester.tap(
+      find.widgetWithText(
+        OutlinedButton,
+        '16 November 2026 – 16 November 2026',
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bulan ini'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Buat laporan'));
+    await tester.pump();
+    expect(requests, hasLength(2));
+    expect(requests.last, isNot(requests.first));
+    final downloadsWhileWaiting = find.text('Unduh XLSX').evaluate().length;
+
+    next.complete(http.Response('', 503));
+    await tester.pumpAndSettle();
+    expect(downloadsWhileWaiting, 0);
+    expect(find.text('Unduh PDF'), findsNothing);
+    expect(find.text('Unduh XLSX'), findsNothing);
+    expect(find.text('File siap diunduh'), findsNothing);
+    expect(find.text('Coba lagi'), findsOneWidget);
+  });
+
+  for (final status in [408, 429]) {
+    testWidgets('reuses the request key after HTTP $status', (tester) async {
+      final requests = <http.Request>[];
+      await _open(
+        tester,
+        MockClient((request) async {
+          expect(request.method, 'POST');
+          requests.add(request);
+          return requests.length == 1
+              ? http.Response('', status)
+              : _job('READY', code: 202);
+        }),
+      );
+
+      await tester.tap(find.text('Buat laporan'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(FilledButton));
+      await tester.pumpAndSettle();
+      expect(requests, hasLength(2));
+      expect(requests.first.headers['idempotency-key'], isNotNull);
+      expect(
+        requests.last.headers['idempotency-key'],
+        requests.first.headers['idempotency-key'],
+      );
+      expect(requests.last.body, requests.first.body);
+      expect(find.text('Unduh XLSX'), findsOneWidget);
+    });
+  }
 }
