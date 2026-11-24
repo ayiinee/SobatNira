@@ -2,6 +2,10 @@
 
 Beranda, tab Produksi/Margin, pintasan Laba/Rekap, serta detail kloter, grade dan batch memakai sumber laporan yang sama. Laporan membaca penerimaan, batch, dan snapshot produksi yang sudah tersedia. Migrasi `024_production_snapshot_lot_lookup.sql` menambah indeks untuk mencari snapshot terbaru per kloter.
 
+Optimisasi 21 November 2026: Beranda memuat `view=summary`; rincian baru diminta saat
+dibuka. API menyediakan `view=page`, batas 100 kloter/5 MiB untuk laporan sinkron dan
+jalur ekspor owner yang lebih besar. Lihat [kontrak dan batas laporan](backend-report-optimization.md).
+
 ## Sumber dan batas perhitungan
 
 - `GET /tenants/:tenantId/factories/:factoryId/production/production-report` memerlukan Bearer token serta membership admin/owner di pabrik tersebut.
@@ -15,7 +19,12 @@ Beranda, tab Produksi/Margin, pintasan Laba/Rekap, serta detail kloter, grade da
 
 Respons berisi `items` (identitas kloter, penerimaan, snapshot, batch sah beserta grade), `grades`, dan `totals` (jumlah kloter diterima/menghasilkan, batch, tebu, gula, nilai, biaya, margin). Angka berat dan rupiah berupa string desimal. API memakai BigInt untuk uang dan aritmetika desimal; Flutter memformat string tanpa konversi rupiah ke floating point. Kode tampilan sama tetap dibedakan melalui UUID kloter.
 
-Satu statement PostgreSQL membaca semua bagian laporan dalam snapshot baca yang sama. Loading/error mengosongkan nilai lama, menyediakan tombol coba lagi, dan tidak mengubah kegagalan menjadi nilai nol. Respons lama setelah pergantian periode tidak menimpa respons yang lebih baru.
+Laporan lengkap/summary membaca satu snapshot dalam satu statement. Mode halaman
+membaca agregat dan rincian dalam transaksi `REPEATABLE READ READ ONLY`; totalnya
+mencakup seluruh filter, bukan jumlah baris halaman. Snapshot tidak dipertahankan
+antar-request halaman. Loading/error mengosongkan nilai lama, menyediakan tombol
+coba lagi, dan tidak mengubah kegagalan menjadi nilai nol. Respons lama setelah
+pergantian periode tidak menimpa respons yang lebih baru.
 
 ## Layar dan ekspor
 

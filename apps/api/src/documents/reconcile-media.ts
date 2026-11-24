@@ -7,9 +7,10 @@ export async function reconcileMedia(db: Database, media: MediaStorage, remove =
   for await (const object of media.originals()) {
     if (object.modified > cutoff) continue;
     await db.transaction(async tx => {
-      // Same lock as intake, held until its COMMIT/ROLLBACK outcome is visible.
+      // Same lock as intake preparation/attachment; manifests protect external uploads.
       await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', ['sobatnira:media:' + object.key]);
-      const refs = await tx.query('SELECT 1 FROM media_assets WHERE object_key=$1', [object.key]);
+      const refs = await tx.query(`SELECT 1 FROM media_assets WHERE object_key=$1
+        UNION ALL SELECT 1 FROM media_uploads WHERE object_key=$1 LIMIT 1`, [object.key]);
       if (refs.rows.length) return;
       result.candidates++;
       if (remove && await media.removeOldOriginal(object.key, cutoff)) result.removed++;

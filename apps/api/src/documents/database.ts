@@ -2,9 +2,10 @@ import { Injectable, Logger, OnModuleDestroy, ServiceUnavailableException } from
 import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 import { loadConfiguration } from '../config/backend.config';
-import { postgresClientOptions } from '../database/postgres.config';
+import { databasePoolOptions, PoolMeasurements, samplePool } from '../database/pool';
 
 const directory = resolve(__dirname, '../../migrations/ocr');
 const migrationFiles = async () => (await readdir(directory)).filter((name) => /^\d+_.*\.sql$/.test(name)).sort();
@@ -14,6 +15,9 @@ export const migrationChecksum = (sql: string) => createHash('sha256').update(sq
 export class Database implements OnModuleDestroy {
   private readonly logger = new Logger(Database.name);
   private pool?: Pool;
+  private sampler?: NodeJS.Timeout;
+  private readonly measurements = new PoolMeasurements();
+  poolStatistics() { return this.measurements.snapshot(this.pool); }
 
   private connection() {
     if (this.pool) return this.pool;
@@ -21,29 +25,39 @@ export class Database implements OnModuleDestroy {
     if (!config.postgres) {
       throw new ServiceUnavailableException('Database dokumen belum dikonfigurasi');
     }
-    const pool = new Pool(postgresClientOptions(config));
+    const pool = new Pool(databasePoolOptions(config, 'documents'));
     // pg discards failed idle connections and opens replacements on demand.
     pool.on('error', () => this.logger.warn('Koneksi idle database dokumen terputus.'));
+    this.sampler = samplePool(pool, this.measurements, stats => this.logger.debug({ event: 'database_pool', pool: 'documents', ...stats }));
     this.pool = pool;
     return pool;
   }
 
-  query<T extends QueryResultRow = QueryResultRow>(sql: string, args?: unknown[]): Promise<QueryResult<T>> {
-    return this.connection().query<T>(sql, args);
+  async query<T extends QueryResultRow = QueryResultRow>(sql: string, args?: unknown[]): Promise<QueryResult<T>> {
+    const client = await this.measurements.connect(this.connection());
+    let failed = false;
+    try { return await this.measurements.directQuery(() => client.query<T>(sql, args)); }
+    catch (error) { failed = true; throw error; }
+    finally { client.release(failed); }
   }
 
   async transaction<T>(operation: (client: PoolClient) => Promise<T>): Promise<T> {
-    const client = await this.connection().connect();
+    const client = await this.measurements.connect(this.connection());
+    const started = performance.now();
+    let broken = false;
+    let failed = false;
     try {
       await client.query('BEGIN');
       const result = await operation(client);
       await client.query('COMMIT');
       return result;
     } catch (error) {
-      await client.query('ROLLBACK').catch(() => undefined);
+      failed = true;
+      await client.query('ROLLBACK').catch(() => { broken = true; });
       throw error;
     } finally {
-      client.release();
+      this.measurements.transactionFinished(started, failed);
+      client.release(broken);
     }
   }
 
@@ -80,6 +94,7 @@ export class Database implements OnModuleDestroy {
   }
 
   async onModuleDestroy() {
+    clearInterval(this.sampler);
     await this.pool?.end();
   }
 }

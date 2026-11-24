@@ -17,12 +17,13 @@ import { AuthModule } from '../auth/auth.module';
 import { OwnerAgentController, OwnerAgentSessionController, OwnerAgentSessions } from './owner-agent';
 import { ReportExports, ReportExportsController } from './report-exports';
 import { ReportDelivery } from './report-delivery';
+import { CatalogCache } from '../cache/catalog-cache';
 
 @Module({
   imports: [DatabaseModule, AuthModule, OcrDocumentsModule],
   controllers: [CostCorrectionsController, SuppliersController, LotsController, CaneTypesController, CalculationController, BatchesController,
     CapabilitiesController, OwnerAgentController, OwnerAgentSessionController, ReportExportsController],
   providers: [CostCorrections, SuppliersRepository, LotsRepository, CaneTypesRepository, ProductionHistoryRepository, Batches, JuiceRepository,
-    Capabilities, OwnerAgentSessions, ReportExports, ReportDelivery],
+    Capabilities, OwnerAgentSessions, ReportExports, ReportDelivery, CatalogCache],
 })
 export class ProductionModule {}

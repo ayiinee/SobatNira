@@ -58,7 +58,7 @@ owner; pemberian akses ekspor admin tidak membuka pairing percakapan owner.
 ## Migrasi dan operasional
 
 1. Siapkan backup dan uji pemulihan pada staging. Jalankan migrasi bisnis tambahan
-   `025_production_v2.sql` dengan `npm run db:migrate`.
+   `026_production_v2.sql` dengan `npm run db:migrate`.
 2. Migrasi OCR menyimpan checksum. Untuk instalasi baru, `npm run db:migrate:ocr` cukup.
    Untuk histori lama tanpa checksum, review schema dan SQL yang telah diterapkan dahulu.
    Setelah review, jalankan `dist/documents/migrate.js --baseline-reviewed` dengan
@@ -73,6 +73,8 @@ owner; pemberian akses ekspor admin tidak membuka pairing percakapan owner.
    khusus pasangan deployment yang sama. Default tidak menghapus apa pun.
    Objek harus berumur minimal 24 jam, tidak direferensikan, dan lolos pemeriksaan ulang
    setelah memperoleh kunci yang sama dengan intake. Penghapusan gagal menghentikan run.
+   Manifest `media_uploads` juga melindungi objek, termasuk upload belum ditautkan.
+   Manifest lama memerlukan review terpisah; cleanup tidak menghapusnya otomatis.
 6. Sertakan `apps/api/assets/fonts` dalam paket deployment. Dockerfile sudah menyalinnya.
 
 Schema baru mempertahankan kolom lama, tetapi aplikasi lama tidak memahami alokasi
@@ -142,3 +144,18 @@ log worker mencatat `reason: unsupported_pdf_character` tanpa isi laporan.
 Hasil lokal bukan hasil GitHub Actions atau staging. Storage memakai fixture lokal/HTTP;
 R2 nyata, Auth live, dan alur WhatsApp penuh belum diverifikasi. Migrasi diuji pada database
 sintetis baru; baseline checksum instalasi OCR lama tetap memerlukan review operator.
+
+## Integrasi main terbaru
+
+Integrasi dengan `main` commit `c741fcc` mempertahankan cache katalog, pool/metrik database,
+staged upload, varian foto, pembatasan laporan, dan pagination milik tim. Ringkasan dan
+halaman laporan membaca alokasi v2 sehingga batch campuran dihitung sekali dan filter
+kloter hanya memuat hasil bagiannya. Tidak ada perubahan Flutter dibanding main tersebut.
+
+Migrasi audit kini `026_production_v2.sql`; `025_catalog_cache_versions.sql` milik tim
+tetap utuh. Nomor 025 untuk produksi hanya merupakan draf lokal sebelum integrasi.
+Upload tetap dilakukan di luar transaksi database; manifest dilindungi dari cleanup.
+
+Regresi gabungan lokal: 139 tes API lulus, 1 Auth live dilewati, 0 gagal (140 total),
+17 tes FastAPI lulus, serta 1 tes kontrak REST berbasis stub lulus. Seluruh migrasi bisnis
+gabungan berhasil diterapkan pada PostgreSQL sintetis baru.

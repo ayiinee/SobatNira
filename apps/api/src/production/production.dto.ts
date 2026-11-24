@@ -6,7 +6,8 @@ export interface SupplierInput { name?: string; isActive?: boolean }
 export interface LotInput { supplierId?: string; displayCode?: string | null; receivedAt?: string }
 export interface CatalogQuery extends Pagination { q?: string; isActive?: boolean }
 export type SupplierQuery = CatalogQuery;
-export interface LotQuery extends Pagination { q?: string; supplierId?: string; receivedFrom?: string; receivedBefore?: string; includeSummary?: boolean; synthetic?: boolean }
+export interface LotQuery extends Pagination { q?: string; supplierId?: string; receivedFrom?: string; receivedBefore?: string; includeSummary?: boolean; synthetic?: boolean;
+  pagination?: 'cursor'; after?: { receivedAt: string; id: string }; status?: 'open' | 'closed'; searchMode?: 'normalized'; lotId?: string }
 
 export function object(input: unknown, allowed: string[]): Record<string, unknown> {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new BadRequestException('Gunakan objek JSON atau parameter query yang valid.');
@@ -97,8 +98,33 @@ export function parseCatalogQuery(input: unknown): CatalogQuery {
 export const parseSupplierQuery = parseCatalogQuery;
 
 export function parseLotQuery(input: unknown): LotQuery {
-  const record = object(input, ['q', 'supplierId', 'receivedFrom', 'receivedBefore', 'includeSummary', 'synthetic', 'limit', 'offset']);
+  const record = object(input, ['q', 'supplierId', 'receivedFrom', 'receivedBefore', 'includeSummary', 'synthetic', 'limit', 'offset', 'pagination', 'after', 'status', 'searchMode', 'lotId']);
   const query: LotQuery = pagination(record);
+  if (record.lotId !== undefined) query.lotId = uuid(record.lotId, 'lotId');
+  if (record.status !== undefined) {
+    if (record.status !== 'open' && record.status !== 'closed') throw new BadRequestException('status harus open atau closed.');
+    query.status = record.status;
+  }
+  if (record.searchMode !== undefined) {
+    if (record.searchMode !== 'normalized') throw new BadRequestException('searchMode harus normalized.');
+    query.searchMode = record.searchMode;
+  }
+  if (record.pagination !== undefined) {
+    if (record.pagination !== 'cursor' || record.offset !== undefined) throw new BadRequestException('Pagination cursor tidak menerima offset.');
+    query.pagination = 'cursor';
+  }
+  if (record.after !== undefined) {
+    if (!query.pagination || typeof record.after !== 'string' || record.after.length > 512 || !/^[A-Za-z0-9_-]+$/.test(record.after)) {
+      throw new BadRequestException('Cursor tidak valid.');
+    }
+    try {
+      const parts: unknown = JSON.parse(Buffer.from(record.after, 'base64url').toString('utf8'));
+      if (!Array.isArray(parts) || parts.length !== 2 || typeof parts[0] !== 'string' ||
+        !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/.test(parts[0])) throw new Error();
+      timestamp(parts[0].replace(/(\.\d{3})\d{3}Z$/, '$1Z'), 'after');
+      query.after = { receivedAt: parts[0], id: uuid(parts[1], 'after') };
+    } catch { throw new BadRequestException('Cursor tidak valid.'); }
+  }
   if (record.synthetic !== undefined) {
     if (record.synthetic !== 'true' && record.synthetic !== 'false') throw new BadRequestException('synthetic harus true atau false.');
     query.synthetic = record.synthetic === 'true';
@@ -116,6 +142,18 @@ export function parseLotQuery(input: unknown): LotQuery {
   if (query.receivedFrom && query.receivedBefore && Date.parse(query.receivedFrom) >= Date.parse(query.receivedBefore)) {
     throw new BadRequestException('receivedBefore harus sesudah receivedFrom.');
   }
+  return query;
+}
+
+export function parseLotCountsQuery(input: unknown): LotQuery {
+  return parseLotQuery(object(input, ['q', 'searchMode', 'supplierId', 'receivedFrom', 'receivedBefore', 'synthetic', 'lotId']));
+}
+
+export function parseLotSuggestionsQuery(input: unknown): LotQuery {
+  const query = parseLotQuery(object(input, ['q', 'status', 'supplierId', 'receivedFrom', 'receivedBefore', 'synthetic', 'limit']));
+  if (!query.q) throw new BadRequestException('q wajib untuk saran kloter.');
+  query.limit = Math.min(query.limit, 5);
+  query.searchMode = 'normalized';
   return query;
 }
 

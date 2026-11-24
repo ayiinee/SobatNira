@@ -19,6 +19,7 @@ class KloterProcessPage extends StatefulWidget {
     required this.onNavigate,
     this.onOpenPekerjaan,
     this.approvedPhoto,
+    this.approvedPhotoOriginal,
     this.loadStock,
     this.onEdit,
     this.onTransfer,
@@ -31,6 +32,7 @@ class KloterProcessPage extends StatefulWidget {
   final ValueChanged<NiraTab> onNavigate;
   final VoidCallback? onOpenPekerjaan;
   final Future<Uint8List?> Function(String)? approvedPhoto;
+  final Future<Uint8List?> Function(String)? approvedPhotoOriginal;
   final Future<Json> Function()? loadStock;
   final Future<bool> Function()? onEdit;
   final Future<void> Function()? onTransfer;
@@ -156,6 +158,13 @@ class _KloterProcessPageState extends State<KloterProcessPage> {
               ApprovedDocumentPreview(
                 batch: false,
                 photo: _photo(intake),
+                loadOriginal:
+                    widget.approvedPhotoOriginal == null ||
+                        kloter.noteRevision(intake: intake) == null
+                    ? null
+                    : () => widget.approvedPhotoOriginal!(
+                        kloter.noteRevision(intake: intake)!,
+                      ),
                 fallback: widget.onOpenPekerjaan == null
                     ? const Text('Foto belum tersedia')
                     : DocumentLink(

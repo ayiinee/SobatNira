@@ -91,7 +91,11 @@ jobs:
       - name: Verify batch and nira transactions
         env:
           DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
-        run: node --test --test-concurrency=1 test/integration/*database.test.cjs
+        run: >-
+          node --test --test-concurrency=1
+          test/integration/*database.test.cjs
+          test/integration/report-pagination.test.cjs
+          test/integration/database-pool.test.cjs
 
   ai:
     name: FastAPI unit tests

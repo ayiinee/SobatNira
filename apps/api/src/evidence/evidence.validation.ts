@@ -4,6 +4,8 @@ import sharp = require('sharp');
 import { expectedRevision } from '../documents/intake.dto';
 import { object, text, uuid } from '../production/production.dto';
 import { EvidenceFile, EvidenceImage, EvidenceUpload, MAX_EVIDENCE_BYTES, MAX_EVIDENCE_PIXELS } from './evidence.types';
+import { imageWork } from './image-work';
+import { pngHasAnimation } from './png-animation';
 
 export function parseEvidenceUpload(input: unknown): EvidenceUpload {
   const fields = object(input, ['requestId', 'expectedRevision', 'reason']);
@@ -26,21 +28,24 @@ export async function validateEvidence(file?: EvidenceFile): Promise<EvidenceIma
   if (!signature || allowed[signature].contentType !== file.mimetype) {
     throw new BadRequestException('Isi berkas dan MIME harus berupa JPEG, PNG, atau WebP.');
   }
-  try {
-    const image = sharp(file.buffer, { limitInputPixels: MAX_EVIDENCE_PIXELS, failOn: 'warning', animated: false });
-    const metadata = await image.metadata();
-    const format = metadata.format && Object.hasOwn(allowed, metadata.format) ? allowed[metadata.format] : undefined;
-    if (!format || metadata.format !== signature || !metadata.width || !metadata.height || (metadata.pages ?? 1) !== 1) {
-      throw new BadRequestException('Foto harus berupa JPEG, PNG, atau WebP statis dengan MIME yang sesuai.');
+  if (pngHasAnimation(bytes)) throw new BadRequestException('Foto PNG harus statis.');
+  return imageWork.run(async () => {
+    try {
+      const image = sharp(file.buffer, { limitInputPixels: MAX_EVIDENCE_PIXELS, failOn: 'warning', animated: false }).timeout({ seconds: 10 });
+      const metadata = await image.metadata();
+      const format = metadata.format && Object.hasOwn(allowed, metadata.format) ? allowed[metadata.format] : undefined;
+      if (!format || metadata.format !== signature || !metadata.width || !metadata.height || (metadata.pages ?? 1) !== 1) {
+        throw new BadRequestException('Foto harus berupa JPEG, PNG, atau WebP statis dengan MIME yang sesuai.');
+      }
+      // Decode pixels as well: valid headers alone do not prove the file is intact.
+      await image.stats();
+      return {
+        bytes: file.buffer, ...format, byteSize: file.buffer.length,
+        sha256: createHash('sha256').update(file.buffer).digest('hex'), width: metadata.width, height: metadata.height,
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException('Foto rusak, tidak didukung, atau melebihi batas 20 megapiksel.');
     }
-    // Decode pixels as well: valid headers alone do not prove the file is intact.
-    await image.stats();
-    return {
-      bytes: file.buffer, ...format, byteSize: file.buffer.length,
-      sha256: createHash('sha256').update(file.buffer).digest('hex'), width: metadata.width, height: metadata.height,
-    };
-  } catch (error) {
-    if (error instanceof BadRequestException) throw error;
-    throw new BadRequestException('Foto rusak, tidak didukung, atau melebihi batas 20 megapiksel.');
-  }
+  });
 }

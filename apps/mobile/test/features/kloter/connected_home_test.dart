@@ -129,6 +129,9 @@ void main() {
             });
             return _json({'items': []});
           }
+          if (uri.path.endsWith('/lots/counts')) {
+            return _json({'total': 1, 'open': 1, 'closed': 0});
+          }
           expect(uri.path, endsWith('/lots'));
           final synthetic = uri.queryParameters['synthetic'] == 'true';
           return _json({
@@ -158,7 +161,7 @@ void main() {
       expect(live.lots.single.id, 'example');
       expect(
         requests.map((uri) => uri.path.split('/').last),
-        unorderedEquals(['lots', 'production-report']),
+        unorderedEquals(['lots', 'counts', 'production-report']),
       );
       await api.factoryBatches(scope, 'example', synthetic: true, offset: 20);
       final changed = Completer<void>();
@@ -189,6 +192,9 @@ void main() {
             return _json({
               'access': [_factory('A'), _factory('B')],
             });
+          }
+          if (request.url.path.endsWith('/lots/counts')) {
+            return _json({'total': 2, 'open': 2, 'closed': 0});
           }
           if (request.url.path.endsWith('/factories/A/lots')) {
             expect(request.url.queryParameters['includeSummary'], 'true');
@@ -417,6 +423,7 @@ void main() {
             '/auth/me' => _json({
               'access': [_factory('A')],
             }),
+            '$root/lots/counts' => _json({'total': 2, 'open': 2, 'closed': 0}),
             '$root/lots' => _json({
               'items': [first, second],
               'total': 2,
@@ -528,7 +535,8 @@ void main() {
       expect(find.text('Belum ada batch'), findsOneWidget);
       expect(find.text('BATCH-UJI-1'), findsNothing);
       expect(opened.toSet(), {'$root/lots/first', '$root/lots/second'});
-      expect(listReads, 1);
+      // Beranda and the independently filtered Kloter tab each fetch one page.
+      expect(listReads, 2);
       expect(reportLotIds, [null]);
     },
   );

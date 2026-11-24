@@ -41,7 +41,7 @@ test('verified media refuses same-size tampering; cleanup protects references an
   const previous=process.env.DOCUMENT_MEDIA_DIR; process.env.DOCUMENT_MEDIA_DIR=folder;
   const media=new MediaStorage();
   try {
-    const key='a'.repeat(64), orphan='b'.repeat(64), young='c'.repeat(64);
+    const key='a'.repeat(64), orphan='b'.repeat(64), young='c'.repeat(64), pending='d'.repeat(64);
     const bytes=Buffer.from('89504e470d0a1a0a1234','hex');
     const expected={mime_type:'image/png',size_bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')};
     await media.put(key,'image/png',bytes);
@@ -49,9 +49,12 @@ test('verified media refuses same-size tampering; cleanup protects references an
     await writeFile(join(folder,key),Buffer.alloc(bytes.length));
     await assert.rejects(()=>media.verifiedRead(key,expected));
     await media.put(orphan,'image/png',bytes); await media.put(young,'image/png',bytes);
+    await media.put(pending,'image/png',bytes);
     const old=new Date(Date.now()-48*3600000);await utimes(join(folder,key),old,old);await utimes(join(folder,orphan),old,old);
+    await utimes(join(folder,pending),old,old);
     const calls=[];
-    const db={transaction:work=>work({query:async(sql,args)=>{calls.push(sql);return {rows:sql.startsWith('SELECT 1')&&args[0]===key?[{}]:[]};}})};
+    const db={transaction:work=>work({query:async(sql,args)=>{calls.push(sql);return {rows:sql.startsWith('SELECT 1')&&
+      (args[0]===key||(sql.includes('media_uploads')&&args[0]===pending))?[{}]:[]};}})};
     assert.deepEqual(await reconcileMedia(db,media),{candidates:1,removed:0,mode:'report'});
     assert.deepEqual(await reconcileMedia(db,media,true),{candidates:1,removed:1,mode:'cleanup'});
     assert.ok(calls[0].includes('pg_advisory_xact_lock'));

@@ -13,12 +13,14 @@ class JuiceTransferPage extends StatefulWidget {
     super.key,
     required this.api,
     required this.scope,
+    this.onChanged,
     this.onNavigate,
     required this.lotId,
   });
   final ValueChanged<NiraTab>? onNavigate;
   final ReviewApi api;
   final FactoryScope scope;
+  final VoidCallback? onChanged;
   final String lotId;
 
   @override
@@ -124,6 +126,7 @@ class _JuiceTransferPageState extends State<JuiceTransferPage> {
       final receipt = await JuiceApi(
         widget.api,
       ).transfer(widget.scope, widget.lotId, request);
+      widget.onChanged?.call();
       if (mounted) {
         setState(() {
           _receipt = receipt;

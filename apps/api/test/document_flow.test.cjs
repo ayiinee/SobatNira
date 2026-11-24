@@ -17,7 +17,7 @@ const { intakeFixture } = require('./integration/intake-fixture.cjs');
 
 const fixture = (name) => readFile(join(__dirname, '../../../docs/ai/examples', `${name}.example.json`), 'utf8').then(JSON.parse);
 const phone = (suffix) => '+' + [1, 202, 555, String(suffix).padStart(4, '0')].join('');
-const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a4FcAAAAASUVORK5CYII=', 'base64');
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADklEQVQImWP4DwYMEAoAU7oL9W/sIDEAAAAASUVORK5CYII=', 'base64');
 const imageFor = (id) => Buffer.concat([png, Buffer.from(id)]);
 const tokenHeaders = { 'X-Internal-Service-Token': 'synthetic-adapter-test' };
 
@@ -529,6 +529,7 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     process.env.DOCUMENT_WORKER_ENABLED = 'false';
     assert.equal((await photo(event('inactive', 'IMAGE', phone(103)))).status, 403);
     assert.equal((await photo(event('bad-media'), Buffer.from('not an image'))).status, 400);
+    assert.equal((await photo(event('broken-png'), png.subarray(0, 40))).status, 400);
     assert.equal((await mobile('review-tasks', 'unauthorized')).status, 401);
     const first = event('truck-01');
     const results = await Promise.all([photo(first), photo(first)]);
@@ -554,7 +555,14 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     // A new worker picks up a crash-expired lease without losing the photo or replacing the job.
     await db.query(`UPDATE document_jobs SET status='PROCESSING',attempts=1,lease_until=now()-interval '1 second',
       claim_token=$2 WHERE revision_id=$1`, [a.revision_id, randomUUID()]);
-    assert.equal(await new DocumentProcessor(db).processOne(), true);
+    const queue = await new DocumentProcessor(db).queueStatistics();
+    assert.equal(queue.processing, 1); assert.equal(queue.expiredLeases, 1);
+    assert.ok(Number(queue.oldestEligibleWaitMs) >= 1000);
+    const claimed = await Promise.all([new DocumentProcessor(db).processOne(), new DocumentProcessor(db).processOne()]);
+    assert.deepEqual(claimed.sort(), [false, true]);
+    const drained = await new DocumentProcessor(db).queueStatistics();
+    assert.equal(drained.queued, 0); assert.equal(drained.processing, 0);
+    assert.equal(drained.oldestEligibleWaitMs, null);
     assert.equal((await db.query('SELECT attempts FROM document_jobs WHERE revision_id=$1', [a.revision_id])).rows[0].attempts, 2);
     const draft = await status(a);
     const { pending_question: question } = draft;
@@ -689,6 +697,11 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     assert.equal(detail.extraction.header.net_weight_kg.normalized_value, 1251);
     assert.equal((await mobile(`review-tasks/${taskId}/assets/${detail.media_asset_id}`, 'other-user')).status, 404);
     assert.deepEqual(Buffer.from(await mobile(`review-tasks/${taskId}/assets/${detail.media_asset_id}`).then((response) => response.arrayBuffer())), imageFor('truck-01'));
+    const previewPath = `review-tasks/${taskId}/assets/${detail.media_asset_id}?variant=preview`;
+    assert.equal((await mobile(previewPath, 'other-user')).status, 404);
+    const preview = await mobile(previewPath);
+    assert.equal(preview.status, 200); assert.equal(preview.headers.get('content-type'), 'image/webp');
+    assert.equal((await require('sharp')(Buffer.from(await preview.arrayBuffer())).metadata()).width, 2);
     const edited = await change(detail, 'draft', { revision_id: detail.revision_id, expected_version: 2,
       field_path: 'header.net_weight_kg', value: 1252 }, randomUUID(), 'PATCH');
     assert.equal(edited.status, 200, await edited.clone().text());

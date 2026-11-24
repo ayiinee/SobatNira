@@ -8,6 +8,8 @@ import { MAX_IMAGE_BYTES, readInbound, requireServiceToken, requireUuid } from '
 import { Database } from './database';
 import { Intake } from './intake';
 import { imageMime, MediaStorage } from './media';
+import { validateEvidence } from '../evidence/evidence.validation';
+import { imageVariant, renderImageVariant } from '../evidence/image-variant';
 import { DocumentProcessor } from './processing';
 import { Review } from './review';
 import { Notices } from './notices';
@@ -65,6 +67,7 @@ class WhatsAppController {
     const inbound = readInbound(event, 'IMAGE', key);
     const mime = imageMime(file.buffer, file.mimetype);
     if (inbound.media_mime_type && inbound.media_mime_type !== mime) throw new BadRequestException('Tipe media tidak cocok');
+    await validateEvidence({ ...file, size: file.buffer.length });
     const result = await this.intake.photo(inbound, mime, file.buffer);
     return result.duplicate ? result : { ...result, commit_confirmed_at_ms: Date.now() };
   }
@@ -126,7 +129,7 @@ class OcrMediaController {
   async get(@Headers('x-internal-service-token') token: string, @Param('key') key: string) {
     requireServiceToken(token, process.env.AI_SERVICE_INTERNAL_TOKEN);
     if (!/^[a-f0-9]{64}$/.test(key)) throw new NotFoundException();
-    const { rows: [asset] } = await this.db.query<{ mime_type: string; size_bytes: string; sha256: string }>('SELECT mime_type,size_bytes,sha256 FROM media_assets WHERE object_key=$1', [key]);
+    const { rows: [asset] } = await this.db.query<{ mime_type: string; size_bytes: number; sha256: string }>('SELECT mime_type,size_bytes,sha256 FROM media_assets WHERE object_key=$1', [key]);
     if (!asset) throw new NotFoundException();
     return new StreamableFile(await this.media.verifiedRead(key, asset), { type: asset.mime_type });
   }
@@ -182,9 +185,11 @@ class MobileReviewController {
   @Get('review-tasks/:id/assets/:asset')
   @Header('Cache-Control', 'private, no-store')
   @Header('X-Content-Type-Options', 'nosniff')
-  async asset(@Headers('authorization') token: string, @Param('id') id: string, @Param('asset') asset: string) {
+  async asset(@Headers('authorization') token: string, @Param('id') id: string, @Param('asset') asset: string, @Query() query: unknown) {
     const media = await this.review.asset(await this.review.user(token), requireUuid(id), requireUuid(asset));
-    return new StreamableFile(await this.media.verifiedRead(media.object_key, media), { type: media.mime_type, disposition: 'inline' });
+    const result = await renderImageVariant(() => this.media.verifiedRead(media.object_key, media),
+      { sha256: media.sha256, bytes: media.size_bytes, mime: media.mime_type }, imageVariant(query));
+    return new StreamableFile(result.bytes, { type: result.mime, length: result.bytes.length, disposition: 'inline' });
   }
 
   @Patch('documents/:id/draft')

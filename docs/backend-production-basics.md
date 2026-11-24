@@ -2,6 +2,9 @@
 
 Modul ini menyediakan metadata pemasok, katalog jenis tebu, dan identitas kloter. Pengujian modul menggunakan identitas dan data sintetis.
 
+[Cache katalog opt-in](catalog-cache.md) memakai migrasi 025 untuk invalidasi pada
+commit. Indeks snapshot kloter tetap berada pada migrasi 024; keduanya berbeda.
+
 ## Cakupan
 
 - Pemasok berada pada tingkat tenant dan dapat dipakai oleh beberapa pabrik dalam tenant tersebut.
@@ -173,9 +176,167 @@ Tes integrasi mencakup alur HTTP tambah/baca/ubah/history, pemakaian pemasok ant
 
 Fixture Auth hanya dibuat jika belum ada trigger aplikasi pada `auth.users` yang perlu diperiksa. Token tiruan hanya diterima server Auth lokal milik tes dan tidak menambahkan jalur masuk khusus pada aplikasi.
 
-Flutter saat ini masih memakai data lokal untuk Beranda/Kloter. Penyambungan UI ke kontrak ini dilakukan terpisah. Alur [dokumen penerimaan dan pengesahan](backend-intake-documents.md) sudah menghubungkan catatan penerimaan sintetis ke identitas kloter ini.
+Flutter mode terhubung membaca Beranda/Kloter melalui API. Demo offline tetap
+memakai data lokal. Alur [dokumen penerimaan dan pengesahan](backend-intake-documents.md)
+menghubungkan catatan penerimaan ke identitas kloter ini.
 
 
-### Ringkasan kloter untuk Flutter
+## Pagination dan ringkasan kloter
+
+Lihat [checklist optimisasi](optimization-checklist.md) untuk status implementasi,
+integrasi Flutter, pengukuran dan pekerjaan lanjutan.
+
+### Pagination cursor (tahap optimisasi backend)
+
+Daftar `GET /tenants/:tenantId/factories/:factoryId/lots` mendukung mode opt-in
+`pagination=cursor&limit=50&includeSummary=true`. Respons berbentuk
+`{ items, limit, nextCursor }`, tanpa total dan offset. Kirim `after=<nextCursor>`
+untuk halaman berikutnya dengan filter yang sama; `nextCursor: null` menandai akhir.
+`offset` tidak boleh digabung dengan mode cursor. Tanpa `pagination=cursor`, respons
+lama `{ items, total, limit, offset }` tetap berlaku.
+
+Urutan tetap `received_at DESC, id ASC`. Cursor mempertahankan mikrodetik PostgreSQL
+agar waktu yang sama atau berbeda kurang dari satu milidetik tidak melewatkan data.
+Cursor hanya batas pencarian, bukan otorisasi: membership dan scope tetap diperiksa
+pada setiap query. Mulai ulang dari halaman pertama setelah filter/pabrik berubah.
+Pagination bukan snapshot lintas-request; perubahan tanggal kloter selama penelusuran
+dapat memindahkan baris ke halaman lain.
+
+Mode cursor menghindari `COUNT(*)` dan memakai indeks `lots_factory_received_idx`
+yang sudah tersedia; tidak ada migrasi indeks tambahan pada tahap ini. Flutter
+mode terhubung memakai cursor dengan 30 item per request, filter server dan counts
+terpisah. Beranda, daftar Kloter dan pilihan kloter Biaya Ops mempunyai pager sendiri.
+Mode demo offline mempertahankan pagination lokal berdasarkan tanggal.
+
+### Filter status, pencarian dan hitungan badge
+
+Daftar menerima `status=open` atau `status=closed` pada mode cursor maupun offset.
+`closed` mengikuti penutupan aktif dengan kategori sintetis/resmi yang sama, bukan
+sekadar semua batch sudah sah. Penutupan yang dibuka kembali tidak dihitung tertutup.
+Tanpa parameter status, daftar tetap menampilkan seluruh status.
+
+Mode opsional `searchMode=normalized&q=...` mencari kode/UUID tanpa membedakan
+huruf besar, spasi dan tanda hubung; nama pemasok tetap dicari sebagai substring
+tanpa membedakan huruf besar. Mode pencarian lama tetap berlaku jika `searchMode`
+tidak dikirim. Token normalisasi kosong tidak mencocokkan seluruh kode/UUID.
+Karakter `%` dan `_` tetap literal, bukan wildcard. Urutan hasil tetap tanggal/ID;
+ranking saran tersedia melalui endpoint di bawah.
+
+`GET /tenants/:tenantId/factories/:factoryId/lots/counts` mengembalikan
+`{ total, open, closed }` untuk seluruh data yang cocok, tanpa mengunduh halaman.
+Filter yang didukung: `q`, `searchMode`, `supplierId`, `receivedFrom`,
+`receivedBefore`, `synthetic`. Filter waktu tetap interval `[receivedFrom, receivedBefore)`
+dengan timestamp berzona; klien harus memakai batas hari dari zona waktu tampilan.
+Endpoint counts menolak `status` dan parameter pagination agar angka semua tab dapat
+dipakai bersama. Panggil ulang counts saat filter berubah, bukan per halaman cursor.
+
+Counts dan daftar memakai filter/scope bersama. Otorisasi tetap membutuhkan admin
+atau owner aktif. Query counts memakai satu snapshot PostgreSQL untuk ketiga angka;
+request daftar dan counts yang terpisah dapat melihat perubahan yang terjadi di
+antaranya. Angka ini hanya jumlah kloter, bukan ringkasan berat, stok atau margin
+Beranda. Total berat, jumlah kloter berproduksi dan margin tetap berasal dari laporan
+lengkap dengan periode yang berlaku, bukan dijumlahkan dari halaman daftar.
+
+`GET /lots/suggestions` pada prefix pabrik yang sama menerima `q` wajib, `status`,
+`supplierId`, `receivedFrom`, `receivedBefore`, `synthetic` dan `limit` (maksimum
+efektif 5). Hasil `{ items }` diperingkat kecocokan kode/UUID: exact (rank 0),
+prefix (1), substring (2), lalu kode dan ID. Pencarian mencakup semua data yang
+cocok dalam scope, bukan hanya halaman cursor yang sudah dimuat. Kecocokan nama
+pemasok saja tidak menjadi saran kode. Memilih saran memakai `lotId` pada daftar
+dan counts agar kode sama di dua kloter tidak memilih record yang salah.
+
+Flutter membentuk batas awal hari dan awal hari berikutnya dalam zona waktu
+perangkat, lalu mengirim keduanya sebagai UTC. Pengelompokan tampilan memakai
+`receivedAt.toLocal()` pada zona waktu yang sama. Kalender membuat hari berikutnya
+dengan konstruktor tanggal, bukan menambah 24 jam, agar batas DST tetap benar.
+Satu hari boleh berlanjut ke halaman berikutnya; baris digabung per tanggal dan ID,
+dan header bertanda `dimuat` selama masih ada halaman. Header tersebut bukan
+klaim jumlah seluruh kloter pada hari itu.
+
+Pencarian/status/tanggal reset cursor. Respons dari query lama atau pager yang
+sudah dibuang diabaikan. Halaman berikutnya ditambahkan tanpa mengosongkan daftar;
+scroll dekat akhir dan tombol **Muat kloter berikutnya** berbagi guard permintaan.
+Error halaman berikutnya mempertahankan baris, posisi scroll, dan cursor retry.
+Tarik untuk refresh memuat ulang hanya jumlah halaman yang pernah dibuka, bukan
+seluruh isi pabrik. Perubahan kategori sintetis atau pabrik membersihkan scope lama.
+
+Sesudah validasi/koreksi/buang draf, pembaruan daftar dijalankan setelah operasi
+berhasil dan pengguna kembali dari detail batch; transfer dan penutupan memberi
+notifikasi setelah operasi berhasil. Kegagalan transport batch juga menandai daftar
+untuk disegarkan setelah kembali, sebab COMMIT mungkin sudah berhasil. Beranda,
+badge, daftar Kloter yang sudah
+dibuka dan laporan disegarkan; detail batch tetap mempunyai jalur baca sendiri.
+Perubahan biaya juga tidak memakai daftar Beranda yang terpotong untuk memilih kloter.
+
+Urutan rilis: deploy API cursor/counts/suggestions terlebih dahulu, kemudian Flutter.
+Klien Flutter baru memerlukan kontrak tersebut; endpoint offset tetap tersedia bagi
+klien lama. Rollback Flutter tidak memerlukan rollback schema pagination.
+
+### Uji Flutter hingga PostgreSQL
+
+Dengan PostgreSQL lokal khusus data sintetis dan migrasi bisnis/Auth fixture yang
+sudah disiapkan, dari `apps/api` jalankan:
+
+```powershell
+$env:TEST_DATABASE_URL = 'postgres://postgres@127.0.0.1:55449/postgres'
+node scripts/mobile-production-fixture.cjs --pagination
+```
+
+Fixture menambahkan 65 kloter bertanda `PAG-`, termasuk 16 penutupan aktif, dalam
+transaksi rollback. Gunakan tiga nilai `PRODUCTION_TEST_*` yang dicetak server untuk
+menjalankan dari `apps/mobile`:
+
+```powershell
+flutter test test/features/kloter/lot_pagination_backend_test.dart --dart-define=PRODUCTION_TEST_API=<URL-fixture> --dart-define=PRODUCTION_TEST_TENANT=<tenant-fixture> --dart-define=PRODUCTION_TEST_FACTORY=<pabrik-fixture>
+```
+
+Mulai fixture baru untuk setiap putaran tes, lalu hentikan dengan Ctrl+C untuk
+rollback. Tes memeriksa 30/60/65 baris tanpa duplikasi, saran di luar halaman awal,
+pilihan ID, counts lengkap, batas hari lokal, pembukaan kembali kloter, refresh
+setelah penambahan data dan penolakan scope lain. Tes ini sengaja dilewati pada
+suite standar jika URL fixture tidak diberikan. Jika C: sempit, arahkan `TEMP` dan
+`TMP` proses Flutter ke direktori sementara di D:.
+
+Verifikasi filter/counts pada 20 November 2026: build dan 87 tes backend/integrasi
+lulus tanpa skip pada PostgreSQL sintetis dengan runner berurutan. Tes HTTP
+mencakup filter cursor/offset, normalisasi, counts seluruh hasil, penutupan yang
+dibuka kembali, pemisahan kategori, isolasi pabrik, akses anonim dan membership dicabut.
+
+### Mengukur query daftar dengan fixture bervolume
+
+Gunakan database lokal khusus bernama `sobatnira_perf_*`, dengan schema Auth sintetis
+dan migrasi bisnis seperti lingkungan CI. Jangan gunakan database demo/tim. Dari
+`apps/api`, set `PERF_DATABASE_URL` ke database tersebut, lalu jalankan
+`npm run perf:lots`. Opsional `PERF_LOTS=20000` (rentang 1000–100000).
+
+Skrip menambahkan kloter sintetis melalui transaksi rollback, menjalankan query
+repository asli untuk offset/cursor halaman awal/jauh, dan merekam lima sampel
+`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`. Rencana lengkap tersimpan di
+`.tmp/performance/lots-query-profile.json` di akar repo, di luar Git. Data fixture
+dibatalkan setelah selesai. `ANALYZE` dapat mengubah statistik database uji sehingga
+database wajib disposable. Pengukuran tidak memakai R2/AI atau akun cloud.
+
+Hasil lokal 20 November 2026, 20.000 kloter dan 50 item per halaman:
+
+| Query | Median waktu eksekusi |
+| --- | --- |
+| Offset halaman awal | 53,564 ms |
+| Offset halaman jauh (16.000) | 108,159 ms |
+| Cursor halaman awal | 1,545 ms |
+| Cursor halaman jauh | 1,592 ms |
+
+Pada query cursor halaman jauh, indeks kloter membaca 51 baris hasil dan menyaring
+satu baris batas. Hasil ini mencakup penghilangan perhitungan total dan perubahan
+query, bukan manfaat cursor saja. Ini lima sampel query hangat pada satu koneksi,
+tanpa biaya jaringan/Auth, persaingan koneksi, atau kepadatan nota/batch produksi;
+bukan jaminan latensi aplikasi produksi.
+
+Verifikasi tahap ini: build TypeScript dan 86 tes backend/integrasi lulus dengan
+PostgreSQL sintetis, memakai
+`node --test --test-concurrency=1 test/*.test.cjs test/integration/production-database.test.cjs`.
+Tes mencakup timestamp sama, mikrodetik, akhir halaman, filter kosong, isolasi pabrik,
+validasi cursor dan kompatibilitas respons offset lama.
+
+### Field ringkasan
 
 Tambahkan `includeSummary=true` pada daftar kloter untuk meminta status penutupan, berat bersih penerimaan dalam gram, Brix, kode jenis tebu, volume nira yang diproduksi dalam liter, dan referensi penerimaan serta penggilingan yang disahkan. Field yang belum dibukukan bernilai `null`. Ringkasan membaca volume nira hasil rekonsiliasi terbaru dan tidak mencakup saldo, reservasi, batch resmi, harga, atau margin. Detail kloter mengembalikan field ringkasan yang sama. Scope pabrik, filter, urutan, dan paginasi daftar tetap berlaku.

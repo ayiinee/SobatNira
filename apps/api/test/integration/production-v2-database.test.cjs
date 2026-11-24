@@ -39,6 +39,19 @@ test('mixed origins conserve output, allocate cooking costs, and owner correctio
   assert.equal((await f.request(root+'/batches/'+id+'/approve','POST')).body.id,approval.body.id);
   const report=(await f.request(root+'/production-report')).body;
   assert.equal(report.totals.batchCount,1);assert.equal(report.totals.finalSugarKg,'10');assert.equal(report.totals.totalCostRupiah,'1300');
+  const summary=await f.request(root+'/production-report?view=summary');
+  assert.equal(summary.status,200,JSON.stringify(summary.body));
+  assert.deepEqual(summary.body.totals,report.totals);
+  assert.deepEqual(summary.body.grades,report.grades);
+  for(const [lot,weight] of [[a,'8'],[b,'2']]) {
+   const scoped=await f.request(root+'/production-report?view=summary&lotId='+lot);
+   assert.equal(scoped.status,200,JSON.stringify(scoped.body));
+   assert.equal(scoped.body.totals.batchCount,1);
+   assert.equal(scoped.body.grades[0].weightKg,weight);
+   const page=await f.request(root+'/production-report?view=page&limit=1&lotId='+lot);
+   assert.equal(page.status,200,JSON.stringify(page.body));
+   assert.deepEqual(page.body.totals,scoped.body.totals);
+  }
   for(const [lot,kg,op]of [[a,'8','800'],[b,'2','200']]){
    const item=report.items.find(x=>x.lotId===lot);assert.equal(item.calculation.finalSugarKg,kg);assert.equal(item.calculation.costs.operationalRupiah,op);
    assert.equal(item.calculation.costs.caneRupiah,lot===a?'100':'200');
