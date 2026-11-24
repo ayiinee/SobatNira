@@ -1,6 +1,6 @@
 # Checklist optimisasi SobatNira
 
-Terakhir ditinjau: **21 November 2026 (Asia/Jakarta)**.
+Terakhir ditinjau: **25 November 2026 (Asia/Jakarta)**.
 
 Dokumen ini melacak pekerjaan backend, database, caching, foto dan retensi storage
 dari audit awal serta implementasi bertahap. Status diperiksa terhadap kode workspace
@@ -27,7 +27,7 @@ berarti perubahan sudah di-commit, digabung, atau diterapkan ke database tim/pro
 | 4. Optimisasi foto | Validasi bersama, preview/thumbnail dan unduh asli sesuai kebutuhan tersedia | Metadata turunan persisten, kualitas tulisan tangan/foto besar, peak RAM dan latensi perangkat |
 | 5. Database dan kapasitas | Pool terkonfigurasi, metrik akuisisi/transaksi dan diagnostik tersedia; indeks lama dimanfaatkan | Profil antrean/review/pencarian, sizing produksi, beban/staging |
 | 6. Caching | Cache katalog opt-in, generasi PostgreSQL, isolasi, penggabungan request dan fallback selesai lokal | Server Redis nyata, beban/staging; laporan belum dicache |
-| 7. Verifikasi dan rilis | CI NestJS, Flutter dan FastAPI lulus pada `3b9d986`; draft PR #22 tersedia | Beban, layanan nyata, staging, review tim dan rilis |
+| 7. Verifikasi dan rilis | Integrasi `main` terbaru diuji di `00ce45f`; seluruh CI lulus; penggabungan langsung sesuai instruksi pengguna | Beban, layanan nyata, staging dan rilis |
 
 ## A. Baseline dan observabilitas
 
@@ -283,12 +283,19 @@ pengganti pembacaan resmi pada transaksi stok/pengesahan.
 - [ ] **QA-11** Terapkan migrasi manifest ke lingkungan tim/staging sebelum kode upload baru, lalu smoke test dan pantau metrik.
 - [ ] **QA-12** Terapkan perubahan ke produksi melalui proses rilis tim; catat versi, tanggal, hasil dan rollback bila diperlukan.
 
-Verifikasi gabungan terakhir: [CI run 44834709677](https://github.com/ayiinee/SobatNira/actions/runs/44834709677)
-pada kode `3b9d986106b575a4a309009abbb8df4dd8fc7a16`. Ketiga job NestJS,
+Verifikasi gabungan terakhir: [CI run 45454330620](https://github.com/ayiinee/SobatNira/actions/runs/45454330620)
+pada kode `00ce45f`, yang mengintegrasikan optimisasi dengan `main` sampai `8502004`.
+Ketiga job NestJS,
 Flutter (analyze dan test), serta FastAPI lulus, termasuk instalasi Flutter dengan
-`--enforce-lockfile` dan step integrasi optimisasi PostgreSQL. Catatan QA-05J/K
-di atas menjelaskan pengujian lokal dan perbaikan lockfile sebelum hasil CI ini.
-Tidak ada perubahan kode setelah revisi tersebut pada pembaruan bukti ini.
+`--enforce-lockfile` dan step integrasi optimisasi PostgreSQL. Integrasi mempertahankan
+filter OCR sebelum pagination, ringkasan Beranda, ekspor owner, pembatasan akses biaya,
+serta navigasi keyboard pencarian. Duplikasi kontrak ekspor dan dua regresi hasil merge
+telah diperbaiki sebelum hasil CI ini. Empat belas tes regresi pencarian/pengaturan
+juga lulus lokal. Suite API lokal lulus 106 tes dengan 3 skip karena database tes tidak
+disediakan; tes PostgreSQL diverifikasi oleh CI. Tidak ada perubahan kode setelah
+revisi tersebut pada pembaruan bukti ini. PR #22 merupakan catatan alur sebelumnya;
+integrasi ini menggunakan push branch lalu merge langsung ke `main`, tanpa PR baru.
+Penggabungan kode tidak menerapkan migrasi, mengaktifkan cache, atau melakukan deployment.
 
 Perintah suite lokal yang lulus, dari `apps/api` dengan database khusus sintetis:
 
@@ -326,6 +333,9 @@ selanjutnya menggunakan branch terpisah per lingkup, sesuai instruksi 25 Novembe
 | 21 November 2026 | `7c73382` | Preview Kloter/Batch dan pemuatan asli saat zoom dengan retry |
 | 21 November 2026 | `6d75325` | Verifikasi integrasi optimisasi PostgreSQL di CI |
 | 21 November 2026 | `3b9d986` | Lockfile sesuai Flutter yang dipatok; seluruh job CI lulus |
+| 25 November 2026 | `6d4ccec` | Integrasi dengan perubahan terbaru main dan alur branch tanpa PR |
+| 25 November 2026 | `4a77492` | Penyatuan kontrak ekspor Flutter dari kedua jalur |
+| 25 November 2026 | `00ce45f` | Pembatasan pemuatan biaya dan navigasi keyboard; seluruh CI integrasi lulus |
 
 Commit implementasi di atas sudah di-push ke remote branch kerja. Status sinkronisasi dapat diperiksa dengan
 `git status -sb`; commit tidak berarti perubahan sudah digabung ke main atau dirilis.
