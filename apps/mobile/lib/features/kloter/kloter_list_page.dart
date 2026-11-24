@@ -68,12 +68,6 @@ class _KloterListPageState extends State<KloterListPage> {
         pager.loadMore();
       }
     });
-    _searchFocus.addListener(() {
-      if (!_searchFocus.hasFocus && _suggestions.isShowing) {
-        _suggestions.hide();
-        setState(() {});
-      }
-    });
   }
 
   void _closeSuggestions() {

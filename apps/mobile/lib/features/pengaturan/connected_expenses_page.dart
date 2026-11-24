@@ -43,7 +43,11 @@ class _ConnectedExpensesPageState extends State<ConnectedExpensesPage> {
   @override
   void initState() {
     super.initState();
-    _pager.refresh();
+    if (!widget.fromSettings &&
+        !_synthetic &&
+        _production.scope.role == 'admin') {
+      _pager.refresh();
+    }
   }
 
   @override
