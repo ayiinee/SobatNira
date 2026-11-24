@@ -221,8 +221,10 @@ class _AsyncReportExportState extends State<AsyncReportExport> {
         final job = _id == null
             ? await reports.api.requestReportExport(
                 reports.scope,
-                _input!,
-                _key,
+                from: DateTime.parse(_input!['from'] as String),
+                before: DateTime.parse(_input!['before'] as String),
+                synthetic: _input!['synthetic'] as bool,
+                requestId: _key,
               )
             : await reports.api.reportExportStatus(reports.scope, _id!);
         _id = job['id'] as String;

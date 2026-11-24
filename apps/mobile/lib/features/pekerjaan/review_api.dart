@@ -383,28 +383,6 @@ class ReviewApi {
     return productionReport(scope, synthetic: synthetic);
   }
 
-  Future<Json> requestReportExport(
-    FactoryScope scope,
-    Json values,
-    String key,
-  ) => _json(
-    _client.post(
-      Uri.parse(
-        baseUrl,
-      ).replace(pathSegments: ['', ...scope._base, 'report-exports']),
-      headers: {
-        ..._headers,
-        'Content-Type': 'application/json',
-        'Idempotency-Key': key,
-      },
-      body: jsonEncode(values),
-    ),
-    expectedStatus: 202,
-  );
-
-  Future<Json> reportExportStatus(FactoryScope scope, String id) =>
-      _productionGet([...scope._base, 'report-exports', id]);
-
   Future<Json> reportDetailPage(
     FactoryScope scope, {
     required bool synthetic,

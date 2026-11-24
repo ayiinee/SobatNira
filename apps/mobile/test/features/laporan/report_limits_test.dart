@@ -236,9 +236,13 @@ void main() {
       );
       addTearDown(api.close);
       expect(
-        (await api.requestReportExport(scope, {
-          'synthetic': false,
-        }, 'stable-key'))['status'],
+        (await api.requestReportExport(
+          scope,
+          from: DateTime.utc(2026, 11, 1),
+          before: DateTime.utc(2026, 12, 1),
+          synthetic: false,
+          requestId: 'stable-key',
+        ))['status'],
         'QUEUED',
       );
       expect((await api.reportExportStatus(scope, 'job'))['status'], 'READY');
