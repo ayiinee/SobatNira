@@ -18,6 +18,23 @@ class _TestPrinting extends MethodChannelPrinting {
   Uint8List? bytes;
   String? filename;
   bool fail = false;
+  bool saved = false;
+
+  @override
+  Future<bool> sharePdf(
+    Uint8List bytes,
+    String filename,
+    Rect bounds,
+    String? subject,
+    String? body,
+    List<String>? emails,
+  ) async {
+    this.bytes = bytes;
+    this.filename = filename;
+    saved = true;
+    completed.complete();
+    return true;
+  }
 
   @override
   Future<bool> layoutPdf(
@@ -156,13 +173,35 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text(title), findsOneWidget);
         expect(find.text(row), findsOneWidget);
-        expect(find.text('Simpan PDF'), findsNothing);
+        final saveButton = find.ancestor(
+          of: find.text('Simpan PDF'),
+          matching: find.byWidgetPredicate(
+            (widget) => widget is OutlinedButton,
+          ),
+        );
+        expect(saveButton, findsOneWidget);
+        final printButton = find.widgetWithText(FilledButton, 'Cetak laporan');
+        expect(
+          tester.getTopLeft(saveButton).dy -
+              tester.getBottomLeft(printButton).dy,
+          greaterThanOrEqualTo(8),
+        );
         printing.completed = Completer<void>();
         await tester.tap(find.text('Cetak laporan'));
         await tester.runAsync(
           () => printing.completed.future.timeout(const Duration(seconds: 20)),
         );
         await tester.pumpAndSettle();
+        expect(printing.filename, file);
+        expect(String.fromCharCodes(printing.bytes!.take(5)), '%PDF-');
+        printing.completed = Completer<void>();
+        printing.saved = false;
+        await tester.tap(find.text('Simpan PDF'));
+        await tester.runAsync(
+          () => printing.completed.future.timeout(const Duration(seconds: 20)),
+        );
+        await tester.pumpAndSettle();
+        expect(printing.saved, isTrue);
         expect(printing.filename, file);
         expect(String.fromCharCodes(printing.bytes!.take(5)), '%PDF-');
         await tester.tap(find.byTooltip('Kembali'));
@@ -218,7 +257,21 @@ void main() {
           .onPressed,
       isNull,
     );
-    expect(find.text('Simpan PDF'), findsNothing);
+    expect(
+      tester
+          .widget<OutlinedButton>(
+            find
+                .ancestor(
+                  of: find.text('Simpan PDF'),
+                  matching: find.byWidgetPredicate(
+                    (widget) => widget is OutlinedButton,
+                  ),
+                )
+                .first,
+          )
+          .onPressed,
+      isNull,
+    );
     expect(tester.takeException(), isNull);
   });
 }

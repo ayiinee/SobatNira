@@ -273,7 +273,7 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
             )
             .then((photo) => photo, onError: (Object _) => null);
   bool _busy = false;
-  String? _openCorrectionId;
+  ({String id, String reason, String? closureId})? _openingCorrection;
   String? _error;
   String? _notice;
 
@@ -404,30 +404,46 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
 
   Future<void> _openCorrection(String? closureId) async {
     if (_busy) return;
-    final confirmed = await confirmBatchAction(
+    final result = await _form(
       context,
-      title: 'Buka koreksi batch?',
+      'Buka koreksi batch?',
+      [
+        _Field(
+          'Alasan koreksi',
+          kind: _Input.reason,
+          initial: _openingCorrection?.reason ?? '',
+        ),
+      ],
+      (values) {
+        final reason = values.single;
+        final previous = _openingCorrection;
+        final id =
+            previous != null &&
+                previous.reason == reason &&
+                previous.closureId == closureId
+            ? previous.id
+            : ReviewApi.requestUuid();
+        _openingCorrection = (id: id, reason: reason, closureId: closureId);
+        return widget.api.openBatchCorrection(
+          widget.scope,
+          _id,
+          id,
+          reason,
+          reopenClosureId: closureId,
+        );
+      },
       message: closureId == null
           ? 'Stok dan laporan tetap memakai data sah terakhir sampai koreksi divalidasi.'
           : 'Kloter akan dibuka kembali dan masuk Perlu ditinjau. Stok dan laporan tetap memakai data sah terakhir sampai koreksi divalidasi.',
-      destructive: true,
     );
-    if (!confirmed || !mounted) return;
-    await _run(
-      () async {
-        final correction = await widget.api.openBatchCorrection(
-          widget.scope,
-          _id,
-          _openCorrectionId ??= ReviewApi.requestUuid(),
-          'Koreksi batch dikonfirmasi melalui aplikasi.',
-          reopenClosureId: closureId,
-        );
-        _openCorrectionId = null;
-        return correction;
-      },
-      apply: (correction) =>
-          _applyCorrection(correction, reopened: closureId != null),
-    );
+    if (!mounted || result == null) return;
+    _openingCorrection = null;
+    widget.onChanged();
+    setState(() {
+      _error = null;
+      _notice = null;
+      _applyCorrection(result, reopened: closureId != null);
+    });
   }
 
   Future<void> _editCorrection(Json correction, {int? gradeIndex}) async {
@@ -496,7 +512,6 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
 
   Future<void> _finishCorrection(Json correction, {bool discard = false}) {
     final correctionId = correction['id'] as String;
-    if (_openCorrectionId == correctionId) _openCorrectionId = null;
     return _run(
       () => widget.api.finishBatchCorrection(
         widget.scope,
@@ -843,7 +858,7 @@ Future<Json?> showLotCostsForm(
   }),
 );
 
-enum _Input { text, integer, date, quantity, money }
+enum _Input { text, reason, integer, date, quantity, money }
 
 class _Field {
   const _Field(this.label, {this.kind = _Input.text, this.initial = ''});
@@ -856,11 +871,17 @@ Future<Json?> _form(
   BuildContext context,
   String title,
   List<_Field> fields,
-  Future<Json> Function(List<String>) save,
-) => showDialog<Json>(
+  Future<Json> Function(List<String>) save, {
+  String? message,
+}) => showDialog<Json>(
   context: context,
   barrierDismissible: false,
-  builder: (_) => _ProductionForm(title: title, fields: fields, save: save),
+  builder: (_) => _ProductionForm(
+    title: title,
+    fields: fields,
+    save: save,
+    message: message,
+  ),
 );
 
 class _ProductionForm extends StatefulWidget {
@@ -868,10 +889,12 @@ class _ProductionForm extends StatefulWidget {
     required this.title,
     required this.fields,
     required this.save,
+    this.message,
   });
   final String title;
   final List<_Field> fields;
   final Future<Json> Function(List<String>) save;
+  final String? message;
 
   @override
   State<_ProductionForm> createState() => _ProductionFormState();
@@ -898,6 +921,7 @@ class _ProductionFormState extends State<_ProductionForm> {
     final text = value?.trim() ?? '';
     final valid = switch (kind) {
       _Input.text => text.isNotEmpty && text.length <= 100,
+      _Input.reason => text.isNotEmpty && text.length <= 500,
       _Input.date => DateTime.tryParse(text) != null,
       _Input.integer =>
         (int.tryParse(text) ?? 0) >= 1 && int.parse(text) <= 10000,
@@ -957,10 +981,13 @@ class _ProductionFormState extends State<_ProductionForm> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (widget.message case final message?) Text(message),
                 for (final (i, field) in widget.fields.indexed)
                   TextFormField(
                     controller: _inputs[i],
                     enabled: _pending == null,
+                    maxLines: field.kind == _Input.reason ? 3 : 1,
+                    maxLength: field.kind == _Input.reason ? 500 : null,
                     keyboardType: switch (field.kind) {
                       _Input.integer || _Input.money => TextInputType.number,
                       _Input.quantity => const TextInputType.numberWithOptions(
@@ -985,7 +1012,7 @@ class _ProductionFormState extends State<_ProductionForm> {
       actions: [
         TextButton(
           onPressed: _busy ? null : () => Navigator.pop(context),
-          child: const Text('Tutup'),
+          child: Text(widget.message == null ? 'Tutup' : 'Batal'),
         ),
         FilledButton(
           onPressed: _busy ? null : _submit,
@@ -994,7 +1021,9 @@ class _ProductionFormState extends State<_ProductionForm> {
                 ? 'Menyimpan…'
                 : _pending != null
                 ? 'Coba lagi'
-                : 'Simpan',
+                : widget.message == null
+                ? 'Simpan'
+                : 'Konfirmasi',
           ),
         ),
       ],

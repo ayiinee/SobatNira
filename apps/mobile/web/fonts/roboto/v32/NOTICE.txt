@@ -1,0 +1,6 @@
+Roboto Regular, version 2.137 (2017)
+Copyright 2011 Google Inc. All Rights Reserved.
+Licensed under the Apache License, Version 2.0. See LICENSE.txt.
+
+Unmodified Flutter Web fallback asset for the pinned Flutter SDK.
+https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2

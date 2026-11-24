@@ -90,7 +90,7 @@ Panggilan pertama PaddleOCR mengunduh model. Gunakan `PADDLE_PDX_CACHE_HOME` unt
 
    Buka `http://127.0.0.1:8000/` di profil browser bersih. Alamat ini menyajikan Flutter beserta CanvasKit lokal, NestJS, dan login sintetis. Bootstrap menerapkan migrasi dengan urutan produksi kemudian OCR (`sobatnira_local`), menyiapkan akun serta dua kloter uji, dan menjalankan worker NestJS serta FastAPI OCR internal (port loopback 8001). `--acceptance` memakai empat PNG sintetis dari [`apps/ai/fixtures/acceptance`](../../apps/ai/fixtures/acceptance) sehingga input OCR identik walaupun font sistem berbeda. Foto dibuat dengan `apps/ai/synthetic_notes.py`. Adapter simulasi memanggil PaddleOCR CPU dan menyimpan salinan privat di `.tmp/local-ai/media`. Tunggu terminal menampilkan tiga tugas siap diproses.
 
-   Gateway preview membatasi koneksi browser dan pemuatan font ke origin lokal. Tampilan uji memakai font yang ikut di build, termasuk saat mesin terhubung ke internet.
+   Gateway preview membatasi koneksi browser dan pemuatan font ke origin lokal. Build di loopback memakai aset font bawaan, termasuk Roboto fallback untuk Flutter Web 3.44.6.
 
 4. Masuk dengan `admin@example.invalid` / `sobatnira-demo`, lalu buka **Pengaturan → Pekerjaan** di **Pabrik Demo**. Gunakan ID tugas dan kode kloter yang dicetak terminal.
 
@@ -127,7 +127,7 @@ Jalankan perintah yang sama dari checkout B dengan database dan direktori bukti 
 node scripts/compare-acceptance.mjs <direktori-bukti-A> <direktori-bukti-B>
 ```
 
-Runner menyimpan `acceptance.json`, PDF Rekap Flutter, teks PDF yang dinormalisasi, serta tangkapan layar Detail Kloter, Laporan, dan Pengaturan. Fixture menguji sesi owner, pertanyaan OpenClaw, PDF/XLSX dari worker, dan receipt notifikasi simulasi. Untuk pertanyaan gabungan produksi dan grade, peringkat ambigu meminta klarifikasi. Dengan basis tanggal penerimaan kloter batch, hasil yang diharapkan adalah 25 kg grade A dan 40.000 mL dari kloter `OCR-A-UJI`. Artefak worker disimpan sebagai `owner-rekap.pdf` dan `owner-rekap.xlsx`. Pembanding memeriksa nilai bisnis, pemeriksaan akses, serta isi PDF Flutter. Bandingkan tangkapan layar untuk perbedaan visual karena versi Chrome dan sistem operasi dapat memengaruhi piksel. Jika automasi browser gagal, buka `browser-error.txt` dan snapshot yang tersedia di direktori bukti. Simpan berkas bukti di luar commit.
+Runner menyimpan `acceptance.json`, PDF Rekap Flutter, teks PDF yang dinormalisasi, serta tangkapan layar Detail Kloter, Laporan, Pengaturan dan Ekspor laporan. Di Flutter, owner membuat ekspor, membuka ulang lewat ID yang sama, lalu mengunduh `owner-flutter.pdf` dan `owner-flutter.xlsx`. Fixture juga menguji pertanyaan OpenClaw, ekspor dari WhatsApp, dan receipt notifikasi simulasi. Untuk pertanyaan gabungan produksi dan grade, peringkat ambigu meminta klarifikasi. Dengan basis tanggal penerimaan kloter batch, hasil yang diharapkan adalah 25 kg grade A dan 40.000 mL dari kloter `OCR-A-UJI`. Artefak ekspor WhatsApp disimpan sebagai `owner-rekap.pdf` dan `owner-rekap.xlsx`. Pembanding memeriksa nilai bisnis, pemeriksaan akses, serta isi PDF Flutter. Bandingkan tangkapan layar untuk perbedaan visual karena versi Chrome dan sistem operasi dapat memengaruhi piksel. Jika automasi browser gagal, buka `browser-error.txt` dan snapshot di direktori bukti. Simpan berkas bukti di luar commit.
 
 Untuk membuka kembali database sintetis yang sudah diisi acceptance, gunakan `LOCAL_DATABASE_URL` dari putaran tersebut. Aktifkan endpoint owner dan ekspor secara eksplisit bila diperlukan.
 

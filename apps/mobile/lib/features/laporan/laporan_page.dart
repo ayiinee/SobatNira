@@ -19,12 +19,14 @@ class LaporanPage extends StatefulWidget {
   const LaporanPage({
     required this.analytics,
     required this.onOpenDetail,
+    this.onOpenExport,
     this.reports,
     super.key,
   });
 
   final DemoAnalytics analytics;
   final ValueChanged<ReportDetailKind> onOpenDetail;
+  final VoidCallback? onOpenExport;
   final ConnectedReports? reports;
 
   @override
@@ -114,6 +116,7 @@ class _LaporanPageState extends State<LaporanPage> {
         ),
       ),
       if (_reports case final reports?) ConnectedReportStatus(reports: reports),
+      ..._exportAction(),
       const SizedBox(height: NiraSpace.md),
       _chartCard(),
       const SizedBox(height: NiraSpace.md),
@@ -154,11 +157,38 @@ class _LaporanPageState extends State<LaporanPage> {
           compactValue: true,
         ),
       ),
+      ..._exportAction(),
       const SizedBox(height: NiraSpace.md),
       _chartCard(margin: true),
       const SizedBox(height: NiraSpace.md),
     ],
   );
+
+  List<Widget> _exportAction() => [
+    if (widget.onOpenExport case final onOpenExport?) ...[
+      const SizedBox(height: NiraSpace.md),
+      OutlinedButton.icon(
+        onPressed: onOpenExport,
+        style: OutlinedButton.styleFrom(
+          alignment: Alignment.centerLeft,
+          minimumSize: const Size(0, 48),
+          padding: const EdgeInsets.symmetric(horizontal: NiraSpace.lg),
+          backgroundColor: niraGreen.withValues(alpha: .045),
+          side: const BorderSide(color: niraLine),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(niraRadius),
+          ),
+        ),
+        icon: const Icon(Icons.file_download_outlined, size: 20),
+        label: const Row(
+          children: [
+            Expanded(child: Text('Ekspor laporan')),
+            Icon(Icons.chevron_right, size: 20),
+          ],
+        ),
+      ),
+    ],
+  ];
 
   Widget _chartCard({bool margin = false}) => margin
       ? MarginChart(

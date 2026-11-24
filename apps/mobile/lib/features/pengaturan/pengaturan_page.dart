@@ -14,7 +14,6 @@ class PengaturanPage extends StatelessWidget {
     this.connectedProfile,
     this.onConnectedEntry,
     this.onOpenPekerjaan,
-    this.allowSessionSettings = false,
     this.onSignOut,
     this.catalogLinks = const {},
     super.key,
@@ -25,7 +24,6 @@ class PengaturanPage extends StatelessWidget {
   final String? connectedProfile;
   final Map<SettingSection, VoidCallback>? onConnectedEntry;
   final VoidCallback? onOpenPekerjaan;
-  final bool allowSessionSettings;
   final VoidCallback? onSignOut;
   final Map<String, VoidCallback> catalogLinks;
 
@@ -55,8 +53,23 @@ class PengaturanPage extends StatelessWidget {
             entry.key == 'Pemasok' ? 'people' : 'science',
             entry.value,
           ),
-        if (onSignOut != null)
-          TextButton(onPressed: onSignOut, child: const Text('Keluar')),
+        if (onSignOut != null) ...[
+          const SizedBox(height: NiraSpace.xl),
+          OutlinedButton.icon(
+            onPressed: onSignOut,
+            icon: const Icon(Icons.logout, size: 20),
+            label: const Text('Keluar'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, 48),
+              backgroundColor: Colors.white,
+              side: const BorderSide(color: niraLeaf),
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(niraRadius)),
+              ),
+            ),
+          ),
+          const SizedBox(height: NiraSpace.sm),
+        ],
       ],
     ),
   );
@@ -101,24 +114,44 @@ class PengaturanPage extends StatelessWidget {
 
   Widget _row(SettingEntry entry, BuildContext context) {
     final callbacks = onConnectedEntry;
-    final open =
-        callbacks?[entry.section] ??
-        (callbacks == null || allowSessionSettings
-            ? () => _open(context, entry)
-            : null);
-    return _menuRow(entry.title, entry.subtitle, entry.icon, open);
+    if (callbacks == null) {
+      return _menuRow(
+        entry.title,
+        entry.subtitle,
+        entry.icon,
+        () => _open(context, entry),
+      );
+    }
+    final open = callbacks[entry.section];
+    if (open == null) return const SizedBox.shrink();
+    return _menuRow(
+      entry.title,
+      switch (entry.section) {
+        SettingSection.identity => 'Nama pabrik, tenant, dan peran',
+        SettingSection.facilities => 'Wajan yang tercatat di produksi',
+        SettingSection.shifts => 'Pencatatan sif pada Nota Produksi',
+        SettingSection.access => 'Lihat anggota dan peran di pabrik ini',
+        SettingSection.rules => 'Ringkasan aturan yang berlaku',
+        SettingSection.grades => 'Klasifikasi hasil produksi A, B, dan C',
+        SettingSection.additives => 'Pencatatan BTP pada Nota Produksi',
+        SettingSection.forms => 'Pratinjau kolom dan satuan nota',
+        SettingSection.prices => 'Harga dan biaya tercatat per kloter',
+        SettingSection.operators => entry.subtitle,
+      },
+      entry.icon,
+      open,
+    );
   }
 
   Widget _menuRow(
     String title,
     String subtitle,
     String icon,
-    VoidCallback? open,
+    VoidCallback open,
   ) {
     return Semantics(
       label: title,
-      button: open != null,
-      enabled: open != null,
+      button: true,
       onTap: open,
       excludeSemantics: true,
       child: InkWell(
@@ -139,14 +172,13 @@ class PengaturanPage extends StatelessWidget {
                     ),
                     const SizedBox(height: NiraSpace.xs),
                     Text(
-                      open == null ? 'Belum tersedia' : subtitle,
+                      subtitle,
                       style: niraText(NiraType.caption, color: niraLeaf),
                     ),
                   ],
                 ),
               ),
-              if (open != null)
-                const Icon(Icons.chevron_right, color: niraGreen, size: 20),
+              const Icon(Icons.chevron_right, color: niraGreen, size: 20),
             ],
           ),
         ),

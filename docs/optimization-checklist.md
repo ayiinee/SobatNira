@@ -13,7 +13,7 @@ berarti perubahan sudah di-commit, digabung, atau diterapkan ke database tim/pro
 - `[ ]` berarti belum selesai, termasuk pekerjaan parsial atau keputusan yang belum disepakati.
 - Pertahankan ID tugas saat memindahkan urutan, agar referensi review tetap stabil.
 - Setelah perubahan, perbarui centang, tanggal tinjauan, bukti, dan pekerjaan berikutnya.
-- Setelah satu unit pekerjaan selesai dan diverifikasi, commit dengan Conventional Commits lalu push ke branch kerja di remote. Penggabungan ke main dan deployment mengikuti proses rilis tersendiri.
+- Sesuai instruksi pengguna 25 November 2026, pisahkan unit pekerjaan berikutnya ke branch per lingkup dari `main` terbaru. Setelah diverifikasi, commit dengan Conventional Commits, push branch tersebut, lalu merge dan push ke `main` tanpa membuat PR. Deployment dan penerapan migrasi tetap melalui proses rilis tersendiri.
 - Catat pengujian yang dilewati/gagal serta batas hasil pengukuran; jangan menggantinya dengan klaim selesai.
 - Simpan kredensial, nota asli, identitas mitra dan dokumen internal di luar Git.
 
@@ -306,7 +306,9 @@ dicatat, bukan hasil menjalankan ulang tes saat memperbarui checklist.
 
 ### Riwayat commit implementasi
 
-Branch kerja: `perf/api-staged-photo-upload`.
+Branch implementasi awal: `perf/api-staged-photo-upload`. Integrasi dengan perubahan
+`main` berikutnya dikerjakan pada `perf/optimization-main-integration`; pekerjaan baru
+selanjutnya menggunakan branch terpisah per lingkup, sesuai instruksi 25 November 2026.
 
 | Tanggal | Commit | Cakupan |
 | --- | --- | --- |

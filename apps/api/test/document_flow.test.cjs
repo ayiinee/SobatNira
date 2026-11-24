@@ -655,7 +655,20 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     assert.deepEqual(await scoped('review-notifications', factory), { unread_count: 1 });
     assert.deepEqual(await scoped('review-notifications', otherFactory), { unread_count: 0 });
     assert.deepEqual(await scoped('review-notifications', factory, 'other-user'), { unread_count: 0 });
-    assert.deepEqual((await scoped('review-tasks', factory)).items.map((task) => task.id), [taskId]);
+    const tasks = (await scoped('review-tasks', factory)).items;
+    assert.deepEqual(tasks.map((task) => task.id), [taskId]);
+    const received = encodeURIComponent(tasks[0].received_at);
+    const filtered = (query, user = 'reviewer') =>
+      mobile(`review-tasks?factory_id=${factory}&${query}`, user).then(response => response.json());
+    const sameType = `document_type=TRUCK_ARRIVAL_NOTE&received_from=${received}&page_size=1`;
+    assert.deepEqual((await filtered(sameType)).items.map(task => task.id), [taskId]);
+    assert.deepEqual((await filtered(sameType + '&page=2')).items, []);
+    assert.deepEqual((await filtered(sameType, 'other-user')).items, []);
+    assert.deepEqual((await filtered('document_type=PRODUCTION_NOTE')).items, []);
+    assert.deepEqual((await filtered(`received_before=${received}`)).items, []);
+    assert.equal((await mobile('review-tasks?document_type=INVALID')).status, 400);
+    assert.equal((await mobile('review-tasks?received_from=2026-11-16')).status, 400);
+    assert.equal((await mobile(`review-tasks?received_from=${received}&received_before=${received}`)).status, 400);
     assert.deepEqual((await scoped('review-tasks', otherFactory)).items, []);
     assert.deepEqual((await scoped('review-tasks', factory, 'other-user')).items, []);
     assert.equal((await mobile('review-tasks?factory_id=bogus')).status, 400);

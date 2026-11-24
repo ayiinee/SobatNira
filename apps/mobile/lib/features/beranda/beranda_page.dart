@@ -23,6 +23,7 @@ class BerandaPage extends StatefulWidget {
     this.profile,
     this.summary,
     this.profit,
+    this.period = 'Semua tanggal',
     this.reportStatus,
     this.statusMessage,
     this.pager,
@@ -41,6 +42,7 @@ class BerandaPage extends StatefulWidget {
   final Widget? reportStatus;
   final String? profit;
   final ConnectedLotPager? pager;
+  final String period;
 
   @override
   State<BerandaPage> createState() => _BerandaPageState();
@@ -203,6 +205,7 @@ class _BerandaPageState extends State<BerandaPage> {
                         ),
                       ],
                     ),
+                    const Text('Kloter semua tanggal'),
                     if (widget.statusMessage case final status?
                         when status is! NiraLoading)
                       Padding(
@@ -258,7 +261,11 @@ class _BerandaPageState extends State<BerandaPage> {
             profile: widget.profile,
           ),
           const SizedBox(height: NiraSpace.lg),
-          _ProductionSummary(summary: widget.summary, profit: widget.profit),
+          _ProductionSummary(
+            summary: widget.summary,
+            profit: widget.profit,
+            period: widget.period,
+          ),
           if (widget.reportStatus != null) widget.reportStatus!,
           const SizedBox(height: NiraSpace.md),
           _QuickActions(onSelected: widget.onQuickAction),
@@ -391,8 +398,9 @@ class _ProfileState extends State<_Profile> {
 }
 
 class _ProductionSummary extends StatefulWidget {
-  const _ProductionSummary({this.summary, this.profit});
+  const _ProductionSummary({this.summary, this.profit, required this.period});
   final String? profit;
+  final String period;
   final ({String cane, String lots})? summary;
 
   @override
@@ -509,9 +517,7 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                           const SizedBox(width: NiraSpace.sm),
                           Expanded(
                             child: Text(
-                              formatDate(DateTime.now()),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                              widget.period,
                               style: niraText(
                                 NiraType.caption,
                                 color: Colors.white,

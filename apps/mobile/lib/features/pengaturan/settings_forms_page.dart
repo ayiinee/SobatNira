@@ -53,13 +53,9 @@ const _production = <_Mapping>[
 ];
 
 class SettingsFormsPage extends StatefulWidget {
-  const SettingsFormsPage({
-    required this.settings,
-    required this.onNavigate,
-    super.key,
-  });
+  const SettingsFormsPage({this.settings, required this.onNavigate, super.key});
 
-  final SettingsDemo settings;
+  final SettingsDemo? settings;
   final ValueChanged<NiraTab> onNavigate;
 
   @override
@@ -74,6 +70,8 @@ class _SettingsFormsPageState extends State<SettingsFormsPage> {
     List<_Mapping> mappings,
     String template,
   ) async {
+    final settings = widget.settings;
+    if (settings == null) return;
     final field = '$template.${mapping.field}';
     final result = await showSettingsEditor(
       context,
@@ -86,7 +84,7 @@ class _SettingsFormsPageState extends State<SettingsFormsPage> {
             for (final other in mappings) {
               final otherKey = '$template.${other.field}';
               if (other.label.toLowerCase() == query ||
-                  widget.settings
+                  settings
                       .aliasesFor(otherKey)
                       .any((alias) => alias.toLowerCase() == query)) {
                 return 'Label ini sudah digunakan pada formulir.';
@@ -98,7 +96,7 @@ class _SettingsFormsPageState extends State<SettingsFormsPage> {
       ],
     );
     if (result == null || !mounted) return;
-    widget.settings.addAlias(field, result['Label OCR tambahan']!);
+    settings.addAlias(field, result['Label OCR tambahan']!);
     showSettingsSaved(context);
   }
 
@@ -106,43 +104,64 @@ class _SettingsFormsPageState extends State<SettingsFormsPage> {
   Widget build(BuildContext context) {
     final mappings = _selected == 0 ? _arrival : _production;
     final template = _selected == 0 ? 'arrival' : 'production';
-    return ListenableBuilder(
-      listenable: widget.settings,
-      builder: (context, _) => SettingsPageFrame(
-        title: 'Formulir produksi',
-        subtitle: 'Pratinjau field dan pemetaan OCR',
-        onNavigate: widget.onNavigate,
-        children: [
-          DropdownButtonFormField<int>(
-            initialValue: _selected,
-            decoration: settingsInputDecoration('Jenis nota'),
-            isExpanded: true,
-            items: const [
-              DropdownMenuItem(value: 0, child: Text('Nota Kedatangan Truk')),
-              DropdownMenuItem(value: 1, child: Text('Nota Produksi')),
+    final settings = widget.settings;
+    Widget page() => SettingsPageFrame(
+      title: 'Formulir produksi',
+      subtitle: 'Pratinjau kolom dan pemetaan OCR',
+      onNavigate: widget.onNavigate,
+      keepTitleVisible: settings == null,
+      children: [
+        SettingsPanel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              DropdownButtonFormField<int>(
+                initialValue: _selected,
+                decoration: settingsInputDecoration('Jenis nota'),
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(
+                    value: 0,
+                    child: Text('Nota Kedatangan Truk'),
+                  ),
+                  DropdownMenuItem(value: 1, child: Text('Nota Produksi')),
+                ],
+                onChanged: (value) => setState(() => _selected = value ?? 0),
+              ),
+              const SizedBox(height: NiraSpace.md),
+              Text(
+                'Kolom wajib tetap ada meski nilainya belum diisi atau tidak terbaca.'
+                '${settings == null ? '' : ' Alias disimpan sebagai draf demo.'}',
+                style: niraText(NiraType.body, color: niraLeaf),
+              ),
             ],
-            onChanged: (value) => setState(() => _selected = value ?? 0),
           ),
-          const SizedBox(height: 12),
-          const SettingsNote(
-            'Wajib pada schema berarti field harus ada. Nilainya dapat '
-            'berstatus belum diisi atau tidak terbaca. Alias disimpan sebagai draf demo.',
+        ),
+        const SizedBox(height: NiraSpace.md),
+        SettingsPanel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var index = 0; index < mappings.length; index++) ...[
+                if (index > 0) const Divider(height: 1, color: niraLine),
+                _mappingRow(mappings[index], mappings, template),
+              ],
+            ],
           ),
-          const SizedBox(height: 10),
-          for (final mapping in mappings) ...[
-            _mappingRow(mapping, mappings, template),
-            const Divider(height: 1, color: niraLine),
-          ],
-          if (_selected == 1) ...[
-            const SizedBox(height: 12),
-            const SettingsNote(
-              'Kolom yang belum terpetakan tetap dicatat dengan label mentah. '
-              'Maknanya menunggu konfirmasi.',
-            ),
-          ],
+        ),
+        if (_selected == 1) ...[
+          const SizedBox(height: NiraSpace.md),
+          const SettingsMessage(
+            icon: Icons.info_outline,
+            message:
+                'Kolom yang belum terpetakan tetap dicatat dengan label mentah.',
+          ),
         ],
-      ),
+      ],
     );
+    return settings == null
+        ? page()
+        : ListenableBuilder(listenable: settings, builder: (_, _) => page());
   }
 
   Widget _mappingRow(
@@ -151,9 +170,10 @@ class _SettingsFormsPageState extends State<SettingsFormsPage> {
     String template,
   ) {
     final key = '$template.${mapping.field}';
-    final aliases = widget.settings.aliasesFor(key);
+    final settings = widget.settings;
+    final aliases = settings?.aliasesFor(key) ?? const <String>[];
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: NiraSpace.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -170,14 +190,21 @@ class _SettingsFormsPageState extends State<SettingsFormsPage> {
                         weight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 3),
-                    SettingsNote('${mapping.field} · ${mapping.unit}'),
-                    const SettingsNote('Wajib pada schema'),
-                    if (mapping.note != null) SettingsNote(mapping.note!),
+                    const SizedBox(height: NiraSpace.xs),
+                    Text(
+                      '${mapping.field} · ${mapping.unit}',
+                      style: niraText(NiraType.body, color: niraLeaf),
+                    ),
+                    if (settings != null)
+                      const SettingsNote('Wajib pada skema'),
+                    if (mapping.note != null) ...[
+                      const SizedBox(height: NiraSpace.xs),
+                      SettingsNote(mapping.note!),
+                    ],
                   ],
                 ),
               ),
-              if (mapping.note == null)
+              if (settings != null && mapping.note == null)
                 IconButton(
                   tooltip: 'Tambah alias ${mapping.label}',
                   onPressed: () => _addAlias(mapping, mappings, template),
@@ -185,7 +212,7 @@ class _SettingsFormsPageState extends State<SettingsFormsPage> {
                 ),
             ],
           ),
-          if (aliases.isNotEmpty)
+          if (settings != null && aliases.isNotEmpty)
             Wrap(
               spacing: 6,
               runSpacing: 3,
@@ -194,7 +221,7 @@ class _SettingsFormsPageState extends State<SettingsFormsPage> {
                   InputChip(
                     label: Text(alias),
                     deleteButtonTooltipMessage: 'Hapus alias $alias',
-                    onDeleted: () => widget.settings.removeAlias(key, alias),
+                    onDeleted: () => settings.removeAlias(key, alias),
                   ),
               ],
             ),

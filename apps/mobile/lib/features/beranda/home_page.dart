@@ -18,20 +18,21 @@ import '../kloter/kloter_detail_page.dart';
 import '../kloter/kloter_list_page.dart';
 import '../laporan/demo_analytics.dart';
 import '../laporan/laporan_page.dart';
+import '../laporan/owner_report_export_page.dart';
 import '../laporan/connected_report_controls.dart';
 import '../laporan/report_detail_page.dart';
 import '../laporan/report_export_page.dart';
 import '../laporan/printable_report.dart';
 import '../pekerjaan/review_api.dart';
 import '../pengaturan/pengaturan_page.dart';
+import '../pengaturan/connected_settings_page.dart';
 import '../pengaturan/settings_demo.dart';
+import '../pengaturan/settings_forms_page.dart';
 import '../pengaturan/harga_biaya_page.dart';
 import '../pengaturan/connected_expenses_page.dart';
 import '../../sobatnira_ui.dart';
 
 import '../../widgets/page_frame.dart';
-
-const _localMode = String.fromEnvironment('SOBATNIRA_MODE') == 'local';
 
 class NiraHome extends StatefulWidget {
   const NiraHome({
@@ -83,9 +84,6 @@ class _NiraHomeState extends State<NiraHome> {
   }
 
   List<DemoKloter> get _lots => _live?.lots ?? _demo.kloter;
-  bool get _allowSessionSettings =>
-      _live == null || (_localMode && widget.scope?.role == 'admin');
-
   String get _role => widget.scope?.role == 'owner' ? 'Pemilik' : 'Admin';
   String _factoryLabel(FactoryScope factory) {
     final count = widget.factories
@@ -130,6 +128,13 @@ class _NiraHomeState extends State<NiraHome> {
           onFactoryChanged: _live == null ? null : _selectFactory,
           profile: _live == null ? null : _role,
           summary: _summary(),
+          period:
+              _live?.reports.period ??
+              switch (_analytics.dateFilter?.range) {
+                final range? =>
+                  '${formatDate(range.start)} – ${formatDate(range.end)}',
+                null => 'Semua tanggal',
+              },
           profit:
               _live?.reports.summary.amount(
                 'productionMarginRupiah',
@@ -167,11 +172,18 @@ class _NiraHomeState extends State<NiraHome> {
           analytics: _analytics,
           reports: _live?.reports,
           onOpenDetail: _openReportDetail,
+          onOpenExport: widget.scope?.role == 'owner' && _live != null
+              ? () => _navigator.push<void>(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        OwnerReportExportPage(reports: _live.reports),
+                  ),
+                )
+              : null,
         ),
         NiraTab.pengaturan => PengaturanPage(
           settings: _settings,
           onNavigate: _navigate,
-          allowSessionSettings: _allowSessionSettings,
           onOpenPekerjaan: _live == null ? null : _openPekerjaan,
           connectedProfile: _live == null
               ? null
@@ -179,8 +191,10 @@ class _NiraHomeState extends State<NiraHome> {
           onConnectedEntry: _live == null
               ? null
               : {
-                  SettingSection.operators: () =>
-                      _openCatalog(ProductionCatalog.operators),
+                  for (final entry in [...factoryEntries, ...productionEntries])
+                    if (entry.section != SettingSection.access ||
+                        widget.scope!.role == 'owner')
+                      entry.section: () => _openSettings(entry, _live),
                 },
           catalogLinks: _live == null
               ? const {}
@@ -209,6 +223,40 @@ class _NiraHomeState extends State<NiraHome> {
     return (
       cane: demoNumber(_analytics.caneTotal),
       lots: '${_analytics.visibleLots.length}',
+    );
+  }
+
+  void _openSettings(SettingEntry entry, ConnectedProduction live) {
+    if (entry.section == SettingSection.operators) {
+      _openCatalog(ProductionCatalog.operators);
+      return;
+    }
+    _navigator.push<void>(
+      MaterialPageRoute(
+        builder: (_) => ListenableBuilder(
+          listenable: live.reports,
+          builder: (_, _) {
+            final synthetic = live.reports.synthetic;
+            return switch (entry.section) {
+              SettingSection.forms => SettingsFormsPage(onNavigate: _navigate),
+              SettingSection.prices => ConnectedExpensesPage(
+                key: ValueKey(synthetic),
+                production: live,
+                fromSettings: true,
+                onNavigate: _navigate,
+              ),
+              _ => ConnectedSettingsPage(
+                key: ValueKey(synthetic),
+                entry: entry,
+                api: live.api,
+                scope: live.scope,
+                synthetic: synthetic,
+                onNavigate: _navigate,
+              ),
+            };
+          },
+        ),
+      ),
     );
   }
 

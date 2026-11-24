@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+const defaultGradeCodes = ['A', 'B', 'C'];
+
 class SettingsDemo extends ChangeNotifier {
   FactoryProfile factory = (
     name: 'Pabrik Demo',
@@ -41,7 +43,7 @@ class SettingsDemo extends ChangeNotifier {
   static const currentAccountId = 1;
 
   final grades = [
-    for (final (index, code) in ['A', 'B', 'C'].indexed)
+    for (final (index, code) in defaultGradeCodes.indexed)
       DemoItem(index + 1, (name: 'Grade $code', code: code)),
   ];
   final additives = [
