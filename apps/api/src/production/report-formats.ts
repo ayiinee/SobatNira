@@ -1,10 +1,17 @@
 import { Workbook } from 'exceljs';
-import { PDFDocument, StandardFonts } from 'pdf-lib';
+import { PDFDocument } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { Batches } from './batches';
 
 export type ReportSnapshot = Awaited<ReturnType<Batches['productionReport']>>;
 export type ReportFormat = 'pdf' | 'xlsx';
 export const formats: ReportFormat[] = ['pdf', 'xlsx'];
+
+export class UnsupportedReportCharacter extends Error {
+  constructor() { super('Karakter laporan belum didukung font PDF.'); }
+}
 
 export const reportMime = {
   pdf: 'application/pdf',
@@ -55,12 +62,14 @@ export async function renderReport(format: ReportFormat, snapshot: ReportSnapsho
   pdf.setTitle('SobatNira - Rekap produksi');
   pdf.setCreationDate(createdAt);
   pdf.setModificationDate(createdAt);
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  pdf.registerFontkit(fontkit);
+  const font = await pdf.embedFont(await readFile(resolve(__dirname, '../../assets/fonts/Inter-Regular.ttf')), { subset: true });
+  const supported = new Set(font.getCharacterSet());
   let page = pdf.addPage([842, 595]);
   let y = 550;
   const line = (value: string, size = 10) => {
-    // The PDF uses a standard font. The Excel artifact retains the full stored text.
-    const text = value.replace(/[^\x20-\x7e]/g, '?').replace(/\s+/g, ' ');
+    const text = value.replace(/\s+/g, ' ');
+    if ([...text].some(char => !supported.has(char.codePointAt(0)!))) throw new UnsupportedReportCharacter();
     if (y < 35) { page = pdf.addPage([842, 595]); y = 550; }
     page.drawText(text, { x: 30, y, size, font, maxWidth: 782, lineHeight: 12 });
     y -= Math.max(1, Math.ceil(font.widthOfTextAtSize(text, size) / 710)) * 12 + 4;

@@ -13,6 +13,7 @@ WORKDIR /app/apps/api
 COPY --from=build /app/apps/api/node_modules ./node_modules
 COPY --from=build /app/apps/api/dist ./dist
 COPY apps/api/migrations ./migrations
+COPY apps/api/assets ./assets
 COPY docs/ai/schemas /app/docs/ai/schemas
 USER node
 EXPOSE 3000

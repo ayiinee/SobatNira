@@ -9,6 +9,7 @@ import { reopenActiveClosure } from '../juice/lot-closure.service';
 import { object, uuid, text, timestamp, scopeValues, found, parsePage } from './production.dto';
 import { decimal, sumDecimals, compareDecimals } from './decimal';
 import { calculateProductionPreview } from './calculation';
+import { rebuildSnapshots } from './snapshots';
 import { batchGradeTotals, type Grade, productionReport, ProductionReportLot } from './production-report';
 
 type ReportPeriod = { from: string; before: string; synthetic: string };
@@ -18,6 +19,11 @@ function checkReportSize(items: ProductionReportLot[], maxLots?: number) {
         throw new BadRequestException('Persempit periode laporan agar semua kloter dapat dihitung.');
     }
 }
+export function assertGradeWeight(physicalWeightKg: string, grades: Grade[]) {
+    if (compareDecimals(sumDecimals(grades.map(g => g.weightKg)), physicalWeightKg) !== 0)
+        throw new BadRequestException('Total berat grade harus sama dengan berat fisik batch.');
+}
+
 export function parseBatch(input: unknown) {
     const b = object(input, ['id', 'lotId', 'code', 'wokNumber', 'occurredAt', 'quantityMl', 'physicalWeightKg', 'grades', 'synthetic']);
     if (!Number.isSafeInteger(b.wokNumber) || Number(b.wokNumber) < 1 || Number(b.wokNumber) > 10000)
@@ -67,31 +73,39 @@ export class Batches {
         });
     }
     async costs(access: FactoryAccess, lotId: string, input: unknown) {
-        const b = object(input, ['caneCostRupiah', 'operationalCostRupiah', 'ingredientCostRupiah', 'otherCostRupiah']);
+        const { version, ...b } = object(input, ['version', 'caneCostRupiah', 'operationalCostRupiah', 'ingredientCostRupiah', 'otherCostRupiah']);
+        if (version !== undefined && (!Number.isSafeInteger(version) || Number(version) < 1))
+            throw new BadRequestException('Versi biaya tidak valid.');
         const c = calculateProductionPreview({ ...b, caneNetKg: '1', rounding: 'HALF_UP', grades: [{ code: 'CHECK', weightKg: '1', pricePerKgRupiah: '0' }] }).costs;
         return this.juice.mutate(access, async (tx) => {
             await this.juice.lockLots(tx, access, [lotId]);
+            if (version !== undefined) {
+                const old = (await tx.query('SELECT version FROM sobatnira.lot_production_costs WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3', [access.tenantId, access.factoryId, lotId])).rows[0];
+                if (!old || old.version !== version) throw new ConflictException('Biaya sudah berubah. Muat ulang.');
+            }
             const approved = await tx.query('SELECT 1 FROM sobatnira.production_calculation_snapshots WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3', [access.tenantId, access.factoryId, lotId]);
             if (approved.rows.length)
                 throw new ConflictException('Biaya historis sudah dibekukan.');
             return (await tx.query(`INSERT INTO sobatnira.lot_production_costs(tenant_id,factory_id,lot_id,cane_rupiah,operational_rupiah,ingredient_rupiah,other_rupiah,created_by)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(tenant_id,factory_id,lot_id) DO UPDATE SET cane_rupiah=$4,operational_rupiah=$5,ingredient_rupiah=$6,other_rupiah=$7 RETURNING *`, [access.tenantId, access.factoryId, lotId, c.caneRupiah, c.operationalRupiah, c.ingredientRupiah, c.otherRupiah, access.userId])).rows[0];
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(tenant_id,factory_id,lot_id) DO UPDATE SET cane_rupiah=$4,operational_rupiah=$5,ingredient_rupiah=$6,other_rupiah=$7,version=sobatnira.lot_production_costs.version+1,updated_by=$8,updated_at=clock_timestamp() RETURNING *`, [access.tenantId, access.factoryId, lotId, c.caneRupiah, c.operationalRupiah, c.ingredientRupiah, c.otherRupiah, access.userId])).rows[0];
         });
     }
     async approve(access: FactoryAccess, id: string) {
         return this.juice.mutate(access, async (tx) => {
             const b = await this.lockBatch(tx, access, id);
             if (b.status === 'approved')
-                return found((await tx.query('SELECT * FROM sobatnira.production_calculation_snapshots WHERE batch_id=$1 AND correction_id IS NULL', [id])).rows[0]);
+                return found((await tx.query('SELECT * FROM sobatnira.production_calculation_snapshots WHERE batch_id=$1 AND lot_id=$2 AND correction_id IS NULL AND cost_correction_id IS NULL', [id, b.lot_id])).rows[0]);
             if (b.status !== 'draft')
                 throw new ConflictException('Batch tidak dapat disahkan.');
             const scope = [access.tenantId, access.factoryId, b.lot_id, b.is_synthetic];
             if ((await tx.query('SELECT 1 FROM sobatnira.lot_closures WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3 AND is_synthetic=$4 AND reopened_at IS NULL', scope)).rows.length)
                 throw new ConflictException('Kloter sudah ditutup.');
-            // Single-origin approval only until mixed-result allocation policy is agreed.
+            // Holder must match the cooking lot; each origin remains traceable.
             const reservations = (await tx.query(`SELECT * FROM sobatnira.juice_reservations WHERE tenant_id=$1 AND factory_id=$2 AND batch_id=$3 AND state<>'released' ORDER BY request_id FOR UPDATE`, [access.tenantId, access.factoryId, id])).rows;
-            if (!reservations.length || reservations.some(r => r.lot_id !== b.lot_id || r.origin_lot_id !== b.lot_id || r.is_synthetic !== b.is_synthetic || !['reserved', 'consumed'].includes(r.state)) || compareDecimals(sumDecimals(reservations.map(r => String(r.quantity_ml))), String(b.quantity_ml)) !== 0)
-                throw new ConflictException('Reservasi harus sesuai volume dan satu asal kloter. Batch campuran belum boleh disahkan.');
+            if (!reservations.length || reservations.some(r => r.lot_id !== b.lot_id || r.is_synthetic !== b.is_synthetic || !['reserved', 'consumed'].includes(r.state)) || compareDecimals(sumDecimals(reservations.map(r => String(r.quantity_ml))), String(b.quantity_ml)) !== 0)
+                throw new ConflictException('Reservasi harus sesuai volume, pabrik, dan kategori batch.');
+            const grades = (await tx.query<Grade>('SELECT code,weight_kg::text AS "weightKg",price_per_kg_rupiah::text AS "pricePerKgRupiah" FROM sobatnira.batch_grade_results WHERE batch_id=$1', [id])).rows;
+            assertGradeWeight(String(b.physical_weight_kg), grades);
             await tx.query("UPDATE sobatnira.juice_reservations SET state='consumed',finalized_by=$4,finalized_at=clock_timestamp() WHERE tenant_id=$1 AND factory_id=$2 AND batch_id=$3 AND state='reserved'", [access.tenantId, access.factoryId, id, access.userId]);
             await tx.query("UPDATE sobatnira.production_batches SET status='approved',approved_by=$2,approved_at=clock_timestamp() WHERE id=$1", [id, access.userId]);
             const snapshot = await this.snapshot(tx, access, {id, lot_id: b.lot_id, is_synthetic: b.is_synthetic}, null);
@@ -101,33 +115,9 @@ export class Batches {
     }
     private async snapshot(tx: DatabaseSession, access: FactoryAccess,
         batch: {id: string; lot_id: string; is_synthetic: boolean}, correctionId: string | null) {
-        const scope = [access.tenantId, access.factoryId, batch.lot_id, batch.is_synthetic];
-        const cost = found((await tx.query('SELECT * FROM sobatnira.lot_production_costs WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3', scope.slice(0, 3))).rows[0]);
-        const receipt = found((await tx.query('SELECT net_weight_kg::text AS weight FROM sobatnira.intake_records WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3 AND is_synthetic=$4', scope)).rows[0]);
-        const grades = (await tx.query(`SELECT g.code,g.weight_kg::text AS "weightKg",g.price_per_kg_rupiah::text AS "pricePerKgRupiah"
-FROM sobatnira.batch_grade_results g JOIN sobatnira.production_batches pb ON pb.id=g.batch_id WHERE pb.tenant_id=$1 AND pb.factory_id=$2 AND pb.lot_id=$3 AND pb.is_synthetic=$4 AND pb.status='approved'`, scope)).rows;
-        const combined = new Map<string, {
-            code: string;
-            weightKg: string;
-            pricePerKgRupiah: string;
-        }>();
-        for (const grade of grades) {
-            const key = grade.code + ':' + grade.pricePerKgRupiah;
-            const previous = combined.get(key);
-            if (previous)
-                previous.weightKg = sumDecimals([previous.weightKg, grade.weightKg]);
-            else
-                combined.set(key, { code: 'G_' + combined.size, weightKg: grade.weightKg, pricePerKgRupiah: grade.pricePerKgRupiah });
-        }
-        const input = { caneNetKg: receipt.weight, caneCostRupiah: String(cost.cane_rupiah), operationalCostRupiah: String(cost.operational_rupiah), ingredientCostRupiah: String(cost.ingredient_rupiah), otherCostRupiah: String(cost.other_rupiah), rounding: 'HALF_UP', grades: [...combined.values()] };
-        const preview = calculateProductionPreview(input);
-        const output = { ...preview, mode: 'approved', persisted: true, calculationVersion: 'production-v1' };
-        return (await tx.query(`INSERT INTO sobatnira.production_calculation_snapshots
-          (tenant_id,factory_id,lot_id,batch_id,calculation_version,input_snapshot,output_snapshot,is_synthetic,approved_by,correction_id)
-          VALUES($1,$2,$3,$4,'production-v1',$5,$6,$7,$8,$9) RETURNING *`,
-          [access.tenantId, access.factoryId, batch.lot_id, batch.id, JSON.stringify(input), JSON.stringify(output),
-            batch.is_synthetic, access.userId, correctionId])).rows[0];
+        return rebuildSnapshots(tx, access, batch, correctionId);
     }
+
     async detail(access: FactoryAccess, id: string) {
         const { rows: [row] } = await this.db.query<{ id: string; code: string; lot_id: string; wok_number: number;
           occurred_at: string; status: string; is_synthetic: boolean; lotClosureId: string | null; grades: Grade[] | null }>(`WITH ${FACTORY_SCOPE_CTE}
@@ -214,6 +204,7 @@ FROM sobatnira.batch_grade_results g JOIN sobatnira.production_batches pb ON pb.
             }
             if (action === 'approve') {
                 const data = existing.proposed_data as ReturnType<typeof correctionData>;
+                assertGradeWeight(data.physicalWeightKg, data.grades);
                 await tx.query('UPDATE sobatnira.production_batches SET physical_weight_kg=$2 WHERE id=$1', [id, data.physicalWeightKg]);
                 await tx.query('DELETE FROM sobatnira.batch_grade_results WHERE batch_id=$1', [id]);
                 for (const grade of data.grades) {
@@ -316,7 +307,16 @@ FROM sobatnira.batch_grade_results g JOIN sobatnira.production_batches pb ON pb.
             s.name AS supplier,l.received_at AS "receivedAt",i.net_weight_kg::text AS "caneNetKg",
             i.cane_type_code AS "caneType",trim_scale(COALESCE(mc.quantity_after,m.juice_produced_liters))::text AS "juiceLiters",
             p.id AS "calculationSnapshotId", p.calculation_version AS "calculationVersion",
-            p.output_snapshot AS calculation,COALESCE(b.items,'[]'::jsonb) AS batches,
+            p.output_snapshot AS calculation,CASE WHEN p.calculation_version='production-v2' THEN
+            ${includeJuiceSources ? `(SELECT jsonb_agg(entry || jsonb_build_object('consumedByOrigin', COALESCE((
+              SELECT jsonb_agg(to_jsonb(src)) FROM (
+                SELECT r.origin_lot_id AS "originLotId",COALESCE(l.display_code,l.id::text) AS "lotCode",
+                  trim_scale(sum(r.quantity_ml))::text AS "quantityMl"
+                FROM sobatnira.juice_reservations r WHERE r.tenant_id=l.tenant_id AND r.factory_id=l.factory_id
+                  AND r.batch_id=(entry->>'id')::uuid AND r.origin_lot_id=l.id
+                  AND r.is_synthetic=$4 AND r.state='consumed' GROUP BY r.origin_lot_id
+              ) src),'[]'::jsonb))) FROM jsonb_array_elements(p.input_snapshot->'allocatedBatches') entry)` : "p.input_snapshot->'allocatedBatches'"}
+            ELSE COALESCE(b.items,'[]'::jsonb) END AS batches,
             EXISTS(SELECT 1 FROM sobatnira.lot_closures c
               WHERE (c.tenant_id,c.factory_id,c.lot_id,c.is_synthetic)=(l.tenant_id,l.factory_id,l.id,i.is_synthetic)
               AND c.reopened_at IS NULL) AS closed
@@ -326,7 +326,7 @@ FROM sobatnira.batch_grade_results g JOIN sobatnira.production_batches pb ON pb.
           JOIN sobatnira.intake_records i ON i.lot_id=l.id AND i.tenant_id=l.tenant_id AND i.factory_id=l.factory_id AND i.is_synthetic=$4
           LEFT JOIN sobatnira.milling_records m ON m.lot_id=l.id AND m.tenant_id=l.tenant_id AND m.factory_id=l.factory_id AND m.is_synthetic=$4
           LEFT JOIN LATERAL (SELECT quantity_after FROM sobatnira.stock_reconciliations WHERE milling_record_id=m.id ORDER BY revision_version DESC LIMIT 1) mc ON true
-          LEFT JOIN LATERAL (SELECT id,calculation_version,output_snapshot FROM sobatnira.production_calculation_snapshots
+          LEFT JOIN LATERAL (SELECT id,calculation_version,input_snapshot,output_snapshot FROM sobatnira.production_calculation_snapshots
             WHERE lot_id=l.id AND tenant_id=l.tenant_id AND factory_id=l.factory_id AND is_synthetic=$4
             ORDER BY approved_at DESC,id DESC LIMIT 1) p ON true
           LEFT JOIN LATERAL (SELECT jsonb_agg(jsonb_build_object(
@@ -372,14 +372,14 @@ FROM sobatnira.batch_grade_results g JOIN sobatnira.production_batches pb ON pb.
    SELECT l.id AS "lotId",l.display_code AS code,s.name AS supplier,l.received_at AS "receivedAt",p.id AS "snapshotId",p.output_snapshot AS calculation,
     EXISTS(SELECT 1 FROM sobatnira.lot_closures c WHERE (c.tenant_id,c.factory_id,c.lot_id,c.is_synthetic)=
       (p.tenant_id,p.factory_id,p.lot_id,p.is_synthetic) AND c.reopened_at IS NULL) AS closed
-    ${includeBatches ? `, (SELECT jsonb_agg(jsonb_build_object('id',b.id,'code',b.code,'wokNumber',b.wok_number,
+    ${includeBatches ? `, CASE WHEN p.calculation_version='production-v2' THEN p.input_snapshot->'allocatedBatches' ELSE (SELECT jsonb_agg(jsonb_build_object('id',b.id,'code',b.code,'wokNumber',b.wok_number,
        'occurredAt',b.occurred_at,'volumeMl',b.quantity_ml::text,'physicalWeightKg',b.physical_weight_kg::text,
        'grades',(SELECT jsonb_agg(jsonb_build_object('code',g.code,'weightKg',g.weight_kg::text) ORDER BY g.code)
          FROM sobatnira.batch_grade_results g WHERE g.batch_id=b.id)) ORDER BY b.occurred_at,b.id)
        FROM sobatnira.production_batches b
        WHERE (b.tenant_id,b.factory_id,b.lot_id,b.is_synthetic)=(p.tenant_id,p.factory_id,p.lot_id,p.is_synthetic)
          AND b.status='approved' AND EXISTS(SELECT 1 FROM sobatnira.production_calculation_snapshots bs
-           WHERE bs.batch_id=b.id AND bs.correction_id IS NULL AND (bs.approved_at,bs.id)<=(p.approved_at,p.id))) AS batches` : ''}
+           WHERE bs.batch_id=b.id AND bs.correction_id IS NULL AND (bs.approved_at,bs.id)<=(p.approved_at,p.id))) END AS batches` : ''}
    FROM latest p JOIN sobatnira.lots l ON l.id=p.lot_id JOIN sobatnira.suppliers s ON s.id=l.supplier_id
    WHERE ($5::timestamptz IS NULL OR l.received_at >= $5) AND ($6::timestamptz IS NULL OR l.received_at < $6)
    ORDER BY l.received_at DESC,l.id`, [...scopeValues(access), q.synthetic === 'true', from, before])).rows;

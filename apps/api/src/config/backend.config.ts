@@ -178,6 +178,11 @@ export function loadConfiguration(options: ConfigOptions = {}): BackendConfig {
     if (config.r2.publicProbeBaseUrl) credentialEndpoint('R2_PUBLIC_BASE_URL', config.r2.publicProbeBaseUrl, true);
   }
 
+  if (value('REPORT_EXPORT_ENABLED') === 'true' && (environment === 'production' || value('SOBATNIRA_MODE') === 'connected')) {
+    if (!config.r2) invalid.push('R2_ENDPOINT');
+    if (!config.r2?.publicProbeBaseUrl) invalid.push('R2_PUBLIC_BASE_URL');
+  }
+
   if (invalid.length) throw new ConfigurationError(invalid);
   return config;
 }

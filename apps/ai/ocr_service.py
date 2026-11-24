@@ -1,5 +1,5 @@
 import base64
-from concurrent.futures import ThreadPoolExecutor
+from paddle_worker import NativeWorker
 from datetime import datetime, timezone
 from functools import lru_cache
 from io import BytesIO
@@ -34,7 +34,7 @@ MAX_PIXELS = 20_000_000
 NOTE_SCHEMA_VERSION = "1.0.0"
 NOTE_TEMPLATE_VERSION = "1.0.0"
 VISION_PROMPT_VERSION = "crop-transcription-v1"
-PADDLE_WORKER = ThreadPoolExecutor(max_workers=1, thread_name_prefix="sobatnira-paddle")
+
 router = APIRouter()
 
 
@@ -141,12 +141,21 @@ def paddle_engine():
 
 
 def warm_paddle():
-    PADDLE_WORKER.submit(paddle_engine).result()
+    PADDLE_WORKER.run(None, False)
 
 
 def recognize(image, preprocess):
-    # Keep the cached native predictor on the thread that initialized it.
-    return PADDLE_WORKER.submit(_recognize, image, preprocess).result()
+    return PADDLE_WORKER.run(image, preprocess)
+
+
+def _paddle_call(image, preprocess):
+    if image is None:
+        paddle_engine()
+        return None
+    return _recognize(image, preprocess)
+
+
+PADDLE_WORKER = NativeWorker(_paddle_call)
 
 
 def _recognize(image, preprocess):

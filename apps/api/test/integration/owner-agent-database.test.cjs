@@ -103,11 +103,11 @@ test('OpenClaw owner session, official answers and recoverable report exports', 
   const snapshot = await fixture.request(path + '/' + id + '/snapshot', 'GET', undefined, owner);
   assert.equal(snapshot.status, 200);
   assert.equal(snapshot.body.snapshot.totals.finalSugarKg, '30');
-  assert.equal((await fixture.request(path + '/' + id, 'GET')).status, 403);
+  assert.equal((await fixture.request(path + '/' + id, 'GET')).status, 404);
   const getFile = (format, actor = owner) => fetch(fixture.base + path + '/' + id + '/files/' + format,
     { headers: { Authorization: 'Bearer ' + actor } });
   assert.equal((await getFile('pdf')).status, 409);
-  assert.equal((await getFile('pdf', 'fixture-admin')).status, 403);
+  assert.equal((await getFile('pdf', 'fixture-admin')).status, 404);
   const notifications = [];
   const send = async value => { notifications.push(value); return 'synthetic-provider-receipt'; };
   assert.equal(await bridge.deliverReportNotice(send), false);
@@ -146,6 +146,15 @@ test('OpenClaw owner session, official answers and recoverable report exports', 
   assert.equal(sheet.getCell('B8').value, '30');
   assert.equal(sheet.getCell('B11').value, snapshot.body.snapshot.totals.productionMarginRupiah);
   assert.ok((await realRead(stored.artifacts.pdf.key, 'reports')).length > 0);
+
+  const adminJob = await reports.request({ tenantId: fixture.ids.tenant, factoryId: fixture.ids.factory,
+    userId: fixture.ids.admin, role: 'admin' }, randomUUID(),
+    { from: '2026-11-16T00:00:00Z', before: '2026-11-17T00:00:00Z', synthetic: false });
+  assert.equal((await fixture.request(path + '/' + adminJob.id, 'GET')).status, 200);
+  assert.equal((await fixture.request(path + '/' + adminJob.id, 'GET', undefined, owner)).status, 404);
+  assert.equal(await reports.processOne(), true);
+  assert.equal((await fetch(fixture.base + path + '/' + adminJob.id + '/files/pdf',
+    { headers: { Authorization: 'Bearer fixture-admin' } })).status, 200);
 
   await fixture.client.query(`UPDATE sobatnira.factory_memberships SET is_active=false
     WHERE (factory_id,user_id)=($1,$2)`, [fixture.ids.factory, fixture.ids.owner]);

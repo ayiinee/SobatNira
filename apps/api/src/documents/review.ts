@@ -183,14 +183,14 @@ export class Review {
   }
 
   async asset(user: string, task: string, asset: string) {
-    const { rows: [record] } = await this.db.query(`SELECT m.object_key,m.mime_type FROM admin_review_tasks t
+    const { rows: [record] } = await this.db.query(`SELECT m.object_key,m.mime_type,m.size_bytes,m.sha256 FROM admin_review_tasks t
       JOIN source_documents d ON d.id=t.document_id JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1 AND a.active AND ${ACTIVE_REVIEW_ACCESS_SQL}
       JOIN document_revisions tr ON tr.id=t.revision_id
       JOIN document_revisions r ON r.document_id=d.id AND r.version<=tr.version
       JOIN document_submissions s ON s.id=r.submission_id JOIN media_assets m ON m.id=s.media_asset_id AND m.factory_id=d.factory_id
       WHERE t.id=$2 AND m.id=$3 LIMIT 1`, [user, task, asset]);
     if (!record) throw new NotFoundException('Foto tidak ditemukan');
-    return record as { object_key: string; mime_type: string };
+    return record as { object_key: string; mime_type: string; size_bytes: string; sha256: string };
   }
 
   async change(user: string, document: string, action: 'CORRECT' | 'VALIDATE' | 'RETURN' | 'MANUAL_ENTRY' | 'RECONCILE', key: string | undefined,

@@ -159,6 +159,7 @@ export class Intake {
         docId = document.id;
       }
       const key = digest(json([operator.factory_id, event.provider_message_id, sha]));
+      await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', ['sobatnira:media:' + key]);
       await this.media.put(key, mime, media);
       const { rows: [asset] } = await db.query(`INSERT INTO media_assets (factory_id, object_key, mime_type, size_bytes, sha256)
         VALUES ($1,$2,$3,$4,$5) RETURNING id`, [operator.factory_id, key, mime, media.length, sha]);

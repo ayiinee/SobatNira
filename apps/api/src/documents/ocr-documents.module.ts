@@ -126,9 +126,9 @@ class OcrMediaController {
   async get(@Headers('x-internal-service-token') token: string, @Param('key') key: string) {
     requireServiceToken(token, process.env.AI_SERVICE_INTERNAL_TOKEN);
     if (!/^[a-f0-9]{64}$/.test(key)) throw new NotFoundException();
-    const { rows: [asset] } = await this.db.query('SELECT mime_type FROM media_assets WHERE object_key=$1', [key]);
+    const { rows: [asset] } = await this.db.query<{ mime_type: string; size_bytes: string; sha256: string }>('SELECT mime_type,size_bytes,sha256 FROM media_assets WHERE object_key=$1', [key]);
     if (!asset) throw new NotFoundException();
-    return new StreamableFile(await this.media.read(key), { type: asset.mime_type });
+    return new StreamableFile(await this.media.verifiedRead(key, asset), { type: asset.mime_type });
   }
 }
 
@@ -184,7 +184,7 @@ class MobileReviewController {
   @Header('X-Content-Type-Options', 'nosniff')
   async asset(@Headers('authorization') token: string, @Param('id') id: string, @Param('asset') asset: string) {
     const media = await this.review.asset(await this.review.user(token), requireUuid(id), requireUuid(asset));
-    return new StreamableFile(await this.media.read(media.object_key), { type: media.mime_type, disposition: 'inline' });
+    return new StreamableFile(await this.media.verifiedRead(media.object_key, media), { type: media.mime_type, disposition: 'inline' });
   }
 
   @Patch('documents/:id/draft')

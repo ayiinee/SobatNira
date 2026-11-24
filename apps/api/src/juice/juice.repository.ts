@@ -39,6 +39,9 @@ export class JuiceRepository {
         AND fm.tenant_id = $2::uuid AND fm.factory_id = $3::uuid AND fm.role = $4
         FOR SHARE OF fm, tm, f, t`, [...scopeValues(access), access.role]);
       if (!membership.rows.length) throw new ForbiddenException('Akses pabrik tidak lagi tersedia.');
+      // ponytail: serialize stock mutations per factory; use component locks if throughput requires it.
+      await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+        [`sobatnira:production:${access.tenantId}:${access.factoryId}`]);
       return work(tx);
     });
   }
@@ -123,7 +126,7 @@ export class JuiceRepository {
             AND r.factory_id=b.factory_id AND r.state<>'released') AS reserved
         FROM sobatnira.production_batches b WHERE b.tenant_id=$1 AND b.factory_id=$2 AND b.id=$3 FOR SHARE OF b`,
         [...scope, input.batchId]);
-      if (batch && (batch.lot_id !== lotId || originLotId !== lotId || batch.is_synthetic !== input.synthetic ||
+      if (batch && (batch.lot_id !== lotId || batch.is_synthetic !== input.synthetic ||
           batch.status !== 'draft' || compareDecimals(sumDecimals([batch.reserved, input.quantityMl]), batch.volume) > 0)) {
         throw new ConflictException('Reservasi harus sesuai draf, asal kloter, dan volume batch.');
       }

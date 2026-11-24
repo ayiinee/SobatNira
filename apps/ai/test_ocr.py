@@ -18,6 +18,10 @@ from ocr_parser import Token, extract
 from ocr_service import SCHEMAS, recognize, validate_runtime, warm_paddle
 
 
+def worker_identity():
+    return (__import__("os").getpid(), get_ident())
+
+
 def token(text, x, y):
     return Token(text, 0.93, (x, y, 0.07, 0.02))
 
@@ -37,14 +41,15 @@ class OcrTest(TestCase):
     def post(self):
         return self.client.post("/internal/v1/ocr/extract", json=self.request, headers=self.headers)
 
-    def test_cached_predictor_warmup_and_inference_share_a_thread(self):
-        initialized = []
-        with (patch("ocr_service.paddle_engine", side_effect=lambda: initialized.append(get_ident())),
-              patch("ocr_service._recognize", side_effect=lambda image, preprocess: get_ident())):
-            warm_paddle()
-            inference = recognize(self.image, False)
-        self.assertEqual(initialized, [inference])
-        self.assertNotEqual(inference, get_ident())
+    def test_cached_worker_reuses_child_process_and_thread(self):
+        from paddle_worker import NativeWorker
+        worker = NativeWorker(worker_identity, timeout=15)
+        try:
+            first = worker.run()
+            self.assertEqual(worker.run(), first)
+            self.assertNotEqual(first[0], __import__('os').getpid())
+        finally:
+            worker.close()
 
     def test_whatsapp_jpeg_reaches_extraction(self):
         self.request["image"]["mime_type"] = "image/jpeg"
@@ -288,7 +293,7 @@ class OcrTest(TestCase):
     def test_readiness_reports_its_mode_after_authentication(self):
         env = {"AI_SERVICE_INTERNAL_TOKEN": self.headers["X-Internal-Service-Token"], "SOBATNIRA_MODE": "local"}
         path = "/internal/v1/ocr/ready"
-        with patch.dict("os.environ", env), patch("ocr_service.paddle_engine") as engine:
+        with patch.dict("os.environ", env), patch("ocr_service.warm_paddle") as engine:
             self.assertEqual(self.client.get(path).status_code, 401)
             engine.assert_not_called()
             response = self.client.get(path, headers=self.headers)

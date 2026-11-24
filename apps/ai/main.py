@@ -2,13 +2,16 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from ocr_service import router as ocr_router
-from ocr_service import validate_runtime
+from ocr_service import validate_runtime, PADDLE_WORKER
 
 
 @asynccontextmanager
 async def lifespan(_app):
     validate_runtime()
-    yield
+    try:
+        yield
+    finally:
+        PADDLE_WORKER.close()
 
 
 app = FastAPI(title="SobatNira AI", lifespan=lifespan)

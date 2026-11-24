@@ -78,7 +78,7 @@ jobs:
               await client.query(`CREATE ROLE anon NOLOGIN;
                 CREATE ROLE authenticated NOLOGIN;
                 CREATE SCHEMA auth;
-                CREATE TABLE auth.users (id uuid PRIMARY KEY, aud text, role text, email text)`);
+                CREATE TABLE auth.users (id uuid PRIMARY KEY, aud text, role text, email text, created_at timestamptz, updated_at timestamptz)`);
             } finally { await client.end(); }
           }
           prepare().catch((error) => { console.error(error.message); process.exitCode = 1; });
@@ -91,7 +91,7 @@ jobs:
       - name: Verify batch and nira transactions
         env:
           DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
-        run: node --test test/integration/batches-database.test.cjs test/integration/juice-database.test.cjs test/integration/owner-agent-database.test.cjs
+        run: node --test --test-concurrency=1 test/integration/*database.test.cjs
 
   ai:
     name: FastAPI unit tests
@@ -112,3 +112,16 @@ jobs:
         run: uv sync --locked --python 3.13
       - name: Test AI service
         run: uv run --locked python -m unittest
+
+  paddle-smoke:
+    name: Native Paddle synthetic smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/ai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --locked --python 3.13 --extra paddle
+      - run: uv run --locked --extra paddle python smoke_paddle.py

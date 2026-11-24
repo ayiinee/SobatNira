@@ -28,7 +28,7 @@ function percentage(sugar: bigint, cane: bigint): string {
 }
 
 /** Explicit input simulation, never posts stock, approvals or accounting entries. */
-export function calculateProductionPreview(input: unknown) {
+export function calculateProductionPreview(input: unknown, internal = false) {
   const body = object(input, ['caneNetKg', 'caneCostRupiah', 'operationalCostRupiah', 'ingredientCostRupiah', 'otherCostRupiah', 'rounding', 'grades']);
   if (body.rounding !== 'HALF_UP') throw new BadRequestException('Pilih rounding HALF_UP secara eksplisit untuk simulasi ini.');
   const cane = quantity(body.caneNetKg, 'caneNetKg');
@@ -36,7 +36,7 @@ export function calculateProductionPreview(input: unknown) {
   const operating = money(body.operationalCostRupiah, 'operationalCostRupiah');
   const ingredients = money(body.ingredientCostRupiah, 'ingredientCostRupiah');
   const other = money(body.otherCostRupiah, 'otherCostRupiah');
-  if (!Array.isArray(body.grades) || body.grades.length < 1 || body.grades.length > 100) {
+  if (!Array.isArray(body.grades) || (!internal && body.grades.length < 1) || (!internal && body.grades.length > 100)) {
     throw new BadRequestException('grades harus memuat 1–100 hasil grade.');
   }
   const seen = new Set<string>();
