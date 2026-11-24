@@ -99,70 +99,84 @@ class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
     final subtitle =
         '${widget.scope.factoryName} \u00b7 ${widget.scope.tenantName}';
     final children = <Widget>[
-      TextField(
-        controller: _search,
-        maxLength: 100,
-        decoration: InputDecoration(
-          labelText: 'Cari ${widget.kind.itemLabel}',
-          suffixIcon: IconButton(
-            tooltip: 'Cari',
-            icon: const Icon(Icons.search),
-            onPressed: () {
-              _query = _search.text.trim();
-              _reload(reset: true);
-            },
-          ),
+      Container(
+        padding: const EdgeInsets.all(NiraSpace.md),
+        decoration: BoxDecoration(
+          color: niraGreen.withValues(alpha: .045),
+          border: Border.all(color: niraLine),
+          borderRadius: BorderRadius.circular(niraRadius * 2),
         ),
-        onSubmitted: (value) {
-          _query = value.trim();
-          _reload(reset: true);
-        },
-      ),
-      if (!widget.selectSupplier)
-        DropdownButtonFormField<String>(
-          initialValue: 'all',
-          decoration: const InputDecoration(labelText: 'Status'),
-          items: const [
-            DropdownMenuItem(value: 'all', child: Text('Semua status')),
-            DropdownMenuItem(value: 'active', child: Text('Aktif')),
-            DropdownMenuItem(value: 'inactive', child: Text('Nonaktif')),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: NiraSpace.md,
+          children: [
+            TextField(
+              controller: _search,
+              maxLength: 100,
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                labelText: 'Cari ${widget.kind.itemLabel}',
+                counterText: '',
+                suffixIcon: IconButton(
+                  tooltip: 'Cari',
+                  icon: const Icon(Icons.search, size: 22),
+                  onPressed: () => _submitSearch(_search.text),
+                ),
+              ),
+              onSubmitted: _submitSearch,
+            ),
+            if (!widget.selectSupplier)
+              DropdownButtonFormField<String>(
+                initialValue: 'all',
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Status'),
+                items: const [
+                  DropdownMenuItem(value: 'all', child: Text('Semua status')),
+                  DropdownMenuItem(value: 'active', child: Text('Aktif')),
+                  DropdownMenuItem(value: 'inactive', child: Text('Nonaktif')),
+                ],
+                onChanged: (value) {
+                  _active = switch (value) {
+                    'active' => true,
+                    'inactive' => false,
+                    _ => null,
+                  };
+                  _reload(reset: true);
+                },
+              ),
           ],
-          onChanged: (value) {
-            _active = switch (value) {
-              'active' => true,
-              'inactive' => false,
-              _ => null,
-            };
-            _reload(reset: true);
-          },
         ),
-      if (!widget.selectSupplier)
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            onPressed: () => _edit(),
-            icon: const Icon(Icons.add, size: 18),
-            label: Text('Tambah ${widget.kind.itemLabel}'),
+      ),
+      if (!widget.selectSupplier) ...[
+        const SizedBox(height: NiraSpace.lg),
+        FilledButton.icon(
+          onPressed: () => _edit(),
+          icon: const Icon(Icons.add, size: 20),
+          label: Text(
+            'Tambah ${widget.kind.itemLabel}',
+            textAlign: TextAlign.center,
           ),
         ),
+      ],
+      const SizedBox(height: NiraSpace.xl),
       NiraPagedFutureBuilder<Json>(
         future: _page,
         page: _offset,
-        dataset: (widget.scope.factoryId, widget.kind, _query),
+        dataset: (widget.scope.factoryId, widget.kind, _query, _active),
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const NiraLoading(label: 'Memuat daftar…');
           }
           if (snapshot.hasError) {
-            return Column(
-              children: [
-                Text(
-                  snapshot.error is ReviewApiError
-                      ? (snapshot.error as ReviewApiError).message
-                      : 'Data gagal dimuat.',
-                ),
-                TextButton(onPressed: _reload, child: const Text('Coba lagi')),
-              ],
+            return _notice(
+              icon: Icons.error_outline,
+              label: snapshot.error is ReviewApiError
+                  ? (snapshot.error as ReviewApiError).message
+                  : 'Data gagal dimuat.',
+              action: TextButton(
+                onPressed: _reload,
+                child: const Text('Coba lagi'),
+              ),
             );
           }
           final page = snapshot.requireData;
@@ -174,62 +188,34 @@ class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
               NiraPageBody(
                 height: _pageHeight,
                 firstPage: _offset == 0,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (items.isEmpty)
-                      const ListTile(title: Text('Data tidak ditemukan.')),
-                    for (final item in items) ...[
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(
-                          item[_isOperator ? 'displayName' : 'name'] as String,
-                          style: niraText(
-                            NiraType.section,
-                            weight: FontWeight.w700,
-                          ),
+                child: items.isEmpty
+                    ? _notice(
+                        icon: Icons.inbox_outlined,
+                        label: 'Data tidak ditemukan.',
+                        detail: _query.isNotEmpty || _active != null
+                            ? 'Ubah kata kunci atau filter status.'
+                            : null,
+                      )
+                    : Card(
+                        margin: EdgeInsets.zero,
+                        elevation: 0,
+                        color: Colors.white,
+                        clipBehavior: Clip.antiAlias,
+                        shape: RoundedRectangleBorder(
+                          side: const BorderSide(color: niraLine),
+                          borderRadius: BorderRadius.circular(niraRadius * 1.5),
                         ),
-                        subtitle: Text(
-                          [
-                            if (_isOperator) item['phoneE164'] as String,
-                            if (item['code'] != null) '${item['code']}',
-                            item['isActive'] == true ? 'Aktif' : 'Nonaktif',
-                          ].join(' · '),
-                          style: niraText(NiraType.caption, color: niraLeaf),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            for (final (index, item) in items.indexed) ...[
+                              if (index > 0)
+                                const Divider(height: 1, color: niraLine),
+                              _catalogRow(item),
+                            ],
+                          ],
                         ),
-                        trailing: _isOperator
-                            ? Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    tooltip: 'Edit operator',
-                                    onPressed: () => _edit(item),
-                                    icon: const Icon(Icons.edit_outlined),
-                                  ),
-                                  IconButton(
-                                    tooltip: 'Riwayat operator',
-                                    onPressed: () => _openHistory(item),
-                                    icon: const Icon(Icons.history),
-                                  ),
-                                ],
-                              )
-                            : Icon(
-                                widget.selectSupplier
-                                    ? Icons.chevron_right
-                                    : Icons.edit_outlined,
-                              ),
-                        onTap: () {
-                          if (widget.selectSupplier) {
-                            Navigator.pop(context, item);
-                          } else {
-                            _edit(item);
-                          }
-                        },
                       ),
-                      const Divider(height: 1, color: niraLine),
-                    ],
-                  ],
-                ),
               ),
               if (_offset > 0 || total > limit)
                 NiraPagination(
@@ -252,6 +238,7 @@ class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
           );
         },
       ),
+      const SizedBox(height: NiraSpace.md),
       TextButton.icon(
         onPressed: _reload,
         icon: const Icon(Icons.refresh),
@@ -271,11 +258,98 @@ class _ProductionCatalogPageState extends State<ProductionCatalogPage> {
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
-          children: [Text(subtitle), ...children],
+          children: [
+            Text(subtitle, style: niraText(NiraType.caption, color: niraLeaf)),
+            const SizedBox(height: NiraSpace.lg),
+            ...children,
+          ],
         ),
       ),
     );
   }
+
+  void _submitSearch(String value) {
+    _query = value.trim();
+    _reload(reset: true);
+  }
+
+  Widget _catalogRow(Json item) => ListTile(
+    contentPadding: const EdgeInsets.symmetric(horizontal: NiraSpace.md),
+    minVerticalPadding: NiraSpace.md,
+    horizontalTitleGap: NiraSpace.sm,
+    title: Text(
+      item[_isOperator ? 'displayName' : 'name'] as String,
+      style: niraText(NiraType.body, weight: FontWeight.w700),
+    ),
+    subtitle: Padding(
+      padding: const EdgeInsets.only(top: NiraSpace.xs),
+      child: Text(
+        [
+          if (_isOperator) item['phoneE164'] as String,
+          if (item['code'] != null) '${item['code']}',
+          item['isActive'] == true ? 'Aktif' : 'Nonaktif',
+        ].join(' · '),
+        style: niraText(NiraType.caption, color: niraLeaf),
+      ),
+    ),
+    trailing: _isOperator
+        ? Row(
+            mainAxisSize: MainAxisSize.min,
+            spacing: NiraSpace.sm,
+            children: [
+              IconButton(
+                tooltip: 'Edit operator',
+                onPressed: () => _edit(item),
+                color: niraGreen,
+                icon: const Icon(Icons.edit_outlined, size: 20),
+              ),
+              IconButton(
+                tooltip: 'Riwayat operator',
+                onPressed: () => _openHistory(item),
+                color: niraGreen,
+                icon: const Icon(Icons.history, size: 20),
+              ),
+            ],
+          )
+        : Icon(
+            widget.selectSupplier ? Icons.chevron_right : Icons.edit_outlined,
+            color: niraGreen,
+            size: 20,
+          ),
+    onTap: () {
+      if (widget.selectSupplier) {
+        Navigator.pop(context, item);
+      } else {
+        _edit(item);
+      }
+    },
+  );
+
+  Widget _notice({
+    required IconData icon,
+    required String label,
+    String? detail,
+    Widget? action,
+  }) => Semantics(
+    liveRegion: true,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: NiraSpace.xl),
+      child: Column(
+        spacing: NiraSpace.sm,
+        children: [
+          Icon(icon, color: niraLeaf),
+          Text(label, textAlign: TextAlign.center),
+          if (detail != null)
+            Text(
+              detail,
+              textAlign: TextAlign.center,
+              style: niraText(NiraType.caption, color: niraLeaf),
+            ),
+          ?action,
+        ],
+      ),
+    ),
+  );
 }
 
 class _CatalogEditor extends StatefulWidget {
@@ -385,6 +459,7 @@ class _CatalogEditorState extends State<_CatalogEditor> {
         key: _form,
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          spacing: NiraSpace.md,
           children: [
             if (widget.kind == ProductionCatalog.caneTypes)
               if (widget.item == null)

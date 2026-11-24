@@ -433,8 +433,9 @@ void main() {
       await tester.tap(find.bySemanticsLabel('Pengaturan'));
       await tester.pumpAndSettle();
       for (final label in ['Pemasok', 'Jenis tebu']) {
-        await tester.scrollUntilVisible(find.bySemanticsLabel(label), 200);
-        await tester.tap(find.bySemanticsLabel(label));
+        final row = find.bySemanticsLabel(label).hitTestable();
+        await tester.scrollUntilVisible(row, 200);
+        await tester.tap(row);
         await tester.pumpAndSettle();
         expect(
           paths.last,

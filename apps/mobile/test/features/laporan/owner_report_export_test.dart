@@ -108,6 +108,7 @@ void main() {
     expect(find.text('Unduh PDF'), findsOneWidget);
     final xlsx = find.text('Unduh XLSX');
     await tester.ensureVisible(xlsx);
+    await tester.pumpAndSettle();
     await tester.tap(xlsx);
     await tester.pumpAndSettle();
     expect(saved?.method, 'save');

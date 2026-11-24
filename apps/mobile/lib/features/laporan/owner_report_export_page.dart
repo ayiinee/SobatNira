@@ -205,68 +205,180 @@ class _OwnerReportExportPageState extends State<OwnerReportExportPage> {
     final busy = _busy || _polling;
     final status = _job?['status'];
     final formats = _job?['formats'];
+    final secondaryAction = OutlinedButton.styleFrom(
+      minimumSize: const Size(0, 48),
+      padding: const EdgeInsets.symmetric(
+        horizontal: NiraSpace.md,
+        vertical: NiraSpace.sm,
+      ),
+      side: const BorderSide(color: niraLine),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(niraRadius),
+      ),
+    );
     return NiraPageScaffold(
       title: const Text('Ekspor laporan'),
       body: ListView(
         padding: EdgeInsets.all(niraPageInset(context)),
         children: [
-          Text('Buat ekspor', style: niraText(NiraType.section)),
-          OutlinedButton(
-            onPressed: busy || _requestId != null ? null : _choosePeriod,
-            child: Text(
-              range == null
-                  ? 'Pilih periode ekspor'
-                  : '${formatDate(range.start)} – ${formatDate(range.end)}',
-            ),
-          ),
-          if (_synthetic) const Text('Menggunakan data sintetis.'),
-          FilledButton(
-            onPressed: busy || range == null ? null : _request,
-            child: Text(_requestId == null ? 'Buat laporan' : 'Coba lagi'),
+          _section(
+            icon: Icons.description_outlined,
+            title: 'Buat ekspor',
+            children: [
+              OutlinedButton(
+                style: secondaryAction,
+                onPressed: busy || _requestId != null ? null : _choosePeriod,
+                child: Row(
+                  children: [
+                    const Icon(Icons.calendar_today_outlined, size: 18),
+                    const SizedBox(width: NiraSpace.sm),
+                    Expanded(
+                      child: Text(
+                        range == null
+                            ? 'Pilih periode ekspor'
+                            : '${formatDate(range.start)} – ${formatDate(range.end)}',
+                      ),
+                    ),
+                    const Icon(Icons.expand_more, size: 20),
+                  ],
+                ),
+              ),
+              if (_synthetic)
+                Text(
+                  'Menggunakan data sintetis.',
+                  style: niraText(NiraType.caption, color: niraLeaf),
+                ),
+              FilledButton(
+                onPressed: busy || range == null ? null : _request,
+                child: Text(_requestId == null ? 'Buat laporan' : 'Coba lagi'),
+              ),
+            ],
           ),
           const SizedBox(height: NiraSpace.lg),
-          Text('Buka ekspor dari WhatsApp', style: niraText(NiraType.section)),
-          const SizedBox(height: NiraSpace.sm),
-          TextField(
-            controller: _lookupId,
-            enabled: !busy,
-            autocorrect: false,
-            decoration: const InputDecoration(labelText: 'ID ekspor'),
-            onSubmitted: (value) => _lookup(value.trim()),
+          _section(
+            icon: Icons.chat_bubble_outline,
+            title: 'Buka ekspor dari WhatsApp',
+            spacing: NiraSpace.lg,
+            children: [
+              TextField(
+                controller: _lookupId,
+                enabled: !busy,
+                autocorrect: false,
+                textInputAction: TextInputAction.search,
+                decoration: const InputDecoration(
+                  labelText: 'ID ekspor',
+                  floatingLabelBehavior: FloatingLabelBehavior.always,
+                  hintText: 'Tempel ID dari WhatsApp',
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(niraRadius)),
+                    borderSide: BorderSide(color: niraLine),
+                  ),
+                ),
+                onSubmitted: (value) => _lookup(value.trim()),
+              ),
+              OutlinedButton.icon(
+                style: secondaryAction,
+                onPressed: busy ? null : () => _lookup(_lookupId.text.trim()),
+                icon: const Icon(Icons.search, size: 18),
+                label: const Text('Cek status'),
+              ),
+            ],
           ),
-          OutlinedButton(
-            onPressed: busy ? null : () => _lookup(_lookupId.text.trim()),
-            child: const Text('Cek status'),
-          ),
-          if (_busy) const LinearProgressIndicator(),
-          if (_error case final error?)
-            Semantics(liveRegion: true, child: Text(error)),
-          if (_job case final job?) ...[
-            const SizedBox(height: NiraSpace.md),
+          if (_busy) ...[
+            const SizedBox(height: NiraSpace.lg),
+            const LinearProgressIndicator(semanticsLabel: 'Memuat ekspor'),
+          ],
+          if (_error case final error?) ...[
+            const SizedBox(height: NiraSpace.lg),
             Semantics(
               liveRegion: true,
-              child: Text(switch (status) {
+              child: Text(
+                error,
+                style: niraText(
+                  NiraType.body,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ),
+          ],
+          if (_job case final job?) ...[
+            const SizedBox(height: NiraSpace.lg),
+            _section(
+              icon: status == 'READY'
+                  ? Icons.check_circle_outline
+                  : Icons.info_outline,
+              announceTitle: true,
+              title: switch (status) {
                 'QUEUED' => 'Dalam antrean',
                 'PROCESSING' => 'Sedang diproses',
                 'READY' => 'File siap diunduh',
                 _ => 'Ekspor gagal. Buat laporan baru untuk mencoba lagi.',
-              }),
+              },
+              children: [
+                SelectableText('ID ekspor ${job['id']}'),
+                if (job['synthetic'] == true)
+                  const Text('Laporan data sintetis'),
+                if (status == 'READY' && formats is List)
+                  for (final format in ReportFileFormat.values)
+                    if (formats.contains(format.name))
+                      OutlinedButton.icon(
+                        style: secondaryAction,
+                        onPressed: busy ? null : () => _download(format),
+                        icon: const Icon(Icons.download_outlined, size: 18),
+                        label: Text('Unduh ${format.name.toUpperCase()}'),
+                      ),
+                if (_message case final message?)
+                  Semantics(liveRegion: true, child: Text(message)),
+              ],
             ),
-            SelectableText('ID ekspor ${job['id']}'),
-            if (job['synthetic'] == true) const Text('Laporan data sintetis'),
-            if (status == 'READY' && formats is List)
-              for (final format in ReportFileFormat.values)
-                if (formats.contains(format.name))
-                  OutlinedButton.icon(
-                    onPressed: busy ? null : () => _download(format),
-                    icon: const Icon(Icons.download_outlined),
-                    label: Text('Unduh ${format.name.toUpperCase()}'),
-                  ),
           ],
-          if (_message case final message?)
-            Semantics(liveRegion: true, child: Text(message)),
         ],
       ),
     );
   }
+
+  Widget _section({
+    required IconData icon,
+    required String title,
+    required List<Widget> children,
+    bool announceTitle = false,
+    double spacing = NiraSpace.md,
+  }) => Container(
+    padding: const EdgeInsets.all(NiraSpace.lg),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      border: Border.all(color: niraLine),
+      borderRadius: BorderRadius.circular(niraRadius * 2),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: spacing,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(NiraSpace.sm),
+              decoration: BoxDecoration(
+                color: niraGreen.withValues(alpha: .075),
+                borderRadius: BorderRadius.circular(niraRadius),
+              ),
+              child: Icon(icon, size: 20, color: niraGreen),
+            ),
+            const SizedBox(width: NiraSpace.md),
+            Expanded(
+              child: Semantics(
+                header: true,
+                liveRegion: announceTitle,
+                child: Text(
+                  title,
+                  style: niraText(NiraType.section, weight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ],
+        ),
+        ...children,
+      ],
+    ),
+  );
 }
