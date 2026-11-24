@@ -2,6 +2,24 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { contributionRanking, productionReport } = require('../dist/production/production-report');
 const { Batches } = require('../dist/production/batches');
+const { boundedReport, REPORT_MAX_BYTES } = require('../dist/production/report-limits');
+
+test('report limits reject overlong periods, excessive rows and bytes without returning partial totals', async () => {
+  const access = { userId:'user',tenantId:'tenant',factoryId:'factory' };
+  let calls=0;
+  const service=new Batches({query:async()=>{calls++;return {rows:Array.from({length:101},(_,n)=>lot(String(n)))}}},{});
+  for (const query of [{from:'2024-01-01T00:00:00Z',before:'2026-01-01T00:00:00Z'},
+    {view:'unknown'}, {limit:'1'}, {view:'page',limit:'0'}]) {
+    await assert.rejects(service.productionReport(access,query),e=>e.getStatus()===400);
+  }
+  assert.equal(calls,0);
+  await assert.rejects(service.productionReport(access,{}),e=>e.getStatus()===400 && /ekspor/.test(e.message));
+  assert.throws(()=>boundedReport({text:'x'.repeat(REPORT_MAX_BYTES)}),e=>e.getStatus()===400);
+  assert.equal(boundedReport({text:'valid'}).text,'valid');
+  const dense=new Batches({query:async()=>({rows:[lot('dense',null,Array(1001).fill({}))]})},{});
+  await assert.rejects(dense.productionReport(access,{}),e=>e.getStatus()===400 && /1000/.test(e.message));
+  await assert.rejects(dense.report(access,{},true),e=>e.getStatus()===400 && /1000/.test(e.message));
+});
 
 const lot = (id, calculation = null, batches = []) => ({ lotId: id, code: 'DUPLICATE',
   supplier: 'Synthetic', receivedAt: '2026-11-19T00:00:00Z', caneNetKg: '1250.01',

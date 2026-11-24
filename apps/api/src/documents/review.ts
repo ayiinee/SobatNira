@@ -78,17 +78,24 @@ export class Review {
     const from = receivedFrom === undefined ? null : timestamp(receivedFrom, 'received_from');
     const before = receivedBefore === undefined ? null : timestamp(receivedBefore, 'received_before');
     if (from && before && from >= before) throw new BadRequestException('Rentang penerimaan tidak valid');
-    const { rows } = await this.db.query(`SELECT t.id,t.document_id,t.status,d.document_type,r.id AS revision_id,r.version,
-      m.received_at,o.display_name AS sender_name,jsonb_array_length(r.issues) AS issue_count,s.media_asset_id
+    const { rows } = await this.db.query(`WITH page AS MATERIALIZED (
+      SELECT t.id,t.document_id,t.status,t.revision_id,t.created_at,d.document_type
       FROM admin_review_tasks t JOIN source_documents d ON d.id=t.document_id
       JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1 AND a.active AND ${ACTIVE_REVIEW_ACCESS_SQL}
-      JOIN document_revisions r ON r.id=t.revision_id JOIN document_submissions s ON s.id=r.submission_id
-      JOIN whatsapp_inbound_messages m ON m.id=s.inbound_message_id JOIN operator_contacts o ON o.id=m.operator_id
       WHERE t.status=$2 AND ($5::uuid IS NULL OR d.factory_id=$5) AND ($6::uuid IS NULL OR t.revision_id=$6)
         AND ($7::text IS NULL OR d.document_type=$7)
-        AND ($8::timestamptz IS NULL OR m.received_at >= $8)
-        AND ($9::timestamptz IS NULL OR m.received_at < $9)
-      ORDER BY t.created_at DESC,t.id LIMIT $3 OFFSET $4`,
+        AND (($8::timestamptz IS NULL AND $9::timestamptz IS NULL) OR EXISTS (
+          SELECT 1 FROM document_revisions rf JOIN document_submissions sf ON sf.id=rf.submission_id
+          JOIN whatsapp_inbound_messages mf ON mf.id=sf.inbound_message_id
+          WHERE rf.id=t.revision_id AND ($8::timestamptz IS NULL OR mf.received_at >= $8)
+            AND ($9::timestamptz IS NULL OR mf.received_at < $9)))
+      ORDER BY t.created_at DESC,t.id LIMIT $3 OFFSET $4
+    ) SELECT t.id,t.document_id,t.status,t.document_type,r.id AS revision_id,r.version,
+      m.received_at,o.display_name AS sender_name,jsonb_array_length(r.issues) AS issue_count,s.media_asset_id
+      FROM page t
+      JOIN document_revisions r ON r.id=t.revision_id JOIN document_submissions s ON s.id=r.submission_id
+      JOIN whatsapp_inbound_messages m ON m.id=s.inbound_message_id JOIN operator_contacts o ON o.id=m.operator_id
+      ORDER BY t.created_at DESC,t.id`,
       [user, status, limit, (page - 1) * limit, factory === undefined ? null : requireUuid(factory),
         revision === undefined ? null : requireUuid(revision), documentType ?? null, from, before]);
     return { items: rows, page, page_size: limit };
@@ -183,14 +190,14 @@ export class Review {
   }
 
   async asset(user: string, task: string, asset: string) {
-    const { rows: [record] } = await this.db.query(`SELECT m.object_key,m.mime_type FROM admin_review_tasks t
+    const { rows: [record] } = await this.db.query(`SELECT m.object_key,m.mime_type,m.sha256,m.size_bytes FROM admin_review_tasks t
       JOIN source_documents d ON d.id=t.document_id JOIN review_memberships a ON a.factory_id=d.factory_id AND a.user_id=$1 AND a.active AND ${ACTIVE_REVIEW_ACCESS_SQL}
       JOIN document_revisions tr ON tr.id=t.revision_id
       JOIN document_revisions r ON r.document_id=d.id AND r.version<=tr.version
       JOIN document_submissions s ON s.id=r.submission_id JOIN media_assets m ON m.id=s.media_asset_id AND m.factory_id=d.factory_id
       WHERE t.id=$2 AND m.id=$3 LIMIT 1`, [user, task, asset]);
     if (!record) throw new NotFoundException('Foto tidak ditemukan');
-    return record as { object_key: string; mime_type: string };
+    return record as { object_key: string; mime_type: string; sha256: string; size_bytes: number };
   }
 
   async change(user: string, document: string, action: 'CORRECT' | 'VALIDATE' | 'RETURN' | 'MANUAL_ENTRY' | 'RECONCILE', key: string | undefined,

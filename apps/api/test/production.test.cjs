@@ -2,9 +2,33 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { BadRequestException } = require('@nestjs/common');
 const { parseCaneTypeCreate, parseCaneTypeUpdate } = require('../dist/cane-types/cane-types.dto');
-const { parseSupplierInput, parseLotInput, parseSupplierQuery, parseLotQuery, timestamp } = require('../dist/production/production.dto');
+const { parseSupplierInput, parseLotInput, parseSupplierQuery, parseLotQuery, parseLotCountsQuery, timestamp } = require('../dist/production/production.dto');
 
 const supplierId = '40000000-0000-4000-8000-000000000001';
+
+test('lot status and count filters reject pagination and unsupported states', () => {
+  assert.equal(parseLotQuery({ status: 'closed', searchMode: 'normalized' }).status, 'closed');
+  assert.equal(parseLotCountsQuery({ q: 'DEMO', searchMode: 'normalized' }).q, 'DEMO');
+  for (const input of [{ status: 'done' }, { searchMode: 'unknown' }]) {
+    assert.throws(() => parseLotQuery(input), error => error.getStatus() === 400);
+  }
+  for (const input of [{ status: 'open' }, { offset: '1' }, { after: 'abc' }, { limit: '1' }]) {
+    assert.throws(() => parseLotCountsQuery(input), error => error.getStatus() === 400);
+  }
+});
+
+test('lot cursor validates boundary, mode and precision without changing legacy pagination', () => {
+  const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const date = '2026-11-16T01:00:00.123456Z';
+  assert.deepEqual(parseLotQuery({ pagination: 'cursor', after: encode([date, supplierId]), limit: '5' }),
+    { pagination: 'cursor', after: { receivedAt: date, id: supplierId }, limit: 5, offset: 0 });
+  for (const input of [{ after: encode([date, supplierId]) }, { pagination: 'invalid' },
+    { pagination: 'cursor', offset: '0' }, { pagination: 'cursor', after: 'garbage' },
+    { pagination: 'cursor', after: encode(['2026-02-30T00:00:00.000000Z', supplierId]) },
+    { pagination: 'cursor', after: encode([date, 'invalid']) }]) {
+    assert.throws(() => parseLotQuery(input), error => error.getStatus() === 400);
+  }
+});
 
 test('supplier input accepts basic metadata and rejects scope/role injection or invalid fields', () => {
   assert.deepEqual(parseSupplierInput({ name: '  Pemasok Sintetis  ' }), { name: 'Pemasok Sintetis' });

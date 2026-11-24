@@ -48,12 +48,19 @@ test('photo upload is scoped, versioned, private, idempotent and retained throug
     assert.equal(read.headers.get('x-content-type-options'), 'nosniff');
     assert.equal(read.headers.get('access-control-allow-origin'), 'http://localhost:8080');
     assert.deepEqual(Buffer.from(await read.arrayBuffer()), bytes);
+    for (const variant of ['preview', 'thumbnail']) {
+      const response = await content(photo.body.evidence.contentPath + '?variant=' + variant);
+      assert.equal(response.status, 200); assert.equal(response.headers.get('content-type'), 'image/webp');
+      assert.equal((await sharp(Buffer.from(await response.arrayBuffer())).metadata()).width, 32);
+    }
+    assert.equal((await content(photo.body.evidence.contentPath + '?variant=unknown')).status, 400);
     assert.equal((await content(photo.body.evidence.contentPath, null)).status, 401);
     const beforeCalls = r2.calls.length;
     for (const root of [f.siblingRoot, f.otherRoot]) {
       const response = await content(photo.body.evidence.contentPath.replace(f.root, root));
       assert.equal(response.status, 404);
       assert.equal((await f.request(root + '/intake-documents/' + id + '/evidence')).status, 404);
+      assert.equal((await content(photo.body.evidence.contentPath.replace(f.root, root) + '?variant=preview')).status, 404);
     }
     assert.equal(r2.calls.length, beforeCalls);
     const otherDoc = await f.create(f.ids.secondLot);

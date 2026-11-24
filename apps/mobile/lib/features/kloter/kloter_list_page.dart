@@ -8,6 +8,9 @@ import '../../widgets/nira_loading.dart';
 import 'demo_production.dart';
 import 'kloter_card.dart';
 import 'kloter_date_filter.dart';
+import 'connected_lot_pager.dart';
+import 'lot_page_footer.dart';
+import '../pekerjaan/review_api.dart';
 
 class KloterListPage extends StatefulWidget {
   const KloterListPage({
@@ -16,6 +19,7 @@ class KloterListPage extends StatefulWidget {
     this.onCreate,
     this.filterToday,
     this.statusMessage,
+    this.pager,
     super.key,
   });
 
@@ -24,6 +28,7 @@ class KloterListPage extends StatefulWidget {
   final VoidCallback? onCreate;
   final DateTime? filterToday;
   final Widget? statusMessage;
+  final ConnectedLotPager? pager;
 
   @override
   State<KloterListPage> createState() => _KloterListPageState();
@@ -46,6 +51,24 @@ class _KloterListPageState extends State<KloterListPage> {
   static const _statuses = [null, KloterStatus.review, KloterStatus.done];
   static const _datesPerPage = 10;
   static const _searchControlSize = 48.0;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.pager case final pager? when !pager.initialized) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) pager.refresh(reset: true);
+      });
+    }
+    _scroll.addListener(() {
+      final pager = widget.pager;
+      if (pager != null &&
+          pager.moreError == null &&
+          _scroll.position.extentAfter < 200) {
+        pager.loadMore();
+      }
+    });
+  }
 
   void _closeSuggestions() {
     if (!_suggestions.isShowing) return;
@@ -104,6 +127,15 @@ class _KloterListPageState extends State<KloterListPage> {
 
   String _keyFor(DemoKloter item) => item.id ?? item.code;
 
+  void _updateRemote() {
+    widget.pager?.setFilters(
+      search: _search.text,
+      status: [null, 'open', 'closed'][_activeTab],
+      date: _dateFilter,
+      selectedId: _selectedId,
+    );
+  }
+
   int _idRank(DemoKloter item, String term) {
     final code = _normalizeId(item.code);
     final id = _normalizeId(_keyFor(item));
@@ -114,6 +146,7 @@ class _KloterListPageState extends State<KloterListPage> {
   }
 
   List<DemoKloter> _matchingIds() {
+    if (widget.pager case final pager?) return pager.suggestions;
     final term = _normalizeId(_search.text);
     if (term.isEmpty) return [];
     final status = _statuses[_activeTab];
@@ -137,6 +170,7 @@ class _KloterListPageState extends State<KloterListPage> {
       _expandedDates[DateUtils.dateOnly(item.date)] = true;
       _page = 0;
     });
+    _updateRemote();
   }
 
   void _submitSearch(String value) {
@@ -164,13 +198,36 @@ class _KloterListPageState extends State<KloterListPage> {
       _dateFilter = result.selection;
       _page = 0;
     });
+    _updateRemote();
   }
 
   @override
   Widget build(BuildContext context) {
+    final pager = widget.pager;
+    final statusMessage = pager == null
+        ? widget.statusMessage
+        : pager.loading
+        ? pager.items.isEmpty
+              ? const NiraLoading(label: 'Memuat kloter…')
+              : const SizedBox(height: 4, child: LinearProgressIndicator())
+        : pager.error == null
+        ? null
+        : Column(
+            children: [
+              Text(
+                pager.error is ReviewApiError
+                    ? (pager.error as ReviewApiError).message
+                    : 'Daftar kloter gagal dimuat.',
+              ),
+              TextButton(
+                onPressed: pager.refresh,
+                child: const Text('Coba lagi daftar kloter'),
+              ),
+            ],
+          );
     final term = _search.text.trim().toLowerCase();
     final idTerm = _normalizeId(term);
-    final suggestions = _suggestions.isShowing && widget.statusMessage == null
+    final suggestions = _suggestions.isShowing && statusMessage == null
         ? _matchingIds().take(5).toList()
         : <DemoKloter>[];
     final showSuggestions =
@@ -179,13 +236,14 @@ class _KloterListPageState extends State<KloterListPage> {
     final status = _statuses[_activeTab];
     final groups = <DateTime, List<DemoKloter>>{};
     var pending = 0;
-    for (final item in widget.kloter) {
+    for (final item in pager?.items ?? widget.kloter) {
       final matchesSearch = _selectedId != null
           ? _keyFor(item) == _selectedId
           : term.isEmpty ||
                 (idTerm.isNotEmpty && _idRank(item, idTerm) < 3) ||
                 (item.id != null && item.supplier.toLowerCase().contains(term));
-      if (!matchesSearch || !(_dateFilter?.contains(item.date) ?? true)) {
+      if (pager == null &&
+          (!matchesSearch || !(_dateFilter?.contains(item.date) ?? true))) {
         continue;
       }
       if (item.status == KloterStatus.review) pending++;
@@ -196,10 +254,12 @@ class _KloterListPageState extends State<KloterListPage> {
     final dates = groups.keys.toList()..sort((a, b) => b.compareTo(a));
     final pageCount = (dates.length / _datesPerPage).ceil();
     // Keep the current page if a refresh temporarily replaces the list.
-    if (widget.statusMessage == null) {
+    if (statusMessage == null) {
       _page = _page.clamp(0, pageCount > 0 ? pageCount - 1 : 0);
     }
-    final pageDates = dates.skip(_page * _datesPerPage).take(_datesPerPage);
+    final pageDates = pager == null
+        ? dates.skip(_page * _datesPerPage).take(_datesPerPage)
+        : dates;
     final inset = niraPageInset(context);
     final tabs = NiraTabs(
       labels: const ['Semua', 'Perlu Ditinjau', 'Tuntas'],
@@ -207,7 +267,7 @@ class _KloterListPageState extends State<KloterListPage> {
       inset: 12,
       selected: _activeTab,
       badgeIndex: 1,
-      badgeCount: pending,
+      badgeCount: pager == null ? pending : pager.counts?['open'] as int? ?? 0,
       onSelected: (index) {
         FocusScope.of(context).unfocus();
         _scrollToTop();
@@ -215,6 +275,7 @@ class _KloterListPageState extends State<KloterListPage> {
           _activeTab = index;
           _page = 0;
         });
+        _updateRemote();
       },
     );
 
@@ -291,55 +352,63 @@ class _KloterListPageState extends State<KloterListPage> {
             ),
             if (!short) tabs,
             Expanded(
-              child: CustomScrollView(
-                key: const PageStorageKey('kloter-scroll'),
-                controller: _scroll,
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                slivers: [
-                  if (short) SliverToBoxAdapter(child: tabs),
-                  if (widget.statusMessage is NiraLoading)
-                    SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: widget.statusMessage,
-                    )
-                  else
-                    SliverPadding(
-                      padding: EdgeInsets.fromLTRB(
-                        inset,
-                        10,
-                        inset,
-                        NiraSpace.lg,
-                      ),
-                      sliver: SliverList.list(
-                        children: [
-                          if (widget.statusMessage case final status?)
-                            status
-                          else if (pageDates.isEmpty)
-                            _empty()
-                          else ...[
-                            for (final date in pageDates)
-                              _dateAccordion(
-                                date,
-                                groups[date]!,
-                                latest: date == pageDates.first,
-                              ),
-                            if (pageCount > 1)
-                              NiraPagination(
-                                page: _page + 1,
-                                pageCount: pageCount,
-                                onPrevious: _page > 0
-                                    ? () => _showPage(_page - 1)
-                                    : null,
-                                onNext: _page + 1 < pageCount
-                                    ? () => _showPage(_page + 1)
-                                    : null,
-                              ),
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  if (pager != null) await pager.refresh();
+                },
+                child: CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  key: const PageStorageKey('kloter-scroll'),
+                  controller: _scroll,
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  slivers: [
+                    if (short) SliverToBoxAdapter(child: tabs),
+                    if (statusMessage is NiraLoading &&
+                        (pager == null || pager.items.isEmpty))
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: statusMessage,
+                      )
+                    else
+                      SliverPadding(
+                        padding: EdgeInsets.fromLTRB(
+                          inset,
+                          10,
+                          inset,
+                          NiraSpace.lg,
+                        ),
+                        sliver: SliverList.list(
+                          children: [
+                            ?statusMessage,
+                            if (pageDates.isEmpty && statusMessage == null)
+                              _empty()
+                            else if (pageDates.isNotEmpty) ...[
+                              for (final date in pageDates)
+                                _dateAccordion(
+                                  date,
+                                  groups[date]!,
+                                  latest: date == pageDates.first,
+                                ),
+                              if (pager == null && pageCount > 1)
+                                NiraPagination(
+                                  page: _page + 1,
+                                  pageCount: pageCount,
+                                  onPrevious: _page > 0
+                                      ? () => _showPage(_page - 1)
+                                      : null,
+                                  onNext: _page + 1 < pageCount
+                                      ? () => _showPage(_page + 1)
+                                      : null,
+                                ),
+                            ],
+                            if (pager != null && !pager.loading)
+                              LotPageFooter(pager),
                           ],
-                        ],
+                        ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
@@ -393,9 +462,12 @@ class _KloterListPageState extends State<KloterListPage> {
                           ),
                         ),
                         const SizedBox(width: NiraSpace.sm),
-                        Text(
-                          '${items.length} kloter',
-                          style: niraText(NiraType.caption, color: niraLeaf),
+                        Flexible(
+                          child: Text(
+                            '${items.length} kloter${widget.pager?.hasMore == true ? ' dimuat' : ''}',
+                            textAlign: TextAlign.end,
+                            style: niraText(NiraType.caption, color: niraLeaf),
+                          ),
                         ),
                         const SizedBox(width: NiraSpace.sm),
                         AnimatedRotation(
@@ -524,6 +596,7 @@ class _KloterListPageState extends State<KloterListPage> {
         _highlighted = null;
         _suggestions.show();
         _showPage(0);
+        _updateRemote();
       },
       onSubmitted: _submitSearch,
       decoration: InputDecoration(
@@ -557,6 +630,7 @@ class _KloterListPageState extends State<KloterListPage> {
                   _selectedId = null;
                   _suggestions.hide();
                   _showPage(0);
+                  _updateRemote();
                 },
                 tooltip: 'Hapus pencarian',
                 icon: const Icon(Icons.close, size: 16, color: niraGreen),

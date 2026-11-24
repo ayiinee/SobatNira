@@ -92,6 +92,17 @@ jobs:
         env:
           DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
         run: node --test test/integration/batches-database.test.cjs test/integration/juice-database.test.cjs test/integration/owner-agent-database.test.cjs
+      - name: Verify optimization scopes and consistency
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+        run: >-
+          node --test --test-concurrency=1
+          test/integration/production-database.test.cjs
+          test/integration/report-pagination.test.cjs
+          test/integration/storage-audit-database.test.cjs
+          test/integration/database-pool.test.cjs
+          test/integration/evidence-database.test.cjs
+          test/integration/catalog-cache-database.test.cjs
 
   ai:
     name: FastAPI unit tests

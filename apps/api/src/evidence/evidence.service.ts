@@ -7,6 +7,7 @@ import { EvidenceRepository, publicEvidence } from './evidence.repository';
 import { EvidenceFile, EvidenceUpload } from './evidence.types';
 import { validateEvidence } from './evidence.validation';
 import { R2EvidenceStorage } from './r2-evidence.storage';
+import { ImageVariant, renderImageVariant } from './image-variant';
 
 @Injectable()
 export class EvidenceService {
@@ -71,8 +72,10 @@ export class EvidenceService {
     return { document: result.document, evidence: result.evidence };
   }
 
-  async content(access: FactoryAccess, documentId: string, id: string) {
+  async content(access: FactoryAccess, documentId: string, id: string, variant: ImageVariant = 'original') {
     const evidence = found(await this.evidence.stored(access, documentId, id));
-    return { bytes: await this.storage.read(evidence), evidence: publicEvidence(evidence) };
+    const result = await renderImageVariant(() => this.storage.read(evidence),
+      { sha256: evidence.sha256, bytes: evidence.byteSize, mime: evidence.contentType }, variant);
+    return { ...result, evidence: publicEvidence(evidence) };
   }
 }

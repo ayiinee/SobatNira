@@ -10,12 +10,16 @@ import { object, uuid, text, timestamp, scopeValues, found, parsePage } from './
 import { decimal, sumDecimals, compareDecimals } from './decimal';
 import { calculateProductionPreview } from './calculation';
 import { batchGradeTotals, type Grade, productionReport, ProductionReportLot } from './production-report';
+import { REPORT_MAX_LOTS, boundedReport, reportPeriod } from './report-limits';
 
 type ReportPeriod = { from: string; before: string; synthetic: string };
 
 function checkReportSize(items: ProductionReportLot[], maxLots?: number) {
+    if (items.some(lot => lot.batches.length > 1000)) {
+        throw new BadRequestException('Laporan melebihi 1000 batch per kloter. Hubungi admin untuk pembagian laporan.');
+    }
     if (maxLots !== undefined && items.length > maxLots) {
-        throw new BadRequestException('Persempit periode laporan agar semua kloter dapat dihitung.');
+        throw new BadRequestException('Persempit periode laporan atau gunakan ekspor asinkron agar semua kloter dapat dihitung.');
     }
 }
 export function parseBatch(input: unknown) {
@@ -275,20 +279,74 @@ FROM sobatnira.batch_grade_results g JOIN sobatnira.production_batches pb ON pb.
           [...scopeValues(access), page.limit, page.offset, lotId, synthetic]);
         return { items: rows.rows, ...page };
     }
-    async productionReport(access: FactoryAccess, query: unknown, maxLots?: number, includeJuiceSources = false) {
-        const q = object(query, ['from', 'before', 'synthetic', 'lotId']);
+    async productionReport(access: FactoryAccess, query: unknown, maxLots = REPORT_MAX_LOTS, includeJuiceSources = false) {
+        const q = object(query, ['from', 'before', 'synthetic', 'lotId', 'view', 'limit', 'offset']);
+        if (q.view !== undefined && !['summary', 'page'].includes(String(q.view))) throw new BadRequestException('view laporan tidak valid.');
+        if (q.view !== 'page' && (q.limit !== undefined || q.offset !== undefined)) throw new BadRequestException('Pagination memerlukan view=page.');
         if (q.synthetic !== undefined && !['true', 'false'].includes(String(q.synthetic)))
             throw new BadRequestException('synthetic tidak valid.');
         const from = q.from === undefined ? null : timestamp(q.from, 'from');
         const before = q.before === undefined ? null : timestamp(q.before, 'before');
-        if (from && before && from >= before) throw new BadRequestException('Periode tidak valid.');
+        reportPeriod(from, before);
         const synthetic = q.synthetic === 'true';
         const lotId = q.lotId === undefined ? null : uuid(q.lotId, 'lotId');
+        if (q.view === 'summary') return this.reportSummary(access, synthetic, from, before, lotId);
+        if (q.view === 'page') {
+          const page = parsePage({ limit: q.limit, offset: q.offset });
+          return this.db.transaction(async session => {
+          await session.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY', []);
+          const summary = await this.reportSummary(access, synthetic, from, before, lotId, session);
+          const items = await this.reportRows(access, synthetic, from, before,
+            { limit: page.limit + 1, offset: page.offset, includeJuiceSources, lotId, session });
+          const more = items.length > page.limit;
+          checkReportSize(items);
+          return boundedReport({ ...summary, view: 'page', items: productionReport(items.slice(0, page.limit)).items,
+            ...page, nextOffset: more ? page.offset + page.limit : null });
+          });
+        }
         const items = await this.reportRows(access, synthetic, from, before, {
           limit: maxLots === undefined ? null : maxLots + 1, includeJuiceSources, lotId,
         });
         checkReportSize(items, maxLots);
-        return { factory: access.factoryName, from, before, synthetic, periodBasis: 'lot_received_at', ...productionReport(items) };
+        return boundedReport({ factory: access.factoryName, from, before, synthetic, periodBasis: 'lot_received_at', ...productionReport(items) });
+    }
+
+    async reportSummary(access: FactoryAccess, synthetic: boolean, from: string | null, before: string | null, lotId: string | null, session: DatabaseSession = this.db) {
+        const { rows: [row] } = await session.query<ReturnType<typeof productionReport>['totals'] & {
+          grades: ReturnType<typeof productionReport>['grades']; provisional: boolean; latestReceivedAt: Date | null;
+        }>(`WITH ${FACTORY_SCOPE_CTE}, selected AS (
+          SELECT l.id,l.received_at,i.net_weight_kg,p.output_snapshot AS calculation,
+            p.id AS snapshot_id, EXISTS(SELECT 1 FROM sobatnira.lot_closures c
+              WHERE (c.tenant_id,c.factory_id,c.lot_id,c.is_synthetic)=(l.tenant_id,l.factory_id,l.id,$4)
+              AND c.reopened_at IS NULL) AS closed
+          FROM sobatnira.lots l JOIN authorized_scope a ON (l.tenant_id,l.factory_id)=(a."tenantId",a."factoryId")
+          JOIN sobatnira.intake_records i ON (i.tenant_id,i.factory_id,i.lot_id,i.is_synthetic)=(l.tenant_id,l.factory_id,l.id,$4)
+          LEFT JOIN LATERAL (SELECT id,output_snapshot FROM sobatnira.production_calculation_snapshots
+            WHERE (tenant_id,factory_id,lot_id,is_synthetic)=(l.tenant_id,l.factory_id,l.id,$4)
+            ORDER BY approved_at DESC,id DESC LIMIT 1) p ON true
+          WHERE ($5::timestamptz IS NULL OR l.received_at >= $5) AND ($6::timestamptz IS NULL OR l.received_at < $6)
+            AND ($7::uuid IS NULL OR l.id=$7)
+        ), approved AS (
+          SELECT b.id FROM sobatnira.production_batches b JOIN selected s ON s.id=b.lot_id
+          WHERE (b.tenant_id,b.factory_id,b.is_synthetic)=($2,$3,$4) AND b.status='approved'
+        ) SELECT count(*)::int AS "lotCount",count(snapshot_id)::int AS "producedLotCount",
+          (SELECT count(*)::int FROM approved) AS "batchCount",
+          COALESCE((SELECT jsonb_agg(to_jsonb(g) ORDER BY code) FROM (
+            SELECT code,trim_scale(sum(weight_kg))::text AS "weightKg",
+              trim_scale(sum(weight_kg*price_per_kg_rupiah))::text AS "exactValueRupiah"
+            FROM sobatnira.batch_grade_results WHERE batch_id IN (SELECT id FROM approved) GROUP BY code
+          ) g),'[]'::jsonb) AS grades,
+          trim_scale(COALESCE(sum(net_weight_kg),0))::text AS "caneNetKg",
+          trim_scale(COALESCE(sum((calculation->>'finalSugarKg')::numeric),0))::text AS "finalSugarKg",
+          trim_scale(COALESCE(sum((calculation->>'productionValueRupiah')::numeric),0))::text AS "productionValueRupiah",
+          trim_scale(COALESCE(sum((calculation->>'totalCostRupiah')::numeric),0))::text AS "totalCostRupiah",
+          trim_scale(COALESCE(sum((calculation->>'productionMarginRupiah')::numeric),0))::text AS "productionMarginRupiah",
+          COALESCE(bool_or(snapshot_id IS NOT NULL AND NOT closed),false) AS provisional,
+          max(received_at) AS "latestReceivedAt" FROM selected`,
+        [...scopeValues(access), synthetic, from, before, lotId]);
+        const { provisional, latestReceivedAt, grades, ...totals } = row;
+        return boundedReport({ factory: access.factoryName, from, before, synthetic, periodBasis: 'lot_received_at',
+          view: 'summary', totals, provisional, latestReceivedAt, items: [], grades });
     }
 
     async compareProductionReports(access: FactoryAccess, first: ReportPeriod, second: ReportPeriod, maxLots: number) {
@@ -301,17 +359,17 @@ FROM sobatnira.batch_grade_results g JOIN sobatnira.production_batches pb ON pb.
                 return lower <= received && received < upper;
             });
             checkReportSize(matching, maxLots);
-            return { from, before, synthetic, periodBasis: 'lot_received_at', ...productionReport(matching) };
+            return boundedReport({ from, before, synthetic, periodBasis: 'lot_received_at', ...productionReport(matching) });
         });
     }
 
     private async reportRows(access: FactoryAccess, synthetic: boolean, from: string | null, before: string | null,
-      { limit, second, includeJuiceSources, lotId }: {
-        limit: number | null; second?: ReportPeriod; includeJuiceSources?: boolean; lotId?: string | null;
+      { limit, second, includeJuiceSources, lotId, offset = 0, session = this.db }: {
+        limit: number | null; second?: ReportPeriod; includeJuiceSources?: boolean; lotId?: string | null; offset?: number; session?: DatabaseSession;
       }) {
         // A single statement gives receipt, latest cumulative snapshot and approved
         // batch details one consistent PostgreSQL read snapshot, scoped by membership.
-        const { rows } = await this.db.query<ProductionReportLot>(`WITH ${FACTORY_SCOPE_CTE}
+        const { rows } = await session.query<ProductionReportLot>(`WITH ${FACTORY_SCOPE_CTE}
           SELECT l.id AS "lotId", COALESCE(l.display_code,l.id::text) AS code,
             s.name AS supplier,l.received_at AS "receivedAt",i.net_weight_kg::text AS "caneNetKg",
             i.cane_type_code AS "caneType",trim_scale(COALESCE(mc.quantity_after,m.juice_produced_liters))::text AS "juiceLiters",
@@ -347,13 +405,16 @@ FROM sobatnira.batch_grade_results g JOIN sobatnira.production_batches pb ON pb.
                 GROUP BY r.origin_lot_id,origin.display_code
               ) c
             ),'[]'::jsonb)` : ''}
-            ) ORDER BY pb.occurred_at,pb.id) AS items FROM sobatnira.production_batches pb
-            WHERE pb.lot_id=l.id AND pb.tenant_id=l.tenant_id AND pb.factory_id=l.factory_id AND pb.is_synthetic=$4 AND pb.status='approved') b ON true
+            ) ORDER BY pb.occurred_at,pb.id) AS items FROM (
+              SELECT * FROM sobatnira.production_batches WHERE lot_id=l.id AND tenant_id=l.tenant_id
+                AND factory_id=l.factory_id AND is_synthetic=$4 AND status='approved'
+              ORDER BY occurred_at,id LIMIT 1001
+            ) pb WHERE pb.status='approved') b ON true
           WHERE ($10::uuid IS NULL OR l.id = $10)
             AND ((($5::timestamptz IS NULL OR l.received_at >= $5) AND ($6::timestamptz IS NULL OR l.received_at < $6))
               OR (l.received_at >= $8::timestamptz AND l.received_at < $9::timestamptz))
-          ORDER BY l.received_at DESC,l.id LIMIT $7`, [...scopeValues(access), synthetic, from, before, limit,
-            second?.from ?? null, second?.before ?? null, lotId ?? null]);
+          ORDER BY l.received_at DESC,l.id LIMIT $7 OFFSET $11`, [...scopeValues(access), synthetic, from, before, limit,
+            second?.from ?? null, second?.before ?? null, lotId ?? null, offset]);
         return rows;
     }
 
@@ -363,8 +424,7 @@ FROM sobatnira.batch_grade_results g JOIN sobatnira.production_batches pb ON pb.
         if (q.synthetic !== undefined && !['true', 'false'].includes(String(q.synthetic)))
             throw new BadRequestException('synthetic tidak valid.');
         const from = q.from === undefined ? null : timestamp(q.from, 'from'), before = q.before === undefined ? null : timestamp(q.before, 'before');
-        if (from && before && from >= before)
-            throw new BadRequestException('Periode tidak valid.');
+        reportPeriod(from, before);
         // Latest cumulative snapshot per lot; report period follows lot receipt time.
         const rows = (await this.db.query(`WITH ${FACTORY_SCOPE_CTE}, latest AS (
    SELECT DISTINCT ON(p.lot_id) p.* FROM sobatnira.production_calculation_snapshots p JOIN authorized_scope s ON s."tenantId"=p.tenant_id AND s."factoryId"=p.factory_id
@@ -376,16 +436,19 @@ FROM sobatnira.batch_grade_results g JOIN sobatnira.production_batches pb ON pb.
        'occurredAt',b.occurred_at,'volumeMl',b.quantity_ml::text,'physicalWeightKg',b.physical_weight_kg::text,
        'grades',(SELECT jsonb_agg(jsonb_build_object('code',g.code,'weightKg',g.weight_kg::text) ORDER BY g.code)
          FROM sobatnira.batch_grade_results g WHERE g.batch_id=b.id)) ORDER BY b.occurred_at,b.id)
-       FROM sobatnira.production_batches b
+       FROM (SELECT * FROM sobatnira.production_batches b
        WHERE (b.tenant_id,b.factory_id,b.lot_id,b.is_synthetic)=(p.tenant_id,p.factory_id,p.lot_id,p.is_synthetic)
          AND b.status='approved' AND EXISTS(SELECT 1 FROM sobatnira.production_calculation_snapshots bs
-           WHERE bs.batch_id=b.id AND bs.correction_id IS NULL AND (bs.approved_at,bs.id)<=(p.approved_at,p.id))) AS batches` : ''}
+           WHERE bs.batch_id=b.id AND bs.correction_id IS NULL AND (bs.approved_at,bs.id)<=(p.approved_at,p.id))
+       ORDER BY b.occurred_at,b.id LIMIT 1001) b) AS batches` : ''}
    FROM latest p JOIN sobatnira.lots l ON l.id=p.lot_id JOIN sobatnira.suppliers s ON s.id=l.supplier_id
    WHERE ($5::timestamptz IS NULL OR l.received_at >= $5) AND ($6::timestamptz IS NULL OR l.received_at < $6)
-   ORDER BY l.received_at DESC,l.id`, [...scopeValues(access), q.synthetic === 'true', from, before])).rows;
-        return { factory: access.factoryName, from, before, synthetic: q.synthetic === 'true', items: rows,
+   ORDER BY l.received_at DESC,l.id LIMIT 101`, [...scopeValues(access), q.synthetic === 'true', from, before])).rows;
+        if (rows.length > REPORT_MAX_LOTS) throw new BadRequestException('Persempit periode laporan: maksimum 100 kloter. Gunakan ekspor asinkron.');
+        if (includeBatches && rows.some(row => row.batches?.length > 1000)) throw new BadRequestException('Laporan melebihi 1000 batch per kloter.');
+        return boundedReport({ factory: access.factoryName, from, before, synthetic: q.synthetic === 'true', items: rows,
             total: rows.length, totalSugarKg: sumDecimals(rows.map(r => r.calculation.finalSugarKg)),
-            totalMarginRupiah: rows.reduce((v, r) => v + BigInt(r.calculation.productionMarginRupiah), 0n).toString() };
+            totalMarginRupiah: rows.reduce((v, r) => v + BigInt(r.calculation.productionMarginRupiah), 0n).toString() });
     }
 }
 @Controller('tenants/:tenantId/factories/:factoryId/production')

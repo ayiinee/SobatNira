@@ -353,9 +353,11 @@ class ReviewApi {
     DateTime? from,
     DateTime? before,
     bool synthetic = false,
+    bool summaryOnly = false,
   }) => _productionGet(
     [...scope._base, 'production', 'production-report'],
     query: {
+      if (summaryOnly) 'view': 'summary',
       'synthetic': '$synthetic',
       if (from != null) 'from': from.toUtc().toIso8601String(),
       if (before != null) 'before': before.toUtc().toIso8601String(),
@@ -379,6 +381,42 @@ class ReviewApi {
       }
     }
     return productionReport(scope, synthetic: synthetic);
+  }
+
+  Future<Json> reportDetailPage(
+    FactoryScope scope, {
+    required bool synthetic,
+    required int offset,
+    DateTime? from,
+    DateTime? before,
+  }) => _productionGet(
+    [...scope._base, 'production', 'production-report'],
+    query: {
+      'view': 'page',
+      'limit': '20',
+      'offset': '$offset',
+      'synthetic': '$synthetic',
+      if (from != null) 'from': from.toUtc().toIso8601String(),
+      if (before != null) 'before': before.toUtc().toIso8601String(),
+    },
+  );
+
+  Future<Uint8List> reportExportPdf(FactoryScope scope, String id) async {
+    final response = await _client.get(
+      Uri.parse(baseUrl).replace(
+        pathSegments: [
+          '',
+          ...scope._base,
+          'report-exports',
+          id,
+          'files',
+          'pdf',
+        ],
+      ),
+      headers: _headers,
+    );
+    _requireStatus(response, 200);
+    return response.bodyBytes;
   }
 
   Future<Json> factoryBatches(
@@ -533,6 +571,32 @@ class ReviewApi {
       if (includeSummary) 'includeSummary': 'true',
       if (search.isNotEmpty) 'q': search,
     },
+  );
+
+  Future<Json> lotCursor(
+    FactoryScope scope, {
+    Map<String, String> filters = const {},
+    String? after,
+  }) => _productionGet(
+    scope._lots,
+    query: {
+      ...filters,
+      'pagination': 'cursor',
+      'limit': '30',
+      'includeSummary': 'true',
+      'after': ?after,
+    },
+  );
+
+  Future<Json> lotCounts(FactoryScope scope, Map<String, String> filters) =>
+      _productionGet([...scope._lots, 'counts'], query: filters);
+
+  Future<Json> lotSuggestions(
+    FactoryScope scope,
+    Map<String, String> filters,
+  ) => _productionGet(
+    [...scope._lots, 'suggestions'],
+    query: {...filters, 'limit': '5'},
   );
 
   Future<Json?> syntheticLotPage(FactoryScope scope, int offset) async {
@@ -750,9 +814,19 @@ class ReviewApi {
     );
   }
 
-  Future<Uint8List> photo(String id, String asset) async {
+  Future<Uint8List> photo(
+    String id,
+    String asset, {
+    String variant = 'original',
+  }) async {
     final response = await _client
-        .get(_url('review-tasks/$id/assets/$asset'), headers: _headers)
+        .get(
+          _url(
+            'review-tasks/$id/assets/$asset',
+            variant == 'original' ? null : {'variant': variant},
+          ),
+          headers: _headers,
+        )
         .timeout(const Duration(seconds: 12));
     _requireStatus(response, 200);
     return response.bodyBytes;
@@ -760,8 +834,9 @@ class ReviewApi {
 
   Future<Uint8List?> approvedPhoto(
     FactoryScope scope,
-    String revisionId,
-  ) async {
+    String revisionId, {
+    String variant = 'original',
+  }) async {
     final tasks = await list(
       'VALIDATED',
       1,
@@ -770,7 +845,11 @@ class ReviewApi {
     );
     final task = tasks.firstOrNull;
     if (task == null) return null;
-    return photo(task['id'] as String, task['media_asset_id'] as String);
+    return photo(
+      task['id'] as String,
+      task['media_asset_id'] as String,
+      variant: variant,
+    );
   }
 
   Future<Json> change(

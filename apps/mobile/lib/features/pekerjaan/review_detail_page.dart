@@ -456,9 +456,60 @@ class _Photo extends StatefulWidget {
 
 class _PhotoState extends State<_Photo> {
   late final Future<(Uint8List, double)> _image = _load();
+  bool _openingOriginal = false;
+
+  Future<void> _openOriginal() async {
+    setState(() => _openingOriginal = true);
+    try {
+      final bytes = await widget.api.photo(widget.taskId, widget.asset);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => Dialog(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Align(
+                alignment: Alignment.centerRight,
+                child: IconButton(
+                  tooltip: 'Tutup foto asli',
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+              Flexible(
+                child: InteractiveViewer(
+                  maxScale: 8,
+                  child: Image.memory(
+                    bytes,
+                    fit: BoxFit.contain,
+                    semanticLabel: 'Foto asli nota',
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Foto asli belum dapat dimuat. Coba lagi.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _openingOriginal = false);
+    }
+  }
 
   Future<(Uint8List, double)> _load() async {
-    final bytes = await widget.api.photo(widget.taskId, widget.asset);
+    final bytes = await widget.api.photo(
+      widget.taskId,
+      widget.asset,
+      variant: 'preview',
+    );
     final codec = await ui.instantiateImageCodec(
       bytes,
       targetWidth: 640,
@@ -477,10 +528,31 @@ class _PhotoState extends State<_Photo> {
   }
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<(Uint8List, double)>(
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Align(
+        alignment: Alignment.centerRight,
+        child: TextButton.icon(
+          onPressed: _openingOriginal ? null : _openOriginal,
+          icon: const Icon(Icons.zoom_in),
+          label: Text(
+            _openingOriginal ? 'Memuat foto asli…' : 'Buka foto asli',
+          ),
+        ),
+      ),
+      _preview(),
+    ],
+  );
+
+  Widget _preview() => FutureBuilder<(Uint8List, double)>(
     future: _image,
     builder: (context, snapshot) {
-      if (snapshot.hasError) return const Text('Foto asli belum dapat dimuat.');
+      if (snapshot.hasError) {
+        return const Text(
+          'Preview belum dapat dimuat. Buka foto asli untuk meninjau nota.',
+        );
+      }
       if (!snapshot.hasData) {
         return const NiraLoading(label: 'Memuat foto nota…');
       }
@@ -495,7 +567,7 @@ class _PhotoState extends State<_Photo> {
                   bytes,
                   fit: BoxFit.fill,
                   cacheWidth: 640,
-                  semanticLabel: 'Foto asli nota',
+                  semanticLabel: 'Preview nota dengan penanda evidence',
                 ),
               ),
               for (final box in widget.evidence.where(

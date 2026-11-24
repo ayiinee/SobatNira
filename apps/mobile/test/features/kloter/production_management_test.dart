@@ -412,7 +412,11 @@ void main() {
             );
           }
           return http.Response(
-            jsonEncode({'items': [], 'total': 0, 'offset': 0, 'limit': 20}),
+            jsonEncode(
+              request.url.path.endsWith('/lots/counts')
+                  ? {'total': 0, 'open': 0, 'closed': 0}
+                  : {'items': [], 'total': 0, 'offset': 0, 'limit': 20},
+            ),
             200,
           );
         }),
@@ -443,7 +447,13 @@ void main() {
         );
         await tester.tap(find.byTooltip('Kembali'));
         await tester.pumpAndSettle();
-        expect(paths.last, '/tenants/tenant/factories/factory/lots');
+        expect(
+          paths.sublist(paths.length - 2),
+          unorderedEquals([
+            '/tenants/tenant/factories/factory/lots',
+            '/tenants/tenant/factories/factory/lots/counts',
+          ]),
+        );
       }
       await tester.tap(find.bySemanticsLabel('Kloter'));
       await tester.pumpAndSettle();

@@ -331,10 +331,16 @@ class DocumentLink extends StatelessWidget {
 }
 
 class DocumentPreview extends StatelessWidget {
-  const DocumentPreview({required this.batch, this.photo, super.key});
+  const DocumentPreview({
+    required this.batch,
+    this.photo,
+    this.loadOriginal,
+    super.key,
+  });
 
   final bool batch;
   final ImageProvider? photo;
+  final Future<Uint8List?> Function()? loadOriginal;
 
   static String asset(bool batch) =>
       'assets/sobatnira/art/nota-${batch ? 'batch' : 'tebu'}.jpg';
@@ -343,9 +349,11 @@ class DocumentPreview extends StatelessWidget {
     BuildContext context, {
     required bool batch,
     ImageProvider? photo,
+    Future<Uint8List?> Function()? loadOriginal,
   }) => showDialog<void>(
     context: context,
-    builder: (context) => _DocumentViewer(batch: batch, photo: photo),
+    builder: (context) =>
+        _DocumentViewer(batch: batch, photo: photo, loadOriginal: loadOriginal),
   );
 
   @override
@@ -356,7 +364,12 @@ class DocumentPreview extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         borderRadius: BorderRadius.circular(niraRadius),
         child: InkWell(
-          onTap: () => open(context, batch: batch, photo: photo),
+          onTap: () => open(
+            context,
+            batch: batch,
+            photo: photo,
+            loadOriginal: loadOriginal,
+          ),
           child: Stack(
             children: [
               AspectRatio(
@@ -374,7 +387,12 @@ class DocumentPreview extends StatelessWidget {
                 right: NiraSpace.xs,
                 child: IconButton(
                   tooltip: 'Perbesar foto',
-                  onPressed: () => open(context, batch: batch, photo: photo),
+                  onPressed: () => open(
+                    context,
+                    batch: batch,
+                    photo: photo,
+                    loadOriginal: loadOriginal,
+                  ),
                   style: IconButton.styleFrom(foregroundColor: Colors.white),
                   icon: const Icon(Icons.open_in_full, size: 20),
                 ),
@@ -392,12 +410,14 @@ class ApprovedDocumentPreview extends StatelessWidget {
     required this.photo,
     required this.batch,
     required this.fallback,
+    this.loadOriginal,
     super.key,
   });
 
   final Future<Uint8List?>? photo;
   final bool batch;
   final Widget fallback;
+  final Future<Uint8List?> Function()? loadOriginal;
 
   @override
   Widget build(BuildContext context) => FutureBuilder<Uint8List?>(
@@ -426,15 +446,20 @@ class ApprovedDocumentPreview extends StatelessWidget {
           ),
         );
       }
-      return DocumentPreview(batch: batch, photo: MemoryImage(bytes));
+      return DocumentPreview(
+        batch: batch,
+        photo: MemoryImage(bytes),
+        loadOriginal: loadOriginal,
+      );
     },
   );
 }
 
 class _DocumentViewer extends StatefulWidget {
-  const _DocumentViewer({required this.batch, this.photo});
+  const _DocumentViewer({required this.batch, this.photo, this.loadOriginal});
   final bool batch;
   final ImageProvider? photo;
+  final Future<Uint8List?> Function()? loadOriginal;
 
   @override
   State<_DocumentViewer> createState() => _DocumentViewerState();
@@ -442,6 +467,72 @@ class _DocumentViewer extends StatefulWidget {
 
 class _DocumentViewerState extends State<_DocumentViewer> {
   final _transform = TransformationController();
+  late Future<Uint8List?>? _original = widget.loadOriginal == null
+      ? null
+      : _requestOriginal();
+
+  Future<Uint8List?> _requestOriginal() {
+    final request = Future<Uint8List?>.sync(() => widget.loadOriginal!());
+    request.then<void>((_) {}, onError: (Object error, StackTrace stack) {});
+    return request;
+  }
+
+  void _retryOriginal() {
+    final request = _requestOriginal();
+    setState(() {
+      _original = request;
+    });
+  }
+
+  Widget _image() {
+    if (_original == null) {
+      return _zoomImage(
+        widget.photo ?? AssetImage(DocumentPreview.asset(widget.batch)),
+      );
+    }
+    return FutureBuilder<Uint8List?>(
+      future: _original,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const NiraLoading(label: 'Memuat foto asli…');
+        }
+        final bytes = snapshot.data;
+        if (bytes == null) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Foto asli belum dapat dimuat.'),
+                TextButton(
+                  onPressed: _retryOriginal,
+                  child: const Text('Coba lagi foto asli'),
+                ),
+              ],
+            ),
+          );
+        }
+        return _zoomImage(MemoryImage(bytes));
+      },
+    );
+  }
+
+  Widget _zoomImage(ImageProvider image) => InteractiveViewer(
+    transformationController: _transform,
+    minScale: 1,
+    maxScale: 6,
+    trackpadScrollCausesScale: true,
+    child: Center(
+      child: Image(
+        image: image,
+        fit: BoxFit.contain,
+        semanticLabel: widget.photo == null
+            ? 'Contoh nota sintetis'
+            : _original == null
+            ? 'Foto nota sah'
+            : 'Foto asli nota sah',
+      ),
+    ),
+  );
 
   @override
   void dispose() {
@@ -479,25 +570,7 @@ class _DocumentViewerState extends State<_DocumentViewer> {
               ],
             ),
           ),
-          Expanded(
-            child: InteractiveViewer(
-              transformationController: _transform,
-              minScale: 1,
-              maxScale: 6,
-              trackpadScrollCausesScale: true,
-              child: Center(
-                child: Image(
-                  image:
-                      widget.photo ??
-                      AssetImage(DocumentPreview.asset(widget.batch)),
-                  fit: BoxFit.contain,
-                  semanticLabel: widget.photo == null
-                      ? 'Contoh nota sintetis'
-                      : 'Foto nota sah',
-                ),
-              ),
-            ),
-          ),
+          Expanded(child: _image()),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [

@@ -12,6 +12,7 @@ import { DocumentsModule } from './documents/documents.module';
 import { OcrDocumentsModule } from './documents/ocr-documents.module';
 import { MillingModule } from './milling/milling.module';
 import { JuiceModule } from './juice/juice.module';
+import { HttpMeasurements } from './metrics/http-measurements';
 
 let configuredBackendConfig: BackendConfig | undefined;
 
@@ -53,6 +54,7 @@ class AppController {
     AuthModule, ProductionModule, DocumentsModule, OcrDocumentsModule, MillingModule, JuiceModule, BatchesModule, ProductionMastersModule, EconomicsModule, ReportingModule,
   ],
   controllers: [AppController],
+  providers: [HttpMeasurements],
 })
 export class AppModule {
   static register(options: ConfigOptions = {}): DynamicModule {
