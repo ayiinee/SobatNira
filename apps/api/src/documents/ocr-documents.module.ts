@@ -131,7 +131,9 @@ class OcrMediaController {
     if (!/^[a-f0-9]{64}$/.test(key)) throw new NotFoundException();
     const { rows: [asset] } = await this.db.query<{ mime_type: string; size_bytes: number; sha256: string }>('SELECT mime_type,size_bytes,sha256 FROM media_assets WHERE object_key=$1', [key]);
     if (!asset) throw new NotFoundException();
-    return new StreamableFile(await this.media.verifiedRead(key, asset), { type: asset.mime_type });
+    const result = await renderImageVariant(() => this.media.verifiedRead(key, asset),
+      { sha256: asset.sha256, bytes: asset.size_bytes, mime: asset.mime_type }, 'original');
+    return new StreamableFile(result.bytes, { type: result.mime });
   }
 }
 
