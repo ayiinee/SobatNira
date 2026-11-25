@@ -2,12 +2,25 @@ import 'package:flutter/foundation.dart';
 
 import '../kloter/kloter_date_filter.dart';
 import '../kloter/demo_lot_fixture.dart';
+import '../kloter/demo_production.dart';
 
 enum ReportTab { production, margin }
 
 enum ProductionVariant { rendemen, gulaFinal, grade }
 
 class DemoAnalytics extends ChangeNotifier {
+  DemoAnalytics({this.production}) {
+    production?.addListener(notifyListeners);
+  }
+
+  final DemoProduction? production;
+
+  @override
+  void dispose() {
+    production?.removeListener(notifyListeners);
+    super.dispose();
+  }
+
   ReportTab tab = ReportTab.production;
   ProductionVariant variant = ProductionVariant.rendemen;
   String query = '';
@@ -43,10 +56,13 @@ class DemoAnalytics extends ChangeNotifier {
 
   AnalyticsRow? selectedRow;
   static AnalyticsRow _row(String code, bool margin) {
-    final lot = demoLotFor(code);
+    return _lotRow(demoLotFor(code), margin);
+  }
+
+  static AnalyticsRow _lotRow(DemoLotFixture lot, bool margin) {
     return AnalyticsRow(
       lot.supplier,
-      code,
+      lot.code,
       margin ? demoMoney(lot.marginRupiah) : '${lot.sugarKg}Kg',
       margin
           ? ''
@@ -55,22 +71,49 @@ class DemoAnalytics extends ChangeNotifier {
     );
   }
 
+  DemoLotFixture lotFor(String code) {
+    final initial = demoLotFor(code);
+    final lot = production?.kloter
+        .where((entry) => entry.code == code)
+        .firstOrNull;
+    if (lot == null) return initial;
+    final batches = [
+      for (final batch in lot.batches)
+        (
+          grade: batch.grade,
+          weight: num.tryParse(batch.gradeWeight.replaceAll(',', '.')) ?? 0,
+          value: batch.productionValue,
+        ),
+    ];
+    final revenue = batches.fold(0, (sum, batch) => sum + batch.value);
+    return DemoLotFixture(
+      initial.code,
+      lot.date.day,
+      lot.supplier,
+      initial.caneKg,
+      0,
+      revenue - initial.totalCost,
+      batches.length,
+      sessionBatches: batches,
+    );
+  }
+
   List<DemoLotFixture> get visibleLots =>
-      rowsFor(ReportTab.production).map((row) => demoLotFor(row.code)).toList();
-  int get sugarTotal => visibleLots.fold(0, (sum, lot) => sum + lot.sugarKg);
+      rowsFor(ReportTab.production).map((row) => lotFor(row.code)).toList();
+  num get sugarTotal => visibleLots.fold(0, (sum, lot) => sum + lot.sugarKg);
   int get caneTotal => visibleLots.fold(0, (sum, lot) => sum + lot.caneKg);
   int get marginTotal => rowsFor(
     ReportTab.margin,
-  ).fold(0, (sum, row) => sum + demoLotFor(row.code).marginRupiah);
+  ).fold(0, (sum, row) => sum + lotFor(row.code).marginRupiah);
   int get valueTotal => rowsFor(
     ReportTab.margin,
-  ).fold(0, (sum, row) => sum + demoLotFor(row.code).productionValue);
+  ).fold(0, (sum, row) => sum + lotFor(row.code).productionValue);
   int get costTotal => valueTotal - marginTotal;
-  int gradeWeight(String grade) {
-    var result = 0;
+  num gradeWeight(String grade) {
+    num result = 0;
     for (final lot in visibleLots) {
       for (var i = 0; i < lot.batchCount; i++) {
-        if (['A', 'B', 'C'][i % 3] == grade) result += lot.batchWeights[i];
+        if (lot.gradeAt(i) == grade) result += lot.batchWeights[i];
       }
     }
     return result;
@@ -103,12 +146,19 @@ class DemoAnalytics extends ChangeNotifier {
   List<AnalyticsRow> rowsFor(ReportTab reportTab) {
     final normalized = query.trim().toLowerCase();
     final rows = reportTab == ReportTab.margin ? marginRows : rendemenRows;
-    return rows.where((row) {
-      return (dateFilter?.contains(DateTime(2026, 10, row.day)) ?? true) &&
-          (normalized.isEmpty ||
-              row.supplier.toLowerCase().contains(normalized) ||
-              row.code.toLowerCase().contains(normalized));
-    }).toList();
+    return rows
+        .map(
+          (row) => production == null
+              ? row
+              : _lotRow(lotFor(row.code), reportTab == ReportTab.margin),
+        )
+        .where((row) {
+          return (dateFilter?.contains(DateTime(2026, 10, row.day)) ?? true) &&
+              (normalized.isEmpty ||
+                  row.supplier.toLowerCase().contains(normalized) ||
+                  row.code.toLowerCase().contains(normalized));
+        })
+        .toList();
   }
 }
 

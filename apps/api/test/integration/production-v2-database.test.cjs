@@ -4,6 +4,48 @@ const test=require('node:test');
 const {mobileClosureFixture}=require('./mobile-closure-fixture.cjs');
 const {TruckIntake}=require('../../dist/documents/truck-intake');
 const {MillingRepository}=require('../../dist/milling/milling.repository');
+const {intakeFixture}=require('./intake-fixture.cjs');
+
+test('lot costs protect concurrent creation and reject stale or versionless edits after cutover', async () => {
+ const f = await intakeFixture(true);
+ const previous = process.env.LOT_COST_REQUIRE_VERSION;
+ const path = f.root + '/production/lots/' + f.ids.lot;
+ const costs = caneCostRupiah => ({
+  caneCostRupiah, operationalCostRupiah: '0', ingredientCostRupiah: '0', otherCostRupiah: '0',
+ });
+ const save = data => f.request(path + '/costs', 'POST', data);
+ try {
+  process.env.LOT_COST_REQUIRE_VERSION = 'false';
+  assert.equal((await f.request(path + '/cost-corrections')).status, 404);
+  const concurrent = await Promise.all([
+   save({ ...costs('100'), version: 0 }), save({ ...costs('200'), version: 0 }),
+  ]);
+  assert.deepEqual(concurrent.map(result => result.status).sort(), [200, 409]);
+  assert.equal((await save(costs('250'))).status, 200);
+  const first = await f.request(path + '/cost-corrections');
+  const second = await f.request(path + '/cost-corrections');
+  assert.equal(first.body.version, 2);
+  assert.equal(second.body.version, first.body.version);
+  process.env.LOT_COST_REQUIRE_VERSION = 'true';
+  assert.equal((await save({ ...costs('300'), version: first.body.version })).status, 200);
+  for (const input of [{ ...costs('400'), version: second.body.version }, costs('450')]) {
+   const conflict = await save(input);
+   assert.equal(conflict.status, 409);
+   assert.equal(conflict.body.code, 'LOT_COST_VERSION_CONFLICT');
+  }
+  const latest = await f.request(path + '/cost-corrections');
+  assert.equal(latest.body.version, 3);
+  assert.equal(latest.body.cane_rupiah, '300');
+  assert.equal(latest.body.frozen, false);
+ } finally {
+  if (previous === undefined) delete process.env.LOT_COST_REQUIRE_VERSION;
+  else process.env.LOT_COST_REQUIRE_VERSION = previous;
+  try {
+   await f.client.query('DELETE FROM sobatnira.lot_production_costs WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3',
+    [f.ids.tenant, f.ids.factory, f.ids.lot]);
+  } finally { await f.close(); }
+ }
+});
 
 test('mixed origins conserve output, allocate cooking costs, and owner corrections preserve history',async()=>{
  const f=await mobileClosureFixture({consume:false});
@@ -43,6 +85,21 @@ test('mixed origins conserve output, allocate cooking costs, and owner correctio
   assert.equal((await f.request(root+'/batches/'+id+'/approve','POST')).body.id,approval.body.id);
   const report=(await f.request(root+'/production-report')).body;
   assert.equal(report.totals.batchCount,1);assert.equal(report.totals.finalSugarKg,'10');assert.equal(report.totals.totalCostRupiah,'1300');
+  const narrow = '/production-report?supplierId='+f.ids.supplier+'&batchId='+id+'&grade=a';
+  const narrowFull = await f.request(root+narrow);
+  assert.equal(narrowFull.status,200,JSON.stringify(narrowFull.body));
+  assert.equal(narrowFull.body.totals.batchCount,1);
+  assert.equal(narrowFull.body.totals.finalSugarKg,'10');
+  assert.equal(narrowFull.body.totals.totalCostRupiah,null);
+  assert.equal(narrowFull.body.totals.productionMarginRupiah,null);
+  assert.ok(narrowFull.body.items.every(item=>item.calculation===null));
+  const narrowPage = await f.request(root+narrow+'&view=page&limit=1');
+  assert.equal(narrowPage.body.nextOffset,1);
+  assert.deepEqual(narrowPage.body.totals,narrowFull.body.totals);
+  const narrowSummary = await f.request(root+narrow+'&view=summary');
+  assert.deepEqual(narrowSummary.body.totals,narrowFull.body.totals);
+  assert.deepEqual(narrowSummary.body.items,[]);
+  assert.equal((await f.request(root+narrow.replace('grade=a','grade=Z'))).body.totals.lotCount,0);
   const summary=await f.request(root+'/production-report?view=summary');
   assert.equal(summary.status,200,JSON.stringify(summary.body));
   assert.deepEqual(summary.body.totals,report.totals);
@@ -65,10 +122,24 @@ test('mixed origins conserve output, allocate cooking costs, and owner correctio
   assert.equal((await f.request(path)).body.version,1);
   assert.equal((await f.request(correction,'POST',proposed)).status,201);
   assert.equal((await f.request(correction,'POST',proposed)).status,201);
+  const ownerDraft = await f.request(path + '/' + randomUUID(),'POST',proposed,'fixture-owner');
+  assert.equal(ownerDraft.status,201);
+  assert.equal((await f.request(path+'/'+ownerDraft.body.id,'POST',proposed)).status,409);
+  assert.equal((await f.request(correction,'POST',proposed,'fixture-owner')).status,409);
+  const inbox = root + '/cost-corrections';
+  assert.equal((await f.request(inbox)).body.items.length,1);
+  const ownerInbox = await f.request(inbox+'?limit=1','GET',undefined,'fixture-owner');
+  assert.equal(ownerInbox.body.nextOffset,1);
+  assert.equal(ownerInbox.body.items[0].status,'pending');
+  assert.equal((await f.request(inbox+'?limit=1&offset=1','GET',undefined,'fixture-owner')).body.items.length,1);
+  assert.deepEqual((await f.request(f.siblingRoot+'/production/cost-corrections')).body.items,[]);
   assert.equal((await f.request(correction,'POST',{...proposed,reason:'Berbeda'})).status,409);
   assert.equal((await f.request(correction+'/approve','POST')).status,403);
   const approved=await f.request(correction+'/approve','POST',undefined,'fixture-owner');assert.equal(approved.status,201,JSON.stringify(approved.body));
   assert.equal((await f.request(correction+'/approve','POST',undefined,'fixture-owner')).body.id,approved.body.id);
+  const afterApproval = (await f.request(inbox,'GET',undefined,'fixture-owner')).body.items;
+  assert.equal(afterApproval.find(item => item.id===approved.body.id).status,'approved');
+  assert.equal(afterApproval.find(item => item.id===ownerDraft.body.id).status,'stale');
   assert.equal((await f.request(path)).body.version,2);
   assert.equal((await f.request(path+'/'+randomUUID(),'POST',proposed)).status,409);
   const updated=(await f.request(root+'/production-report')).body;

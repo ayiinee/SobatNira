@@ -212,6 +212,7 @@ void main() {
             expect(request.method, 'POST');
             expect(request.headers['authorization'], 'Bearer local-token');
             expect(jsonDecode(request.body), {
+              'version': 0,
               'caneCostRupiah': '200000',
               'operationalCostRupiah': '88000',
               'ingredientCostRupiah': '25000',
@@ -255,7 +256,7 @@ void main() {
                       'wokNumber': 1,
                       'quantityMl': '40000',
                       'occurredAt': '2026-11-10T06:00:00Z',
-                      'physicalWeightKg': '26',
+                      'physicalWeightKg': '25',
                       'grades': [
                         {
                           'code': 'A',

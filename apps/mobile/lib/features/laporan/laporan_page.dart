@@ -6,7 +6,10 @@ import '../../widgets/nira_loading.dart';
 import '../../widgets/summary_card.dart';
 import '../kloter/kloter_date_filter.dart';
 import 'connected_report_controls.dart'
-    show ConnectedReportStatus, filterConnectedReport;
+    show
+        ConnectedReportStatus,
+        filterConnectedReport,
+        selectConnectedReportDimensions;
 import 'connected_reports.dart';
 import 'demo_analytics.dart';
 import '../kloter/demo_lot_fixture.dart';
@@ -115,7 +118,10 @@ class _LaporanPageState extends State<LaporanPage> {
           boxes: true,
         ),
       ),
-      if (_reports case final reports?) ConnectedReportStatus(reports: reports),
+      if (_reports case final reports?) ...[
+        ConnectedReportStatus(reports: reports),
+        _dimensionsButton(reports),
+      ],
       ..._exportAction(),
       const SizedBox(height: NiraSpace.md),
       _chartCard(),
@@ -135,6 +141,7 @@ class _LaporanPageState extends State<LaporanPage> {
       ),
       if (_reports case final reports?) ...[
         ConnectedReportStatus(reports: reports),
+        _dimensionsButton(reports),
         if (reports.provisional)
           Text(
             'Margin sementara untuk kloter yang masih terbuka.',
@@ -162,6 +169,16 @@ class _LaporanPageState extends State<LaporanPage> {
       _chartCard(margin: true),
       const SizedBox(height: NiraSpace.md),
     ],
+  );
+
+  Widget _dimensionsButton(ConnectedReports reports) => TextButton.icon(
+    onPressed: () => selectConnectedReportDimensions(context, reports),
+    icon: const Icon(Icons.filter_list),
+    label: Text(
+      reports.dimensions.isEmpty
+          ? 'Filter data laporan'
+          : 'Filter data laporan (${reports.dimensions.length})',
+    ),
   );
 
   List<Widget> _exportAction() => [
@@ -237,17 +254,28 @@ class _LaporanPageState extends State<LaporanPage> {
     },
   );
 
-  Widget _margin() => _tableSection(
-    title: 'Detail margin kloter',
-    scrollHeader: _marginHeader(),
-    plain: true,
-    columns: const ['Pemasok', 'Margin'],
-    rows: _rows,
-    onTap: (row) {
-      widget.analytics.selectedRow = row;
-      widget.onOpenDetail(ReportDetailKind.margin);
-    },
-  );
+  Widget _margin() => _reports?.narrow == true
+      ? ListView(
+          padding: const EdgeInsets.all(NiraSpace.lg),
+          children: [
+            const Text(
+              'Biaya dan margin tidak tersedia untuk filter batch atau grade.',
+            ),
+            _dimensionsButton(_reports!),
+            ..._exportAction(),
+          ],
+        )
+      : _tableSection(
+          title: 'Detail margin kloter',
+          scrollHeader: _marginHeader(),
+          plain: true,
+          columns: const ['Pemasok', 'Margin'],
+          rows: _rows,
+          onTap: (row) {
+            widget.analytics.selectedRow = row;
+            widget.onOpenDetail(ReportDetailKind.margin);
+          },
+        );
 
   Widget _plainTable(
     String title,

@@ -49,7 +49,7 @@ void main() {
         'A',
         'B',
         'C',
-      ].fold<int>(0, (sum, grade) => sum + analytics.gradeWeight(grade)),
+      ].fold<num>(0, (sum, grade) => sum + analytics.gradeWeight(grade)),
       analytics.sugarTotal,
     );
     expect(analytics.valueTotal - analytics.costTotal, analytics.marginTotal);

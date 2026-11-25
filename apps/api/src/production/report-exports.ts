@@ -8,6 +8,7 @@ import { FactoryAccess } from '../auth/auth.types';
 import { FACTORY_SCOPE_CTE } from '../auth/access.sql';
 import { DatabaseService } from '../database/database.service';
 import { assertR2Privacy, MediaStorage } from '../documents/media';
+import { reportSelection } from './production-report';
 import { loadConfiguration } from '../config/backend.config';
 import { Batches } from './batches';
 import { found, object, scopeValues, timestamp, uuid } from './production.dto';
@@ -72,13 +73,13 @@ export class ReportExports implements OnModuleInit, OnModuleDestroy {
   async request(access: FactoryAccess, key: unknown, body: unknown, target?: ReportTarget) {
     this.authorize(access);
     const idempotencyKey = uuid(key, 'Idempotency-Key');
-    const input = object(body, ['from', 'before', 'synthetic']);
+    const input = object(body, ['from', 'before', 'synthetic', 'supplierId', 'lotId', 'batchId', 'grade']);
     const from = timestamp(input.from, 'from'), before = timestamp(input.before, 'before');
     if (Date.parse(before) - Date.parse(from) > 366 * 86_400_000 || from >= before ||
       (input.synthetic !== undefined && typeof input.synthetic !== 'boolean')) {
       throw new BadRequestException('Periode atau kategori laporan tidak valid.');
     }
-    const payload = { from, before, synthetic: String(input.synthetic === true) };
+    const payload = { from, before, synthetic: String(input.synthetic === true), ...reportSelection(input) };
     const hash = digest(JSON.stringify(payload));
     const previous = await this.forActor(access, 'idempotency_key', idempotencyKey);
     if (previous) {
