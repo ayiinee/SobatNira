@@ -57,11 +57,21 @@ export class Batches {
     async create(access: FactoryAccess, input: unknown) {
         const b = parseBatch(input);
         const hash = createHash('sha256').update(JSON.stringify(b)).digest('hex');
+        const hashes = [hash];
+        if (!b.masterReferences) {
+            const { masterReferences, kind, source, ...legacy } = b;
+            const versions: Record<string, unknown>[] = [{ kind, source, ...legacy }];
+            if (kind === 'normal') {
+                versions.push({ source, ...legacy });
+                if (!source) versions.push(legacy);
+            }
+            hashes.push(...versions.map(value => createHash('sha256').update(JSON.stringify(value)).digest('hex')));
+        }
         return this.juice.mutate(access, async (tx) => {
             await this.juice.lockLots(tx, access, [b.lotId]);
             const old = (await tx.query('SELECT * FROM sobatnira.production_batches WHERE id=$1', [b.id])).rows[0];
             if (old) {
-                if (old.tenant_id !== access.tenantId || old.factory_id !== access.factoryId || old.input_hash !== hash)
+                if (old.tenant_id !== access.tenantId || old.factory_id !== access.factoryId || !hashes.includes(old.input_hash))
                     throw new ConflictException('ID batch sudah dipakai.');
                 return old;
             }

@@ -23,6 +23,12 @@ test('official masters preserve versions, scope, legacy batches and pilot activa
   assert.equal((await f.request(root+'/batches','POST',{...body,id:randomUUID(),code:'STALE'})).status,409);
   const legacy={...body,id:randomUUID(),code:'LEGACY'};delete legacy.masterReferences;
   assert.equal((await f.request(root+'/batches','POST',legacy)).status,201);
+  const parsed=require('../../dist/production/batches').parseBatch(legacy);
+  const {masterReferences,kind,source,...oldPayload}=parsed;
+  const oldHash=require('node:crypto').createHash('sha256').update(JSON.stringify(oldPayload)).digest('hex');
+  await f.client.query('UPDATE sobatnira.production_batches SET input_hash=$2 WHERE id=$1',[legacy.id,oldHash]);
+  assert.equal((await f.request(root+'/batches','POST',legacy)).status,201);
+  assert.equal((await f.request(root+'/batches','POST',{...legacy,physicalWeightKg:'2'})).status,409);
   const detail=(await f.request(root+'/batches/'+id)).body;
   assert.equal(detail.master_references.wok.version,1);
   const history=(await f.request(path+'?history=true')).body.items;assert.equal(history.length,3);
