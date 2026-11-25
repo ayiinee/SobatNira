@@ -7,6 +7,7 @@ import '../pekerjaan/review_api.dart';
 import 'batch_detail_page.dart';
 import 'demo_production.dart';
 import 'juice_volume.dart';
+import 'batch_juice_reservation_page.dart';
 import 'kloter_detail_widgets.dart';
 import 'kloter_detail_page.dart';
 import '../laporan/connected_reports.dart';
@@ -666,16 +667,26 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
           _costs,
         ),
         if (costSaved && remaining != '0')
-          NiraButton(
-            'Reservasi nira',
-            () => _run(
-              () => widget.api.reserveBatchJuice(
-                widget.scope,
-                _lot,
-                _id,
-                remaining,
+          NiraButton('Reservasi nira', () async {
+            await Navigator.of(context).push<void>(
+              MaterialPageRoute(
+                builder: (_) => BatchJuiceReservationPage(
+                  api: widget.api,
+                  scope: widget.scope,
+                  lotId: _lot,
+                  batchId: _id,
+                ),
               ),
-            ),
+            );
+            if (mounted) {
+              widget.onChanged();
+              _reload();
+            }
+          }),
+        for (final source
+            in (batch['reservations'] as List? ?? const []).cast<Json>())
+          Text(
+            '${source['lotCode']}: ${millilitersToLiters(source['quantityMl'] as String)} L · ${source['state']}',
           ),
         TextButton(
           onPressed: () => _run(

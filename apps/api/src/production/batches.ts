@@ -136,9 +136,16 @@ export class Batches {
              FROM sobatnira.batch_grade_results g WHERE g.batch_id=b.id) AS grades,
             EXISTS(SELECT 1 FROM sobatnira.lot_production_costs c
               WHERE (c.tenant_id,c.factory_id,c.lot_id)=(b.tenant_id,b.factory_id,b.lot_id)) AS "costSaved",
+            COALESCE((SELECT jsonb_agg(jsonb_build_object('requestId',r.request_id,
+              'originLotId',r.origin_lot_id,'lotCode',COALESCE(l.display_code,l.id::text),
+              'quantityMl',trim_scale(r.quantity_ml)::text,'state',r.state) ORDER BY r.created_at,r.request_id)
+              FROM sobatnira.juice_reservations r JOIN sobatnira.lots l
+                ON (l.tenant_id,l.factory_id,l.id)=(r.tenant_id,r.factory_id,r.origin_lot_id)
+              WHERE (r.tenant_id,r.factory_id,r.batch_id,r.lot_id,r.is_synthetic)
+                =(b.tenant_id,b.factory_id,b.id,b.lot_id,b.is_synthetic)), '[]'::jsonb) AS reservations,
             (SELECT trim_scale(b.quantity_ml-COALESCE(sum(r.quantity_ml),0))::text FROM sobatnira.juice_reservations r
                WHERE (r.tenant_id,r.factory_id,r.batch_id)=(b.tenant_id,b.factory_id,b.id)
-                 AND r.lot_id=b.lot_id AND r.origin_lot_id=b.lot_id
+                 AND r.lot_id=b.lot_id
                  AND r.is_synthetic=b.is_synthetic AND r.state<>'released') AS "remainingMl"
           FROM sobatnira.production_batches b JOIN authorized_scope s
             ON s."tenantId"=b.tenant_id AND s."factoryId"=b.factory_id WHERE b.id=$4`, [...scopeValues(access), id]);
