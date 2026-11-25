@@ -52,6 +52,16 @@ class _BatchDraftState extends State<BatchDraftPage> {
   );
   late final Future<Json> _stock = widget.api.sugarStock(widget.scope);
   String _kind = 'normal';
+  List<Json> _masters = [];
+  late final Future<Json> _masterData = widget.api
+      .getProduction([...widget.scope.basePath, 'production', 'masters'])
+      .then((data) {
+        _masters = (data['items'] as List)
+            .cast<Json>()
+            .where((r) => r['active'] == true)
+            .toList();
+        return data;
+      });
   Json? _source;
   String? _error;
   bool _busy = false;
@@ -145,6 +155,26 @@ class _BatchDraftState extends State<BatchDraftPage> {
             },
         ],
         if (_source != null) 'source': _source!['source'],
+        if (_masters.any((r) => r['kind'] == 'wok' && r['code'] == _wok.text) &&
+            _grades.every(
+              (g) => _masters.any(
+                (r) => r['kind'] == 'grade' && r['code'] == g[0].text,
+              ),
+            ))
+          'masterReferences': {
+            'wok': {
+              for (final r in _masters.where(
+                (r) => r['kind'] == 'wok' && r['code'] == _wok.text,
+              )) ...{'code': r['code'], 'version': r['version']},
+            },
+            'grades': [
+              for (final g in _grades)
+                for (final r in _masters.where(
+                  (r) => r['kind'] == 'grade' && r['code'] == g[0].text,
+                ))
+                  {'code': r['code'], 'version': r['version']},
+            ],
+          },
       };
       final result = await widget.api.createBatch(widget.scope, _pending!);
       if (mounted) Navigator.pop(context, result);
@@ -240,6 +270,35 @@ class _BatchDraftState extends State<BatchDraftPage> {
               ],
             ),
           ),
+          FutureBuilder<Json>(
+            future: _masterData,
+            builder: (context, snapshot) => Column(
+              children: [
+                if (snapshot.hasError)
+                  const Text(
+                    'Pilihan master belum tersedia. Kode manual tetap diterima.',
+                  ),
+                if (snapshot.hasData) ...[
+                  const Text('Pilihan master aktif (opsional)'),
+                  Wrap(
+                    children: [
+                      for (final r in _masters.where((r) => r['kind'] == 'wok'))
+                        TextButton(
+                          onPressed: _busy || _pending != null
+                              ? null
+                              : () => setState(
+                                  () => _wok.text = r['code'] as String,
+                                ),
+                          child: Text(
+                            'Wajan ${r['code']} \u00b7 ${r['name']} \u00b7 ${r['capacityLiters']} L',
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
           _field('Kode batch', _code),
           _field('Nomor wajan', _wok, number: true),
           _field('Waktu pemasakan', _time),
@@ -251,6 +310,17 @@ class _BatchDraftState extends State<BatchDraftPage> {
           for (final (index, g) in _grades.indexed) ...[
             Text('Grade ${index + 1}'),
             _field('Kode grade ${index + 1}', g[0]),
+            Wrap(
+              children: [
+                for (final r in _masters.where((r) => r['kind'] == 'grade'))
+                  TextButton(
+                    onPressed: _busy || _pending != null
+                        ? null
+                        : () => setState(() => g[0].text = r['code'] as String),
+                    child: Text('${r['code']} \u00b7 ${r['name']}'),
+                  ),
+              ],
+            ),
             _field('Berat grade ${index + 1} (kg)', g[1], number: true),
             _field('Harga grade ${index + 1} per kg (Rp)', g[2], number: true),
           ],

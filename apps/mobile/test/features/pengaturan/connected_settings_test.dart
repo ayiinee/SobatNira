@@ -82,6 +82,26 @@ Future<void> _openApp(
             {'userId': 'akun-nonaktif-A', 'role': 'admin', 'isActive': false},
           ],
         }),
+        _ when uri.path.endsWith('/sugar') => _json({
+          'active': false,
+          'sources': [],
+          'limitation': 'Pengiriman belum dicatat.',
+        }),
+        _ when uri.path.endsWith('/masters') => _json({
+          'items': [
+            for (final code in ['A', 'B', 'C'])
+              {
+                'kind': 'grade',
+                'code': code,
+                'name': 'Grade $code',
+                'version': 1,
+                'active': true,
+                'reason': 'Fixture',
+                'createdAt': '2026-11-25',
+              },
+          ],
+          'usage': [],
+        }),
         _ when uri.path.endsWith('/lots') => _json({'items': [], 'total': 0}),
         _ when uri.path.endsWith('/production-report') => _production(
           synthetic: uri.queryParameters['synthetic'] == 'true',
@@ -129,11 +149,14 @@ void main() {
 
     for (final (menu, content) in [
       ('Identitas pabrik', 'Tenant Uji'),
-      ('Fasilitas Produksi', 'Wajan 2'),
+      ('Fasilitas Produksi', 'Kelola master produksi'),
       ('Shift kerja', 'Jadwal sif per pabrik belum tersedia.'),
       ('Hak akses & pengguna', 'Nonaktif'),
-      ('Aturan produksi', 'Satu grade dicatat untuk setiap batch.'),
-      ('Grade produk', 'Klasifikasi hasil produksi'),
+      (
+        'Aturan produksi',
+        'Beberapa grade boleh dicatat. Total berat grade harus sama dengan hasil fisik.',
+      ),
+      ('Grade produk', 'Kelola master produksi'),
       ('Bahan tambahan (BTP)', 'Daftar BTP per pabrik belum tersedia.'),
       ('Formulir produksi', 'Nota Kedatangan Truk'),
       ('Harga & Biaya', 'KLOTER-A'),
@@ -143,13 +166,8 @@ void main() {
       expect(find.text(content), findsOneWidget, reason: menu);
       expect(find.text('Simpan perubahan'), findsNothing);
       expect(find.text('Isi biaya'), findsNothing);
-      if (menu == 'Grade produk') {
-        for (final code in ['A', 'B', 'C']) {
-          expect(find.text('Grade $code'), findsOneWidget);
-        }
+      if (menu == 'Grade produk' || menu == 'Fasilitas Produksi') {
         expect(requests, isEmpty);
-      } else if (menu == 'Fasilitas Produksi') {
-        expect(find.text('2 batch disahkan'), findsOneWidget);
       } else if (menu == 'Formulir produksi') {
         expect(find.byTooltip('Tambah alias Tanggal'), findsNothing);
         await _tap(tester, find.text('Nota Kedatangan Truk'));
@@ -212,6 +230,7 @@ void main() {
     final gradeMenu = _menu('Grade produk');
     await tester.scrollUntilVisible(gradeMenu, 220);
     await _tap(tester, gradeMenu);
+    await _tap(tester, find.text('Kelola master produksi'));
 
     await tester.binding.setSurfaceSize(const Size(320, 626));
     tester.platformDispatcher.textScaleFactorTestValue = 2;
@@ -219,7 +238,7 @@ void main() {
     await tester.pumpAndSettle();
 
     for (final code in ['A', 'B', 'C']) {
-      final label = find.text('Grade $code');
+      final label = find.text('$code \u00b7 Grade $code');
       expect(label, findsOneWidget);
       await tester.ensureVisible(label);
       await tester.pumpAndSettle();
@@ -264,36 +283,26 @@ void main() {
     expect(find.text('Coba lagi'), findsNothing);
   });
 
-  testWidgets('respons lama tidak muncul setelah beralih ke data contoh', (
+  testWidgets('master lama tidak muncul setelah mengganti scope', (
     tester,
   ) async {
-    final delayed = Completer<http.Response>();
-    var hold = false;
-    await _openApp(tester, (uri) {
-      if (hold &&
-          uri.path.endsWith('/production-report') &&
-          uri.queryParameters['synthetic'] == 'false') {
-        return delayed.future;
-      }
-      return null;
-    });
+    await _openApp(tester, (_) => null);
     await _tap(tester, _menu('Pengaturan'));
-    hold = true;
-    await tester.tap(_menu('Fasilitas Produksi'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('Memuat pengaturan…'), findsWidgets);
-    hold = false;
-    await _tap(tester, find.byTooltip('Kembali'));
-    await _tap(tester, _menu('Beranda'));
-    await _tap(tester, find.text('Rekap'));
-    await _tap(tester, find.text('Tampilkan data contoh'));
-    await _tap(tester, _menu('Pengaturan'));
-    await _tap(tester, _menu('Fasilitas Produksi'));
-    expect(find.textContaining('Data sintetis'), findsOneWidget);
-    expect(find.text('Belum ada wajan pada batch sah.'), findsOneWidget);
-    delayed.complete(_production());
+    await tester.scrollUntilVisible(_menu('Grade produk'), 220);
+    await _tap(tester, _menu('Grade produk'));
+    await _tap(tester, find.text('Kelola master produksi'));
+    expect(find.text('A \u00b7 Grade A'), findsOneWidget);
+    expect(find.text('Tambah master'), findsNothing);
+    await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(find.text('Wajan 2'), findsNothing);
+    await _tap(tester, _menu('Beranda'));
+    await _tap(tester, find.byTooltip('Pilih pabrik'));
+    await _tap(tester, find.text('Pabrik B'));
+    await _tap(tester, _menu('Pengaturan'));
+    await tester.scrollUntilVisible(_menu('Grade produk'), 220);
+    await _tap(tester, _menu('Grade produk'));
+    await _tap(tester, find.text('Kelola master produksi'));
+    expect(find.text('Tambah master'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

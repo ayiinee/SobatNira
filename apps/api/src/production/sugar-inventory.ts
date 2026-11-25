@@ -100,6 +100,8 @@ export class SugarInventory {
     return this.command(access,input,'opening',async(tx,b,synthetic)=>{
       if(b.version!==0) throw new ConflictException('Saldo awal hanya dapat dicatat satu kali. Gunakan penyesuaian.');
       if(!Array.isArray(b.items) || b.items.length>100) throw new BadRequestException('Saldo awal harus berupa daftar maksimum 100 sumber.');
+      const grades=(await tx.query(`SELECT DISTINCT ON(code) code,active FROM sobatnira.production_master_versions WHERE tenant_id=$1 AND factory_id=$2 AND kind='grade' ORDER BY code,version DESC`,keys(access))).rows;
+      if(!grades.some(g=>g.active) || b.items.some(item=>!grades.some(g=>g.active && g.code===(item as any)?.gradeCode))) throw new ConflictException('Siapkan master grade aktif sebelum saldo awal.');
       await tx.query('INSERT INTO sobatnira.production_inventory_state(tenant_id,factory_id,is_synthetic) VALUES($1,$2,$3)',[...keys(access),synthetic]);
       const ids=[];
       for(const item of b.items) {

@@ -1,3 +1,4 @@
+import 'production_masters_page.dart';
 import 'package:flutter/material.dart';
 
 import '../../sobatnira_ui.dart';
@@ -76,83 +77,26 @@ class _ConnectedSettingsPageState extends State<ConnectedSettingsPage> {
             ]),
         ];
       case SettingSection.facilities:
-        final report = await api.productionReport(
-          scope,
-          synthetic: widget.synthetic,
-        );
-        final batchesByWok = <int, int>{};
-        for (final lot in (report['items'] as List).cast<Json>()) {
-          for (final batch in (lot['batches'] as List).cast<Json>()) {
-            final wok = batch['wokNumber'] as int;
-            batchesByWok.update(wok, (count) => count + 1, ifAbsent: () => 1);
-          }
-        }
-        final woks = batchesByWok.keys.toList()..sort();
-        return [
-          if (woks.isEmpty)
-            const SettingsMessage(
-              icon: Icons.precision_manufacturing_outlined,
-              title: 'Riwayat pemakaian wajan',
-              message: 'Belum ada wajan pada batch sah.',
-            )
-          else ...[
-            const SettingsMessage(
-              icon: Icons.history,
-              title: 'Riwayat pemakaian wajan',
-              message: 'Wajan tercatat di produksi berdasarkan batch sah.',
-            ),
-            const SizedBox(height: NiraSpace.md),
-            _group([
-              for (final number in woks)
-                SettingsInfoRow(
-                  icon: Icons.precision_manufacturing_outlined,
-                  title: 'Wajan $number',
-                  description: '${batchesByWok[number]} batch disahkan',
-                ),
-            ]),
-          ],
-        ];
       case SettingSection.grades:
         return [
-          SettingsPanel(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Klasifikasi hasil produksi',
-                  style: niraText(NiraType.section, weight: FontWeight.w700),
+          const SettingsMessage(
+            icon: Icons.history,
+            message: 'Master resmi per pabrik, dengan riwayat versi.',
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).push<void>(
+              MaterialPageRoute(
+                builder: (_) => ProductionMastersPage(
+                  api: api,
+                  scope: scope,
+                  synthetic: widget.synthetic,
+                  kind: widget.entry.section == SettingSection.facilities
+                      ? 'wok'
+                      : 'grade',
                 ),
-                const SizedBox(height: NiraSpace.xs),
-                Text(
-                  'Gunakan satu grade untuk setiap batch.',
-                  style: niraText(NiraType.body, color: niraLeaf),
-                ),
-                const SizedBox(height: NiraSpace.lg),
-                Wrap(
-                  spacing: NiraSpace.sm,
-                  runSpacing: NiraSpace.sm,
-                  children: [
-                    for (final grade in defaultGradeCodes)
-                      DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: niraGreen.withValues(alpha: .08),
-                          borderRadius: BorderRadius.circular(niraRadius),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(NiraSpace.md),
-                          child: Text(
-                            'Grade $grade',
-                            style: niraText(
-                              NiraType.body,
-                              weight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ],
+              ),
             ),
+            child: const Text('Kelola master produksi'),
           ),
         ];
       case SettingSection.shifts:
@@ -167,7 +111,7 @@ class _ConnectedSettingsPageState extends State<ConnectedSettingsPage> {
           SizedBox(height: NiraSpace.md),
           SettingsMessage(
             icon: Icons.calendar_today_outlined,
-            title: 'Jadwal pabrik',
+            title: 'Pratinjau jadwal pabrik',
             message: 'Jadwal sif per pabrik belum tersedia.',
           ),
         ];
@@ -177,7 +121,8 @@ class _ConnectedSettingsPageState extends State<ConnectedSettingsPage> {
             SettingsInfoRow(
               icon: Icons.label_outline,
               title: 'Grade hasil',
-              description: 'Satu grade dicatat untuk setiap batch.',
+              description:
+                  'Beberapa grade boleh dicatat. Total berat grade harus sama dengan hasil fisik.',
             ),
             SettingsInfoRow(
               icon: Icons.water_drop_outlined,
@@ -212,7 +157,7 @@ class _ConnectedSettingsPageState extends State<ConnectedSettingsPage> {
           SizedBox(height: NiraSpace.md),
           SettingsMessage(
             icon: Icons.list_alt_outlined,
-            title: 'Daftar bahan',
+            title: 'Pratinjau daftar bahan',
             message: 'Daftar BTP per pabrik belum tersedia.',
           ),
         ];
