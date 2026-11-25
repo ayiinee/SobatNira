@@ -80,7 +80,7 @@ String documentType(Object? type) => switch (type) {
 };
 
 class ReviewApiError implements Exception {
-  const ReviewApiError(this.status, {this.authCode, this.detail});
+  const ReviewApiError(this.status, {this.authCode, this.detail, this.code});
 
   factory ReviewApiError.fromSignInResponse(http.Response response) {
     String? authCode;
@@ -104,6 +104,7 @@ class ReviewApiError implements Exception {
   final int status;
   final String? authCode;
   final String? detail;
+  final String? code;
 
   bool get unsupportedQuery =>
       status == 400 && detail == 'Terdapat field yang tidak didukung.';
@@ -137,6 +138,8 @@ class ReviewApi {
   bool _supportsLotReport = true;
   bool _supportsSyntheticLotPage = true;
   void Function()? onSessionExpired;
+  String? accountId;
+  String? accountEmail;
 
   String _transferKey(FactoryScope scope, String lotId) =>
       '${scope.tenantId}/${scope.factoryId}/$lotId';
@@ -233,6 +236,25 @@ class ReviewApi {
     return ReviewApi(token);
   }
 
+  static Future<void> completeInvitation(
+    String accessToken,
+    String password,
+  ) async {
+    if (invalidConfiguration.isNotEmpty) throw const ReviewApiError(503);
+    final response = await http
+        .put(
+          Uri.parse(supabaseProject).replace(path: '/auth/v1/user'),
+          headers: {
+            'apikey': supabasePublicKey,
+            'Authorization': 'Bearer $accessToken',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({'password': password}),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (response.statusCode != 200) throw ReviewApiError(response.statusCode);
+  }
+
   static bool _validOrigin(String value) {
     final uri = Uri.tryParse(value);
     return uri != null &&
@@ -266,16 +288,19 @@ class ReviewApi {
     if (status == expectedStatus) return;
     if (status == 401) onSessionExpired?.call();
     String? detail;
+    String? code;
     if (status == 400 || status == 404 || status == 409) {
       try {
         final body = jsonDecode(response.body);
         final message = body is Json ? body['message'] : null;
         if (message is String && message.length <= 200) detail = message;
+        final errorCode = body is Json ? body['code'] : null;
+        if (errorCode is String && errorCode.length <= 80) code = errorCode;
       } on FormatException {
         // Proxies may return a plain text response.
       }
     }
-    throw ReviewApiError(status, detail: detail);
+    throw ReviewApiError(status, detail: detail, code: code);
   }
 
   Future<Json> _productionGet(
@@ -299,12 +324,14 @@ class ReviewApi {
     required DateTime before,
     required bool synthetic,
     required String requestId,
+    Map<String, String> selection = const {},
   }) => writeProduction(
     [...scope._base, 'report-exports'],
     {
       'from': from.toUtc().toIso8601String(),
       'before': before.toUtc().toIso8601String(),
       'synthetic': synthetic,
+      ...selection,
     },
     requestId: requestId,
     expectedStatus: 202,
@@ -343,6 +370,10 @@ class ReviewApi {
 
   Future<List<FactoryScope>> factories() async {
     final response = await _productionGet(['auth', 'me']);
+    if (response['user'] case final Json user) {
+      accountId = user['id'] as String?;
+      accountEmail = user['email'] as String?;
+    }
     return (response['access'] as List)
         .cast<Json>()
         .map(FactoryScope.fromJson)
@@ -355,6 +386,7 @@ class ReviewApi {
     DateTime? before,
     bool synthetic = false,
     bool summaryOnly = false,
+    Map<String, String> selection = const {},
   }) => _productionGet(
     [...scope._base, 'production', 'production-report'],
     query: {
@@ -362,6 +394,7 @@ class ReviewApi {
       'synthetic': '$synthetic',
       if (from != null) 'from': from.toUtc().toIso8601String(),
       if (before != null) 'before': before.toUtc().toIso8601String(),
+      ...selection,
     },
   );
 
@@ -390,6 +423,7 @@ class ReviewApi {
     required int offset,
     DateTime? from,
     DateTime? before,
+    Map<String, String> selection = const {},
   }) => _productionGet(
     [...scope._base, 'production', 'production-report'],
     query: {
@@ -399,6 +433,7 @@ class ReviewApi {
       'synthetic': '$synthetic',
       if (from != null) 'from': from.toUtc().toIso8601String(),
       if (before != null) 'before': before.toUtc().toIso8601String(),
+      ...selection,
     },
   );
 
@@ -520,12 +555,61 @@ class ReviewApi {
   Future<Json> createBatch(FactoryScope scope, Json draft) =>
       writeProduction([...scope._base, 'production', 'batches'], draft);
 
+  Future<Json?> lotCosts(FactoryScope scope, String lotId) async {
+    try {
+      return await _productionGet([
+        ...scope._base,
+        'production',
+        'lots',
+        lotId,
+        'cost-corrections',
+      ]);
+    } on ReviewApiError catch (error) {
+      if (error.status == 404) return null;
+      rethrow;
+    }
+  }
+
   Future<Json> saveLotCosts(FactoryScope scope, String lotId, Json costs) =>
       writeProduction(
         [...scope._base, 'production', 'lots', lotId, 'costs'],
         costs,
         expectedStatus: 200,
       );
+
+  Future<Json> lotCostCorrections(FactoryScope scope, {int offset = 0}) =>
+      _productionGet(
+        [...scope._base, 'production', 'cost-corrections'],
+        query: {'offset': '$offset'},
+      );
+
+  Future<Json> requestLotCostCorrection(
+    FactoryScope scope,
+    String lotId,
+    String requestId,
+    Json values,
+  ) => writeProduction([
+    ...scope._base,
+    'production',
+    'lots',
+    lotId,
+    'cost-corrections',
+    requestId,
+  ], values);
+
+  Future<Json> approveLotCostCorrection(
+    FactoryScope scope,
+    String lotId,
+    String requestId,
+  ) => writeProduction([
+    ...scope._base,
+    'production',
+    'lots',
+    lotId,
+    'cost-corrections',
+    requestId,
+    'approve',
+  ], const {});
 
   Future<Json> reserveBatchJuice(
     FactoryScope scope,
@@ -846,6 +930,29 @@ class ReviewApi {
       ),
     );
     return response['unread_count'] as int;
+  }
+
+  Future<void> registerReviewPush(String installation, String factoryId) async {
+    await _json(
+      _client.put(
+        _url('review-push'),
+        headers: {..._headers, 'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'installation_id': installation,
+          'factory_id': factoryId,
+        }),
+      ),
+    );
+  }
+
+  Future<void> revokeReviewPush(String installation) async {
+    await _json(
+      _client.delete(
+        _url('review-push'),
+        headers: {..._headers, 'Content-Type': 'application/json'},
+        body: jsonEncode({'installation_id': installation}),
+      ),
+    );
   }
 
   Future<void> markNotificationRead(String taskId, String revisionId) async {

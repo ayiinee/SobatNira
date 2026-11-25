@@ -6,6 +6,9 @@ import '../../sobatnira_ui.dart';
 import '../../widgets/nira_loading.dart';
 import '../../widgets/page_frame.dart';
 import 'login_pages.dart';
+import 'admin_invitation_page.dart';
+import 'admin_invitation_stub.dart'
+    if (dart.library.js_interop) 'admin_invitation_web.dart';
 import '../pekerjaan/review_api.dart';
 
 typedef FactoryHomeBuilder =
@@ -43,6 +46,13 @@ class _ConnectedSessionGateState extends State<ConnectedSessionGate> {
   bool _signingIn = false;
   bool _checkingAccess = false;
   String? _loginMessage;
+  String? _invitationToken;
+
+  @override
+  void initState() {
+    super.initState();
+    _invitationToken = takeAdminInvitation();
+  }
 
   @override
   void dispose() {
@@ -97,25 +107,8 @@ class _ConnectedSessionGateState extends State<ConnectedSessionGate> {
       final factories = await api.factories();
       if (!mounted || !identical(_api, api)) return;
       setState(() {
-        if (_factories == null) {
-          _syntheticTenants.addAll(
-            factories
-                .where((scope) => scope.tenantName == 'SobatNira Uji')
-                .map((scope) => scope.tenantId),
-          );
-        }
         _factories = factories;
-        final first = factories.firstOrNull;
-        _scope = first?.tenantName == 'SobatNira Uji'
-            ? factories
-                      .where(
-                        (scope) =>
-                            scope.tenantId == first!.tenantId &&
-                            scope.factoryName == 'Pabrik A',
-                      )
-                      .firstOrNull ??
-                  first
-            : first;
+        _scope = factories.firstOrNull;
       });
     } catch (_) {
       // A transient failure leaves access unloaded so the user can retry.
@@ -160,6 +153,17 @@ class _ConnectedSessionGateState extends State<ConnectedSessionGate> {
       );
     }
     if (api == null) {
+      if (_invitationToken case final token?) {
+        return AdminInvitationPage(
+          token: token,
+          onDone: () => setState(() {
+            _invitationToken = null;
+            _showLogin = true;
+            _loginMessage =
+                'Kata sandi tersimpan. Masuk dengan akun admin Anda.';
+          }),
+        );
+      }
       return _showLogin
           ? LoginFormPage(
               busy: _signingIn,

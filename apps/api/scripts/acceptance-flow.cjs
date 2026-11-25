@@ -31,10 +31,18 @@ async (page, { origin, output }) => {
     const control = name === 'ID ekspor'
       ? page.getByRole('textbox', { name: /^ID ekspor(?:\s|$)/ })
       : page.getByRole('textbox', { name, exact: true });
-    await control.click({ timeout: 15_000 });
-    await page.waitForTimeout(120);
-    await page.keyboard.press('ControlOrMeta+A');
-    await page.keyboard.type(value, { delay: 24 });
+    if (name === 'Catatan pemeriksaan foto') {
+      await scroll(1800);
+      await control.scrollIntoViewIfNeeded();
+      await control.click({ timeout: 15_000 });
+      await control.fill(value);
+      await waitForText(`${1000 - value.length} characters remaining`);
+    } else {
+      await control.click({ timeout: 15_000 });
+      await page.waitForTimeout(120);
+      await page.keyboard.press('ControlOrMeta+A');
+      await page.keyboard.type(value, { delay: 24 });
+    }
     if (await control.inputValue() !== value) throw new Error('Input was not retained: ' + name);
   };
   const submit = async (label, suffix, status) => {
@@ -90,7 +98,10 @@ async (page, { origin, output }) => {
     ['Jenis tebu', 'BL'],
     ['Catatan pemeriksaan foto', 'Pemeriksaan foto nota sintetis'],
   ]) await field(name, value);
-  await submit('Simpan draf manual', '/manual-draft', 200);
+  const savedDraft = await submit('Simpan draf manual', '/manual-draft', 200);
+  if (savedDraft.request().postDataJSON().note !== 'Pemeriksaan foto nota sintetis') {
+    throw new Error('Catatan pemeriksaan foto tidak terkirim dari formulir.');
+  }
   await page.getByText('Status: PENDING_VALIDATION', { exact: true }).waitFor({ timeout: 15_000 });
   await validateIntake('B');
 
@@ -118,7 +129,7 @@ async (page, { origin, output }) => {
   await button('Tambah batch').click({ timeout: 15_000 });
   for (const [name, value] of [
     ['Kode batch', 'SMOKE-UJI'], ['Nomor wajan', '1'], ['Waktu pemasakan', '2026-11-16T10:00:00+07:00'],
-    ['Volume nira (mL)', '40000'], ['Hasil fisik (kg)', '26'], ['Grade', 'A'], ['Berat grade (kg)', '25'],
+    ['Volume nira (mL)', '40000'], ['Hasil fisik (kg)', '25'], ['Grade', 'A'], ['Berat grade (kg)', '25'],
     ['Harga per kg (Rp)', '20000'],
   ]) await field(name, value);
   await submit('Simpan', '/production/batches', 201);
@@ -135,7 +146,7 @@ async (page, { origin, output }) => {
 
   await button('Laporan').click();
   await waitForText('Gula final 25 kg');
-  if (await button('Ekspor laporan').count()) throw new Error('Ekspor owner terlihat untuk admin.');
+  await button('Ekspor laporan').waitFor();
   await capture('laporan');
   await button('Margin').click();
   const margin = await waitForText('Margin Produksi Rp375.000');
