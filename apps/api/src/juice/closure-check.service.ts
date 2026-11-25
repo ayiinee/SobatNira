@@ -13,6 +13,8 @@ export class ClosureCheckService {
       WHERE b.tenant_id=$1 AND b.factory_id=$2 AND b.lot_id=$3 AND b.is_synthetic=$4 AND c.status='draft' LIMIT 1`,
       [access.tenantId, access.factoryId, lotId, synthetic]);
     if (correction.rows.length) throw new ConflictException('Selesaikan koreksi batch sebelum menutup kloter.');
+    const rework=await tx.query(`SELECT 1 FROM sobatnira.production_rework_reservations r JOIN sobatnira.production_sugar_sources s ON s.id=r.source_id LEFT JOIN sobatnira.production_batches b ON b.id=s.batch_id WHERE r.tenant_id=$1 AND r.factory_id=$2 AND r.is_synthetic=$4 AND r.state='reserved' AND (s.origin_lot_id=$3 OR b.lot_id=$3) LIMIT 1`,[access.tenantId,access.factoryId,lotId,synthetic]);
+    if(rework.rows.length) throw new ConflictException('Selesaikan reservasi rework sebelum menutup kloter.');
     const upstream = synthetic && this.config.environment !== 'production' ? this.config.batchClosure : undefined;
     if (!upstream) {
       const { rows: [result] } = await tx.query<{blocked:boolean}>(`SELECT

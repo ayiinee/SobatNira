@@ -1,3 +1,4 @@
+import { ProductionRework, assertFinancialsAvailable, reworkAffectedLots } from './rework';
 import { SugarInventory } from './sugar-inventory';
 import { assertBatchSource, batchSourceRows, parseBatchSource } from './batch-sources';
 import { BadRequestException, Body, ConflictException, Controller, Get, HttpCode, Injectable, Param, Patch, Post, Query } from '@nestjs/common';
@@ -31,14 +32,15 @@ export function assertGradeWeight(physicalWeightKg: string, grades: Grade[]) {
 }
 
 export function parseBatch(input: unknown) {
-    const b = object(input, ['id', 'lotId', 'code', 'wokNumber', 'occurredAt', 'quantityMl', 'physicalWeightKg', 'grades', 'synthetic', 'source']);
+    const b = object(input, ['id', 'lotId', 'code', 'wokNumber', 'occurredAt', 'quantityMl', 'physicalWeightKg', 'grades', 'synthetic', 'source', 'kind']);
     if (!Number.isSafeInteger(b.wokNumber) || Number(b.wokNumber) < 1 || Number(b.wokNumber) > 10000)
         throw new BadRequestException('Nomor wajan tidak valid.');
     if (b.synthetic !== undefined && typeof b.synthetic !== 'boolean')
         throw new BadRequestException('synthetic harus boolean.');
     // Reuse exact calculator validation for weights, prices and duplicate grade codes.
     const calculation = calculateProductionPreview({ caneNetKg: '1', caneCostRupiah: '0', operationalCostRupiah: '0', ingredientCostRupiah: '0', otherCostRupiah: '0', rounding: 'HALF_UP', grades: b.grades });
-    return { source: parseBatchSource(b.source), id: uuid(b.id), lotId: uuid(b.lotId), code: text(b.code, 'code', 100), wokNumber: Number(b.wokNumber), occurredAt: timestamp(b.occurredAt, 'occurredAt'), quantityMl: decimal(b.quantityMl, 'quantityMl'), physicalWeightKg: decimal(b.physicalWeightKg, 'physicalWeightKg'), grades: calculation.grades.map(g => ({ code: g.code, weightKg: g.weightKg, pricePerKgRupiah: g.pricePerKgRupiah })), synthetic: b.synthetic === true };
+    if (b.kind !== undefined && !['normal','rework'].includes(String(b.kind))) throw new BadRequestException('kind batch tidak valid.');
+    return { kind: b.kind ?? 'normal', source: parseBatchSource(b.source), id: uuid(b.id), lotId: uuid(b.lotId), code: text(b.code, 'code', 100), wokNumber: Number(b.wokNumber), occurredAt: timestamp(b.occurredAt, 'occurredAt'), quantityMl: decimal(b.quantityMl, 'quantityMl'), physicalWeightKg: decimal(b.physicalWeightKg, 'physicalWeightKg'), grades: calculation.grades.map(g => ({ code: g.code, weightKg: g.weightKg, pricePerKgRupiah: g.pricePerKgRupiah })), synthetic: b.synthetic === true };
 }
 
 function correctionData(physicalWeight: unknown, grades: unknown) {
@@ -50,7 +52,7 @@ function correctionData(physicalWeight: unknown, grades: unknown) {
 }
 @Injectable()
 export class Batches {
-    constructor(private readonly db: DatabaseService, private readonly juice: JuiceRepository, private readonly inventory: SugarInventory) { }
+    constructor(private readonly db: DatabaseService, private readonly juice: JuiceRepository, private readonly inventory: SugarInventory, private readonly rework: ProductionRework) { }
     async create(access: FactoryAccess, input: unknown) {
         const b = parseBatch(input);
         const hash = createHash('sha256').update(JSON.stringify(b)).digest('hex');
@@ -63,6 +65,10 @@ export class Batches {
                 return old;
             }
             await assertBatchSource(tx, access, b.lotId, b.source, b.id);
+            if(b.kind==='rework') {
+                const state=(await tx.query('SELECT rework_enabled FROM sobatnira.production_inventory_state WHERE tenant_id=$1 AND factory_id=$2 AND is_synthetic=$3',[access.tenantId,access.factoryId,b.synthetic])).rows[0];
+                if(!state?.rework_enabled) throw new ConflictException('Rework belum diaktifkan setelah integrasi laporan.');
+            }
             const scope = [access.tenantId, access.factoryId, b.lotId, b.synthetic];
             const source = await tx.query('SELECT occurred_at FROM sobatnira.milling_records WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3 AND is_synthetic=$4', scope);
             if (!source.rows.length || new Date(source.rows[0].occurred_at).getTime() > Date.parse(b.occurredAt))
@@ -70,8 +76,8 @@ export class Batches {
             const closed = await tx.query('SELECT 1 FROM sobatnira.lot_closures WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3 AND is_synthetic=$4 AND reopened_at IS NULL', scope);
             if (closed.rows.length)
                 throw new ConflictException('Kloter sudah ditutup.');
-            const result = await tx.query(`INSERT INTO sobatnira.production_batches(id,tenant_id,factory_id,lot_id,code,wok_number,occurred_at,quantity_ml,physical_weight_kg,is_synthetic,input_hash,created_by,source_document_id,source_revision_id,source_block,source_row)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`, [b.id, access.tenantId, access.factoryId, b.lotId, b.code, b.wokNumber, b.occurredAt, b.quantityMl, b.physicalWeightKg, b.synthetic, hash, access.userId, b.source?.documentId ?? null,b.source?.revisionId ?? null,b.source?.block ?? null,b.source?.rowReference ?? null]);
+            const result = await tx.query(`INSERT INTO sobatnira.production_batches(id,tenant_id,factory_id,lot_id,code,wok_number,occurred_at,quantity_ml,physical_weight_kg,is_synthetic,input_hash,created_by,source_document_id,source_revision_id,source_block,source_row,kind)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`, [b.id, access.tenantId, access.factoryId, b.lotId, b.code, b.wokNumber, b.occurredAt, b.quantityMl, b.physicalWeightKg, b.synthetic, hash, access.userId, b.source?.documentId ?? null,b.source?.revisionId ?? null,b.source?.block ?? null,b.source?.rowReference ?? null,b.kind]);
             for (const g of b.grades)
                 await tx.query('INSERT INTO sobatnira.batch_grade_results(batch_id,code,weight_kg,price_per_kg_rupiah) VALUES($1,$2,$3,$4)', [b.id, g.code, g.weightKg, g.pricePerKgRupiah]);
             await tx.query("INSERT INTO sobatnira.production_batch_events(batch_id,action,actor_id) VALUES($1,'created',$2)", [b.id, access.userId]);
@@ -104,7 +110,7 @@ export class Batches {
         return this.juice.mutate(access, async (tx) => {
             const b = await this.lockBatch(tx, access, id);
             if (b.status === 'approved')
-                return found((await tx.query('SELECT * FROM sobatnira.production_calculation_snapshots WHERE batch_id=$1 AND lot_id=$2 AND correction_id IS NULL AND cost_correction_id IS NULL', [id, b.lot_id])).rows[0]);
+                return (await tx.query('SELECT * FROM sobatnira.production_calculation_snapshots WHERE batch_id=$1 AND lot_id=$2 AND correction_id IS NULL AND cost_correction_id IS NULL', [id, b.lot_id])).rows[0] ?? {id,financialStatus:'REWORK_FINANCIALS_PENDING'};
             await assertBatchSource(tx, access, b.lot_id, b.source_document_id ? {documentId:b.source_document_id, revisionId:b.source_revision_id,block:b.source_block,rowReference:b.source_row} : null, id);
             if (b.status !== 'draft')
                 throw new ConflictException('Batch tidak dapat disahkan.');
@@ -117,6 +123,7 @@ export class Batches {
                 throw new ConflictException('Reservasi harus sesuai volume, pabrik, dan kategori batch.');
             const grades = (await tx.query<Grade>('SELECT code,weight_kg::text AS "weightKg",price_per_kg_rupiah::text AS "pricePerKgRupiah" FROM sobatnira.batch_grade_results WHERE batch_id=$1', [id])).rows;
             assertGradeWeight(String(b.physical_weight_kg), grades);
+            await this.rework.finalize(tx, access, b, true);
             await tx.query("UPDATE sobatnira.juice_reservations SET state='consumed',finalized_by=$4,finalized_at=clock_timestamp() WHERE tenant_id=$1 AND factory_id=$2 AND batch_id=$3 AND state='reserved'", [access.tenantId, access.factoryId, id, access.userId]);
             const approved = (await tx.query("UPDATE sobatnira.production_batches SET status='approved',approved_by=$2,approved_at=clock_timestamp() WHERE id=$1 RETURNING *", [id, access.userId])).rows[0];
             await this.inventory.postBatch(tx, access, approved, id);
@@ -158,7 +165,9 @@ export class Batches {
           FROM sobatnira.production_batches b JOIN authorized_scope s
             ON s."tenantId"=b.tenant_id AND s."factoryId"=b.factory_id WHERE b.id=$4`, [...scopeValues(access), id]);
         const batch = found(row);
-        return { ...batch, ...batchGradeTotals(batch.grades ?? []),
+        const financialStatus=(await reworkAffectedLots(this.db,access,batch.is_synthetic)).includes(batch.lot_id)?'REWORK_FINANCIALS_PENDING':'available';
+        return { ...batch, ...batchGradeTotals(batch.grades ?? []), financialStatus,
+            ...(financialStatus==='REWORK_FINANCIALS_PENDING'?{exactValueRupiah:null}:{}),
             lotClosed: batch.lotClosureId !== null,
             canCorrect: access.role === 'admin' && batch.status === 'approved' };
     }
@@ -262,6 +271,7 @@ export class Batches {
             }
             await tx.query(`UPDATE sobatnira.juice_reservations SET state='released',finalized_by=$4,finalized_at=clock_timestamp()
               WHERE tenant_id=$1 AND factory_id=$2 AND batch_id=$3 AND state='reserved'`, [...keys, access.userId]);
+            await this.rework.finalize(tx, access, row, false);
             const updated = (await tx.query(`UPDATE sobatnira.production_batches SET status='cancelled'
               WHERE tenant_id=$1 AND factory_id=$2 AND id=$3 RETURNING *`, keys)).rows[0];
             await tx.query("INSERT INTO sobatnira.production_batch_events(batch_id,action,actor_id) VALUES($1,'cancelled',$2)", [id, access.userId]);
@@ -336,6 +346,7 @@ export class Batches {
     }
 
     async reportSummary(access: FactoryAccess, synthetic: boolean, from: string | null, before: string | null, selection: ReportSelection, session: DatabaseSession = this.db) {
+        await assertFinancialsAvailable(session,access,synthetic,from,before,selection.lotId);
         const { rows: [row] } = await session.query<ReturnType<typeof productionReport>['totals'] & {
           grades: ReturnType<typeof productionReport>['grades']; provisional: boolean; latestReceivedAt: Date | null;
         }>(`WITH ${FACTORY_SCOPE_CTE}, selected AS (
@@ -406,6 +417,8 @@ export class Batches {
       { limit, second, includeJuiceSources, lotId, supplierId, batchId, grade, offset = 0, session = this.db }: ReportSelection & {
         limit: number | null; second?: ReportPeriod; includeJuiceSources?: boolean; offset?: number; session?: DatabaseSession;
       }) {
+        await assertFinancialsAvailable(session,access,synthetic,from,before,lotId ?? null);
+        if(second) await assertFinancialsAvailable(session,access,synthetic,second.from,second.before);
         const batchesSql = `CASE WHEN p.calculation_version='production-v2' THEN
             ${includeJuiceSources ? `(SELECT jsonb_agg(entry || jsonb_build_object('consumedByOrigin', COALESCE((
               SELECT jsonb_agg(to_jsonb(src)) FROM (
@@ -488,6 +501,7 @@ export class Batches {
             throw new BadRequestException('synthetic tidak valid.');
         const from = q.from === undefined ? null : timestamp(q.from, 'from'), before = q.before === undefined ? null : timestamp(q.before, 'before');
         reportPeriod(from, before);
+        await assertFinancialsAvailable(this.db,access,q.synthetic === 'true',from,before);
         // Latest cumulative snapshot per lot; report period follows lot receipt time.
         const rows = (await this.db.query(`WITH ${FACTORY_SCOPE_CTE}, latest AS (
    SELECT DISTINCT ON(p.lot_id) p.* FROM sobatnira.production_calculation_snapshots p JOIN authorized_scope s ON s."tenantId"=p.tenant_id AND s."factoryId"=p.factory_id

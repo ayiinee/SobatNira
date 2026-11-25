@@ -7,7 +7,7 @@ const { boundedReport, REPORT_MAX_BYTES } = require('../dist/production/report-l
 test('report limits reject overlong periods, excessive rows and bytes without returning partial totals', async () => {
   const access = { userId:'user',tenantId:'tenant',factoryId:'factory' };
   let calls=0;
-  const service=new Batches({query:async()=>{calls++;return {rows:Array.from({length:101},(_,n)=>lot(String(n)))}}},{});
+  const service=new Batches({query:async(sql)=>{if(sql.startsWith('WITH RECURSIVE')) return {rows:[]}; calls++;return {rows:Array.from({length:101},(_,n)=>lot(String(n)))}}},{});
   for (const query of [{from:'2024-01-01T00:00:00Z',before:'2026-01-01T00:00:00Z'},
     {view:'unknown'}, {limit:'1'}, {view:'page',limit:'0'}]) {
     await assert.rejects(service.productionReport(access,query),e=>e.getStatus()===400);
@@ -16,7 +16,7 @@ test('report limits reject overlong periods, excessive rows and bytes without re
   await assert.rejects(service.productionReport(access,{}),e=>e.getStatus()===400 && /ekspor/.test(e.message));
   assert.throws(()=>boundedReport({text:'x'.repeat(REPORT_MAX_BYTES)}),e=>e.getStatus()===400);
   assert.equal(boundedReport({text:'valid'}).text,'valid');
-  const dense=new Batches({query:async()=>({rows:[lot('dense',null,Array(1001).fill({}))]})},{});
+  const dense=new Batches({query:async(sql)=>({rows:sql.startsWith('WITH RECURSIVE')?[]:[lot('dense',null,Array(1001).fill({}))]})},{});
   await assert.rejects(dense.productionReport(access,{}),e=>e.getStatus()===400 && /1000/.test(e.message));
   await assert.rejects(dense.report(access,{},true),e=>e.getStatus()===400 && /1000/.test(e.message));
 });
@@ -82,8 +82,9 @@ test('report validates period and category before accessing database, and binds 
   assert.equal(calls.length, 0);
   const result = await service.productionReport(access, { synthetic: 'true', from: '2026-11-19T00:00:00+07:00', before: '2026-11-20T00:00:00+07:00' });
   assert.equal(result.synthetic, true);
-  assert.deepEqual(calls[0].values.slice(0, 4), ['user', 'tenant', 'factory', true]);
-  assert.match(calls[0].sql, /pb.status='approved'/);
-  assert.match(calls[0].sql, /l.received_at < \$6/);
-  assert.match(calls[0].sql, /JOIN authorized_scope/);
+  const reportCall=calls.find(c=>c.sql.includes('JOIN authorized_scope'));
+  assert.deepEqual(reportCall.values.slice(0, 4), ['user', 'tenant', 'factory', true]);
+  assert.match(reportCall.sql, /pb.status='approved'/);
+  assert.match(reportCall.sql, /l.received_at < \$6/);
+  assert.match(reportCall.sql, /JOIN authorized_scope/);
 });

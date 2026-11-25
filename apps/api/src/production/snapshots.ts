@@ -1,3 +1,4 @@
+import { reworkAffectedLots } from './rework';
 import { ConflictException } from '@nestjs/common';
 import { FactoryAccess } from '../auth/auth.types';
 import { DatabaseSession } from '../database/database.service';
@@ -46,6 +47,8 @@ export async function rebuildSnapshots(tx: DatabaseSession, access: FactoryAcces
     JOIN sobatnira.intake_records i ON (i.tenant_id,i.factory_id,i.lot_id)=(c.tenant_id,c.factory_id,c.lot_id)
     WHERE c.tenant_id=$1 AND c.factory_id=$2 AND i.is_synthetic=$3 AND c.lot_id=ANY($4::uuid[])`, [...scope, ids])).rows;
   if (lots.length !== ids.length) throw new ConflictException('Semua kloter asal memerlukan penerimaan dan biaya resmi.');
+  const pending = await reworkAffectedLots(tx,access,trigger.is_synthetic);
+  if(ids.some(id => pending.includes(id))) return {id:trigger.id,financialStatus:'REWORK_FINANCIALS_PENDING',affectedLotIds:pending};
   const allocated = new Map<string, AllocatedBatch[]>(ids.map(id => [id, []]));
   const selected = batches.filter(b => affected.has(b.lot_id));
   for (const b of selected) {

@@ -42,7 +42,7 @@ export class SugarInventory {
       LEFT JOIN sobatnira.lots l ON (l.tenant_id,l.factory_id,l.id)=(s.tenant_id,s.factory_id,s.origin_lot_id)
       WHERE s.is_synthetic=$4 ORDER BY s.grade_code,s.quality,s.id`,scope)).rows;
     return {active:!!state,version:state?.version ?? 0,activatedAt:state?.activated_at ?? null,
-      synthetic,limitation:INVENTORY_LIMITATION,sources};
+      synthetic,reworkEnabled:state?.rework_enabled ?? false,limitation:INVENTORY_LIMITATION,sources};
   }
 
   async history(access: FactoryAccess, query: unknown) {

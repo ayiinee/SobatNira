@@ -1,3 +1,4 @@
+import { ProductionRework, ProductionReworkController } from './rework';
 import { SugarInventory, SugarInventoryController } from './sugar-inventory';
 import { Batches, BatchesController } from './batches';
 import { CostCorrections, CostCorrectionsController } from './cost-corrections';
@@ -22,9 +23,9 @@ import { CatalogCache } from '../cache/catalog-cache';
 
 @Module({
   imports: [DatabaseModule, AuthModule, OcrDocumentsModule],
-  controllers: [SugarInventoryController, CostCorrectionsController, SuppliersController, LotsController, CaneTypesController, CalculationController, BatchesController,
+  controllers: [ProductionReworkController, SugarInventoryController, CostCorrectionsController, SuppliersController, LotsController, CaneTypesController, CalculationController, BatchesController,
     CapabilitiesController, OwnerAgentController, OwnerAgentSessionController, ReportExportsController],
-  providers: [SugarInventory, CostCorrections, SuppliersRepository, LotsRepository, CaneTypesRepository, ProductionHistoryRepository, Batches, JuiceRepository,
+  providers: [ProductionRework, SugarInventory, CostCorrections, SuppliersRepository, LotsRepository, CaneTypesRepository, ProductionHistoryRepository, Batches, JuiceRepository,
     Capabilities, OwnerAgentSessions, ReportExports, ReportDelivery, CatalogCache],
 })
 export class ProductionModule {}
