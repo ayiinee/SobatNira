@@ -215,7 +215,9 @@ class _ConnectedSettingsPageState extends State<ConnectedSettingsPage> {
                     SettingsInfoRow(
                       icon: Icons.person_outline,
                       title: _role(member['role']),
-                      description: 'ID akun ${member['userId'] as String}',
+                      description:
+                          member['email'] as String? ??
+                          'ID akun ${member['userId'] as String}',
                       status: _status(member['isActive'] as bool),
                     ),
                     if (member['role'] == 'admin')

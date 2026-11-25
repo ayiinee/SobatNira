@@ -143,6 +143,14 @@ Untuk menguji sampai antrean **Pekerjaan** dengan PaddleOCR CPU lokal tanpa memb
 
 Jika ringkasan menyatakan template belum terbaca, operator dapat membalas ringkasan otomatis yang aktif dengan `JENIS TRUK` atau `JENIS PRODUKSI`. SobatNira mencoba membaca ulang foto asli dengan jenis nota tersebut sebagai petunjuk. Pilihan berlaku sekali per foto. Foto yang tetap tidak terbaca tersedia untuk tinjauan manual di antrean Pekerjaan.
 
+### Notifikasi Pekerjaan di Android
+
+1. Di staging, terapkan migrasi OCR `010_android_review_push.sql` lewat `npm run db:migrate:ocr`. Atur `ANDROID_REVIEW_PUSH_PROJECT_ID` dan kredensial Google untuk pengiriman FCM HTTP v1 melalui workload identity atau secret file `GOOGLE_APPLICATION_CREDENTIALS`. Samakan proyek dengan `apps/mobile/android/app/google-services.json` yang hanya tersedia di lingkungan build staging. [Setup Android](https://firebase.google.com/docs/android/setup) · [Otorisasi FCM](https://firebase.google.com/docs/cloud-messaging/send/v1-api)
+2. Tambahkan `--dart-define=SOBATNIRA_ANDROID_PUSH=true` pada build Android staging. Masukkan nama alias, berkas keystore, dan dua kata sandi melalui `SOBATNIRA_ANDROID_KEY_ALIAS`, `SOBATNIRA_ANDROID_KEYSTORE`, `SOBATNIRA_ANDROID_STORE_PASSWORD`, dan `SOBATNIRA_ANDROID_KEY_PASSWORD`. Gunakan `SOBATNIRA_ANDROID_SIGNING_REQUIRED=true` pada build distribusi supaya build berhenti jika secret tim belum lengkap. Build lokal tanpa secret tetap menggunakan kunci debug.
+3. Setelah memeriksa konfigurasi, aktifkan `ANDROID_REVIEW_PUSH_ENABLED=true` pada API dan `DOCUMENT_WORKER_ENABLED=true` pada proses yang menjalankan pengiriman. Masuk sebagai admin pabrik uji dan nyalakan **Notifikasi pekerjaan Android** di Pengaturan. Konfirmasi satu nota sintetis dari WhatsApp saat aplikasi di latar belakang, lalu ketuk notifikasi untuk membuka Pekerjaan. Ulangi setelah keluar, setelah admin dinonaktifkan, dan setelah API mendapat respons sementara gagal dari FCM. Web tetap menampilkan badge di dalam aplikasi.
+
+Antrean memakai satu pengiriman per tugas dan instalasi, dengan maksimal tiga percobaan dalam 15 menit. Pesan Android memakai tag yang sama agar notifikasi berulang menggantikan pemberitahuan sebelumnya. NestJS memeriksa anggota aktif dan status pekerjaan saat pengiriman. Isi pesan di layar kunci bersifat umum. Jika telepon sedang offline saat keluar, pencabutan di server dan Firebase baru dapat dikonfirmasi ketika tersedia koneksi.
+
 ### Percakapan operator
 
 - Balasan **“Foto diterima. Sedang membaca nota…”** dikirim setelah API menyimpan foto dan pekerjaan OCR. Gunakan **STATUS** untuk cek progres. Jika ada beberapa nota dalam satu chat, balas foto atau ringkasan nota yang dimaksud dengan **STATUS**.

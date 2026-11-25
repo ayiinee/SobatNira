@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../widgets/nira_loading.dart';
@@ -12,6 +14,7 @@ import '../kloter/lot_closure_page.dart';
 import '../kloter/production_catalog_page.dart';
 import '../kloter/production_lot_editor.dart';
 import '../pekerjaan/pekerjaan_page.dart';
+import '../pekerjaan/android_review_push.dart';
 import '../kloter/demo_production.dart';
 import '../kloter/demo_lot_fixture.dart';
 import '../kloter/kloter_detail_page.dart';
@@ -78,15 +81,56 @@ class _NiraHomeState extends State<NiraHome> {
   final _settings = SettingsDemo();
   final _tab = ValueNotifier(NiraTab.beranda);
   final _pages = <NiraTab, Widget>{};
+  AndroidReviewPush? _push;
+  bool _openingReview = false;
+  bool _signingOut = false;
 
   @override
   void initState() {
     super.initState();
     _live?.refresh();
+    if (AndroidReviewPush.supported && widget.api != null) {
+      final push = _push = AndroidReviewPush(
+        widget.api!,
+        widget.scope!,
+        _openReviewFromPush,
+      );
+      unawaited(push.started);
+    }
+  }
+
+  Future<void> _openReviewFromPush() async {
+    if (!mounted || _openingReview || _signingOut) return;
+    _openingReview = true;
+    try {
+      final scopes = await widget.api!.factories();
+      if (mounted &&
+          !_signingOut &&
+          scopes.any(
+            (scope) =>
+                scope.factoryId == widget.scope!.factoryId &&
+                scope.role == 'admin',
+          )) {
+        await _openPekerjaan();
+      }
+    } catch (_) {
+      // An unavailable or expired session cannot open a review from a notification.
+    } finally {
+      _openingReview = false;
+    }
+  }
+
+  Future<void> _signOut() async {
+    if (_signingOut) return;
+    _signingOut = true;
+    await _push?.signOut();
+    if (mounted) widget.signOut?.call();
   }
 
   List<DemoKloter> get _lots => _live?.lots ?? _demo.kloter;
   String get _role => widget.scope?.role == 'owner' ? 'Pemilik' : 'Admin';
+  String? get _accountInitial =>
+      widget.api?.accountEmail?.characters.firstOrNull?.toUpperCase();
   String _factoryLabel(FactoryScope factory) {
     final count = widget.factories
         .where((other) => other.factoryName == factory.factoryName)
@@ -129,6 +173,7 @@ class _NiraHomeState extends State<NiraHome> {
           },
           onFactoryChanged: _live == null ? null : _selectFactory,
           profile: _live == null ? null : _role,
+          profileInitial: _accountInitial,
           summary: _summary(),
           period:
               _live?.reports.period ??
@@ -192,6 +237,7 @@ class _NiraHomeState extends State<NiraHome> {
           connectedProfile: _live == null
               ? null
               : '$_role · ${widget.scope!.factoryName}',
+          profileInitial: _accountInitial,
           onConnectedEntry: _live == null
               ? null
               : {
@@ -208,7 +254,19 @@ class _NiraHomeState extends State<NiraHome> {
                   ProductionCatalog.caneTypes.label: () =>
                       _openCatalog(ProductionCatalog.caneTypes),
                 },
-          onSignOut: widget.signOut,
+          reviewPushSetting: switch (_push) {
+            final push? when push.available => ListenableBuilder(
+              listenable: push,
+              builder: (_, _) => SwitchListTile(
+                title: const Text('Notifikasi pekerjaan Android'),
+                subtitle: push.error == null ? null : Text(push.error!),
+                value: push.enabled,
+                onChanged: push.busy ? null : (_) => push.toggle(),
+              ),
+            ),
+            _ => null,
+          },
+          onSignOut: widget.signOut == null ? null : _signOut,
         ),
       },
     ),
@@ -316,6 +374,7 @@ class _NiraHomeState extends State<NiraHome> {
 
   @override
   void dispose() {
+    _push?.dispose();
     _tab.dispose();
     _analytics.dispose();
     _demo.dispose();

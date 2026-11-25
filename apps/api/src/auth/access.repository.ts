@@ -26,14 +26,15 @@ export class AccessRepository {
   }
 
   async listFactoryMembers(access: FactoryAccess) {
-    const result = await this.database.query<{ userId: string; role: FactoryRole; isActive: boolean }>(`
+    const result = await this.database.query<{ userId: string; email: string | null; role: FactoryRole; isActive: boolean }>(`
       WITH authorized_factory AS (
         ${ACTIVE_ACCESS} AND fm.tenant_id = $2::uuid AND fm.factory_id = $3::uuid AND fm.role = 'owner'
       )
-      SELECT fm.user_id AS "userId", fm.role, (fm.is_active AND tm.is_active) AS "isActive"
+      SELECT fm.user_id AS "userId", u.email, fm.role, (fm.is_active AND tm.is_active) AS "isActive"
       FROM sobatnira.factory_memberships fm
       JOIN sobatnira.tenant_memberships tm ON tm.tenant_id = fm.tenant_id AND tm.user_id = fm.user_id
       JOIN authorized_factory allowed ON allowed."tenantId" = fm.tenant_id AND allowed."factoryId" = fm.factory_id
+      LEFT JOIN auth.users u ON u.id=fm.user_id
       ORDER BY fm.user_id
     `, [access.userId, access.tenantId, access.factoryId]);
     return result.rows;

@@ -12,8 +12,10 @@ class PengaturanPage extends StatelessWidget {
     required this.settings,
     required this.onNavigate,
     this.connectedProfile,
+    this.profileInitial,
     this.onConnectedEntry,
     this.onOpenPekerjaan,
+    this.reviewPushSetting,
     this.onSignOut,
     this.catalogLinks = const {},
     super.key,
@@ -22,8 +24,10 @@ class PengaturanPage extends StatelessWidget {
   final SettingsDemo settings;
   final ValueChanged<NiraTab> onNavigate;
   final String? connectedProfile;
+  final String? profileInitial;
   final Map<SettingSection, VoidCallback>? onConnectedEntry;
   final VoidCallback? onOpenPekerjaan;
+  final Widget? reviewPushSetting;
   final VoidCallback? onSignOut;
   final Map<String, VoidCallback> catalogLinks;
 
@@ -44,6 +48,7 @@ class PengaturanPage extends StatelessWidget {
         _section('PABRIK & TIM', factoryEntries, context),
         if (onOpenPekerjaan case final open?)
           _menuRow('Pekerjaan', 'Tinjau nota dari pabrik aktif', 'form', open),
+        ?reviewPushSetting,
         const SizedBox(height: NiraSpace.xl),
         _section('PRODUKSI & PERHITUNGAN', productionEntries, context),
         for (final entry in catalogLinks.entries)
@@ -79,7 +84,7 @@ class PengaturanPage extends StatelessWidget {
       if (connectedProfile case final profile?)
         CircleAvatar(
           radius: 32,
-          child: Text(profile.characters.first.toUpperCase()),
+          child: Text(profileInitial ?? profile.characters.first.toUpperCase()),
         )
       else
         ClipOval(

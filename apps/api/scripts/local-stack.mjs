@@ -45,7 +45,8 @@ const users = { 'admin@example.invalid': admin, 'owner@example.invalid': owner, 
 const userTokens = Object.fromEntries(Object.keys(users).map((key) => [key, randomBytes(32).toString('hex')]));
 const clearProviders = ['GEMINI_API_KEY','GEMINI_VISION_MODEL','OPENROUTER_API_KEY','OPENROUTER_AGENT_MODEL',
   'OPENROUTER_ALLOWED_PROVIDERS','OPENROUTER_AGENT_FALLBACK_MODEL','R2_ENDPOINT','R2_BUCKET_NAME','R2_BUCKET','R2_ACCOUNT_ID',
-  'R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','DATABASE_SSL_CA_FILE','REDIS_URL','SUPABASE_SECRET_KEY','BATCH_API_BASE_URL'];
+  'R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','DATABASE_SSL_CA_FILE','REDIS_URL','SUPABASE_SECRET_KEY','BATCH_API_BASE_URL',
+  'ANDROID_REVIEW_PUSH_ENABLED','ANDROID_REVIEW_PUSH_PROJECT_ID','GOOGLE_APPLICATION_CREDENTIALS'];
 for (const key of clearProviders) process.env[key] = '';
 const serveWeb = process.argv.includes('--web');
 if (acceptance && (!serveWeb || ocrOnly || !process.env.LOCAL_DATABASE_URL)) {

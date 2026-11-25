@@ -8,6 +8,7 @@ import { correctField } from './revisions';
 import { closeClarifications, describeQuestion, openClarifications, Question } from './clarifications';
 import { enqueueNotice } from './notices';
 import { operatorChecks } from './operator-readiness';
+import { enqueueReviewPush } from './review-push';
 
 type Operator = { id: string; factory_id: string };
 type PhotoPreparation = { factoryId: string; key: string | null; documentId?: string; revisionId?: string };
@@ -415,6 +416,7 @@ export class Intake {
           [doc.id, base.id]);
         await db.query(`INSERT INTO admin_review_notifications (task_id,user_id)
           SELECT $1,user_id FROM review_memberships WHERE factory_id=$2 AND active AND role='ADMIN'`, [task.id, operator.factory_id]);
+        await enqueueReviewPush(db, task.id, operator.factory_id);
         await audit(db, base, 'OPERATOR_CONFIRMED', operator.id);
         outcome = { document_id: doc.id, revision_id: base.id, task_id: task.id, operator_status: 'CONFIRMED' };
       }

@@ -137,6 +137,8 @@ class ReviewApi {
   bool _supportsLotReport = true;
   bool _supportsSyntheticLotPage = true;
   void Function()? onSessionExpired;
+  String? accountId;
+  String? accountEmail;
 
   String _transferKey(FactoryScope scope, String lotId) =>
       '${scope.tenantId}/${scope.factoryId}/$lotId';
@@ -367,6 +369,10 @@ class ReviewApi {
 
   Future<List<FactoryScope>> factories() async {
     final response = await _productionGet(['auth', 'me']);
+    if (response['user'] case final Json user) {
+      accountId = user['id'] as String?;
+      accountEmail = user['email'] as String?;
+    }
     return (response['access'] as List)
         .cast<Json>()
         .map(FactoryScope.fromJson)
@@ -880,6 +886,29 @@ class ReviewApi {
       ),
     );
     return response['unread_count'] as int;
+  }
+
+  Future<void> registerReviewPush(String installation, String factoryId) async {
+    await _json(
+      _client.put(
+        _url('review-push'),
+        headers: {..._headers, 'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'installation_id': installation,
+          'factory_id': factoryId,
+        }),
+      ),
+    );
+  }
+
+  Future<void> revokeReviewPush(String installation) async {
+    await _json(
+      _client.delete(
+        _url('review-push'),
+        headers: {..._headers, 'Content-Type': 'application/json'},
+        body: jsonEncode({'installation_id': installation}),
+      ),
+    );
   }
 
   Future<void> markNotificationRead(String taskId, String revisionId) async {

@@ -21,6 +21,7 @@ class BerandaPage extends StatefulWidget {
     this.factories = const {},
     this.onFactoryChanged,
     this.profile,
+    this.profileInitial,
     this.summary,
     this.profit,
     this.period = 'Semua tanggal',
@@ -37,6 +38,7 @@ class BerandaPage extends StatefulWidget {
   final Map<String, String> factories;
   final ValueChanged<String>? onFactoryChanged;
   final String? profile;
+  final String? profileInitial;
   final ({String cane, String lots})? summary;
   final Widget? statusMessage;
   final Widget? reportStatus;
@@ -259,6 +261,7 @@ class _BerandaPageState extends State<BerandaPage> {
             factories: widget.factories,
             onFactoryChanged: widget.onFactoryChanged,
             profile: widget.profile,
+            profileInitial: widget.profileInitial,
           ),
           const SizedBox(height: NiraSpace.lg),
           _ProductionSummary(
@@ -318,12 +321,14 @@ class _Profile extends StatefulWidget {
     required this.factories,
     this.onFactoryChanged,
     this.profile,
+    this.profileInitial,
   });
 
   final String? factoryId;
   final Map<String, String> factories;
   final ValueChanged<String>? onFactoryChanged;
   final String? profile;
+  final String? profileInitial;
 
   @override
   State<_Profile> createState() => _ProfileState();
@@ -355,7 +360,9 @@ class _ProfileState extends State<_Profile> {
         if (widget.profile case final profile?)
           CircleAvatar(
             radius: 20,
-            child: Text(profile.characters.first.toUpperCase()),
+            child: Text(
+              widget.profileInitial ?? profile.characters.first.toUpperCase(),
+            ),
           )
         else
           ClipOval(

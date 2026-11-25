@@ -419,7 +419,7 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     const folder = process.env.DOCUMENT_MEDIA_DIR;
     t.after(() => rm(folder, { recursive: true, force: true }));
 
-    const app = await createApplication({ envFile: false, env: { LOG_LEVEL: 'silent' } });
+    const app = await createApplication({ envFile: false, env: { LOG_LEVEL: 'silent', DATABASE_URL: process.env.DATABASE_URL } });
     t.after(() => app.close());
     const db = app.get(Database);
     await db.migrate();
@@ -1003,4 +1003,68 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     assert.equal(stillUnknown.document_type_selection_allowed, false);
     assert.equal(stillUnknown.submission_id, unknown.submission_id);
     assert.equal((await db.query('SELECT document_type FROM source_documents WHERE id=$1', [unknown.document_id])).rows[0].document_type, 'UNKNOWN');
+
+    const { ReviewPush } = require('../dist/documents/review-push');
+    const push = app.get(ReviewPush);
+    const installation = 'u'.repeat(22);
+    const pushRequest = (user = 'reviewer', factory_id = factory, method = 'PUT') => mobile('review-push', user, {
+      method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ installation_id: installation, factory_id }),
+    });
+    let sends = 0;
+    t.mock.method(push, 'send', async (project, delivery) => {
+      assert.equal(project, 'synthetic-fcm');
+      assert.equal(delivery.installation_id, installation);
+      assert.equal(delivery.user_id, reviewer);
+      return ++sends === 1 ? 'RETRY' : 'SENT';
+    });
+    Object.assign(process.env, { ANDROID_REVIEW_PUSH_ENABLED: 'true', ANDROID_REVIEW_PUSH_PROJECT_ID: 'synthetic-fcm' });
+    t.after(() => { delete process.env.ANDROID_REVIEW_PUSH_ENABLED; delete process.env.ANDROID_REVIEW_PUSH_PROJECT_ID; });
+    assert.equal((await pushRequest('owner')).status, 403);
+    assert.equal((await pushRequest('reviewer', otherFactory)).status, 403);
+    assert.equal((await pushRequest()).status, 200);
+    assert.equal((await pushRequest()).status, 200);
+    const confirmForPush = async (suffix) => {
+      const target = await photo(event(`push-photo-${suffix}`)).then((response) => response.json());
+      const complete = structuredClone(missing);
+      complete.header.arrival_date = truck.header.arrival_date;
+      notes.push(complete);
+      assert.equal(await processor.processOne(), true);
+      const confirmEvent = event(`push-confirm-${suffix}`, 'TEXT');
+      const confirmed = await action(confirmEvent, target);
+      assert.equal(confirmed.status, 200, await confirmed.clone().text());
+      assert.equal((await action(confirmEvent, target).then((response) => response.json())).duplicate, true);
+      return (await confirmed.json()).task_id;
+    };
+    const pushedTask = await confirmForPush('first');
+    assert.equal((await db.query('SELECT 1 FROM review_push_deliveries WHERE task_id=$1', [pushedTask])).rowCount, 1);
+    assert.deepEqual((await Promise.all([push.processOne(), push.processOne()])).sort(), [false, true]);
+    assert.equal(await push.processOne(), false);
+    await db.query('UPDATE review_push_deliveries SET available_at=now() WHERE task_id=$1', [pushedTask]);
+    assert.equal(await push.processOne(), true);
+    assert.deepEqual((await db.query('SELECT status,attempts FROM review_push_deliveries WHERE task_id=$1', [pushedTask])).rows,
+      [{ status: 'SENT', attempts: 2 }]);
+    const revokedTask = await confirmForPush('revoked');
+    const taskPath = `review-tasks/${revokedTask}`;
+    const revocable = await mobile(taskPath).then(response => response.json());
+    const revocableEvidence = `${taskPath}/assets/${revocable.media_asset_id}`;
+    assert.equal((await mobile(revocableEvidence)).status, 200);
+    const { SupabaseAuthService } = require('../dist/auth/supabase-auth.service');
+    t.mock.method(app.get(SupabaseAuthService), 'verifyAccessToken', async (token) => {
+      assert.equal(token, 'owner');
+      return { id: owner };
+    });
+    const deactivated = await fetch(`${base}/tenants/${tenant}/factories/${factory}/memberships/${reviewer}`, {
+      method: 'PATCH', headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isActive: false }),
+    });
+    assert.equal(deactivated.status, 200, await deactivated.clone().text());
+    assert.equal((await mobile(taskPath)).status, 404);
+    assert.equal((await mobile(revocableEvidence)).status, 404);
+    assert.equal((await mobile(taskPath, 'owner')).status, 200);
+    assert.equal(await push.processOne(), true);
+    assert.equal(sends, 2);
+    assert.equal((await pushRequest('colleague', factory, 'DELETE')).status, 200);
+    assert.equal((await db.query('SELECT 1 FROM review_push_installations')).rowCount, 1);
+    assert.equal((await pushRequest('reviewer', factory, 'DELETE')).status, 200);
+    assert.equal((await db.query('SELECT 1 FROM review_push_installations')).rowCount, 0);
   });
