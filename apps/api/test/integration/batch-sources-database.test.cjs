@@ -29,5 +29,10 @@ test('approved note rows remain unique across revisions and multi-grade drafts a
   assert.equal((await f.request(root+'/batches/'+body.id+'/approve','POST')).status,409);
   assert.equal((await f.request(root+'/batches/'+body.id+'/cancel','POST')).status,200);
   assert.equal((await f.request(root+'/batches','POST',{...body,id:randomUUID(),code:'LATEST',source:{...body.source,revisionId:next}})).status,201);
+  const changed=randomUUID(),renamed=structuredClone(note);renamed.cane_blocks[0].batches[0].row_reference='renamed-row';
+  await f.client.query('INSERT INTO document_revisions(id,document_id,submission_id,version,extraction) VALUES($1,$2,$3,3,$4)',[changed,document,submission,renamed]);
+  await f.client.query('INSERT INTO document_approvals(document_id,revision_id,user_id) VALUES($1,$2,$3)',[document,changed,f.ids.admin]);
+  assert.equal((await f.request(root+'/lots/'+f.ids.lot+'/batch-sources')).status,409);
+  assert.equal((await f.request(root+'/batches','POST',{...body,id:randomUUID(),code:'RENAMED',source:{...body.source,revisionId:changed,rowReference:'renamed-row'}})).status,409);
  }finally{await f.close();}
 });

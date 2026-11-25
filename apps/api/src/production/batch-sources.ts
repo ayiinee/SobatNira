@@ -15,7 +15,9 @@ function read(value: any) { return value?.status === 'READ' ? value.normalized_v
 export async function batchSourceRows(db: DatabaseSession, access: FactoryAccess, lotId: string) {
   // Approval rows, rather than current_revision_id, identify the latest officially accepted note.
   const { rows } = await db.query(`SELECT m.ocr_document_id AS "documentId",m.ocr_cane_label AS block,
-    p.revision_id AS "revisionId",r.extraction FROM sobatnira.milling_records m
+    p.revision_id AS "revisionId",r.extraction,
+    (SELECT jsonb_agg(v.extraction) FROM document_approvals a JOIN document_revisions v ON v.id=a.revision_id
+      WHERE a.document_id=d.id) AS "approvedHistory" FROM sobatnira.milling_records m
     JOIN source_documents d ON d.id=m.ocr_document_id AND d.factory_id=m.factory_id
     JOIN LATERAL (SELECT a.revision_id FROM document_approvals a JOIN document_revisions v ON v.id=a.revision_id
       WHERE a.document_id=d.id ORDER BY v.version DESC LIMIT 1) p ON true
@@ -38,6 +40,11 @@ export async function batchSourceRows(db: DatabaseSession, access: FactoryAccess
         physicalWeightKg: row.output?.hasil_kg?.unit === 'kg' ? read(row.output.hasil_kg) : null,
         grade: read(row.output?.grade), finishTime: read(row.cooking?.jam_turun),
         contentsKg: read(row.cooking?.isi_kg), gamping: row.cooking?.gamping ?? null });
+    }
+    for (const previous of note.approvedHistory ?? []) {
+      const oldBlocks = previous.cane_blocks?.filter((b: any) => read(b.cane_label) === note.block) ?? [];
+      if (oldBlocks.length !== 1 || oldBlocks[0].batches?.some((r: any) => !seen.has(r.row_reference)))
+        throw new ConflictException('Identitas baris nota berubah. Periksa sumber; jangan mencocokkan dari nomor wajan.');
     }
   }
   const existing = (await db.query(`SELECT id,source_document_id,source_block,source_row FROM sobatnira.production_batches

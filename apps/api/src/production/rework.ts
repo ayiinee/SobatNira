@@ -26,12 +26,18 @@ export async function reworkAffectedLots(db: DatabaseSession, access: FactoryAcc
 }
 
 export async function assertFinancialsAvailable(db: DatabaseSession, access: FactoryAccess, synthetic: boolean,
-  from: string|null=null,before: string|null=null,lotId: string|null=null) {
+  from: string|null=null,before: string|null=null,lotId: string|null=null,
+  selection: {supplierId?:string|null;batchId?:string|null;grade?:string|null}={}) {
   const affected=await reworkAffectedLots(db,access,synthetic);
   if(!affected.length) return;
-  const selected=(await db.query<{id:string}>(`SELECT id FROM sobatnira.lots WHERE tenant_id=$1 AND factory_id=$2 AND id=ANY($3::uuid[])
-    AND ($4::timestamptz IS NULL OR received_at >= $4) AND ($5::timestamptz IS NULL OR received_at < $5)
-    AND ($6::uuid IS NULL OR id=$6) ORDER BY id`,[...keys(access),affected,from,before,lotId])).rows;
+  const selected=(await db.query<{id:string}>(`SELECT l.id FROM sobatnira.lots l WHERE l.tenant_id=$1 AND l.factory_id=$2 AND l.id=ANY($3::uuid[])
+    AND ($4::timestamptz IS NULL OR l.received_at >= $4) AND ($5::timestamptz IS NULL OR l.received_at < $5)
+    AND ($6::uuid IS NULL OR l.id=$6) AND ($7::uuid IS NULL OR l.supplier_id=$7)
+    AND (($8::uuid IS NULL AND $9::text IS NULL) OR EXISTS (
+      SELECT 1 FROM sobatnira.production_batches b WHERE b.tenant_id=$1 AND b.factory_id=$2 AND b.status='approved' AND b.is_synthetic=$10
+        AND ($8::uuid IS NULL OR b.id=$8) AND ($9::text IS NULL OR EXISTS(SELECT 1 FROM sobatnira.batch_grade_results g WHERE g.batch_id=b.id AND g.code=$9))
+        AND (b.lot_id=l.id OR EXISTS(SELECT 1 FROM sobatnira.juice_reservations r WHERE r.batch_id=b.id AND r.origin_lot_id=l.id AND r.state='consumed'))
+    )) ORDER BY l.id`,[...keys(access),affected,from,before,lotId,selection.supplierId??null,selection.batchId??null,selection.grade??null,synthetic])).rows;
   if(selected.length) throw new ConflictException({code:'REWORK_FINANCIALS_PENDING',
     message:'Nilai dan margin kloter rework belum tersedia. Laporan gabungan belum lengkap.',affectedLotIds:selected.map(r=>r.id)});
 }

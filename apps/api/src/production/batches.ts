@@ -1,3 +1,4 @@
+import { assertMasterReferences, parseMasterReferences } from './masters';
 import { ProductionRework, assertFinancialsAvailable, reworkAffectedLots } from './rework';
 import { SugarInventory } from './sugar-inventory';
 import { assertBatchSource, batchSourceRows, parseBatchSource } from './batch-sources';
@@ -32,7 +33,7 @@ export function assertGradeWeight(physicalWeightKg: string, grades: Grade[]) {
 }
 
 export function parseBatch(input: unknown) {
-    const b = object(input, ['id', 'lotId', 'code', 'wokNumber', 'occurredAt', 'quantityMl', 'physicalWeightKg', 'grades', 'synthetic', 'source', 'kind']);
+    const b = object(input, ['id', 'lotId', 'code', 'wokNumber', 'occurredAt', 'quantityMl', 'physicalWeightKg', 'grades', 'synthetic', 'source', 'kind', 'masterReferences']);
     if (!Number.isSafeInteger(b.wokNumber) || Number(b.wokNumber) < 1 || Number(b.wokNumber) > 10000)
         throw new BadRequestException('Nomor wajan tidak valid.');
     if (b.synthetic !== undefined && typeof b.synthetic !== 'boolean')
@@ -40,7 +41,7 @@ export function parseBatch(input: unknown) {
     // Reuse exact calculator validation for weights, prices and duplicate grade codes.
     const calculation = calculateProductionPreview({ caneNetKg: '1', caneCostRupiah: '0', operationalCostRupiah: '0', ingredientCostRupiah: '0', otherCostRupiah: '0', rounding: 'HALF_UP', grades: b.grades });
     if (b.kind !== undefined && !['normal','rework'].includes(String(b.kind))) throw new BadRequestException('kind batch tidak valid.');
-    return { kind: b.kind ?? 'normal', source: parseBatchSource(b.source), id: uuid(b.id), lotId: uuid(b.lotId), code: text(b.code, 'code', 100), wokNumber: Number(b.wokNumber), occurredAt: timestamp(b.occurredAt, 'occurredAt'), quantityMl: decimal(b.quantityMl, 'quantityMl'), physicalWeightKg: decimal(b.physicalWeightKg, 'physicalWeightKg'), grades: calculation.grades.map(g => ({ code: g.code, weightKg: g.weightKg, pricePerKgRupiah: g.pricePerKgRupiah })), synthetic: b.synthetic === true };
+    return { masterReferences: parseMasterReferences(b.masterReferences), kind: b.kind ?? 'normal', source: parseBatchSource(b.source), id: uuid(b.id), lotId: uuid(b.lotId), code: text(b.code, 'code', 100), wokNumber: Number(b.wokNumber), occurredAt: timestamp(b.occurredAt, 'occurredAt'), quantityMl: decimal(b.quantityMl, 'quantityMl'), physicalWeightKg: decimal(b.physicalWeightKg, 'physicalWeightKg'), grades: calculation.grades.map(g => ({ code: g.code, weightKg: g.weightKg, pricePerKgRupiah: g.pricePerKgRupiah })), synthetic: b.synthetic === true };
 }
 
 function correctionData(physicalWeight: unknown, grades: unknown) {
@@ -56,15 +57,26 @@ export class Batches {
     async create(access: FactoryAccess, input: unknown) {
         const b = parseBatch(input);
         const hash = createHash('sha256').update(JSON.stringify(b)).digest('hex');
+        const hashes = [hash];
+        if (!b.masterReferences) {
+            const { masterReferences, kind, source, ...legacy } = b;
+            const versions: Record<string, unknown>[] = [{ kind, source, ...legacy }];
+            if (kind === 'normal') {
+                versions.push({ source, ...legacy });
+                if (!source) versions.push(legacy);
+            }
+            hashes.push(...versions.map(value => createHash('sha256').update(JSON.stringify(value)).digest('hex')));
+        }
         return this.juice.mutate(access, async (tx) => {
             await this.juice.lockLots(tx, access, [b.lotId]);
             const old = (await tx.query('SELECT * FROM sobatnira.production_batches WHERE id=$1', [b.id])).rows[0];
             if (old) {
-                if (old.tenant_id !== access.tenantId || old.factory_id !== access.factoryId || old.input_hash !== hash)
+                if (old.tenant_id !== access.tenantId || old.factory_id !== access.factoryId || !hashes.includes(old.input_hash))
                     throw new ConflictException('ID batch sudah dipakai.');
                 return old;
             }
             await assertBatchSource(tx, access, b.lotId, b.source, b.id);
+            await assertMasterReferences(tx, access, b);
             if(b.kind==='rework') {
                 const state=(await tx.query('SELECT rework_enabled FROM sobatnira.production_inventory_state WHERE tenant_id=$1 AND factory_id=$2 AND is_synthetic=$3',[access.tenantId,access.factoryId,b.synthetic])).rows[0];
                 if(!state?.rework_enabled) throw new ConflictException('Rework belum diaktifkan setelah integrasi laporan.');
@@ -76,8 +88,8 @@ export class Batches {
             const closed = await tx.query('SELECT 1 FROM sobatnira.lot_closures WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3 AND is_synthetic=$4 AND reopened_at IS NULL', scope);
             if (closed.rows.length)
                 throw new ConflictException('Kloter sudah ditutup.');
-            const result = await tx.query(`INSERT INTO sobatnira.production_batches(id,tenant_id,factory_id,lot_id,code,wok_number,occurred_at,quantity_ml,physical_weight_kg,is_synthetic,input_hash,created_by,source_document_id,source_revision_id,source_block,source_row,kind)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`, [b.id, access.tenantId, access.factoryId, b.lotId, b.code, b.wokNumber, b.occurredAt, b.quantityMl, b.physicalWeightKg, b.synthetic, hash, access.userId, b.source?.documentId ?? null,b.source?.revisionId ?? null,b.source?.block ?? null,b.source?.rowReference ?? null,b.kind]);
+            const result = await tx.query(`INSERT INTO sobatnira.production_batches(id,tenant_id,factory_id,lot_id,code,wok_number,occurred_at,quantity_ml,physical_weight_kg,is_synthetic,input_hash,created_by,source_document_id,source_revision_id,source_block,source_row,kind,master_references)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *`, [b.id, access.tenantId, access.factoryId, b.lotId, b.code, b.wokNumber, b.occurredAt, b.quantityMl, b.physicalWeightKg, b.synthetic, hash, access.userId, b.source?.documentId ?? null,b.source?.revisionId ?? null,b.source?.block ?? null,b.source?.rowReference ?? null,b.kind,b.masterReferences]);
             for (const g of b.grades)
                 await tx.query('INSERT INTO sobatnira.batch_grade_results(batch_id,code,weight_kg,price_per_kg_rupiah) VALUES($1,$2,$3,$4)', [b.id, g.code, g.weightKg, g.pricePerKgRupiah]);
             await tx.query("INSERT INTO sobatnira.production_batch_events(batch_id,action,actor_id) VALUES($1,'created',$2)", [b.id, access.userId]);
@@ -346,7 +358,7 @@ export class Batches {
     }
 
     async reportSummary(access: FactoryAccess, synthetic: boolean, from: string | null, before: string | null, selection: ReportSelection, session: DatabaseSession = this.db) {
-        await assertFinancialsAvailable(session,access,synthetic,from,before,selection.lotId);
+        await assertFinancialsAvailable(session,access,synthetic,from,before,selection.lotId,selection);
         const { rows: [row] } = await session.query<ReturnType<typeof productionReport>['totals'] & {
           grades: ReturnType<typeof productionReport>['grades']; provisional: boolean; latestReceivedAt: Date | null;
         }>(`WITH ${FACTORY_SCOPE_CTE}, selected AS (
@@ -394,6 +406,7 @@ export class Batches {
           COALESCE(bool_or(snapshot_id IS NOT NULL AND NOT closed),false) AS provisional,
           max(received_at) AS "latestReceivedAt" FROM selected`,
         [...scopeValues(access), synthetic, from, before, selection.lotId ?? null, selection.supplierId ?? null]);
+        await assertFinancialsAvailable(session,access,synthetic,from,before,selection.lotId,selection);
         const { provisional, latestReceivedAt, grades, ...totals } = row;
         return boundedReport({ factory: access.factoryName, from, before, synthetic, periodBasis: 'lot_received_at', selection,
           view: 'summary', totals, provisional, latestReceivedAt, items: [], grades });
@@ -417,7 +430,7 @@ export class Batches {
       { limit, second, includeJuiceSources, lotId, supplierId, batchId, grade, offset = 0, session = this.db }: ReportSelection & {
         limit: number | null; second?: ReportPeriod; includeJuiceSources?: boolean; offset?: number; session?: DatabaseSession;
       }) {
-        await assertFinancialsAvailable(session,access,synthetic,from,before,lotId ?? null);
+        await assertFinancialsAvailable(session,access,synthetic,from,before,lotId ?? null,{supplierId,batchId,grade});
         if(second) await assertFinancialsAvailable(session,access,synthetic,second.from,second.before);
         const batchesSql = `CASE WHEN p.calculation_version='production-v2' THEN
             ${includeJuiceSources ? `(SELECT jsonb_agg(entry || jsonb_build_object('consumedByOrigin', COALESCE((
@@ -491,6 +504,8 @@ export class Batches {
               OR (l.received_at >= $8::timestamptz AND l.received_at < $9::timestamptz))
           ORDER BY l.received_at DESC,l.id LIMIT $7 OFFSET $11`, [...scopeValues(access), synthetic, from, before, limit,
             second?.from ?? null, second?.before ?? null, lotId ?? null, offset, supplierId ?? null, batchId ?? null, grade ?? null]);
+        await assertFinancialsAvailable(session,access,synthetic,from,before,lotId ?? null,{supplierId,batchId,grade});
+        if(second) await assertFinancialsAvailable(session,access,synthetic,second.from,second.before);
         return rows;
     }
 
@@ -521,6 +536,7 @@ export class Batches {
    FROM latest p JOIN sobatnira.lots l ON l.id=p.lot_id JOIN sobatnira.suppliers s ON s.id=l.supplier_id
    WHERE ($5::timestamptz IS NULL OR l.received_at >= $5) AND ($6::timestamptz IS NULL OR l.received_at < $6)
    ORDER BY l.received_at DESC,l.id LIMIT 101`, [...scopeValues(access), q.synthetic === 'true', from, before])).rows;
+        await assertFinancialsAvailable(this.db,access,q.synthetic === 'true',from,before);
         if (rows.length > REPORT_MAX_LOTS) throw new BadRequestException('Persempit periode laporan: maksimum 100 kloter. Gunakan ekspor asinkron.');
         if (includeBatches && rows.some(row => row.batches?.length > 1000)) throw new BadRequestException('Laporan melebihi 1000 batch per kloter.');
         return boundedReport({ factory: access.factoryName, from, before, synthetic: q.synthetic === 'true', items: rows,

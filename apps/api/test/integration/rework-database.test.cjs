@@ -6,6 +6,7 @@ test('rework conserves stock atomically, retains source lineage and blocks incom
  const f=await mobileClosureFixture({consume:false});
  try{
   const root=f.root+'/production',stock=root+'/sugar';
+  assert.equal((await f.request(root+'/masters','POST',{requestId:randomUUID(),kind:'grade',code:'A',version:0,name:'Grade A',active:true,reason:'Master sintetis'})).status,201);
   let state=(await f.request(stock)).body;
   assert.equal((await f.request(stock+'/opening','POST',{requestId:randomUUID(),version:0,reason:'Start sintetis',items:[]})).status,201);
   state=(await f.request(stock)).body;
@@ -44,10 +45,26 @@ test('rework conserves stock atomically, retains source lineage and blocks incom
    const report=await f.request(root+suffix);assert.equal(report.status,409,JSON.stringify(report.body));assert.equal(report.body.code,'REWORK_FINANCIALS_PENDING');
   }
   assert.equal((await f.request(root+'/production-report?lotId='+f.ids.thirdLot)).status,200);
+  assert.equal((await f.request(root+'/production-report?batchId='+randomUUID())).status,200);
+  assert.equal((await f.request(root+'/production-report?grade=UNUSED')).status,200);
+  assert.equal((await f.request(root+'/production-report?grade=A')).status,409);
+  assert.equal((await f.request(root+'/production-report?supplierId='+randomUUID())).status,200);
   assert.equal((await f.client.query('SELECT output_snapshot FROM sobatnira.production_calculation_snapshots WHERE id=$1',[first.body.id])).rows[0].output_snapshot.finalSugarKg,'10');
   const cancelled=await create('rework','1');state=(await f.request(stock)).body;
   assert.equal((await f.request(root+'/batches/'+cancelled+'/rework-inputs','POST',{...reservation,requestId:randomUUID(),version:state.version,weightKg:'1'})).status,201);
   assert.equal((await f.request(root+'/batches/'+cancelled+'/cancel','POST')).status,200);
   assert.equal((await f.request(stock)).body.sources.find(s=>s.id===source.id).reservedKg,'0');
+  const shrink=await create('rework','1');state=(await f.request(stock)).body;
+  const tooMuch={...reservation,requestId:randomUUID(),version:state.version,weightKg:'9'};
+  assert.equal((await f.request(root+'/batches/'+shrink+'/rework-inputs','POST',tooMuch)).status,409);
+  assert.equal((await f.request(root+'/batches/'+shrink+'/rework-inputs','POST',{...tooMuch,requestId:randomUUID(),weightKg:'2'})).status,201);
+  assert.equal((await f.request(root+'/batches/'+shrink+'/approve','POST')).status,200);
+  assert.equal((await f.request(root+'/batches/'+shrink+'/traceability')).body.netAdditionalKg,'-1');
+  const correction=root+'/batches/'+sourceBatch+'/corrections/'+randomUUID();
+  assert.equal((await f.request(correction,'POST',{reason:'Tidak boleh mengurangi gula terpakai'})).status,201);
+  assert.equal((await f.request(correction,'PATCH',{version:1,physicalWeightKg:'1',grades:[{code:'A',weightKg:'1',pricePerKgRupiah:'100'}]})).status,200);
+  assert.equal((await f.request(correction+'/approve','POST',{version:2})).status,409);
+  assert.equal((await f.request(root+'/batches/'+sourceBatch)).body.physical_weight_kg,'10');
+
  }finally{await f.close();}
 });

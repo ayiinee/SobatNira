@@ -6,6 +6,7 @@ test('inventory activation, exact production, quality and correction reconcile w
  const f=await mobileClosureFixture({consume:false});
  try{
   const root=f.root+'/production', stock=root+'/sugar';
+  assert.equal((await f.request(root+'/masters','POST',{requestId:randomUUID(),kind:'grade',code:'A',version:0,name:'Grade A',active:true,reason:'Master sintetis'})).status,201);
   const opening={requestId:randomUUID(),version:0,reason:'Hitung fisik sintetis',items:[{gradeCode:'A',quality:'good',weightKg:'2.000001'}]};
   const receipt=await f.request(stock+'/opening','POST',opening);assert.equal(receipt.status,201,JSON.stringify(receipt.body));
   assert.deepEqual((await f.request(stock+'/opening','POST',opening)).body,receipt.body);
@@ -27,12 +28,35 @@ test('inventory activation, exact production, quality and correction reconcile w
   assert.equal((await f.request(root+'/batches/'+id+'/approve','POST')).status,200);
   assert.equal((await f.request(root+'/batches/'+id+'/approve','POST')).status,200);
   state=(await f.request(stock)).body;assert.equal(state.sources.find(s=>s.batchId===id).onHandKg,'3');
-  const history=(await f.request(stock+'/history')).body;assert.equal(history.items.length,4);
+  const correction=root+'/batches/'+id+'/corrections/'+randomUUID();
+  assert.equal((await f.request(correction,'POST',{reason:'Koreksi berat sintetis'})).status,201);
+  assert.equal((await f.request(correction,'PATCH',{version:1,physicalWeightKg:'2',grades:[{code:'A',weightKg:'2',pricePerKgRupiah:'100'}]})).status,200);
+  assert.equal((await f.request(correction+'/approve','POST',{version:2})).status,200);
+  assert.equal((await f.request(correction+'/approve','POST',{version:2})).status,200);
+  state=(await f.request(stock)).body;assert.equal(state.sources.find(s=>s.batchId===id).onHandKg,'2');
+  const history=(await f.request(stock+'/history')).body;assert.equal(history.items.length,5);
   const sum=(await f.client.query('SELECT sum(quantity_delta_kg)::text AS total FROM sobatnira.production_sugar_entries WHERE tenant_id=$1',[f.ids.tenant])).rows[0].total;
-  assert.equal(Number(sum),5.000001);
+  assert.equal(Number(sum),4.000001);
   assert.equal((await f.request(stock+'/opening','POST',opening,'fixture-owner')).status,403);
   assert.equal((await f.request(f.siblingRoot+'/production/sugar')).body.active,false);
   assert.equal((await f.request(stock+'?synthetic=true')).body.active,false);
   assert.match(state.limitation,/Pengeluaran selain rework/);
  }finally{await f.close();}
+});
+
+test('pre-activation batches and their corrections never backfill the physical opening count',async()=>{
+ const f=await mobileClosureFixture();
+ try {
+  const root=f.root+'/production',stock=root+'/sugar';
+  assert.equal((await f.request(root+'/masters','POST',{requestId:randomUUID(),kind:'grade',code:'A',version:0,name:'Grade A',active:true,reason:'Master sintetis'})).status,201);
+  const batch=(await f.request(root+'/batches?lotId='+f.ids.lot)).body.items[0].id;
+  assert.equal((await f.request(stock+'/opening','POST',{requestId:randomUUID(),version:0,reason:'Hitung fisik setelah produksi lama',items:[{gradeCode:'A',quality:'good',weightKg:'5'}]})).status,201);
+  const correction=root+'/batches/'+batch+'/corrections/'+randomUUID();
+  assert.equal((await f.request(correction,'POST',{reason:'Koreksi hasil sebelum aktivasi'})).status,201);
+  assert.equal((await f.request(correction,'PATCH',{version:1,physicalWeightKg:'29',grades:[{code:'A',weightKg:'29',pricePerKgRupiah:'20000'}]})).status,200);
+  assert.equal((await f.request(correction+'/approve','POST',{version:2})).status,200);
+  const state=(await f.request(stock)).body;
+  assert.equal(state.sources.length,1);assert.equal(state.sources[0].onHandKg,'5');
+  assert.equal((await f.request(stock+'/history')).body.items.length,1);
+ }finally {await f.close();}
 });
