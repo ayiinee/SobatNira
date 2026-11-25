@@ -45,6 +45,10 @@ test('rework conserves stock atomically, retains source lineage and blocks incom
    const report=await f.request(root+suffix);assert.equal(report.status,409,JSON.stringify(report.body));assert.equal(report.body.code,'REWORK_FINANCIALS_PENDING');
   }
   assert.equal((await f.request(root+'/production-report?lotId='+f.ids.thirdLot)).status,200);
+  assert.equal((await f.request(root+'/production-report?batchId='+randomUUID())).status,200);
+  assert.equal((await f.request(root+'/production-report?grade=UNUSED')).status,200);
+  assert.equal((await f.request(root+'/production-report?grade=A')).status,409);
+  assert.equal((await f.request(root+'/production-report?supplierId='+randomUUID())).status,200);
   assert.equal((await f.client.query('SELECT output_snapshot FROM sobatnira.production_calculation_snapshots WHERE id=$1',[first.body.id])).rows[0].output_snapshot.finalSugarKg,'10');
   const cancelled=await create('rework','1');state=(await f.request(stock)).body;
   assert.equal((await f.request(root+'/batches/'+cancelled+'/rework-inputs','POST',{...reservation,requestId:randomUUID(),version:state.version,weightKg:'1'})).status,201);

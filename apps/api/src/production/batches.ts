@@ -358,7 +358,7 @@ export class Batches {
     }
 
     async reportSummary(access: FactoryAccess, synthetic: boolean, from: string | null, before: string | null, selection: ReportSelection, session: DatabaseSession = this.db) {
-        await assertFinancialsAvailable(session,access,synthetic,from,before,selection.lotId);
+        await assertFinancialsAvailable(session,access,synthetic,from,before,selection.lotId,selection);
         const { rows: [row] } = await session.query<ReturnType<typeof productionReport>['totals'] & {
           grades: ReturnType<typeof productionReport>['grades']; provisional: boolean; latestReceivedAt: Date | null;
         }>(`WITH ${FACTORY_SCOPE_CTE}, selected AS (
@@ -406,7 +406,7 @@ export class Batches {
           COALESCE(bool_or(snapshot_id IS NOT NULL AND NOT closed),false) AS provisional,
           max(received_at) AS "latestReceivedAt" FROM selected`,
         [...scopeValues(access), synthetic, from, before, selection.lotId ?? null, selection.supplierId ?? null]);
-        await assertFinancialsAvailable(session,access,synthetic,from,before,selection.lotId);
+        await assertFinancialsAvailable(session,access,synthetic,from,before,selection.lotId,selection);
         const { provisional, latestReceivedAt, grades, ...totals } = row;
         return boundedReport({ factory: access.factoryName, from, before, synthetic, periodBasis: 'lot_received_at', selection,
           view: 'summary', totals, provisional, latestReceivedAt, items: [], grades });
@@ -430,7 +430,7 @@ export class Batches {
       { limit, second, includeJuiceSources, lotId, supplierId, batchId, grade, offset = 0, session = this.db }: ReportSelection & {
         limit: number | null; second?: ReportPeriod; includeJuiceSources?: boolean; offset?: number; session?: DatabaseSession;
       }) {
-        await assertFinancialsAvailable(session,access,synthetic,from,before,lotId ?? null);
+        await assertFinancialsAvailable(session,access,synthetic,from,before,lotId ?? null,{supplierId,batchId,grade});
         if(second) await assertFinancialsAvailable(session,access,synthetic,second.from,second.before);
         const batchesSql = `CASE WHEN p.calculation_version='production-v2' THEN
             ${includeJuiceSources ? `(SELECT jsonb_agg(entry || jsonb_build_object('consumedByOrigin', COALESCE((
@@ -504,7 +504,7 @@ export class Batches {
               OR (l.received_at >= $8::timestamptz AND l.received_at < $9::timestamptz))
           ORDER BY l.received_at DESC,l.id LIMIT $7 OFFSET $11`, [...scopeValues(access), synthetic, from, before, limit,
             second?.from ?? null, second?.before ?? null, lotId ?? null, offset, supplierId ?? null, batchId ?? null, grade ?? null]);
-        await assertFinancialsAvailable(session,access,synthetic,from,before,lotId ?? null);
+        await assertFinancialsAvailable(session,access,synthetic,from,before,lotId ?? null,{supplierId,batchId,grade});
         if(second) await assertFinancialsAvailable(session,access,synthetic,second.from,second.before);
         return rows;
     }

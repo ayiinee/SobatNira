@@ -1,6 +1,6 @@
 # Produksi, stok gula, dan rework
 
-Kontrak tambahan untuk A1–A4, berbasis `b20abf8`. Kalkulasi, otorisasi, penguncian, dan pencatatan resmi berada di NestJS. Endpoint B1 tidak digunakan.
+Kontrak tambahan untuk A1–A4, berbasis `b20abf8`, terintegrasi dengan `main` `04306e3`. Kalkulasi, otorisasi, penguncian, dan pencatatan resmi berada di NestJS. Endpoint B1 tidak digunakan.
 
 ## Kontrak API
 
