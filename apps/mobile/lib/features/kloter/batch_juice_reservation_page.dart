@@ -85,11 +85,12 @@ class _ReservationState extends State<BatchJuiceReservationPage> {
           ? error.detail ?? error.message
           : 'Hasil belum terkonfirmasi. Coba lagi permintaan yang sama.';
     } finally {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _busy = false;
           _data = _load();
         });
+      }
     }
   }
 
@@ -108,7 +109,7 @@ class _ReservationState extends State<BatchJuiceReservationPage> {
     body: FutureBuilder<List<Json>>(
       future: _data,
       builder: (context, snapshot) {
-        if (!snapshot.hasData)
+        if (!snapshot.hasData) {
           return Center(
             child: snapshot.hasError
                 ? TextButton(
@@ -117,6 +118,7 @@ class _ReservationState extends State<BatchJuiceReservationPage> {
                   )
                 : const CircularProgressIndicator(),
           );
+        }
         final [batch, stock] = snapshot.requireData;
         final pending = widget.api.pendingReservation(widget.batchId);
         final origins = (stock['origins'] as List)

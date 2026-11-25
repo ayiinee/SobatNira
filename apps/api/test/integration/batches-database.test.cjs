@@ -226,7 +226,7 @@ test('cancelling a batch releases its reservation once and excludes it from offi
   const grade = {code:'A',weightKg:'30',pricePerKgRupiah:'20000'};
   const draft = {id,lotId:f.ids.lot,code:'CANCEL-TEST',wokNumber:1,occurredAt:'2026-11-16T03:00:00Z',
    quantityMl:'100000',physicalWeightKg:'30',grades:[grade]};
-  assert.equal((await f.request(batches,'POST',{...draft,grades:[grade,{...grade,code:'B'}]})).status,400);
+  assert.equal((await f.request(batches,'POST',{...draft,grades:[grade,grade]})).status,400);
   assert.equal((await f.request(batches,'POST',draft)).status,201);
   const input = {requestId:id,batchId:id,quantityMl:'100000'};
   assert.equal((await f.request(reservations,'POST',{...input,quantityMl:'100001'})).status,409);

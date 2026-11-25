@@ -520,6 +520,10 @@ class ReviewApi {
   Future<Json> createBatch(FactoryScope scope, Json draft) =>
       writeProduction([...scope._base, 'production', 'batches'], draft);
 
+  Future<Json> batchSources(FactoryScope scope, String lotId) => _productionGet(
+    [...scope._base, 'production', 'lots', lotId, 'batch-sources'],
+  );
+
   Future<Json> saveLotCosts(FactoryScope scope, String lotId, Json costs) =>
       writeProduction(
         [...scope._base, 'production', 'lots', lotId, 'costs'],
