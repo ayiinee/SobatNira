@@ -54,13 +54,13 @@ class _ProductionChartState extends State<ProductionChart> {
     final lots = widget.analytics.visibleLots.where(
       (lot) => lot.day == date.day,
     );
-    final sugar = lots.fold(0, (sum, lot) => sum + lot.sugarKg);
+    final sugar = lots.fold<num>(0, (sum, lot) => sum + lot.sugarKg);
     final cane = lots.fold(0, (sum, lot) => sum + lot.caneKg);
     double grade(String code) {
-      var total = 0;
+      num total = 0;
       for (final lot in lots) {
         for (final (i, weight) in lot.batchWeights.indexed) {
-          if (['A', 'B', 'C'][i % 3] == code) total += weight;
+          if (lot.gradeAt(i) == code) total += weight;
         }
       }
       return total.toDouble();
@@ -79,7 +79,9 @@ class _ProductionChartState extends State<ProductionChart> {
   List<_ChartDay> _officialDays(ConnectedReports reports) {
     final byDate = <DateTime, List<Json>>{};
     for (final lot in reports.lots) {
-      if (lot['calculation'] == null) continue;
+      if (lot['calculation'] == null && lot['filteredSugarKg'] == null) {
+        continue;
+      }
       final local = DateTime.parse(lot['receivedAt'] as String).toLocal();
       final date = DateTime(local.year, local.month, local.day);
       (byDate[date] ??= []).add(lot);
@@ -96,7 +98,10 @@ class _ProductionChartState extends State<ProductionChart> {
     double quantity(Object? value) => double.tryParse('$value') ?? 0;
     for (final lot in lots) {
       cane += quantity(lot['caneNetKg']);
-      sugar += quantity((lot['calculation'] as Json)['finalSugarKg']);
+      sugar += quantity(
+        lot['filteredSugarKg'] ??
+            (lot['calculation'] as Json?)?['finalSugarKg'],
+      );
       for (final batch in (lot['batches'] as List).cast<Json>()) {
         for (final grade in (batch['grades'] as List).cast<Json>()) {
           final code = grade['code'] as String;

@@ -100,7 +100,7 @@ http.Response response(Json value) => http.Response(jsonEncode(value), 200);
 
 void main() {
   testWidgets(
-    'seeded Pabrik A loads once at login and both charts filter dates',
+    'data contoh dipilih secara eksplisit dan kedua grafik memakai periode data',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(393, 853));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -115,7 +115,7 @@ void main() {
           if (uri.path == '/auth/me') {
             return response({
               'access': [
-                for (final factory in ['B', 'A'])
+                for (final factory in ['A', 'B'])
                   {
                     'tenantId': 'tenant',
                     'tenantName': 'SobatNira Uji',
@@ -127,7 +127,7 @@ void main() {
             });
           }
           expect(uri.path, startsWith('/tenants/tenant/factories/A/'));
-          expect(uri.queryParameters['synthetic'], 'true');
+          final synthetic = uri.queryParameters['synthetic'] == 'true';
           if (uri.path.endsWith('/lots')) {
             return response({
               'items': [
@@ -138,14 +138,14 @@ void main() {
                   'supplierName': 'Pemasok satu',
                   'netWeightGrams': '1250000',
                   'status': 'open',
-                  'synthetic': true,
+                  'synthetic': synthetic,
                 },
               ],
               'total': 1,
             });
           }
           expect(uri.path, endsWith('/production-report'));
-          requests.add(uri);
+          if (synthetic) requests.add(uri);
           final from = uri.queryParameters['from'];
           final before = uri.queryParameters['before'];
           final includesLot =
@@ -153,7 +153,7 @@ void main() {
               (before == null || receipt.isBefore(DateTime.parse(before)));
           return response({
             ...report,
-            'synthetic': true,
+            'synthetic': synthetic,
             'items': [
               if (includesLot)
                 {...lot, 'receivedAt': receipt.toIso8601String()},
@@ -182,9 +182,16 @@ void main() {
       await tester.tap(signIn);
       await tester.pumpAndSettle();
       expect(find.text('Pabrik A'), findsOneWidget);
+      expect(requests, isEmpty);
+      await tester.tap(find.text('Rekap'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Tampilkan data contoh'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Kembali').first);
+      await tester.pumpAndSettle();
       expect(find.text('-Rp1'), findsOneWidget);
-      expect(requests, hasLength(1));
-      expect(requests.single.queryParameters.containsKey('from'), isFalse);
+      expect(requests, isNotEmpty);
+      expect(requests.first.queryParameters.containsKey('from'), isFalse);
 
       await tester.tap(find.bySemanticsLabel('Laporan'));
       await tester.pumpAndSettle();

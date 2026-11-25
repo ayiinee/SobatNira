@@ -41,6 +41,17 @@ class OcrTest(TestCase):
     def post(self):
         return self.client.post("/internal/v1/ocr/extract", json=self.request, headers=self.headers)
 
+    def test_truck_hint_requires_weight_and_vehicle_and_keeps_missing_fields(self):
+        tokens = [token(text, .1, .1 + i * .1) for i, text in enumerate([
+            "PENGIRIM: PEMASOK DEMO", "NO KENDARAAN: UJI-001", "BERAT BERSIH: 5050",
+        ])]
+        self.assertIsNone(extract(tokens, "synthetic", "1.0.0", "1.0.0"))
+        hinted = extract(tokens, "synthetic", "1.0.0", "1.0.0", document_type_hint="TRUCK_ARRIVAL_NOTE")
+        self.assertEqual(hinted["header"]["arrival_date"]["status"], "NOT_PRESENT")
+        self.assertEqual(hinted["header"]["net_weight_kg"]["normalized_value"], 5050)
+        without_vehicle = [tokens[0], tokens[2], token("TANGGAL: 26-09-2026", .1, .5)]
+        self.assertIsNone(extract(without_vehicle, "synthetic", "1.0.0", "1.0.0", document_type_hint="TRUCK_ARRIVAL_NOTE"))
+
     def test_cached_worker_reuses_child_process_and_thread(self):
         from paddle_worker import NativeWorker
         worker = NativeWorker(worker_identity, timeout=15)

@@ -13,7 +13,7 @@ import { object, uuid, text, timestamp, scopeValues, found, parsePage } from './
 import { decimal, sumDecimals, compareDecimals } from './decimal';
 import { calculateProductionPreview } from './calculation';
 import { rebuildSnapshots } from './snapshots';
-import { batchGradeTotals, type Grade, productionReport, ProductionReportLot } from './production-report';
+import { batchGradeTotals, type Grade, productionReport, ProductionReportLot, reportProductionSelection, reportSelection, type ReportSelection } from './production-report';
 import { REPORT_MAX_LOTS, boundedReport, reportPeriod } from './report-limits';
 
 type ReportPeriod = { from: string; before: string; synthetic: string };
@@ -90,18 +90,18 @@ export class Batches {
     }
     async costs(access: FactoryAccess, lotId: string, input: unknown) {
         const { version, ...b } = object(input, ['version', 'caneCostRupiah', 'operationalCostRupiah', 'ingredientCostRupiah', 'otherCostRupiah']);
-        if (version !== undefined && (!Number.isSafeInteger(version) || Number(version) < 1))
+        if (version !== undefined && (!Number.isSafeInteger(version) || Number(version) < 0))
             throw new BadRequestException('Versi biaya tidak valid.');
         const c = calculateProductionPreview({ ...b, caneNetKg: '1', rounding: 'HALF_UP', grades: [{ code: 'CHECK', weightKg: '1', pricePerKgRupiah: '0' }] }).costs;
         return this.juice.mutate(access, async (tx) => {
             await this.juice.lockLots(tx, access, [lotId]);
-            if (version !== undefined) {
-                const old = (await tx.query('SELECT version FROM sobatnira.lot_production_costs WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3', [access.tenantId, access.factoryId, lotId])).rows[0];
-                if (!old || old.version !== version) throw new ConflictException('Biaya sudah berubah. Muat ulang.');
-            }
             const approved = await tx.query('SELECT 1 FROM sobatnira.production_calculation_snapshots WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3', [access.tenantId, access.factoryId, lotId]);
             if (approved.rows.length)
-                throw new ConflictException('Biaya historis sudah dibekukan.');
+                throw new ConflictException({ code: 'LOT_COST_FROZEN', message: 'Biaya historis sudah dibekukan. Ajukan koreksi biaya.' });
+            const old = (await tx.query('SELECT version FROM sobatnira.lot_production_costs WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3 FOR UPDATE', [access.tenantId, access.factoryId, lotId])).rows[0];
+            if ((version !== undefined && (old?.version ?? 0) !== version) ||
+                (old && version === undefined && process.env.LOT_COST_REQUIRE_VERSION === 'true'))
+                throw new ConflictException({ code: 'LOT_COST_VERSION_CONFLICT', message: 'Biaya sudah berubah atau aplikasi belum mendukung versi. Muat ulang atau perbarui aplikasi.' });
             return (await tx.query(`INSERT INTO sobatnira.lot_production_costs(tenant_id,factory_id,lot_id,cane_rupiah,operational_rupiah,ingredient_rupiah,other_rupiah,created_by)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(tenant_id,factory_id,lot_id) DO UPDATE SET cane_rupiah=$4,operational_rupiah=$5,ingredient_rupiah=$6,other_rupiah=$7,version=sobatnira.lot_production_costs.version+1,updated_by=$8,updated_at=clock_timestamp() RETURNING *`, [access.tenantId, access.factoryId, lotId, c.caneRupiah, c.operationalRupiah, c.ingredientRupiah, c.otherRupiah, access.userId])).rows[0];
         });
@@ -297,7 +297,7 @@ export class Batches {
         return { items: rows.rows, ...page };
     }
     async productionReport(access: FactoryAccess, query: unknown, maxLots = REPORT_MAX_LOTS, includeJuiceSources = false) {
-        const q = object(query, ['from', 'before', 'synthetic', 'lotId', 'view', 'limit', 'offset']);
+        const q = object(query, ['from', 'before', 'synthetic', 'supplierId', 'lotId', 'batchId', 'grade', 'view', 'limit', 'offset']);
         if (q.view !== undefined && !['summary', 'page'].includes(String(q.view))) throw new BadRequestException('view laporan tidak valid.');
         if (q.view !== 'page' && (q.limit !== undefined || q.offset !== undefined)) throw new BadRequestException('Pagination memerlukan view=page.');
         if (q.synthetic !== undefined && !['true', 'false'].includes(String(q.synthetic)))
@@ -306,15 +306,32 @@ export class Batches {
         const before = q.before === undefined ? null : timestamp(q.before, 'before');
         reportPeriod(from, before);
         const synthetic = q.synthetic === 'true';
-        const lotId = q.lotId === undefined ? null : uuid(q.lotId, 'lotId');
-        if (q.view === 'summary') return this.reportSummary(access, synthetic, from, before, lotId);
+        const selection = reportSelection(q);
+        const header = { factory: access.factoryName, from, before, synthetic, periodBasis: 'lot_received_at', selection };
+        if (selection.batchId || selection.grade) {
+          // Keep the filtered result bounded before computing exact full-result totals.
+          const items = await this.reportRows(access, synthetic, from, before, {
+            limit: maxLots + 1, includeJuiceSources, ...selection,
+          });
+          checkReportSize(items, maxLots);
+          const report = reportProductionSelection(items, selection);
+          if (q.view === 'summary') return boundedReport({ ...header, ...report, view: 'summary', items: [] });
+          if (q.view === 'page') {
+            const page = parsePage({ limit: q.limit, offset: q.offset });
+            const end = page.offset + page.limit;
+            return boundedReport({ ...header, ...report, view: 'page', ...page,
+              items: report.items.slice(page.offset, end), nextOffset: end < items.length ? end : null });
+          }
+          return boundedReport({ ...header, ...report });
+        }
+        if (q.view === 'summary') return this.reportSummary(access, synthetic, from, before, selection);
         if (q.view === 'page') {
           const page = parsePage({ limit: q.limit, offset: q.offset });
           return this.db.transaction(async session => {
           await session.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY', []);
-          const summary = await this.reportSummary(access, synthetic, from, before, lotId, session);
+          const summary = await this.reportSummary(access, synthetic, from, before, selection, session);
           const items = await this.reportRows(access, synthetic, from, before,
-            { limit: page.limit + 1, offset: page.offset, includeJuiceSources, lotId, session });
+            { limit: page.limit + 1, offset: page.offset, includeJuiceSources, ...selection, session });
           const more = items.length > page.limit;
           checkReportSize(items);
           return boundedReport({ ...summary, view: 'page', items: productionReport(items.slice(0, page.limit)).items,
@@ -322,14 +339,14 @@ export class Batches {
           });
         }
         const items = await this.reportRows(access, synthetic, from, before, {
-          limit: maxLots === undefined ? null : maxLots + 1, includeJuiceSources, lotId,
+          limit: maxLots === undefined ? null : maxLots + 1, includeJuiceSources, ...selection,
         });
         checkReportSize(items, maxLots);
-        return boundedReport({ factory: access.factoryName, from, before, synthetic, periodBasis: 'lot_received_at', ...productionReport(items) });
+        return boundedReport({ ...header, ...productionReport(items) });
     }
 
-    async reportSummary(access: FactoryAccess, synthetic: boolean, from: string | null, before: string | null, lotId: string | null, session: DatabaseSession = this.db) {
-        await assertFinancialsAvailable(session,access,synthetic,from,before,lotId);
+    async reportSummary(access: FactoryAccess, synthetic: boolean, from: string | null, before: string | null, selection: ReportSelection, session: DatabaseSession = this.db) {
+        await assertFinancialsAvailable(session,access,synthetic,from,before,selection.lotId);
         const { rows: [row] } = await session.query<ReturnType<typeof productionReport>['totals'] & {
           grades: ReturnType<typeof productionReport>['grades']; provisional: boolean; latestReceivedAt: Date | null;
         }>(`WITH ${FACTORY_SCOPE_CTE}, selected AS (
@@ -344,6 +361,7 @@ export class Batches {
             ORDER BY approved_at DESC,id DESC LIMIT 1) p ON true
           WHERE ($5::timestamptz IS NULL OR l.received_at >= $5) AND ($6::timestamptz IS NULL OR l.received_at < $6)
             AND ($7::uuid IS NULL OR l.id=$7)
+            AND ($8::uuid IS NULL OR l.supplier_id=$8)
         ), approved AS (
           SELECT b.id FROM sobatnira.production_batches b JOIN selected s ON s.id=b.lot_id
           WHERE (b.tenant_id,b.factory_id,b.is_synthetic)=($2,$3,$4) AND b.status='approved'
@@ -375,9 +393,9 @@ export class Batches {
           trim_scale(COALESCE(sum((calculation->>'productionMarginRupiah')::numeric),0))::text AS "productionMarginRupiah",
           COALESCE(bool_or(snapshot_id IS NOT NULL AND NOT closed),false) AS provisional,
           max(received_at) AS "latestReceivedAt" FROM selected`,
-        [...scopeValues(access), synthetic, from, before, lotId]);
+        [...scopeValues(access), synthetic, from, before, selection.lotId ?? null, selection.supplierId ?? null]);
         const { provisional, latestReceivedAt, grades, ...totals } = row;
-        return boundedReport({ factory: access.factoryName, from, before, synthetic, periodBasis: 'lot_received_at',
+        return boundedReport({ factory: access.factoryName, from, before, synthetic, periodBasis: 'lot_received_at', selection,
           view: 'summary', totals, provisional, latestReceivedAt, items: [], grades });
     }
 
@@ -396,19 +414,12 @@ export class Batches {
     }
 
     private async reportRows(access: FactoryAccess, synthetic: boolean, from: string | null, before: string | null,
-      { limit, second, includeJuiceSources, lotId, offset = 0, session = this.db }: {
-        limit: number | null; second?: ReportPeriod; includeJuiceSources?: boolean; lotId?: string | null; offset?: number; session?: DatabaseSession;
+      { limit, second, includeJuiceSources, lotId, supplierId, batchId, grade, offset = 0, session = this.db }: ReportSelection & {
+        limit: number | null; second?: ReportPeriod; includeJuiceSources?: boolean; offset?: number; session?: DatabaseSession;
       }) {
         await assertFinancialsAvailable(session,access,synthetic,from,before,lotId ?? null);
         if(second) await assertFinancialsAvailable(session,access,synthetic,second.from,second.before);
-        // A single statement gives receipt, latest cumulative snapshot and approved
-        // batch details one consistent PostgreSQL read snapshot, scoped by membership.
-        const { rows } = await session.query<ProductionReportLot>(`WITH ${FACTORY_SCOPE_CTE}
-          SELECT l.id AS "lotId", COALESCE(l.display_code,l.id::text) AS code,
-            s.name AS supplier,l.received_at AS "receivedAt",i.net_weight_kg::text AS "caneNetKg",
-            i.cane_type_code AS "caneType",trim_scale(COALESCE(mc.quantity_after,m.juice_produced_liters))::text AS "juiceLiters",
-            p.id AS "calculationSnapshotId", p.calculation_version AS "calculationVersion",
-            p.output_snapshot AS calculation,CASE WHEN p.calculation_version='production-v2' THEN
+        const batchesSql = `CASE WHEN p.calculation_version='production-v2' THEN
             ${includeJuiceSources ? `(SELECT jsonb_agg(entry || jsonb_build_object('consumedByOrigin', COALESCE((
               SELECT jsonb_agg(to_jsonb(src)) FROM (
                 SELECT r.origin_lot_id AS "originLotId",COALESCE(l.display_code,l.id::text) AS "lotCode",
@@ -417,7 +428,15 @@ export class Batches {
                   AND r.batch_id=(entry->>'id')::uuid AND r.origin_lot_id=l.id
                   AND r.is_synthetic=$4 AND r.state='consumed' GROUP BY r.origin_lot_id
               ) src),'[]'::jsonb))) FROM jsonb_array_elements(p.input_snapshot->'allocatedBatches') entry)` : "p.input_snapshot->'allocatedBatches'"}
-            ELSE COALESCE(b.items,'[]'::jsonb) END AS batches,
+            ELSE COALESCE(b.items,'[]'::jsonb) END`;
+        // A single statement gives receipt, latest cumulative snapshot and approved
+        // batch details one consistent PostgreSQL read snapshot, scoped by membership.
+        const { rows } = await session.query<ProductionReportLot>(`WITH ${FACTORY_SCOPE_CTE}
+          SELECT l.id AS "lotId", COALESCE(l.display_code,l.id::text) AS code,l.supplier_id AS "supplierId",
+            s.name AS supplier,l.received_at AS "receivedAt",i.net_weight_kg::text AS "caneNetKg",
+            i.cane_type_code AS "caneType",trim_scale(COALESCE(mc.quantity_after,m.juice_produced_liters))::text AS "juiceLiters",
+            p.id AS "calculationSnapshotId", p.calculation_version AS "calculationVersion",
+            p.output_snapshot AS calculation,COALESCE(report_batches.items,'[]'::jsonb) AS batches,
             EXISTS(SELECT 1 FROM sobatnira.lot_closures c
               WHERE (c.tenant_id,c.factory_id,c.lot_id,c.is_synthetic)=(l.tenant_id,l.factory_id,l.id,i.is_synthetic)
               AND c.reopened_at IS NULL) AS closed
@@ -449,15 +468,29 @@ export class Batches {
               ) c
             ),'[]'::jsonb)` : ''}
             ) ORDER BY pb.occurred_at,pb.id) AS items FROM (
-              SELECT * FROM sobatnira.production_batches WHERE lot_id=l.id AND tenant_id=l.tenant_id
-                AND factory_id=l.factory_id AND is_synthetic=$4 AND status='approved'
+              SELECT batch.* FROM sobatnira.production_batches batch WHERE batch.lot_id=l.id AND batch.tenant_id=l.tenant_id
+                AND batch.factory_id=l.factory_id AND batch.is_synthetic=$4 AND batch.status='approved'
+                AND ($13::uuid IS NULL OR batch.id=$13)
+                AND ($14::text IS NULL OR EXISTS (
+                  SELECT 1 FROM sobatnira.batch_grade_results grade
+                  WHERE grade.batch_id=batch.id AND grade.code=$14
+                ))
               ORDER BY occurred_at,id LIMIT 1001
             ) pb WHERE pb.status='approved') b ON true
+          CROSS JOIN LATERAL (SELECT ${batchesSql} AS items) report_batches
           WHERE ($10::uuid IS NULL OR l.id = $10)
+            AND ($12::uuid IS NULL OR l.supplier_id=$12)
+            AND (($13::uuid IS NULL AND $14::text IS NULL) OR EXISTS (
+              SELECT 1 FROM jsonb_array_elements(report_batches.items) entry
+              WHERE ($13::uuid IS NULL OR entry->>'id'=$13::text)
+                AND ($14::text IS NULL OR EXISTS (
+                  SELECT 1 FROM jsonb_array_elements(entry->'grades') g WHERE g->>'code'=$14
+                ))
+            ))
             AND ((($5::timestamptz IS NULL OR l.received_at >= $5) AND ($6::timestamptz IS NULL OR l.received_at < $6))
               OR (l.received_at >= $8::timestamptz AND l.received_at < $9::timestamptz))
           ORDER BY l.received_at DESC,l.id LIMIT $7 OFFSET $11`, [...scopeValues(access), synthetic, from, before, limit,
-            second?.from ?? null, second?.before ?? null, lotId ?? null, offset]);
+            second?.from ?? null, second?.before ?? null, lotId ?? null, offset, supplierId ?? null, batchId ?? null, grade ?? null]);
         return rows;
     }
 

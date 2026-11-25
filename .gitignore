@@ -13,3 +13,6 @@ __pycache__/
 *.log
 
 knowledge-pack/
+/apps/mobile/android/app/google-services.json
+*.jks
+*.keystore

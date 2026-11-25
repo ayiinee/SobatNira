@@ -302,7 +302,7 @@ def production_grid(tokens, asset, shared, image):
             "cane_blocks": blocks, "unmapped_columns": unknown}
 
 
-def extract(tokens, asset, schema_version, template_version, image=None):
+def extract(tokens, asset, schema_version, template_version, image=None, document_type_hint=None):
     lines = rows(tokens)
     shared = {"schema_version": schema_version, "template_version": template_version, "issues": []}
     if grid := production_grid(tokens, asset, shared, image):
@@ -318,7 +318,8 @@ def extract(tokens, asset, schema_version, template_version, image=None):
                 return {**shared, "document_type": "PRODUCTION_NOTE", "header": key_values(lines[:index], PRODUCTION, asset),
                         "cane_blocks": blocks, "unmapped_columns": unknown}
     header = key_values(lines, TRUCK, asset)
-    if sum(value["status"] != "NOT_PRESENT" for value in header.values()) >= 4 and all(
+    minimum_fields = 3 if document_type_hint == "TRUCK_ARRIVAL_NOTE" else 4
+    if sum(value["status"] != "NOT_PRESENT" for value in header.values()) >= minimum_fields and all(
         header[key]["status"] != "NOT_PRESENT" for key in ("vehicle_number", "net_weight_kg")
     ):
         return {**shared, "document_type": "TRUCK_ARRIVAL_NOTE", "header": header, "cane_tag_reference": {

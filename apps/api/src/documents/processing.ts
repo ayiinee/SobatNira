@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { randomUUID } from 'node:crypto';
 import { SCHEMA_VERSION, DocumentType, Envelope, Issue, Note, readEnvelope } from './contracts';
 import { Database } from './database';
-import { audit, Revision } from './intake';
+import { audit, operatorTypeHint, Revision } from './intake';
 import { mergeProduction } from './revisions';
 import { openClarifications } from './clarifications';
 import { operatorChecks } from './operator-readiness';
@@ -11,6 +11,7 @@ import { AdaptivePoller, documentPollSettings } from './adaptive-poller';
 
 type Job = { id: string; revision_id: string; attempts: number; claim_token: string; eligible_at: Date };
 type Work = Revision & { created_at: Date; factory_id: string; document_type: DocumentType; parent_revision_id: string | null;
+  document_type_hint: Exclude<DocumentType, 'UNKNOWN'> | null;
   media_asset_id: string; object_key: string; mime_type: string; explicit_new: boolean };
 const MAX_ATTEMPTS = 3;
 const TIMEOUT = 240_000;
@@ -67,6 +68,7 @@ export class DocumentProcessor implements OnModuleInit, OnModuleDestroy {
           claim_token=$1 FROM candidate WHERE j.id=candidate.id RETURNING j.*,candidate.eligible_at`, [randomUUID(), LEASE]);
       if (!job) return null;
       const { rows: [work] } = await db.query<Work>(`SELECT r.*,d.factory_id,d.document_type,s.media_asset_id,s.explicit_new,a.object_key,a.mime_type
+        ,COALESCE(NULLIF(d.document_type,'UNKNOWN'),${operatorTypeHint('r')}) AS document_type_hint
         FROM document_revisions r JOIN source_documents d ON d.id=r.document_id
         JOIN document_submissions s ON s.id=r.submission_id JOIN media_assets a ON a.id=s.media_asset_id
         WHERE r.id=$1`, [job.revision_id]);
@@ -111,7 +113,7 @@ export class DocumentProcessor implements OnModuleInit, OnModuleDestroy {
       let status = !result ? 'FAILED_FINAL' : !extraction ? 'MANUAL_REVIEW_REQUIRED'
         : result.status === 'COMPLETED' ? 'EXTRACTED' : 'NEEDS_CLARIFICATION';
       if (!result) issues.push({ code: errorCode ?? 'OCR_UNAVAILABLE', severity: 'ERROR', message: 'Layanan ekstraksi tidak tersedia.' });
-      if (extraction && work.document_type !== 'UNKNOWN' && work.document_type !== extraction.document_type) {
+      if (extraction && work.document_type_hint && work.document_type_hint !== extraction.document_type) {
         issues.push({ code: 'DOCUMENT_TYPE_MISMATCH', severity: 'BLOCKER', message: 'Jenis foto berbeda dari dokumen yang dirujuk.' });
         extraction = null;
         status = 'MANUAL_REVIEW_REQUIRED';
@@ -175,7 +177,7 @@ export class DocumentProcessor implements OnModuleInit, OnModuleDestroy {
       headers: { 'Content-Type': 'application/json', 'X-Internal-Service-Token': token },
       body: JSON.stringify({ request_id: ids.request_id, document_id: ids.document_id, submission_id: ids.submission_id,
         revision_id: ids.revision_id, factory_id: work.factory_id, schema_version: SCHEMA_VERSION, template_version: '1.0.0',
-        document_type_hint: work.document_type === 'UNKNOWN' ? null : work.document_type,
+        document_type_hint: work.document_type_hint,
         image: { asset_id: work.media_asset_id, object_key: work.object_key, mime_type: work.mime_type } }),
     });
     if (!response.ok) throw new Error('OCR_UNAVAILABLE');
