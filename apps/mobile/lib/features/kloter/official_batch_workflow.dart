@@ -8,6 +8,7 @@ import 'batch_detail_page.dart';
 import 'demo_production.dart';
 import 'juice_volume.dart';
 import 'batch_juice_reservation_page.dart';
+import 'batch_draft_page.dart';
 import 'kloter_detail_widgets.dart';
 import 'kloter_detail_page.dart';
 import '../laporan/connected_reports.dart';
@@ -70,33 +71,14 @@ class _OfficialLotBatchesState extends State<OfficialLotBatches> {
   }
 
   Future<void> _create() async {
-    final id = ReviewApi.requestUuid();
-    final today = DateTime.now().toIso8601String().substring(0, 16);
-    final created = await _form(
-      context,
-      'Tambah batch',
-      [
-        const _Field('Kode batch'),
-        const _Field('Nomor wajan', kind: _Input.integer),
-        _Field('Waktu pemasakan', initial: today, kind: _Input.date),
-        const _Field('Volume nira (mL)', kind: _Input.quantity),
-        const _Field('Hasil fisik (kg)', kind: _Input.quantity),
-        const _Field('Grade'),
-        const _Field('Berat grade (kg)', kind: _Input.quantity),
-        const _Field('Harga per kg (Rp)', kind: _Input.money),
-      ],
-      (v) => widget.api.createBatch(widget.scope, {
-        'id': id,
-        'lotId': widget.lotId,
-        'code': v[0],
-        'wokNumber': int.parse(v[1]),
-        'occurredAt': DateTime.parse(v[2]).toUtc().toIso8601String(),
-        'quantityMl': v[3],
-        'physicalWeightKg': v[4],
-        'grades': [
-          {'code': v[5], 'weightKg': v[6], 'pricePerKgRupiah': v[7]},
-        ],
-      }),
+    final created = await Navigator.of(context).push<Json>(
+      MaterialPageRoute(
+        builder: (_) => BatchDraftPage(
+          api: widget.api,
+          scope: widget.scope,
+          lotId: widget.lotId,
+        ),
+      ),
     );
     if (!mounted) return;
     if (created != null) {
