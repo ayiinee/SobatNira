@@ -1,3 +1,4 @@
+import { SugarInventory } from './sugar-inventory';
 import { assertBatchSource, batchSourceRows, parseBatchSource } from './batch-sources';
 import { BadRequestException, Body, ConflictException, Controller, Get, HttpCode, Injectable, Param, Patch, Post, Query } from '@nestjs/common';
 import { createHash } from 'node:crypto';
@@ -49,7 +50,7 @@ function correctionData(physicalWeight: unknown, grades: unknown) {
 }
 @Injectable()
 export class Batches {
-    constructor(private readonly db: DatabaseService, private readonly juice: JuiceRepository) { }
+    constructor(private readonly db: DatabaseService, private readonly juice: JuiceRepository, private readonly inventory: SugarInventory) { }
     async create(access: FactoryAccess, input: unknown) {
         const b = parseBatch(input);
         const hash = createHash('sha256').update(JSON.stringify(b)).digest('hex');
@@ -117,7 +118,8 @@ export class Batches {
             const grades = (await tx.query<Grade>('SELECT code,weight_kg::text AS "weightKg",price_per_kg_rupiah::text AS "pricePerKgRupiah" FROM sobatnira.batch_grade_results WHERE batch_id=$1', [id])).rows;
             assertGradeWeight(String(b.physical_weight_kg), grades);
             await tx.query("UPDATE sobatnira.juice_reservations SET state='consumed',finalized_by=$4,finalized_at=clock_timestamp() WHERE tenant_id=$1 AND factory_id=$2 AND batch_id=$3 AND state='reserved'", [access.tenantId, access.factoryId, id, access.userId]);
-            await tx.query("UPDATE sobatnira.production_batches SET status='approved',approved_by=$2,approved_at=clock_timestamp() WHERE id=$1", [id, access.userId]);
+            const approved = (await tx.query("UPDATE sobatnira.production_batches SET status='approved',approved_by=$2,approved_at=clock_timestamp() WHERE id=$1 RETURNING *", [id, access.userId])).rows[0];
+            await this.inventory.postBatch(tx, access, approved, id);
             const snapshot = await this.snapshot(tx, access, {id, lot_id: b.lot_id, is_synthetic: b.is_synthetic}, null);
             await tx.query("INSERT INTO sobatnira.production_batch_events(batch_id,action,actor_id) VALUES($1,'approved',$2)", [id, access.userId]);
             return snapshot;
@@ -228,6 +230,7 @@ export class Batches {
                     await tx.query(`INSERT INTO sobatnira.batch_grade_results(batch_id,code,weight_kg,price_per_kg_rupiah)
                       VALUES($1,$2,$3,$4)`, [id, grade.code, grade.weightKg, grade.pricePerKgRupiah]);
                 }
+                await this.inventory.postBatch(tx, access, batch, correctionId, true);
                 await this.snapshot(tx, access, {id, lot_id: batch.lot_id, is_synthetic: batch.is_synthetic}, correctionId);
             }
             return (await tx.query(`UPDATE sobatnira.production_batch_corrections
