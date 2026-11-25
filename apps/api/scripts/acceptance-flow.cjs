@@ -35,6 +35,15 @@ async (page, { origin, output }) => {
     await page.waitForTimeout(120);
     await page.keyboard.press('ControlOrMeta+A');
     await page.keyboard.type(value, { delay: 24 });
+    if (name === 'Catatan pemeriksaan foto' && await control.inputValue() !== value) {
+      await scroll(1800);
+      await control.scrollIntoViewIfNeeded();
+      const box = await control.boundingBox();
+      if (!box) throw new Error('Kolom catatan di luar area tampilan.');
+      await page.mouse.click(box.x + Math.min(45, box.width / 2), box.y + Math.min(20, box.height / 2));
+      await page.keyboard.press('ControlOrMeta+A');
+      await page.keyboard.insertText(value);
+    }
     if (await control.inputValue() !== value) throw new Error('Input was not retained: ' + name);
   };
   const submit = async (label, suffix, status) => {
@@ -118,7 +127,7 @@ async (page, { origin, output }) => {
   await button('Tambah batch').click({ timeout: 15_000 });
   for (const [name, value] of [
     ['Kode batch', 'SMOKE-UJI'], ['Nomor wajan', '1'], ['Waktu pemasakan', '2026-11-16T10:00:00+07:00'],
-    ['Volume nira (mL)', '40000'], ['Hasil fisik (kg)', '26'], ['Grade', 'A'], ['Berat grade (kg)', '25'],
+    ['Volume nira (mL)', '40000'], ['Hasil fisik (kg)', '25'], ['Grade', 'A'], ['Berat grade (kg)', '25'],
     ['Harga per kg (Rp)', '20000'],
   ]) await field(name, value);
   await submit('Simpan', '/production/batches', 201);
