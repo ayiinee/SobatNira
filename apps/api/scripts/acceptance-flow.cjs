@@ -31,18 +31,17 @@ async (page, { origin, output }) => {
     const control = name === 'ID ekspor'
       ? page.getByRole('textbox', { name: /^ID ekspor(?:\s|$)/ })
       : page.getByRole('textbox', { name, exact: true });
-    await control.click({ timeout: 15_000 });
-    await page.waitForTimeout(120);
-    await page.keyboard.press('ControlOrMeta+A');
-    await page.keyboard.type(value, { delay: 24 });
-    if (name === 'Catatan pemeriksaan foto' && await control.inputValue() !== value) {
+    if (name === 'Catatan pemeriksaan foto') {
       await scroll(1800);
       await control.scrollIntoViewIfNeeded();
-      const box = await control.boundingBox();
-      if (!box) throw new Error('Kolom catatan di luar area tampilan.');
-      await page.mouse.click(box.x + Math.min(45, box.width / 2), box.y + Math.min(20, box.height / 2));
+      await control.click({ timeout: 15_000 });
+      await control.fill(value);
+      await waitForText(`${1000 - value.length} characters remaining`);
+    } else {
+      await control.click({ timeout: 15_000 });
+      await page.waitForTimeout(120);
       await page.keyboard.press('ControlOrMeta+A');
-      await page.keyboard.insertText(value);
+      await page.keyboard.type(value, { delay: 24 });
     }
     if (await control.inputValue() !== value) throw new Error('Input was not retained: ' + name);
   };
@@ -99,7 +98,10 @@ async (page, { origin, output }) => {
     ['Jenis tebu', 'BL'],
     ['Catatan pemeriksaan foto', 'Pemeriksaan foto nota sintetis'],
   ]) await field(name, value);
-  await submit('Simpan draf manual', '/manual-draft', 200);
+  const savedDraft = await submit('Simpan draf manual', '/manual-draft', 200);
+  if (savedDraft.request().postDataJSON().note !== 'Pemeriksaan foto nota sintetis') {
+    throw new Error('Catatan pemeriksaan foto tidak terkirim dari formulir.');
+  }
   await page.getByText('Status: PENDING_VALIDATION', { exact: true }).waitFor({ timeout: 15_000 });
   await validateIntake('B');
 
