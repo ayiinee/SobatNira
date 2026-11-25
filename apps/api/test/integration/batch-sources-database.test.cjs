@@ -9,8 +9,8 @@ test('approved note rows remain unique across revisions and multi-grade drafts a
  try{
   const [document,revision,submission,operator,message,media]=Array.from({length:6},()=>randomUUID());
   await f.client.query("INSERT INTO operator_contacts(id,factory_id,display_name,phone_e164) VALUES($1,$2,'Synthetic source','+628'||floor(random()*100000000000)::bigint::text)",[operator,f.ids.factory]);
-  await f.client.query("INSERT INTO whatsapp_inbound_messages(id,operator_id,provider_message_id,event,fingerprint) VALUES($1,$2,$1::text,'{}','synthetic')",[message,operator]);
-  await f.client.query("INSERT INTO media_assets(id,factory_id,object_key,mime_type,size_bytes,sha256) VALUES($1,$2,$1::text,'image/png',1,'synthetic')",[media,f.ids.factory]);
+  await f.client.query("INSERT INTO whatsapp_inbound_messages(id,operator_id,provider_message_id,event,fingerprint) VALUES($1::uuid,$2,$1::text,'{}','synthetic')",[message,operator]);
+  await f.client.query("INSERT INTO media_assets(id,factory_id,object_key,mime_type,size_bytes,sha256) VALUES($1::uuid,$2,$1::text,'image/png',1,'synthetic')",[media,f.ids.factory]);
   await f.client.query("INSERT INTO source_documents(id,factory_id,document_type) VALUES($1,$2,'PRODUCTION_NOTE')",[document,f.ids.factory]);
   await f.client.query('INSERT INTO document_submissions(id,document_id,inbound_message_id,media_asset_id) VALUES($1,$2,$3,$4)',[submission,document,message,media]);
   const field=(v,unit=null)=>({status:'READ',normalized_value:v,unit});
