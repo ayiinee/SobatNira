@@ -133,6 +133,7 @@ class ReviewApi {
   final http.Client _client;
   final String baseUrl;
   final _pendingTransfers = <String, JuiceTransferRequest>{};
+  final _pendingReservations = <String, Json>{};
   bool _supportsLotReport = true;
   bool _supportsSyntheticLotPage = true;
   void Function()? onSessionExpired;
@@ -530,16 +531,59 @@ class ReviewApi {
     FactoryScope scope,
     String lotId,
     String batchId,
-    String quantityMl,
-  ) => writeProduction(
+    String quantityMl, {
+    String? originLotId,
+    String? requestId,
+    bool synthetic = false,
+  }) => writeProduction(
     [...scope._lots, lotId, 'juice', 'reservations'],
     {
-      'requestId': batchId,
+      'requestId': requestId ?? batchId,
       'batchId': batchId,
-      'originLotId': lotId,
+      'originLotId': originLotId ?? lotId,
       'quantityMl': quantityMl,
+      'synthetic': synthetic,
     },
   );
+
+  Json? pendingReservation(String batchId) => _pendingReservations[batchId];
+
+  Future<Json> reserveJuiceSource(
+    FactoryScope scope,
+    String lotId,
+    String batchId, {
+    required String originLotId,
+    required String quantityMl,
+    bool synthetic = false,
+  }) async {
+    final pending = _pendingReservations.putIfAbsent(
+      batchId,
+      () => {
+        'requestId': requestUuid(),
+        'originLotId': originLotId,
+        'quantityMl': quantityMl,
+        'synthetic': synthetic,
+      },
+    );
+    try {
+      final result = await reserveBatchJuice(
+        scope,
+        lotId,
+        batchId,
+        pending['quantityMl'] as String,
+        originLotId: pending['originLotId'] as String,
+        requestId: pending['requestId'] as String,
+        synthetic: pending['synthetic'] as bool,
+      );
+      _pendingReservations.remove(batchId);
+      return result;
+    } on ReviewApiError catch (error) {
+      if (error.status == 400 || error.status == 409) {
+        _pendingReservations.remove(batchId);
+      }
+      rethrow;
+    }
+  }
 
   Future<Json> finishBatch(
     FactoryScope scope,

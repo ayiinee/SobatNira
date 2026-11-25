@@ -32,6 +32,10 @@ test('mixed origins conserve output, allocate cooking costs, and owner correctio
    assert.equal(r.status,201,JSON.stringify(r.body));
   }
   await f.client.query('UPDATE sobatnira.production_batches SET physical_weight_kg=9.999999 WHERE id=$1',[id]);
+  const detail=(await f.request(root+'/batches/'+id)).body;
+  assert.equal(detail.remainingMl,'0');
+  assert.equal(detail.reservations.length,2);
+  assert.deepEqual(detail.reservations.map(r=>r.quantityMl).sort(),['20000','80000']);
   assert.equal((await f.request(root+'/batches/'+id+'/approve','POST')).status,400);
   assert.equal((await f.client.query("SELECT count(*)::int AS n FROM sobatnira.juice_reservations WHERE batch_id=$1 AND state='consumed'",[id])).rows[0].n,0);
   await f.client.query('UPDATE sobatnira.production_batches SET physical_weight_kg=10 WHERE id=$1',[id]);
