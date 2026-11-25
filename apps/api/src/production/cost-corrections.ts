@@ -14,7 +14,10 @@ export class CostCorrections {
   constructor(private readonly juice: JuiceRepository, private readonly db: DatabaseService) {}
 
   async current(access: FactoryAccess, lotId: string) {
-    return found((await this.db.query(`WITH ${FACTORY_SCOPE_CTE} SELECT c.* FROM sobatnira.lot_production_costs c
+    return found((await this.db.query(`WITH ${FACTORY_SCOPE_CTE} SELECT c.*,
+      EXISTS (SELECT 1 FROM sobatnira.production_calculation_snapshots s
+        WHERE (s.tenant_id,s.factory_id,s.lot_id)=(c.tenant_id,c.factory_id,c.lot_id)) AS frozen
+      FROM sobatnira.lot_production_costs c
       JOIN authorized_scope a ON (c.tenant_id,c.factory_id)=(a."tenantId",a."factoryId")
       WHERE c.lot_id=$4`, [...scopeValues(access), lotId])).rows[0]);
   }

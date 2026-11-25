@@ -78,18 +78,18 @@ export class Batches {
     }
     async costs(access: FactoryAccess, lotId: string, input: unknown) {
         const { version, ...b } = object(input, ['version', 'caneCostRupiah', 'operationalCostRupiah', 'ingredientCostRupiah', 'otherCostRupiah']);
-        if (version !== undefined && (!Number.isSafeInteger(version) || Number(version) < 1))
+        if (version !== undefined && (!Number.isSafeInteger(version) || Number(version) < 0))
             throw new BadRequestException('Versi biaya tidak valid.');
         const c = calculateProductionPreview({ ...b, caneNetKg: '1', rounding: 'HALF_UP', grades: [{ code: 'CHECK', weightKg: '1', pricePerKgRupiah: '0' }] }).costs;
         return this.juice.mutate(access, async (tx) => {
             await this.juice.lockLots(tx, access, [lotId]);
-            if (version !== undefined) {
-                const old = (await tx.query('SELECT version FROM sobatnira.lot_production_costs WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3', [access.tenantId, access.factoryId, lotId])).rows[0];
-                if (!old || old.version !== version) throw new ConflictException('Biaya sudah berubah. Muat ulang.');
-            }
             const approved = await tx.query('SELECT 1 FROM sobatnira.production_calculation_snapshots WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3', [access.tenantId, access.factoryId, lotId]);
             if (approved.rows.length)
-                throw new ConflictException('Biaya historis sudah dibekukan.');
+                throw new ConflictException({ code: 'LOT_COST_FROZEN', message: 'Biaya historis sudah dibekukan. Ajukan koreksi biaya.' });
+            const old = (await tx.query('SELECT version FROM sobatnira.lot_production_costs WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3 FOR UPDATE', [access.tenantId, access.factoryId, lotId])).rows[0];
+            if ((version !== undefined && (old?.version ?? 0) !== version) ||
+                (old && version === undefined && process.env.LOT_COST_REQUIRE_VERSION === 'true'))
+                throw new ConflictException({ code: 'LOT_COST_VERSION_CONFLICT', message: 'Biaya sudah berubah atau aplikasi belum mendukung versi. Muat ulang atau perbarui aplikasi.' });
             return (await tx.query(`INSERT INTO sobatnira.lot_production_costs(tenant_id,factory_id,lot_id,cane_rupiah,operational_rupiah,ingredient_rupiah,other_rupiah,created_by)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(tenant_id,factory_id,lot_id) DO UPDATE SET cane_rupiah=$4,operational_rupiah=$5,ingredient_rupiah=$6,other_rupiah=$7,version=sobatnira.lot_production_costs.version+1,updated_by=$8,updated_at=clock_timestamp() RETURNING *`, [access.tenantId, access.factoryId, lotId, c.caneRupiah, c.operationalRupiah, c.ingredientRupiah, c.otherRupiah, access.userId])).rows[0];
         });

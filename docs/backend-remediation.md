@@ -39,8 +39,8 @@ Prefix: `/tenants/:tenantId/factories/:factoryId/production/lots/:lotId`.
 
 | Endpoint | Hak dan isi |
 | --- | --- |
-| `POST /costs` | Admin; payload lama tetap diterima. `version` opsional menolak versi usang dengan 409. Setelah snapshot pertama, gunakan koreksi. |
-| `GET /cost-corrections` | Admin/owner; nilai biaya saat ini beserta `version`. |
+| `POST /costs` | Admin; kirim `version: 0` untuk pembuatan atau versi saat ini untuk edit. Versi usang mendapat 409. Setelah snapshot pertama, gunakan koreksi. |
+| `GET /cost-corrections` | Admin/owner; nilai biaya saat ini beserta `version` dan `frozen`. Mengembalikan 404 jika belum ada biaya. |
 | `POST /cost-corrections/:requestId` | Admin/owner; UUID stabil, `version`, `reason`, `caneCostRupiah`, `operationalCostRupiah`, `ingredientCostRupiah`, `otherCostRupiah`. |
 | `POST /cost-corrections/:requestId/approve` | Owner; tanpa payload. Mengubah biaya dan membuat snapshot terkait dalam satu transaksi. |
 
@@ -50,6 +50,12 @@ Pengajuan ulang approval yang berhasil tidak menaikkan biaya atau membuat snapsh
 Audit biaya menyimpan nilai sebelum/sesudah, pelaku, waktu, dan versi; alasan terdapat
 pada pengajuan koreksi. Nilai biaya berlaku bersama untuk kategori sintetis/resmi sesuai
 struktur lama; koreksi memperbarui kedua kategori jika keduanya mempunyai hasil.
+
+Deploy API yang memahami `version: 0` lebih dahulu dengan `LOT_COST_REQUIRE_VERSION=false`.
+Perbarui dan verifikasi klien terhubung yang mengedit biaya. Aktifkan
+`LOT_COST_REQUIRE_VERSION=true` setelah klien siap. Pembuatan pertama oleh klien lama
+tetap diterima. Upaya edit tanpa versi kemudian mendapat 409
+`LOT_COST_VERSION_CONFLICT`. Biaya setelah snapshot mendapat `LOT_COST_FROZEN`.
 
 Ekspor tetap milik pemohon: admin tidak dapat mengambil job/file milik owner, dan sebaliknya.
 Akses dicek ulang ketika job diproses dan file diunduh. Jalur percakapan owner tetap khusus

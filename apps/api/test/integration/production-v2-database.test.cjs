@@ -4,6 +4,48 @@ const test=require('node:test');
 const {mobileClosureFixture}=require('./mobile-closure-fixture.cjs');
 const {TruckIntake}=require('../../dist/documents/truck-intake');
 const {MillingRepository}=require('../../dist/milling/milling.repository');
+const {intakeFixture}=require('./intake-fixture.cjs');
+
+test('lot costs protect concurrent creation and reject stale or versionless edits after cutover', async () => {
+ const f = await intakeFixture(true);
+ const previous = process.env.LOT_COST_REQUIRE_VERSION;
+ const path = f.root + '/production/lots/' + f.ids.lot;
+ const costs = caneCostRupiah => ({
+  caneCostRupiah, operationalCostRupiah: '0', ingredientCostRupiah: '0', otherCostRupiah: '0',
+ });
+ const save = data => f.request(path + '/costs', 'POST', data);
+ try {
+  process.env.LOT_COST_REQUIRE_VERSION = 'false';
+  assert.equal((await f.request(path + '/cost-corrections')).status, 404);
+  const concurrent = await Promise.all([
+   save({ ...costs('100'), version: 0 }), save({ ...costs('200'), version: 0 }),
+  ]);
+  assert.deepEqual(concurrent.map(result => result.status).sort(), [200, 409]);
+  assert.equal((await save(costs('250'))).status, 200);
+  const first = await f.request(path + '/cost-corrections');
+  const second = await f.request(path + '/cost-corrections');
+  assert.equal(first.body.version, 2);
+  assert.equal(second.body.version, first.body.version);
+  process.env.LOT_COST_REQUIRE_VERSION = 'true';
+  assert.equal((await save({ ...costs('300'), version: first.body.version })).status, 200);
+  for (const input of [{ ...costs('400'), version: second.body.version }, costs('450')]) {
+   const conflict = await save(input);
+   assert.equal(conflict.status, 409);
+   assert.equal(conflict.body.code, 'LOT_COST_VERSION_CONFLICT');
+  }
+  const latest = await f.request(path + '/cost-corrections');
+  assert.equal(latest.body.version, 3);
+  assert.equal(latest.body.cane_rupiah, '300');
+  assert.equal(latest.body.frozen, false);
+ } finally {
+  if (previous === undefined) delete process.env.LOT_COST_REQUIRE_VERSION;
+  else process.env.LOT_COST_REQUIRE_VERSION = previous;
+  try {
+   await f.client.query('DELETE FROM sobatnira.lot_production_costs WHERE tenant_id=$1 AND factory_id=$2 AND lot_id=$3',
+    [f.ids.tenant, f.ids.factory, f.ids.lot]);
+  } finally { await f.close(); }
+ }
+});
 
 test('mixed origins conserve output, allocate cooking costs, and owner corrections preserve history',async()=>{
  const f=await mobileClosureFixture({consume:false});

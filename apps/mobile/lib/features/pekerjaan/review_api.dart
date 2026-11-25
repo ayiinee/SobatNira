@@ -80,7 +80,7 @@ String documentType(Object? type) => switch (type) {
 };
 
 class ReviewApiError implements Exception {
-  const ReviewApiError(this.status, {this.authCode, this.detail});
+  const ReviewApiError(this.status, {this.authCode, this.detail, this.code});
 
   factory ReviewApiError.fromSignInResponse(http.Response response) {
     String? authCode;
@@ -104,6 +104,7 @@ class ReviewApiError implements Exception {
   final int status;
   final String? authCode;
   final String? detail;
+  final String? code;
 
   bool get unsupportedQuery =>
       status == 400 && detail == 'Terdapat field yang tidak didukung.';
@@ -265,16 +266,19 @@ class ReviewApi {
     if (status == expectedStatus) return;
     if (status == 401) onSessionExpired?.call();
     String? detail;
+    String? code;
     if (status == 400 || status == 404 || status == 409) {
       try {
         final body = jsonDecode(response.body);
         final message = body is Json ? body['message'] : null;
         if (message is String && message.length <= 200) detail = message;
+        final errorCode = body is Json ? body['code'] : null;
+        if (errorCode is String && errorCode.length <= 80) code = errorCode;
       } on FormatException {
         // Proxies may return a plain text response.
       }
     }
-    throw ReviewApiError(status, detail: detail);
+    throw ReviewApiError(status, detail: detail, code: code);
   }
 
   Future<Json> _productionGet(
@@ -518,6 +522,21 @@ class ReviewApi {
 
   Future<Json> createBatch(FactoryScope scope, Json draft) =>
       writeProduction([...scope._base, 'production', 'batches'], draft);
+
+  Future<Json?> lotCosts(FactoryScope scope, String lotId) async {
+    try {
+      return await _productionGet([
+        ...scope._base,
+        'production',
+        'lots',
+        lotId,
+        'cost-corrections',
+      ]);
+    } on ReviewApiError catch (error) {
+      if (error.status == 404) return null;
+      rethrow;
+    }
+  }
 
   Future<Json> saveLotCosts(FactoryScope scope, String lotId, Json costs) =>
       writeProduction(
