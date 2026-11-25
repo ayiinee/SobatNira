@@ -50,7 +50,7 @@ test('batch approval freezes costs, consumes once, isolates scope and produces a
   const production=await f.request(root+'/production-report');
   assert.equal(production.status,200,JSON.stringify(production.body));
   const scopedReport=await f.request(root+'/production-report?lotId='+f.ids.lot);
-  assert.deepEqual(scopedReport.body,production.body);
+  assert.deepEqual(scopedReport.body,{...production.body,selection:{lotId:f.ids.lot}});
   assert.deepEqual((await f.request(root+'/production-report?lotId='+f.ids.secondLot)).body.items,[]);
   assert.deepEqual((await f.request(f.siblingRoot+'/production/production-report?lotId='+f.ids.lot)).body.items,[]);
   assert.deepEqual((await f.request(root+'/production-report?synthetic=true&lotId='+f.ids.lot)).body.items,[]);

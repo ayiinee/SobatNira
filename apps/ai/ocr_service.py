@@ -178,9 +178,9 @@ def _recognize(image, preprocess):
     return tokens
 
 
-def read_note(image, asset_id, schema_version, template_version, preprocess=True, *, infer=None):
+def read_note(image, asset_id, schema_version, template_version, preprocess=True, *, infer=None, document_type_hint=None):
     tokens = (infer if infer is not None else recognize)(image, preprocess)
-    return tokens, extract(tokens, asset_id, schema_version, template_version, image)
+    return tokens, extract(tokens, asset_id, schema_version, template_version, image, document_type_hint)
 
 
 def reread(image, bbox, model, key, *, supplier_name=False):
@@ -304,7 +304,8 @@ def run_extraction(request: ExtractionRequest, x_internal_service_token: str = H
         infer_started = monotonic()
         try:
             tokens, note = read_note(image, str(request.image.asset_id), request.schema_version,
-                                     request.template_version, request.options.preprocess)
+                                     request.template_version, request.options.preprocess,
+                                     document_type_hint=request.document_type_hint)
         except (ImportError, RuntimeError, OSError, ValueError, KeyError):
             raise HTTPException(503, "PaddleOCR inference unavailable") from None
         processing.update(media_duration_ms=int((infer_started - start) * 1000),

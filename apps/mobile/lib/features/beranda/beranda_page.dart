@@ -21,6 +21,7 @@ class BerandaPage extends StatefulWidget {
     this.factories = const {},
     this.onFactoryChanged,
     this.profile,
+    this.profileInitial,
     this.summary,
     this.profit,
     this.period = 'Semua tanggal',
@@ -37,6 +38,7 @@ class BerandaPage extends StatefulWidget {
   final Map<String, String> factories;
   final ValueChanged<String>? onFactoryChanged;
   final String? profile;
+  final String? profileInitial;
   final ({String cane, String lots})? summary;
   final Widget? statusMessage;
   final Widget? reportStatus;
@@ -259,12 +261,14 @@ class _BerandaPageState extends State<BerandaPage> {
             factories: widget.factories,
             onFactoryChanged: widget.onFactoryChanged,
             profile: widget.profile,
+            profileInitial: widget.profileInitial,
           ),
           const SizedBox(height: NiraSpace.lg),
           _ProductionSummary(
             summary: widget.summary,
             profit: widget.profit,
             period: widget.period,
+            connected: widget.profile != null,
           ),
           if (widget.reportStatus != null) widget.reportStatus!,
           const SizedBox(height: NiraSpace.md),
@@ -317,12 +321,14 @@ class _Profile extends StatefulWidget {
     required this.factories,
     this.onFactoryChanged,
     this.profile,
+    this.profileInitial,
   });
 
   final String? factoryId;
   final Map<String, String> factories;
   final ValueChanged<String>? onFactoryChanged;
   final String? profile;
+  final String? profileInitial;
 
   @override
   State<_Profile> createState() => _ProfileState();
@@ -351,14 +357,22 @@ class _ProfileState extends State<_Profile> {
     ),
     child: Row(
       children: [
-        ClipOval(
-          child: Image.asset(
-            'assets/sobatnira/art/profil-demo.png',
-            width: 40,
-            height: 40,
-            excludeFromSemantics: true,
+        if (widget.profile case final profile?)
+          CircleAvatar(
+            radius: 20,
+            child: Text(
+              widget.profileInitial ?? profile.characters.first.toUpperCase(),
+            ),
+          )
+        else
+          ClipOval(
+            child: Image.asset(
+              'assets/sobatnira/art/profil-demo.png',
+              width: 40,
+              height: 40,
+              excludeFromSemantics: true,
+            ),
           ),
-        ),
         const SizedBox(width: NiraSpace.md),
         Expanded(
           child: Column(
@@ -398,9 +412,15 @@ class _ProfileState extends State<_Profile> {
 }
 
 class _ProductionSummary extends StatefulWidget {
-  const _ProductionSummary({this.summary, this.profit, required this.period});
+  const _ProductionSummary({
+    this.summary,
+    this.profit,
+    required this.period,
+    required this.connected,
+  });
   final String? profit;
   final String period;
+  final bool connected;
   final ({String cane, String lots})? summary;
 
   @override
@@ -459,7 +479,7 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Keuntungan',
+                      widget.connected ? 'Margin Produksi' : 'Keuntungan',
                       style: niraText(
                         NiraType.section,
                         color: Colors.white,
@@ -473,7 +493,9 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                         Flexible(
                           child: NiraValue(
                             _showProfit ? (widget.profit ?? '—') : 'Rp ••••••',
-                            label: 'Keuntungan',
+                            label: widget.connected
+                                ? 'Margin Produksi'
+                                : 'Keuntungan',
                             style: niraText(
                               NiraType.hero,
                               color: niraYellow,
@@ -490,9 +512,9 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                           padding: EdgeInsets.zero,
                           onPressed: () =>
                               setState(() => _showProfit = !_showProfit),
-                          tooltip: _showProfit
-                              ? 'Sembunyikan keuntungan'
-                              : 'Tampilkan keuntungan',
+                          tooltip:
+                              '${_showProfit ? 'Sembunyikan' : 'Tampilkan'} '
+                              '${widget.connected ? 'margin produksi' : 'keuntungan'}',
                           isSelected: !_showProfit,
                           icon: Icon(
                             _showProfit

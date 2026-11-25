@@ -661,7 +661,10 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
           !_busy &&
           widget.initial['is_synthetic'] != true &&
           widget.scope.role == 'admin') ...[
-        if (!costSaved) NiraButton('Isi biaya kloter', _costs),
+        NiraButton(
+          costSaved ? 'Edit biaya kloter' : 'Isi biaya kloter',
+          _costs,
+        ),
         if (costSaved && remaining != '0')
           NiraButton(
             'Reservasi nira',
@@ -840,23 +843,98 @@ Future<Json?> showLotCostsForm(
   ReviewApi api,
   FactoryScope scope,
   String lotId,
-  String kloterCode,
-) => _form(
-  context,
-  'Biaya kloter $kloterCode',
-  const [
-    _Field('Biaya tebu (Rp)', kind: _Input.money),
-    _Field('Biaya operasional (Rp)', kind: _Input.money),
-    _Field('Biaya bahan (Rp)', kind: _Input.money),
-    _Field('Biaya lain (Rp)', kind: _Input.money),
-  ],
-  (values) => api.saveLotCosts(scope, lotId, {
-    'caneCostRupiah': values[0],
-    'operationalCostRupiah': values[1],
-    'ingredientCostRupiah': values[2],
-    'otherCostRupiah': values[3],
-  }),
-);
+  String kloterCode, {
+  bool correction = false,
+}) async {
+  Future<Json?> read() async {
+    final cost = await api.lotCosts(scope, lotId);
+    if (!correction && cost?['frozen'] == true) {
+      throw const ReviewApiError(
+        409,
+        code: 'LOT_COST_FROZEN',
+        detail: 'Biaya historis sudah dibekukan. Ajukan koreksi biaya.',
+      );
+    }
+    return cost;
+  }
+
+  Json? cost;
+  try {
+    cost = await read();
+  } catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_costErrorText(error))));
+    }
+    return null;
+  }
+  if (!context.mounted) return null;
+  if (correction && cost == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Biaya awal kloter belum tersedia.')),
+    );
+    return null;
+  }
+  final requestId = correction ? ReviewApi.requestUuid() : null;
+
+  const labels = [
+    'Biaya tebu (Rp)',
+    'Biaya operasional (Rp)',
+    'Biaya bahan (Rp)',
+    'Biaya lain (Rp)',
+  ];
+  const keys = [
+    'cane_rupiah',
+    'operational_rupiah',
+    'ingredient_rupiah',
+    'other_rupiah',
+  ];
+  return _form(
+    context,
+    correction
+        ? 'Koreksi biaya kloter $kloterCode'
+        : 'Biaya kloter $kloterCode',
+    [
+      for (final (index, key) in keys.indexed)
+        _Field(
+          labels[index],
+          kind: _Input.money,
+          initial: cost?[key]?.toString() ?? '',
+        ),
+      if (correction) const _Field('Alasan koreksi', kind: _Input.reason),
+    ],
+    (values) {
+      final payload = {
+        'version': cost?['version'] ?? 0,
+        'caneCostRupiah': values[0],
+        'operationalCostRupiah': values[1],
+        'ingredientCostRupiah': values[2],
+        'otherCostRupiah': values[3],
+      };
+      return requestId == null
+          ? api.saveLotCosts(scope, lotId, payload)
+          : api.requestLotCostCorrection(scope, lotId, requestId, {
+              ...payload,
+              'reason': values[4],
+            });
+    },
+    reloadOnConflict: () async {
+      cost = await read();
+      return [
+        'Biaya terbaru di server',
+        for (final (index, key) in keys.indexed)
+          '${labels[index]}: ${cost?[key]?.toString() ?? '—'}',
+        'Periksa masukan Anda sebelum menyimpan kembali.',
+      ].join('\n');
+    },
+  );
+}
+
+String _costErrorText(Object? error) =>
+    error is ReviewApiError && error.status == 409
+    ? error.detail ?? _errorText(error)
+    : _errorText(error);
 
 enum _Input { text, reason, integer, date, quantity, money }
 
@@ -873,6 +951,7 @@ Future<Json?> _form(
   List<_Field> fields,
   Future<Json> Function(List<String>) save, {
   String? message,
+  Future<String> Function()? reloadOnConflict,
 }) => showDialog<Json>(
   context: context,
   barrierDismissible: false,
@@ -881,6 +960,7 @@ Future<Json?> _form(
     fields: fields,
     save: save,
     message: message,
+    reloadOnConflict: reloadOnConflict,
   ),
 );
 
@@ -890,11 +970,13 @@ class _ProductionForm extends StatefulWidget {
     required this.fields,
     required this.save,
     this.message,
+    this.reloadOnConflict,
   });
   final String title;
   final List<_Field> fields;
   final Future<Json> Function(List<String>) save;
   final String? message;
+  final Future<String> Function()? reloadOnConflict;
 
   @override
   State<_ProductionForm> createState() => _ProductionFormState();
@@ -908,6 +990,9 @@ class _ProductionFormState extends State<_ProductionForm> {
   bool _busy = false;
   List<String>? _pending;
   String? _error;
+  String? _latest;
+  bool _requiresReload = false;
+  bool _frozen = false;
 
   @override
   void dispose() {
@@ -963,7 +1048,38 @@ class _ProductionFormState extends State<_ProductionForm> {
             error.status != 429) {
           _pending = null;
         }
-        _error = _errorText(error);
+        if (widget.reloadOnConflict != null &&
+            error is ReviewApiError &&
+            error.status == 409) {
+          _latest = null;
+          _frozen = error.code == 'LOT_COST_FROZEN';
+          _requiresReload = !_frozen;
+          _error = _costErrorText(error);
+        } else {
+          _error = _errorText(error);
+        }
+      });
+    }
+  }
+
+  Future<void> _reloadConflict() async {
+    setState(() => _busy = true);
+    try {
+      final latest = await widget.reloadOnConflict!();
+      if (!mounted) return;
+      setState(() {
+        _latest = latest;
+        _error = null;
+        _requiresReload = false;
+        _busy = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _frozen = error is ReviewApiError && error.code == 'LOT_COST_FROZEN';
+        _requiresReload = !_frozen;
+        _error = _costErrorText(error);
+        _busy = false;
       });
     }
   }
@@ -1004,6 +1120,7 @@ class _ProductionFormState extends State<_ProductionForm> {
                     validator: (value) => _validate(value, field.kind),
                   ),
                 if (_error != null) Text(_error!),
+                if (_latest case final latest?) Text(latest),
               ],
             ),
           ),
@@ -1014,8 +1131,13 @@ class _ProductionFormState extends State<_ProductionForm> {
           onPressed: _busy ? null : () => Navigator.pop(context),
           child: Text(widget.message == null ? 'Tutup' : 'Batal'),
         ),
+        if (_requiresReload)
+          TextButton(
+            onPressed: _busy ? null : _reloadConflict,
+            child: const Text('Muat biaya terbaru'),
+          ),
         FilledButton(
-          onPressed: _busy ? null : _submit,
+          onPressed: _busy || _requiresReload || _frozen ? null : _submit,
           child: Text(
             _busy
                 ? 'Menyimpan…'
