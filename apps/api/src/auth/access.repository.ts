@@ -84,6 +84,7 @@ export class AccessRepository {
 
   async addFactoryAdmin(access: FactoryAccess, userId: string) {
     return this.database.transaction(async tx => {
+      const reviewReady = await this.lockReviewMembership(tx, access.factoryId, userId);
       const ids = await this.lockOwner(tx, access);
       const memberKey = [access.tenantId, access.factoryId, userId];
       const existing = await tx.query<{ role: FactoryRole; is_active: boolean }>(`
@@ -101,13 +102,14 @@ export class AccessRepository {
           VALUES ($1,$2,$3,'admin')`, memberKey);
         await this.recordChange(tx, ids, 'admin_added', userId);
       }
-      await this.setReviewMembership(tx, access.factoryId, userId, true);
+      if (reviewReady) await this.setReviewMembership(tx, access.factoryId, userId, true);
       return { userId, role: 'admin', isActive: true };
     });
   }
 
   async setFactoryAdminActive(access: FactoryAccess, userId: string, active: boolean) {
     return this.database.transaction(async tx => {
+      const reviewReady = await this.lockReviewMembership(tx, access.factoryId, userId);
       const ids = await this.lockOwner(tx, access);
       const memberKey = [access.tenantId, access.factoryId, userId];
       const { rows: [member] } = await tx.query<{ is_active: boolean }>(`
@@ -121,7 +123,7 @@ export class AccessRepository {
           WHERE tenant_id=$1 AND factory_id=$2 AND user_id=$3 AND role='admin'`, [...memberKey, active]);
         await this.recordChange(tx, ids, active ? 'admin_activated' : 'admin_deactivated', userId);
       }
-      await this.setReviewMembership(tx, access.factoryId, userId, active);
+      if (reviewReady) await this.setReviewMembership(tx, access.factoryId, userId, active);
       return { userId, role: 'admin', isActive: active };
     });
   }
@@ -140,9 +142,15 @@ export class AccessRepository {
     if (!rows.length) throw new ConflictException('Akun tidak aktif pada tenant ini.');
   }
 
-  private async setReviewMembership(tx: DatabaseSession, factoryId: string, userId: string, active: boolean) {
+  private async lockReviewMembership(tx: DatabaseSession, factoryId: string, userId: string) {
     const { rows: [table] } = await tx.query("SELECT to_regclass('review_memberships') AS name", []);
-    if (!table.name) return;
+    if (!table.name) return false;
+    // Document validation locks the reviewer before it locks production access.
+    await tx.query('SELECT 1 FROM review_memberships WHERE factory_id=$1 AND user_id=$2 FOR UPDATE', [factoryId, userId]);
+    return true;
+  }
+
+  private async setReviewMembership(tx: DatabaseSession, factoryId: string, userId: string, active: boolean) {
     if (active) {
       const { rows } = await tx.query(`
         INSERT INTO review_memberships (factory_id,user_id,role,active) VALUES ($1,$2,'ADMIN',true)

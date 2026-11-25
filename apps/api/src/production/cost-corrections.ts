@@ -52,7 +52,8 @@ export class CostCorrections {
       await this.juice.lockLots(tx, access, [lotId]);
       const old = (await tx.query('SELECT * FROM sobatnira.production_cost_corrections WHERE id=$1', [id])).rows[0];
       if (old) {
-        if (old.tenant_id !== access.tenantId || old.factory_id !== access.factoryId || old.input_hash !== hash)
+        if (old.tenant_id !== access.tenantId || old.factory_id !== access.factoryId ||
+          old.created_by !== access.userId || old.input_hash !== hash)
           throw new ConflictException('ID koreksi sudah dipakai.');
         return old;
       }

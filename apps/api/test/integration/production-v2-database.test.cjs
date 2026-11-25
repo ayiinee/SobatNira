@@ -120,6 +120,8 @@ test('mixed origins conserve output, allocate cooking costs, and owner correctio
   assert.equal((await f.request(correction,'POST',proposed)).status,201);
   const ownerDraft = await f.request(path + '/' + randomUUID(),'POST',proposed,'fixture-owner');
   assert.equal(ownerDraft.status,201);
+  assert.equal((await f.request(path+'/'+ownerDraft.body.id,'POST',proposed)).status,409);
+  assert.equal((await f.request(correction,'POST',proposed,'fixture-owner')).status,409);
   const inbox = root + '/cost-corrections';
   assert.equal((await f.request(inbox)).body.items.length,1);
   const ownerInbox = await f.request(inbox+'?limit=1','GET',undefined,'fixture-owner');

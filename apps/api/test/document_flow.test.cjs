@@ -1053,10 +1053,33 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
       assert.equal(token, 'owner');
       return { id: owner };
     });
-    const deactivated = await fetch(`${base}/tenants/${tenant}/factories/${factory}/memberships/${reviewer}`, {
+    const deactivate = () => fetch(`${base}/tenants/${tenant}/factories/${factory}/memberships/${reviewer}`, {
       method: 'PATCH', headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ isActive: false }),
+      body: JSON.stringify({ isActive: false }), signal: AbortSignal.timeout(8_000),
     });
+    const heldReview = await admin.connect();
+    let pendingDeactivation;
+    try {
+      await heldReview.query('BEGIN');
+      await heldReview.query("SET LOCAL lock_timeout='2s'");
+      await heldReview.query(`SELECT 1 FROM ${schema}.review_memberships WHERE factory_id=$1 AND user_id=$2 FOR SHARE`, [factory, reviewer]);
+      const { rows: [{ pid }] } = await heldReview.query('SELECT pg_backend_pid() AS pid');
+      pendingDeactivation = deactivate();
+      pendingDeactivation.catch(() => {});
+      const deadline = Date.now() + 3_000;
+      while (true) {
+        const { rows: [{ blocked }] } = await admin.query(`SELECT EXISTS (
+          SELECT FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))) AS blocked`, [pid]);
+        if (blocked) break;
+        assert.ok(Date.now() < deadline, 'Deactivation must wait for the open review');
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      const { requireProductionAccess } = require('../dist/documents/production-access');
+      assert.equal((await requireProductionAccess(heldReview, reviewer, factory)).userId, reviewer);
+    } finally {
+      try { await heldReview.query('ROLLBACK'); } finally { heldReview.release(); }
+    }
+    const deactivated = await pendingDeactivation;
     assert.equal(deactivated.status, 200, await deactivated.clone().text());
     assert.equal((await mobile(taskPath)).status, 404);
     assert.equal((await mobile(revocableEvidence)).status, 404);
