@@ -446,7 +446,7 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     t.after(async () => {
       const clean = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
       try {
-        for (const table of ['stock_reconciliations', 'juice_reservations', 'sugarcane_stock_movements', 'juice_stock_movements',
+        for (const table of ['factory_admin_events', 'stock_reconciliations', 'juice_reservations', 'sugarcane_stock_movements', 'juice_stock_movements',
           'milling_records', 'intake_records', 'lots', 'suppliers', 'factory_memberships',
           'tenant_memberships', 'factories']) {
           await clean.query(`DELETE FROM sobatnira.${table} WHERE tenant_id=$1`, [tenant]);
