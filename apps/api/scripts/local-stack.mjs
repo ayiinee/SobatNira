@@ -365,7 +365,7 @@ async function smoke(ocrOnly = false) {
     return { status: response.status, data: await response.json() };
   };
   const code = acceptance ? 'SMOKE-UJI' : `SMOKE-${lotA.id.slice(0, 8)}`;
-  console.log(`Nota sah. Pada detail ${lotA.code}, buat batch ${code}, wajan 1, masak setelah penggilingan, 40000 mL, hasil fisik 26 kg, grade A 25 kg, Rp20000/kg.`);
+  console.log(`Nota sah. Pada detail ${lotA.code}, buat batch ${code}, wajan 1, masak setelah penggilingan, 40000 mL, hasil fisik 25 kg, grade A 25 kg, Rp20000/kg.`);
   console.log('Isi biaya Rp100000, Rp20000, Rp5000, Rp0. Reservasi nira lalu sahkan batch.');
   const batch = await waitFor(async () => (await db.query(`SELECT id, quantity_ml::text AS volume
       FROM sobatnira.production_batches WHERE lot_id=$1 AND code=$2 AND status='approved'`, [lotA.id, code])).rows[0],

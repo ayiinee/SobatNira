@@ -302,12 +302,14 @@ class ReviewApi {
     required DateTime before,
     required bool synthetic,
     required String requestId,
+    Map<String, String> selection = const {},
   }) => writeProduction(
     [...scope._base, 'report-exports'],
     {
       'from': from.toUtc().toIso8601String(),
       'before': before.toUtc().toIso8601String(),
       'synthetic': synthetic,
+      ...selection,
     },
     requestId: requestId,
     expectedStatus: 202,
@@ -358,6 +360,7 @@ class ReviewApi {
     DateTime? before,
     bool synthetic = false,
     bool summaryOnly = false,
+    Map<String, String> selection = const {},
   }) => _productionGet(
     [...scope._base, 'production', 'production-report'],
     query: {
@@ -365,6 +368,7 @@ class ReviewApi {
       'synthetic': '$synthetic',
       if (from != null) 'from': from.toUtc().toIso8601String(),
       if (before != null) 'before': before.toUtc().toIso8601String(),
+      ...selection,
     },
   );
 
@@ -393,6 +397,7 @@ class ReviewApi {
     required int offset,
     DateTime? from,
     DateTime? before,
+    Map<String, String> selection = const {},
   }) => _productionGet(
     [...scope._base, 'production', 'production-report'],
     query: {
@@ -402,6 +407,7 @@ class ReviewApi {
       'synthetic': '$synthetic',
       if (from != null) 'from': from.toUtc().toIso8601String(),
       if (before != null) 'before': before.toUtc().toIso8601String(),
+      ...selection,
     },
   );
 

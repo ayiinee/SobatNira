@@ -5,21 +5,32 @@ class DemoLotFixture {
     this.day,
     this.supplier,
     this.caneKg,
-    this.sugarKg,
+    this._sugarKg,
     this.marginRupiah,
-    this.batchCount,
-  );
+    this.batchCount, {
+    this.sessionBatches,
+  });
   final String code, supplier;
-  final int day, caneKg, sugarKg, marginRupiah, batchCount;
+  final int day, caneKg, _sugarKg, marginRupiah, batchCount;
+  final List<({String grade, num weight, int value})>? sessionBatches;
   num get brix => (165 + caneKg % 37) / 10;
 
-  List<int> get batchWeights {
+  num get sugarKg =>
+      sessionBatches?.fold<num>(0, (sum, batch) => sum + batch.weight) ??
+      _sugarKg;
+  String gradeAt(int index) =>
+      sessionBatches?[index].grade ?? ['A', 'B', 'C'][index % 3];
+
+  List<num> get batchWeights {
+    if (sessionBatches case final batches?) {
+      return batches.map((batch) => batch.weight).toList();
+    }
     final weights = <int>[];
-    var remaining = sugarKg;
+    var remaining = _sugarKg;
     for (var i = 0; i < batchCount; i++) {
       final value = i == batchCount - 1
           ? remaining
-          : sugarKg ~/ batchCount + (i % 3 - 1);
+          : _sugarKg ~/ batchCount + (i % 3 - 1);
       weights.add(value);
       remaining -= value;
     }
@@ -27,12 +38,19 @@ class DemoLotFixture {
   }
 
   int get productionValue {
+    if (sessionBatches case final batches?) {
+      return batches.fold(0, (sum, batch) => sum + batch.value);
+    }
     var total = 0;
     for (var i = 0; i < batchCount; i++) {
-      total += batchWeights[i] * [20000, 18000, 15000][i % 3];
+      total += batchValueAt(i);
     }
     return total;
   }
+
+  int batchValueAt(int index) =>
+      sessionBatches?[index].value ??
+      (batchWeights[index] * [20000, 18000, 15000][index % 3]).round();
 
   int get totalCost => productionValue - marginRupiah;
 }

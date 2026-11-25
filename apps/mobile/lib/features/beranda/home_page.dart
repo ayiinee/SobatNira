@@ -72,7 +72,9 @@ class _NiraHomeState extends State<NiraHome> {
           onSyntheticChanged: widget.onSyntheticChanged,
         );
   final _storage = PageStorageBucket();
-  final _analytics = DemoAnalytics();
+  late final _analytics = DemoAnalytics(
+    production: widget.api == null ? _demo : null,
+  );
   final _settings = SettingsDemo();
   final _tab = ValueNotifier(NiraTab.beranda);
   final _pages = <NiraTab, Widget>{};
@@ -172,7 +174,9 @@ class _NiraHomeState extends State<NiraHome> {
           analytics: _analytics,
           reports: _live?.reports,
           onOpenDetail: _openReportDetail,
-          onOpenExport: widget.scope?.role == 'owner' && _live != null
+          onOpenExport:
+              _live != null &&
+                  const {'admin', 'owner'}.contains(widget.scope?.role)
               ? () => _navigator.push<void>(
                   MaterialPageRoute(
                     builder: (_) =>

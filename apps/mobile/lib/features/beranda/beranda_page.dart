@@ -265,6 +265,7 @@ class _BerandaPageState extends State<BerandaPage> {
             summary: widget.summary,
             profit: widget.profit,
             period: widget.period,
+            connected: widget.profile != null,
           ),
           if (widget.reportStatus != null) widget.reportStatus!,
           const SizedBox(height: NiraSpace.md),
@@ -398,9 +399,15 @@ class _ProfileState extends State<_Profile> {
 }
 
 class _ProductionSummary extends StatefulWidget {
-  const _ProductionSummary({this.summary, this.profit, required this.period});
+  const _ProductionSummary({
+    this.summary,
+    this.profit,
+    required this.period,
+    required this.connected,
+  });
   final String? profit;
   final String period;
+  final bool connected;
   final ({String cane, String lots})? summary;
 
   @override
@@ -459,7 +466,7 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Keuntungan',
+                      widget.connected ? 'Margin Produksi' : 'Keuntungan',
                       style: niraText(
                         NiraType.section,
                         color: Colors.white,
@@ -473,7 +480,9 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                         Flexible(
                           child: NiraValue(
                             _showProfit ? (widget.profit ?? '—') : 'Rp ••••••',
-                            label: 'Keuntungan',
+                            label: widget.connected
+                                ? 'Margin Produksi'
+                                : 'Keuntungan',
                             style: niraText(
                               NiraType.hero,
                               color: niraYellow,
@@ -490,9 +499,9 @@ class _ProductionSummaryState extends State<_ProductionSummary> {
                           padding: EdgeInsets.zero,
                           onPressed: () =>
                               setState(() => _showProfit = !_showProfit),
-                          tooltip: _showProfit
-                              ? 'Sembunyikan keuntungan'
-                              : 'Tampilkan keuntungan',
+                          tooltip:
+                              '${_showProfit ? 'Sembunyikan' : 'Tampilkan'} '
+                              '${widget.connected ? 'margin produksi' : 'keuntungan'}',
                           isSelected: !_showProfit,
                           icon: Icon(
                             _showProfit

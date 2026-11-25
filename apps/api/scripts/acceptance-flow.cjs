@@ -146,7 +146,7 @@ async (page, { origin, output }) => {
 
   await button('Laporan').click();
   await waitForText('Gula final 25 kg');
-  if (await button('Ekspor laporan').count()) throw new Error('Ekspor owner terlihat untuk admin.');
+  await button('Ekspor laporan').waitFor();
   await capture('laporan');
   await button('Margin').click();
   const margin = await waitForText('Margin Produksi Rp375.000');

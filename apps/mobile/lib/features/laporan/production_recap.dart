@@ -3,8 +3,11 @@ import 'demo_analytics.dart';
 
 // A read-only join of existing demo records. No production values are inferred.
 class ProductionRecap {
-  ProductionRecap(Iterable<RecapKloter> kloter, {this.marginTotalOverride})
-    : kloter = List.unmodifiable(kloter);
+  ProductionRecap(
+    Iterable<RecapKloter> kloter, {
+    this.marginTotalOverride,
+    this.batchCountOverride,
+  }) : kloter = List.unmodifiable(kloter);
 
   factory ProductionRecap.fromRows(
     List<AnalyticsRow> rows, {
@@ -70,8 +73,11 @@ class ProductionRecap {
       );
 
   final String? marginTotalOverride;
+  final int? batchCountOverride;
   final List<RecapKloter> kloter;
-  int get batchCount => kloter.fold(0, (sum, lot) => sum + lot.batches.length);
+  int get batchCount =>
+      batchCountOverride ??
+      kloter.fold(0, (sum, lot) => sum + lot.batches.length);
   int get marginCount => kloter.where((lot) => lot.margin != null).length;
   int get sugarCount =>
       kloter.where((lot) => readRecapNumber(lot.sugar) != null).length;
