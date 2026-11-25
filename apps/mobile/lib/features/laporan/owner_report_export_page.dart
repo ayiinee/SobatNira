@@ -108,6 +108,7 @@ class _OwnerReportExportPageState extends State<OwnerReportExportPage> {
             before: before,
             synthetic: _synthetic,
             requestId: _requestId!,
+            selection: widget.reports.dimensions,
           );
           if (!mounted) return;
           _display(job);

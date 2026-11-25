@@ -19,6 +19,156 @@ Future<void> filterConnectedReport(
   if (result != null) await reports.setFilter(result.selection);
 }
 
+Future<void> selectConnectedReportDimensions(
+  BuildContext context,
+  ConnectedReports reports,
+) async {
+  final selected = await showDialog<Map<String, String>>(
+    context: context,
+    builder: (_) => _ReportDimensionsDialog(reports: reports),
+  );
+  if (selected != null) await reports.setDimensions(selected);
+}
+
+class _ReportDimensionsDialog extends StatefulWidget {
+  const _ReportDimensionsDialog({required this.reports});
+  final ConnectedReports reports;
+
+  @override
+  State<_ReportDimensionsDialog> createState() =>
+      _ReportDimensionsDialogState();
+}
+
+class _ReportDimensionsDialogState extends State<_ReportDimensionsDialog> {
+  late final _selected = Map<String, String>.of(widget.reports.dimensions);
+  final _lots = <String, Json>{};
+  bool _loading = true;
+  bool _error = false;
+  int? _next = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final offset = _next;
+    if (offset == null) return;
+    setState(() {
+      _loading = true;
+      _error = false;
+    });
+    try {
+      final page = await widget.reports.selectionPage(offset);
+      if (!mounted) return;
+      setState(() {
+        for (final lot in (page['items'] as List).cast<Json>()) {
+          _lots[lot['lotId'] as String] = lot;
+        }
+        _next = page['nextOffset'] as int?;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _error = true);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Widget _field(String key, String title, Map<String, String> options) {
+    final current = _selected[key];
+    return DropdownButtonFormField<String>(
+      key: ValueKey((key, current)),
+      initialValue: current ?? '',
+      isExpanded: true,
+      decoration: InputDecoration(labelText: title),
+      items: [
+        const DropdownMenuItem(value: '', child: Text('Semua')),
+        if (current != null && !options.containsKey(current))
+          DropdownMenuItem(value: current, child: const Text('Filter aktif')),
+        for (final entry in options.entries)
+          DropdownMenuItem(value: entry.key, child: Text(entry.value)),
+      ],
+      onChanged: (value) => setState(() {
+        _selected.remove(key);
+        if (value != null && value.isNotEmpty) _selected[key] = value;
+        if (key == 'supplierId') _selected.remove('lotId');
+        if (key == 'supplierId' || key == 'lotId') _selected.remove('batchId');
+        if (key != 'grade') _selected.remove('grade');
+      }),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bySupplier = _lots.values.where(
+      (lot) =>
+          _selected['supplierId'] == null ||
+          lot['supplierId'] == _selected['supplierId'],
+    );
+    final batches = bySupplier
+        .where(
+          (lot) =>
+              _selected['lotId'] == null || lot['lotId'] == _selected['lotId'],
+        )
+        .expand((lot) => (lot['batches'] as List).cast<Json>());
+    return AlertDialog(
+      title: const Text('Filter data laporan'),
+      content: SizedBox(
+        width: 350,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _field('supplierId', 'Pemasok', {
+                for (final lot in _lots.values)
+                  if (lot['supplierId'] case final String id)
+                    id: lot['supplier'] as String,
+              }),
+              _field('lotId', 'Kloter', {
+                for (final lot in bySupplier)
+                  lot['lotId'] as String: lot['code'] as String,
+              }),
+              _field('batchId', 'Batch', {
+                for (final batch in batches)
+                  batch['id'] as String: batch['code'] as String,
+              }),
+              _field('grade', 'Grade', {
+                for (final batch in batches)
+                  if (_selected['batchId'] == null ||
+                      batch['id'] == _selected['batchId'])
+                    for (final grade in (batch['grades'] as List).cast<Json>())
+                      grade['code'] as String: grade['code'] as String,
+              }),
+              if (_loading)
+                const NiraLoading(label: 'Memuat pilihan…', compact: true),
+              if (!_loading && _next != null)
+                TextButton(
+                  onPressed: _load,
+                  child: Text(
+                    _error
+                        ? 'Coba lagi memuat pilihan'
+                        : 'Muat pilihan berikutnya',
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, <String, String>{}),
+          child: const Text('Hapus filter'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _selected),
+          child: const Text('Terapkan'),
+        ),
+      ],
+    );
+  }
+}
+
 class ConnectedReportStatus extends StatelessWidget {
   const ConnectedReportStatus({
     required this.reports,
@@ -52,7 +202,7 @@ class ConnectedReportStatus extends StatelessWidget {
             ),
             child: const Text('Lihat rincian per halaman'),
           ),
-          if (reports.scope.role == 'owner')
+          if (const {'admin', 'owner'}.contains(reports.scope.role))
             AsyncReportExport(reports: reports),
         ],
       );
@@ -78,6 +228,7 @@ class _PagedReportDetailsState extends State<PagedReportDetails> {
       widget.reports.scope,
       synthetic: _synthetic,
       offset: _offset,
+      selection: widget.reports.dimensions,
       from: _range?.start,
       before: _range == null
           ? null
@@ -216,6 +367,7 @@ class _AsyncReportExportState extends State<AsyncReportExport> {
               range.end.day + 1,
             ).toUtc().toIso8601String(),
             'synthetic': reports.synthetic,
+            'selection': reports.dimensions,
           };
         }
         final job = _id == null
@@ -225,6 +377,8 @@ class _AsyncReportExportState extends State<AsyncReportExport> {
                 before: DateTime.parse(_input!['before'] as String),
                 synthetic: _input!['synthetic'] as bool,
                 requestId: _key,
+                selection:
+                    _input!['selection'] as Map<String, String>? ?? const {},
               )
             : await reports.api.reportExportStatus(reports.scope, _id!);
         _id = job['id'] as String;

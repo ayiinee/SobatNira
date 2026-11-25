@@ -81,7 +81,7 @@ Future<Uint8List> buildProductionRecapPdf(
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
             pw.Text(
-              '${report.synthetic ? 'Data sintetis' : 'Data disahkan'} · - = belum tercatat · Status mengikuti validasi batch${report.provisional ? ' · Margin sementara pada kloter terbuka' : ''}',
+              '${report.synthetic ? 'Data sintetis' : 'Data disahkan'} · - = belum tercatat · Status mengikuti validasi batch${report.provisional ? ' · Margin sementara pada kloter terbuka' : ''}${report.scopeNote == null ? '' : ' · ${report.scopeNote}'}',
               style: const pw.TextStyle(fontSize: 8, color: muted),
             ),
             pw.Text(

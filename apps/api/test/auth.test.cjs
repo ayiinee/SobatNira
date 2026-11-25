@@ -7,6 +7,7 @@ const { NestFactory } = require('@nestjs/core');
 const { createApplication } = require('../dist/application');
 const { AppModule } = require('../dist/app.module');
 const { AccessRepository } = require('../dist/auth/access.repository');
+const { SupabaseAuthService } = require('../dist/auth/supabase-auth.service');
 
 const TENANT_A = '10000000-0000-4000-8000-000000000001';
 const TENANT_B = '10000000-0000-4000-8000-000000000002';
@@ -61,6 +62,7 @@ async function fixture(t) {
     databaseReads++;
     return memberships.find((m) => m.userId === userId && m.tenantId === tenantId && m.factoryId === factoryId);
   };
+  repository.factoryProfile = async (access) => ({ ...access, profileVersion: 1 });
   repository.listFactoryMembers = async (access) => memberships
     .filter((m) => m.tenantId === access.tenantId && m.factoryId === access.factoryId)
     .map((m) => ({ userId: m.userId, role: m.role, isActive: true }));
@@ -124,6 +126,32 @@ test('allows admin and owner in their factory, but restricts membership listing 
   assert.equal((await owner.json()).memberships.length, 2);
   // This user is owner at factory C and admin at A: roles remain scoped.
   assert.equal((await f.request(path(TENANT_B, FACTORY_C) + '/memberships', 'admin-token')).status, 200);
+});
+
+test('invitation uses the server-side provider key and the configured app redirect', async (t) => {
+  const email = 'synthetic-invite@example.invalid';
+  const configured = 'http://127.0.0.1:8080/?acceptInvite=1';
+  const envKey = 'SUPABASE_ADMIN_INVITE_REDIRECT_URL';
+  const original = process.env[envKey];
+  t.after(() => original === undefined ? delete process.env[envKey] : process.env[envKey] = original);
+  const send = t.mock.method(globalThis, 'fetch', async (url, request) => {
+    assert.equal(url.pathname, '/auth/v1/invite');
+    assert.equal(url.searchParams.get('redirect_to'), configured);
+    assert.equal(request.headers.apikey, 'sb_secret_synthetic');
+    assert.equal(request.headers.Authorization, undefined);
+    assert.equal(request.redirect, 'error');
+    assert.deepEqual(JSON.parse(request.body), { email });
+    return Response.json({ id: ADMIN, email });
+  });
+  const auth = new SupabaseAuthService({ timeoutMs: 100, supabase: {
+    url: 'http://127.0.0.1:8081', secretKey: 'sb_secret_synthetic',
+  } });
+  process.env[envKey] = 'http://example.invalid/?acceptInvite=1';
+  await assert.rejects(() => auth.inviteByEmail(email), { status: 503 });
+  assert.equal(send.mock.callCount(), 0);
+  process.env[envKey] = configured;
+  assert.equal(await auth.inviteByEmail(email), ADMIN);
+  assert.equal(send.mock.callCount(), 1);
 });
 
 test('browser preflight permits the Authorization header without requiring a token', async (t) => {

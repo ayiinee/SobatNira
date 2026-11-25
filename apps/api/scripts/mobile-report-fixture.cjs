@@ -15,7 +15,7 @@ async function main() {
       return result.body;
     };
     await checked(root + '/batches', 'POST', { id: batch, lotId: fixture.ids.lot, code: 'BATCH-FLUTTER-REPORT', wokNumber: 1,
-      occurredAt: '2026-11-16T03:00:00Z', quantityMl: '100000', physicalWeightKg: '32',
+      occurredAt: '2026-11-16T03:00:00Z', quantityMl: '100000', physicalWeightKg: '30',
       grades: [{ code: 'A', weightKg: '30', pricePerKgRupiah: '20000' }] });
     await checked(root + '/lots/' + fixture.ids.lot + '/costs', 'POST', {
       caneCostRupiah: '100000', operationalCostRupiah: '20000', ingredientCostRupiah: '5000', otherCostRupiah: '0' });

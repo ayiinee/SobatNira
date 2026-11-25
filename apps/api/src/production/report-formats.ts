@@ -20,26 +20,33 @@ export const reportMime = {
 
 function tables(snapshot: ReportSnapshot) {
   const totals = snapshot.totals;
+  const narrowed = 'financialScope' in snapshot && snapshot.financialScope === 'unavailable';
   return {
     Ringkasan: [
       ['Dari (inklusif)', snapshot.from ?? ''],
       ['Sebelum (eksklusif)', snapshot.before ?? ''],
       ['Basis periode', snapshot.periodBasis],
       ['Data contoh', snapshot.synthetic ? 'Ya' : 'Tidak'],
+      ...Object.entries(snapshot.selection ?? {}).map(([key, value]) => [
+        ({ supplierId: 'ID pemasok', lotId: 'ID kloter', batchId: 'ID batch', grade: 'Filter grade' })[key] ?? key,
+        value,
+      ]),
       ['Kloter', String(totals.lotCount)],
       ['Batch sah', String(totals.batchCount)],
       ['Tebu bersih (kg)', totals.caneNetKg],
       ['Gula final (kg)', totals.finalSugarKg],
       ['Nilai produksi (Rp)', totals.productionValueRupiah],
-      ['Total biaya (Rp)', totals.totalCostRupiah],
-      ['Margin produksi (Rp)', totals.productionMarginRupiah],
-      ['Catatan', 'Margin bersifat sementara untuk kloter terbuka.'],
+      ['Total biaya (Rp)', totals.totalCostRupiah ?? ''],
+      ['Margin produksi (Rp)', totals.productionMarginRupiah ?? ''],
+      ['Catatan', narrowed
+        ? 'Biaya dan margin tidak tersedia untuk filter batch atau grade.'
+        : 'Margin bersifat sementara untuk kloter terbuka.'],
     ],
     Grade: [['Kode grade', 'Gula final (kg)', 'Nilai eksak (Rp)'],
       ...snapshot.grades.map(row => [row.code, row.weightKg, row.exactValueRupiah])],
     Kloter: [['ID kloter', 'Kode', 'ID snapshot', 'Gula final (kg)', 'Biaya (Rp)', 'Margin (Rp)'],
       ...snapshot.items.map(lot => [lot.lotId, lot.code, lot.calculationSnapshotId ?? '',
-        lot.calculation?.finalSugarKg ?? '', lot.calculation?.totalCostRupiah ?? '',
+        'filteredSugarKg' in lot ? lot.filteredSugarKg : lot.calculation?.finalSugarKg ?? '', lot.calculation?.totalCostRupiah ?? '',
         lot.calculation?.productionMarginRupiah ?? ''])],
   };
 }
