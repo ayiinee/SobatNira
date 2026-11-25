@@ -30,6 +30,7 @@ class _ReportSelection {
   _ReportSelection(this.synthetic);
   bool synthetic;
   KloterDateFilter? filter;
+  Map<String, String> dimensions = const {};
   DateTime? latestSyntheticReceipt;
 }
 
@@ -52,6 +53,9 @@ class ConnectedReports extends ChangeNotifier {
       _summaryOnly ? this : (_summaryState ??= ConnectedReports._summary(this));
   KloterDateFilter? get filter => _selection.filter;
   set filter(KloterDateFilter? value) => _selection.filter = value;
+  Map<String, String> get dimensions => _selection.dimensions;
+  bool get narrow =>
+      dimensions.containsKey('batchId') || dimensions.containsKey('grade');
   bool get synthetic => _selection.synthetic;
   set synthetic(bool value) => _selection.synthetic = value;
   bool loading = true;
@@ -97,7 +101,7 @@ class ConnectedReports extends ChangeNotifier {
       ? 'Semua tanggal'
       : '${formatDate(filter!.range.start)} - ${formatDate(filter!.range.end)}';
   String amount(String key, {bool money = false, String unit = ''}) =>
-      data == null
+      data == null || totals[key] == null
       ? '—'
       : money
       ? reportMoney(totals[key])
@@ -181,6 +185,7 @@ class ConnectedReports extends ChangeNotifier {
                 scope,
                 synthetic: synthetic,
                 summaryOnly: summaryOnly,
+                selection: dimensions,
                 from: range?.start,
                 before: range == null
                     ? null
@@ -241,7 +246,26 @@ class ConnectedReports extends ChangeNotifier {
   Future<void> setSynthetic(bool value) {
     if (_summaryOnly) return _parent!.setSynthetic(value);
     synthetic = value;
+    _selection.dimensions = const {};
     return detailsRequested ? refresh() : refreshHome();
+  }
+
+  Future<void> setDimensions(Map<String, String> value) {
+    if (_summaryOnly) return _parent!.setDimensions(value);
+    _selection.dimensions = Map.unmodifiable(value);
+    return refresh();
+  }
+
+  Future<Json> selectionPage(int offset) {
+    final range = filter?.range;
+    final end = range?.end;
+    return api.reportDetailPage(
+      scope,
+      synthetic: synthetic,
+      offset: offset,
+      from: range?.start,
+      before: end == null ? null : DateTime(end.year, end.month, end.day + 1),
+    );
   }
 
   PrintableReport printable(PrintableReportKind kind) => PrintableReport(
@@ -251,6 +275,9 @@ class ConnectedReports extends ChangeNotifier {
     synthetic: synthetic,
     connected: true,
     provisional: provisional,
+    scopeNote: narrow
+        ? 'Biaya dan margin tidak tersedia untuk filter batch atau grade.'
+        : null,
     totalDisplayOverride: amount(
       kind == PrintableReportKind.profit
           ? 'productionMarginRupiah'
@@ -260,7 +287,9 @@ class ConnectedReports extends ChangeNotifier {
     ),
     rows: [
       for (final lot in lots)
-        if (lot['calculation'] != null)
+        if (lot['calculation'] != null ||
+            (kind != PrintableReportKind.profit &&
+                lot['filteredSugarKg'] != null))
           _reportRow(
             lot,
             kind == PrintableReportKind.profit
@@ -270,55 +299,65 @@ class ConnectedReports extends ChangeNotifier {
     ],
     recap: kind == PrintableReportKind.profit
         ? null
-        : ProductionRecap([
-            for (final lot in lots)
-              RecapKloter(
-                id: lot['lotId'] as String,
-                code: lot['code'] as String,
-                supplier: lot['supplier'] as String,
-                date: DateTime.parse(lot['receivedAt'] as String).toLocal(),
-                sugar: lot['calculation'] == null
-                    ? '-'
-                    : '${reportNumber((lot['calculation'] as Json)['finalSugarKg'])} kg',
-                rendemen: lot['calculation'] == null
-                    ? '-'
-                    : '${reportNumber((lot['calculation'] as Json)['rendemenPercent'])}%',
-                cane: '${reportNumber(lot['caneNetKg'])} kg',
-                caneType: lot['caneType'] as String?,
-                vehicle: null,
-                juice: lot['juiceLiters'] == null
-                    ? null
-                    : '${reportNumber(lot['juiceLiters'])} L',
-                margin: lot['calculation'] == null
-                    ? null
-                    : reportMoney(
-                        (lot['calculation'] as Json)['productionMarginRupiah'],
+        : ProductionRecap(
+            [
+              for (final lot in lots)
+                RecapKloter(
+                  id: lot['lotId'] as String,
+                  code: lot['code'] as String,
+                  supplier: lot['supplier'] as String,
+                  date: DateTime.parse(lot['receivedAt'] as String).toLocal(),
+                  sugar: lot['filteredSugarKg'] != null
+                      ? '${reportNumber(lot['filteredSugarKg'])} kg'
+                      : lot['calculation'] == null
+                      ? '-'
+                      : '${reportNumber((lot['calculation'] as Json)['finalSugarKg'])} kg',
+                  rendemen: lot['calculation'] == null
+                      ? '-'
+                      : '${reportNumber((lot['calculation'] as Json)['rendemenPercent'])}%',
+                  cane: '${reportNumber(lot['caneNetKg'])} kg',
+                  caneType: lot['caneType'] as String?,
+                  vehicle: null,
+                  juice: lot['juiceLiters'] == null
+                      ? null
+                      : '${reportNumber(lot['juiceLiters'])} L',
+                  margin: lot['calculation'] == null
+                      ? null
+                      : reportMoney(
+                          (lot['calculation']
+                              as Json)['productionMarginRupiah'],
+                        ),
+                  batches: [
+                    for (final batch in (lot['batches'] as List).cast<Json>())
+                      RecapBatch(
+                        number: batch['wokNumber'] as int,
+                        shift: null,
+                        brix: null,
+                        juice: '${reportNumber(batch['quantityMl'])} ml',
+                        lime: null,
+                        physical:
+                            '${reportNumber(batch['physicalWeightKg'])} kg',
+                        grade: (batch['grades'] as List)
+                            .cast<Json>()
+                            .map(
+                              (g) =>
+                                  '${g['code']} · ${reportNumber(g['weightKg'])} kg',
+                            )
+                            .join(', '),
+                        time: formatDate(
+                          DateTime.parse(
+                            batch['occurredAt'] as String,
+                          ).toLocal(),
+                        ),
+                        verified: true,
+                        code: batch['code'] as String,
                       ),
-                batches: [
-                  for (final batch in (lot['batches'] as List).cast<Json>())
-                    RecapBatch(
-                      number: batch['wokNumber'] as int,
-                      shift: null,
-                      brix: null,
-                      juice: '${reportNumber(batch['quantityMl'])} ml',
-                      lime: null,
-                      physical: '${reportNumber(batch['physicalWeightKg'])} kg',
-                      grade: (batch['grades'] as List)
-                          .cast<Json>()
-                          .map(
-                            (g) =>
-                                '${g['code']} · ${reportNumber(g['weightKg'])} kg',
-                          )
-                          .join(', '),
-                      time: formatDate(
-                        DateTime.parse(batch['occurredAt'] as String).toLocal(),
-                      ),
-                      verified: true,
-                      code: batch['code'] as String,
-                    ),
-                ],
-              ),
-          ], marginTotalOverride: amount('productionMarginRupiah', money: true)),
+                  ],
+                ),
+            ],
+            marginTotalOverride: amount('productionMarginRupiah', money: true),
+            batchCountOverride: totals['batchCount'] as int?,
+          ),
   );
 
   @override
@@ -341,7 +380,9 @@ AnalyticsRow _reportRow(Json lot, ReportTab tab) {
   return AnalyticsRow(
     lot['supplier'] as String,
     lot['code'] as String,
-    calculation == null
+    !margin && lot['filteredSugarKg'] != null
+        ? '${reportNumber(lot['filteredSugarKg'])} kg'
+        : calculation == null
         ? '—'
         : margin
         ? reportMoney(calculation['productionMarginRupiah'])

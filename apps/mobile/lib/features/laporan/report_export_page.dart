@@ -242,6 +242,7 @@ class _ReportExportPageState extends State<ReportExportPage> {
                   ],
                   const SizedBox(height: NiraSpace.md),
                   NiraSummaryCard(report.totalLabel, report.totalDisplay),
+                  if (report.scopeNote case final note?) Text(note),
                   if (report.provisional) ...[
                     const SizedBox(height: NiraSpace.sm),
                     Text(

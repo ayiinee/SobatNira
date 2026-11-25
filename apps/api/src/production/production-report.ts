@@ -1,12 +1,25 @@
 import { compareDecimals, sumDecimals } from './decimal';
+import { text, uuid } from './production.dto';
 
 export type Grade = { code: string; weightKg: string; pricePerKgRupiah: string };
 type OriginVolume = { originLotId: string; lotCode: string; quantityMl: string };
 type Batch = { id: string; code: string; wokNumber: number; occurredAt: string; quantityMl: string; physicalWeightKg: string;
   grades: Grade[]; consumedByOrigin?: OriginVolume[] };
 type Calculation = { finalSugarKg: string; rendemenPercent: string; productionValueRupiah: string; totalCostRupiah: string; productionMarginRupiah: string; costs: Record<string, string> };
+export type ReportSelection = { supplierId?: string; lotId?: string; batchId?: string; grade?: string };
+
+export function reportSelection(query: Record<string, unknown>): ReportSelection {
+  return {
+    ...(query.supplierId === undefined ? {} : { supplierId: uuid(query.supplierId, 'supplierId') }),
+    ...(query.lotId === undefined ? {} : { lotId: uuid(query.lotId, 'lotId') }),
+    ...(query.batchId === undefined ? {} : { batchId: uuid(query.batchId, 'batchId') }),
+    ...(query.grade === undefined ? {} : { grade: text(query.grade, 'grade', 30).toUpperCase() }),
+  };
+}
+
 export type ProductionReportLot = {
   lotId: string; code: string; supplier: string; receivedAt: string;
+  supplierId?: string;
   caneNetKg: string; caneType: string | null; juiceLiters: string | null;
   closed?: boolean;
   calculationSnapshotId?: string | null;
@@ -53,6 +66,32 @@ export function productionReport(items: ProductionReportLot[]) {
       finalSugarKg: sumDecimals(produced.map(row => row.finalSugarKg)),
       productionValueRupiah: money('productionValueRupiah'), totalCostRupiah: money('totalCostRupiah'),
       productionMarginRupiah: money('productionMarginRupiah') } };
+}
+
+export function reportProductionSelection(items: ProductionReportLot[], { batchId, grade }: ReportSelection) {
+  const selected = items.map(lot => ({
+    ...lot,
+    calculation: null,
+    batches: lot.batches.filter(batch => !batchId || batch.id === batchId).flatMap(batch => {
+      const grades = batch.grades.filter(row => !grade || row.code === grade);
+      return grade && !grades.length ? [] : [{ ...batch, grades }];
+    }),
+  }));
+  const report = productionReport(selected);
+  const grades = report.grades;
+  return {
+    ...report,
+    financialScope: 'unavailable' as const,
+    items: report.items.map(lot => ({
+      ...lot, filteredSugarKg: sumDecimals(lot.batches.map(batch => batch.finalSugarKg)),
+    })),
+    totals: {
+      ...report.totals, producedLotCount: selected.length,
+      finalSugarKg: sumDecimals(grades.map(row => row.weightKg)),
+      productionValueRupiah: sumDecimals(grades.map(row => row.exactValueRupiah)),
+      totalCostRupiah: null, productionMarginRupiah: null,
+    },
+  };
 }
 
 export function contributionRanking(items: ProductionReportLot[]) {

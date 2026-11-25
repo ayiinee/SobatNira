@@ -42,14 +42,19 @@ class ReportDetailPage extends StatelessWidget {
           .cast<Json>()
           .where((batch) => batchId == null || batch['id'] == batchId)
           .toList();
-  DemoLotFixture get lot => demoLotFor(
-    row?.code.isNotEmpty == true ? row!.code : demoLotFixtures.first.code,
-  );
+  DemoLotFixture get lot {
+    final code = row?.code.isNotEmpty == true
+        ? row!.code
+        : demoLotFixtures.first.code;
+    return analytics?.lotFor(code) ?? demoLotFor(code);
+  }
+
   String get grade => row?.supplier.startsWith('Grade ') == true
       ? row!.supplier.substring(6)
       : 'A';
-  String get displayedSugar =>
-      report == null ? '${lot.sugarKg}Kg' : _kg(calculation?['finalSugarKg']);
+  String get displayedSugar => report == null
+      ? '${lot.sugarKg}Kg'
+      : _kg(officialLot?['filteredSugarKg'] ?? calculation?['finalSugarKg']);
   String get displayedGrade =>
       report == null ? '${gradeTotal}Kg' : _kg(gradeResult?['weightKg']);
 
@@ -64,7 +69,9 @@ class ReportDetailPage extends StatelessWidget {
       'Gula final (kg)',
       report == null
           ? demoNumber(lot.sugarKg)
-          : _weight(calculation?['finalSugarKg']),
+          : _weight(
+              officialLot?['filteredSugarKg'] ?? calculation?['finalSugarKg'],
+            ),
     ),
     (
       'Rendemen',
@@ -75,11 +82,11 @@ class ReportDetailPage extends StatelessWidget {
           : '${reportNumber(calculation!['rendemenPercent'])}%',
     ),
   ];
-  int get gradeTotal =>
+  num get gradeTotal =>
       analytics?.gradeWeight(grade) ??
       lot.batchWeights.indexed
-          .where((entry) => ['A', 'B', 'C'][entry.$1 % 3] == grade)
-          .fold(0, (sum, entry) => sum + entry.$2);
+          .where((entry) => lot.gradeAt(entry.$1) == grade)
+          .fold<num>(0, (sum, entry) => sum + entry.$2);
   List<(String, String, String)> get contributions {
     if (report != null) return _officialContributions();
     if (kind == ReportDetailKind.grade) {
@@ -149,9 +156,9 @@ class ReportDetailPage extends StatelessWidget {
         : reportMoney('${value == '0' ? '' : '-'}$value');
   }
 
-  int _gradeKg(DemoLotFixture source) => source.batchWeights.indexed
-      .where((entry) => ['A', 'B', 'C'][entry.$1 % 3] == grade)
-      .fold(0, (sum, entry) => sum + entry.$2);
+  num _gradeKg(DemoLotFixture source) => source.batchWeights.indexed
+      .where((entry) => source.gradeAt(entry.$1) == grade)
+      .fold<num>(0, (sum, entry) => sum + entry.$2);
 
   final ValueChanged<NiraTab> onNavigate;
 
@@ -250,7 +257,8 @@ class ReportDetailPage extends StatelessWidget {
         'Nilai produksi',
         report == null
             ? demoMoney(
-                gradeTotal * {'A': 20000, 'B': 18000, 'C': 15000}[grade]!,
+                (gradeTotal * {'A': 20000, 'B': 18000, 'C': 15000}[grade]!)
+                    .round(),
               )
             : reportMoney(gradeResult?['exactValueRupiah']),
       ),
@@ -349,13 +357,7 @@ class ReportDetailPage extends StatelessWidget {
                 items: report == null
                     ? [
                         for (var i = 0; i < lot.batchCount; i++)
-                          (
-                            'Batch ${i + 1}',
-                            demoMoney(
-                              lot.batchWeights[i] *
-                                  [20000, 18000, 15000][i % 3],
-                            ),
-                          ),
+                          ('Batch ${i + 1}', demoMoney(lot.batchValueAt(i))),
                       ]
                     : [
                         for (final batch in officialBatches)

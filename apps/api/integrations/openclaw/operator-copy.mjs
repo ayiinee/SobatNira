@@ -103,6 +103,7 @@ export function summary(revision, page = 1, { fromStatus = false, retryQueued = 
     const serviceFailed = revision.processing_status === 'FAILED_FINAL';
     return [heading, returned ? '*Dikembalikan admin.*' : '*Perlu tinjauan manual.*', followUp,
       serviceFailed ? 'Foto asli tersimpan. Pembacaan otomatis gagal.' : 'Foto asli tersimpan. Tata letak atau bagian nota belum terbaca.',
+      revision.document_type_selection_allowed && `Jika jenis nota terlihat, balas ${target} dengan *JENIS TRUK* atau *JENIS PRODUKSI*.`,
       retryQueued ? 'Ringkasan dijadwalkan untuk dikirim ulang.' :
         serviceFailed && !returned ? `Balas ${target} dengan *COBA LAGI* untuk membaca ulang foto asli.` :
           revision.photo_retake_allowed ? `Foto ulang dengan semua judul dan tepi nota terlihat. ${retake}` :

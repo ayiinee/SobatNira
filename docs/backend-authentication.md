@@ -49,7 +49,17 @@ Skema aplikasi tidak diberi izin kepada role Supabase `anon`/`authenticated`. RL
 | `GET /tenants/:tenantId/factories/:factoryId` | Admin/owner pada cakupan tersebut | ID/nama pabrik, tenant dan role user pada pabrik |
 | `GET /tenants/:tenantId/factories/:factoryId/memberships` | Owner pada cakupan tersebut | Daftar user ID, role dan status aktif anggota pabrik |
 
-User terautentikasi yang belum memiliki membership menerima `access: []` dari `/auth/me`, lalu ditolak ketika mengakses pabrik. Endpoint daftar anggota tidak membuat akun, mengirim undangan atau mengubah role.
+User terautentikasi yang belum memiliki membership menerima `access: []` dari `/auth/me`, lalu ditolak ketika mengakses pabrik.
+
+Endpoint berikut berada di bawah prefix pabrik yang sama. Perubahan memerlukan owner aktif dan dicatat dalam audit.
+
+| Method | Kontrak |
+| --- | --- |
+| `PATCH /profile` | `version`, `displayCode`, `branchName`, `supportPhone`; kolom opsional bisa diisi `null`. Versi usang mendapat 409. |
+| `POST /memberships/admin` | `email`; menambahkan akun Auth yang sudah ada sebagai admin pada pabrik tersebut. Akun baru memerlukan izin undangan Supabase. |
+| `PATCH /memberships/:userId` | `isActive` boolean; hanya mengubah membership admin pada pabrik tersebut. |
+
+Untuk uji undangan baru, allowlist URL Flutter Web seperti `https://app.example.invalid/?acceptInvite=1` pada proyek Supabase staging. Di konfigurasi privat NestJS, isi `SUPABASE_ADMIN_INVITE_REDIRECT_URL` dengan URL tersebut dan aktifkan `FACTORY_ADMIN_INVITES_ENABLED` setelah pengelola menyetujui email uji. Pengguna membuka undangan di browser, mengisi kata sandi dan masuk kembali. Secret Supabase hanya digunakan di NestJS. Verifikasi alur email dan login di staging sebelum aktivasi.
 
 Contoh request:
 
@@ -144,7 +154,7 @@ END $$;
 
 Seluruh block bersifat atomik. UUID yang tidak ada pada Supabase Auth ditolak oleh foreign key. Untuk admin, buat akun Supabase yang terpisah lalu tambahkan membership tenant dan pabrik yang sesuai dengan role `admin` melalui operasi administratif tepercaya. Jangan memberikan fasilitas perubahan membership langsung kepada klien.
 
-Simpan pemetaan akun asli, data tenant/pabrik, token dan kredensial di luar Git. Endpoint undangan, perubahan role dan pengelolaan akun admin merupakan implementasi berikutnya; fondasi saat ini menyediakan pembacaan akses dan pembatasan endpoint.
+Simpan pemetaan akun asli, data tenant/pabrik, token dan kredensial di luar Git. Perubahan role owner tetap melalui operasi administratif tepercaya.
 
 ## 7. Verifikasi
 

@@ -45,7 +45,8 @@ const users = { 'admin@example.invalid': admin, 'owner@example.invalid': owner, 
 const userTokens = Object.fromEntries(Object.keys(users).map((key) => [key, randomBytes(32).toString('hex')]));
 const clearProviders = ['GEMINI_API_KEY','GEMINI_VISION_MODEL','OPENROUTER_API_KEY','OPENROUTER_AGENT_MODEL',
   'OPENROUTER_ALLOWED_PROVIDERS','OPENROUTER_AGENT_FALLBACK_MODEL','R2_ENDPOINT','R2_BUCKET_NAME','R2_BUCKET','R2_ACCOUNT_ID',
-  'R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','DATABASE_SSL_CA_FILE','REDIS_URL','SUPABASE_SECRET_KEY','BATCH_API_BASE_URL'];
+  'R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','DATABASE_SSL_CA_FILE','REDIS_URL','SUPABASE_SECRET_KEY','BATCH_API_BASE_URL',
+  'ANDROID_REVIEW_PUSH_ENABLED','ANDROID_REVIEW_PUSH_PROJECT_ID','GOOGLE_APPLICATION_CREDENTIALS'];
 for (const key of clearProviders) process.env[key] = '';
 const serveWeb = process.argv.includes('--web');
 if (acceptance && (!serveWeb || ocrOnly || !process.env.LOCAL_DATABASE_URL)) {
@@ -365,7 +366,7 @@ async function smoke(ocrOnly = false) {
     return { status: response.status, data: await response.json() };
   };
   const code = acceptance ? 'SMOKE-UJI' : `SMOKE-${lotA.id.slice(0, 8)}`;
-  console.log(`Nota sah. Pada detail ${lotA.code}, buat batch ${code}, wajan 1, masak setelah penggilingan, 40000 mL, hasil fisik 26 kg, grade A 25 kg, Rp20000/kg.`);
+  console.log(`Nota sah. Pada detail ${lotA.code}, buat batch ${code}, wajan 1, masak setelah penggilingan, 40000 mL, hasil fisik 25 kg, grade A 25 kg, Rp20000/kg.`);
   console.log('Isi biaya Rp100000, Rp20000, Rp5000, Rp0. Reservasi nira lalu sahkan batch.');
   const batch = await waitFor(async () => (await db.query(`SELECT id, quantity_ml::text AS volume
       FROM sobatnira.production_batches WHERE lot_id=$1 AND code=$2 AND status='approved'`, [lotA.id, code])).rows[0],
