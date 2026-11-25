@@ -61,6 +61,7 @@ async function fixture(t) {
     databaseReads++;
     return memberships.find((m) => m.userId === userId && m.tenantId === tenantId && m.factoryId === factoryId);
   };
+  repository.factoryProfile = async (access) => ({ ...access, profileVersion: 1 });
   repository.listFactoryMembers = async (access) => memberships
     .filter((m) => m.tenantId === access.tenantId && m.factoryId === access.factoryId)
     .map((m) => ({ userId: m.userId, role: m.role, isActive: true }));

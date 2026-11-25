@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, NotFoundException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { PoolClient } from 'pg';
-import { fields, Inbound, Issue, Note, requireUuid, UUID } from './contracts';
+import { DocumentType, fields, Inbound, Issue, Note, requireUuid, UUID } from './contracts';
 import { Database } from './database';
 import { MediaStorage } from './media';
 import { correctField } from './revisions';
@@ -14,10 +14,21 @@ type PhotoPreparation = { factoryId: string; key: string | null; documentId?: st
 type PhotoAttempt = { outcome: Record<string, unknown> } | { pending: PhotoPreparation };
 export type Revision = { id: string; document_id: string; submission_id: string; version: number;
   processing_status: string; operator_status: string; extraction: Note | null; issues: Issue[] };
-type Action = { action: 'CONFIRM' | 'CORRECT' | 'ANSWER' | 'RETRY_OCR'; document_id: string; revision_id: string;
+type Action = { action: 'CONFIRM' | 'CORRECT' | 'ANSWER' | 'RETRY_OCR' | 'SELECT_DOCUMENT_TYPE'; document_id: string; revision_id: string;
   question_id?: string; field_path?: string; value?: unknown };
 const digest = (value: Buffer | string) => createHash('sha256').update(value).digest('hex');
 const json = (value: unknown) => JSON.stringify(value);
+
+export const operatorTypeHint = (revisionAlias: string) => `(SELECT e.details->>'document_type' FROM audit_events e
+  JOIN document_revisions selected ON selected.id=e.revision_id
+  WHERE e.document_id=${revisionAlias}.document_id AND e.action='OPERATOR_DOCUMENT_TYPE_SELECTED'
+    AND selected.submission_id=${revisionAlias}.submission_id ORDER BY selected.version DESC LIMIT 1)`;
+
+function canSelectType(revision: Revision, documentType: DocumentType, hint: string | null, reviewStatus: string | null) {
+  return documentType === 'UNKNOWN' && hint === null && reviewStatus === 'MANUAL_REVIEW_REQUIRED' &&
+    revision.processing_status === 'MANUAL_REVIEW_REQUIRED' && !revision.extraction &&
+    revision.issues.some(({ code }) => code === 'UNKNOWN_LAYOUT');
+}
 
 // Only inbound photos and provider-acknowledged bot notices can identify a quoted submission.
 const quotedSubmission = `SELECT s.* FROM document_submissions s
@@ -217,7 +228,9 @@ export class Intake {
   async status(phone: string, documentId: string, revisionId: string) {
     const { rows: [revision] } = await this.db.query<Revision & { factory_id: string; follow_up: unknown;
       review_status: string | null; failed_notice: boolean; sent_questions: (string | null)[]; previous_extraction: Note | null;
-      photo_recorded_at: string | null; operator_id: string; chat_id: string }>(`SELECT r.*,o.id AS operator_id,m.event->>'chat_id' AS chat_id,
+      photo_recorded_at: string | null; operator_id: string; chat_id: string; document_type: DocumentType;
+      selected_document_type: string | null }>(`SELECT r.*,o.id AS operator_id,m.event->>'chat_id' AS chat_id,
+      d.document_type,${operatorTypeHint('r')} AS selected_document_type,
       CASE WHEN m.outcome->>'revision_id'=r.id::text THEN m.outcome->>'recorded_at' END AS photo_recorded_at,
       (SELECT t.status FROM admin_review_tasks t WHERE t.revision_id=r.id ORDER BY t.created_at DESC,t.id LIMIT 1) AS review_status,
       EXISTS(SELECT 1 FROM whatsapp_notices n WHERE n.revision_id=r.id AND n.status='FAILED') AS failed_notice,
@@ -231,7 +244,8 @@ export class Intake {
       WHERE o.phone_e164=$1 AND o.active AND d.id=$2 AND m.operator_id=o.id`,
     [phone, documentId, revisionId]);
     if (!revision) throw new NotFoundException('Revisi aktif tidak ditemukan');
-    const { factory_id, review_status, previous_extraction, failed_notice, sent_questions, operator_id, chat_id, ...stored } = revision;
+    const { factory_id, review_status, previous_extraction, failed_notice, sent_questions, operator_id, chat_id,
+      document_type, selected_document_type, ...stored } = revision;
     const pending = revision.operator_status === 'PENDING' && revision.extraction;
     const checks = pending ? operatorChecks(pending, revision.issues) : null;
     const can_confirm = checks !== null && !checks.documentBlocked && checks.questions.size === 0;
@@ -249,6 +263,7 @@ export class Intake {
       }
     }
     const result = { ...stored, review_status, can_confirm,
+      document_type_selection_allowed: canSelectType(revision, document_type, selected_document_type, review_status),
       workflow_status: workflowStatus(revision, review_status, can_confirm, revision.follow_up),
       pending_question: describeQuestion(question, extraction, issues), changed_fields: [...updatedPaths],
       notice_retry_available: failed_notice || Boolean(question && sent_questions.length && !sent_questions.includes(question.id)),
@@ -317,8 +332,9 @@ export class Intake {
   }
 
   async reply(event: Inbound, action: Action) {
-    if (!action || !['CONFIRM', 'CORRECT', 'ANSWER', 'RETRY_OCR'].includes(action.action) || !UUID.test(action.document_id) || !UUID.test(action.revision_id) ||
+    if (!action || !['CONFIRM', 'CORRECT', 'ANSWER', 'RETRY_OCR', 'SELECT_DOCUMENT_TYPE'].includes(action.action) || !UUID.test(action.document_id) || !UUID.test(action.revision_id) ||
         (action.action === 'CORRECT' && typeof action.field_path !== 'string') ||
+        (action.action === 'SELECT_DOCUMENT_TYPE' && action.value !== 'TRUCK_ARRIVAL_NOTE' && action.value !== 'PRODUCTION_NOTE') ||
         (action.action === 'ANSWER' && (!action.question_id || !UUID.test(action.question_id)))) throw new BadRequestException('Aksi operator tidak valid');
     return this.db.transaction(async (db) => {
       const operator = await this.operator(db, event);
@@ -327,7 +343,7 @@ export class Intake {
         ...(action.action === 'ANSWER' ? [action.question_id] : [])]));
       const inbound = await this.inbound(db, operator, event, fingerprint);
       if (inbound.duplicate) return { ...inbound.outcome, duplicate: true };
-      const { rows: [doc] } = await db.query(`SELECT id,current_revision_id FROM source_documents WHERE id=$1 AND factory_id=$2 FOR UPDATE`,
+      const { rows: [doc] } = await db.query(`SELECT id,current_revision_id,document_type FROM source_documents WHERE id=$1 AND factory_id=$2 FOR UPDATE`,
         [action.document_id, operator.factory_id]);
       if (!doc) throw new NotFoundException('Dokumen tidak ditemukan');
       if (doc.current_revision_id !== action.revision_id) throw new ConflictException('STALE_REVISION');
@@ -335,15 +351,28 @@ export class Intake {
         JOIN document_submissions s ON s.id=r.submission_id JOIN whatsapp_inbound_messages m ON m.id=s.inbound_message_id
         WHERE r.id=$1 AND m.operator_id=$2 AND m.event->>'chat_id'=$3`, [action.revision_id, operator.id, event.chat_id]);
       if (!base) throw new NotFoundException('Revisi operator tidak ditemukan');
-      if (action.action === 'RETRY_OCR') {
-        if (base.processing_status !== 'FAILED_FINAL' || base.extraction) throw new ConflictException('OCR_RETRY_UNAVAILABLE');
+      const selectingType = action.action === 'SELECT_DOCUMENT_TYPE';
+      if (selectingType || action.action === 'RETRY_OCR') {
+        if (selectingType) {
+          const { rows: [context] } = await db.query<{ hint: string | null; review_status: string | null }>(`SELECT
+            ${operatorTypeHint('r')} AS hint,
+            (SELECT t.status FROM admin_review_tasks t WHERE t.revision_id=r.id ORDER BY t.created_at DESC,t.id LIMIT 1) AS review_status
+            FROM document_revisions r WHERE r.id=$1 AND EXISTS (SELECT 1 FROM whatsapp_notices n
+              WHERE n.revision_id=r.id AND n.status='SENT' AND n.provider_message_id=$2)`, [base.id, event.quoted_message_id]);
+          if (!context || !canSelectType(base, doc.document_type, context.hint, context.review_status)) {
+            throw new ConflictException('OPERATOR_DOCUMENT_TYPE_UNAVAILABLE');
+          }
+        } else if (base.processing_status !== 'FAILED_FINAL' || base.extraction) {
+          throw new ConflictException('OCR_RETRY_UNAVAILABLE');
+        }
         const { rows: [revision] } = await db.query<Revision>(`INSERT INTO document_revisions
           (document_id,submission_id,parent_revision_id,version) VALUES ($1,$2,$3,$4) RETURNING *`,
         [base.document_id, base.submission_id, base.id, base.version + 1]);
         await db.query('UPDATE source_documents SET current_revision_id=$2 WHERE id=$1', [doc.id, revision.id]);
         await db.query("UPDATE admin_review_tasks SET status='SUPERSEDED' WHERE revision_id=$1 AND status='MANUAL_REVIEW_REQUIRED'", [base.id]);
         await db.query('INSERT INTO document_jobs (revision_id) VALUES ($1)', [revision.id]);
-        await audit(db, revision, 'OCR_RETRY_QUEUED', operator.id, { inbound_message_id: inbound.id });
+        await audit(db, revision, selectingType ? 'OPERATOR_DOCUMENT_TYPE_SELECTED' : 'OCR_RETRY_QUEUED', operator.id,
+          { inbound_message_id: inbound.id, ...(selectingType ? { document_type: action.value } : {}) });
         const outcome = { document_id: doc.id, revision_id: revision.id, processing_status: 'QUEUED' };
         await db.query('UPDATE whatsapp_inbound_messages SET outcome=$2 WHERE id=$1', [inbound.id, json(outcome)]);
         return { ...outcome, duplicate: false };

@@ -141,6 +141,8 @@ Gunakan `--smoke` untuk menguji foto ambigu dan foto ulang. Mode `--smoke` mence
 
 Untuk menguji sampai antrean **Pekerjaan** dengan PaddleOCR CPU lokal tanpa membuka Flutter, jalankan `npm run local:stack -- --ocr-smoke` dari `apps/api` memakai database pengembangan sintetis. Perintah memeriksa foto truk, dua revisi produksi, penolakan konfirmasi saat klarifikasi masih terbuka, penolakan format angka ambigu, foto ulang, dan tinjauan manual. Layanan yang dimulai oleh perintah ini ditutup setelah tes selesai.
 
+Jika ringkasan menyatakan template belum terbaca, operator dapat membalas ringkasan otomatis yang aktif dengan `JENIS TRUK` atau `JENIS PRODUKSI`. SobatNira mencoba membaca ulang foto asli dengan jenis nota tersebut sebagai petunjuk. Pilihan berlaku sekali per foto. Foto yang tetap tidak terbaca tersedia untuk tinjauan manual di antrean Pekerjaan.
+
 ### Percakapan operator
 
 - Balasan **“Foto diterima. Sedang membaca nota…”** dikirim setelah API menyimpan foto dan pekerjaan OCR. Gunakan **STATUS** untuk cek progres. Jika ada beberapa nota dalam satu chat, balas foto atau ringkasan nota yang dimaksud dengan **STATUS**.

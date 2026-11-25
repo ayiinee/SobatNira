@@ -202,6 +202,29 @@ test('OpenClaw bridge rejects multiple attachments and formats revision-bound co
   assert.equal(calls, 1);
 });
 
+test('OpenClaw requires a quoted active summary to choose the OCR document type', async () => {
+  const { createBridge } = await import('../integrations/openclaw/index.mjs');
+  const document_id = randomUUID(), revision_id = randomUUID();
+  const requests = [];
+  const bridge = createBridge({ apiUrl: 'http://127.0.0.1', token: 'synthetic', mediaDir: tmpdir(),
+    request(url, options) {
+      if (url.pathname.endsWith('/quoted-context')) {
+        assert.equal(url.searchParams.get('action'), 'true');
+        return Response.json({ document_id, revision_id });
+      }
+      requests.push(JSON.parse(options.body));
+      return Response.json({ revision_id: randomUUID() });
+    } });
+  const message = { senderId: phone(101), conversationId: 'SYNTHETIC', messageId: 'type-choice',
+    timestamp: 1794799800000, body: 'JENIS TRUK' };
+  assert.match((await bridge.handle(message, {})).text, /Balas ringkasan otomatis/);
+  assert.match((await bridge.handle({ ...message, replyToId: 'type-summary', body: 'JENIS LAIN' }, {})).text, /JENIS PRODUKSI/);
+  assert.match((await bridge.handle({ ...message, replyToId: 'type-summary' }, {})).text, /antrean pembacaan ulang/);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].event.quoted_message_id, 'type-summary');
+  assert.deepEqual(requests[0].action, { document_id, revision_id, action: 'SELECT_DOCUMENT_TYPE', value: 'TRUCK_ARRIVAL_NOTE' });
+});
+
 test('OpenClaw reply dispatch uses the WhatsApp context and owns only the configured account', async (t) => {
   const { default: plugin } = await import('../integrations/openclaw/index.mjs');
   t.mock.method(globalThis, 'fetch', (url, options) => {
@@ -459,6 +482,7 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     await app.listen(0, '127.0.0.1');
     const base = await app.getUrl();
     const notes = [];
+    const typeHints = [];
     const upstream = createServer(async (request, response) => {
       try {
         if (request.url === '/auth/v1/user') {
@@ -472,6 +496,7 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
         const chunks = [];
         for await (const chunk of request) chunks.push(chunk);
         const input = JSON.parse(Buffer.concat(chunks));
+        typeHints.push(input.document_type_hint);
         const photo = await fetch(`${base}/internal/v1/ocr/media/${input.image.object_key}`, {
           headers: { 'X-Internal-Service-Token': process.env.AI_SERVICE_INTERNAL_TOKEN },
         });
@@ -482,7 +507,8 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
         const { request_id, document_id, submission_id, revision_id, schema_version } = input;
         response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ request_id, document_id,
           submission_id, revision_id, schema_version, document_type: note.document_type, source_asset_id: input.image.asset_id,
-          status: 'COMPLETED', issues: [], extraction: note,
+          status: note.document_type === 'UNKNOWN' ? 'NEEDS_REVIEW' : 'COMPLETED', issues: note.document_type === 'UNKNOWN' ? note.issues : [],
+          extraction: note.document_type === 'UNKNOWN' ? null : note,
           processing: { ocr_engine: 'SYNTHETIC', started_at: '2026-11-16T03:30:00Z', duration_ms: 0 } }));
       } catch (error) { response.writeHead(500).end(); t.diagnostic(error.message); }
     });
@@ -950,4 +976,31 @@ test('PostgreSQL intake, OCR, revisions, confirmation and mobile review',
     assert.equal(state.pending_question.issue_code, 'REQUIRED_FIELD');
     assert.equal((await status(incomplete)).pending_question.id, state.pending_question.id);
     assert.equal((await action(event('missing-date-confirm', 'TEXT'), incomplete)).status, 409);
+
+    const unknown = await photo(event('unknown-type-photo')).then((response) => response.json());
+    const unknownNote = { document_type: 'UNKNOWN', issues: [{ code: 'UNKNOWN_LAYOUT', severity: 'ERROR', message: 'Foto sintetis' }] };
+    notes.push(unknownNote);
+    assert.equal(await processor.processOne(), true);
+    assert.equal(typeHints.at(-1), null);
+    assert.equal((await status(unknown)).document_type_selection_allowed, true);
+    await db.query("UPDATE whatsapp_notices SET status='SENT',provider_message_id=$2 WHERE revision_id=$1",
+      [unknown.revision_id, 'unknown-type-summary']);
+    const selection = event('unknown-type-choice', 'TEXT', phone(101), 'unknown-type-summary');
+    const value = { value: 'TRUCK_ARRIVAL_NOTE' };
+    const choose = (metadata, target = unknown) => action(metadata, target, 'SELECT_DOCUMENT_TYPE', value);
+    assert.equal((await choose({ ...selection, quoted_message_id: null })).status, 409);
+    assert.equal((await choose({ ...selection, sender_phone_e164: phone(102) })).status, 404);
+    const selected = await choose(selection);
+    assert.equal(selected.status, 200, await selected.clone().text());
+    const queued = await selected.json();
+    assert.equal((await choose(selection).then((response) => response.json())).duplicate, true);
+    assert.equal((await choose({ ...selection, provider_message_id: 'type-stale' })).status, 409);
+    notes.push(unknownNote);
+    assert.equal(await processor.processOne(), true);
+    assert.equal(typeHints.at(-1), 'TRUCK_ARRIVAL_NOTE');
+    const stillUnknown = await status(queued);
+    assert.equal(stillUnknown.workflow_status, 'MANUAL_REVIEW_REQUIRED');
+    assert.equal(stillUnknown.document_type_selection_allowed, false);
+    assert.equal(stillUnknown.submission_id, unknown.submission_id);
+    assert.equal((await db.query('SELECT document_type FROM source_documents WHERE id=$1', [unknown.document_id])).rows[0].document_type, 'UNKNOWN');
   });
