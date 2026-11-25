@@ -843,11 +843,12 @@ Future<Json?> showLotCostsForm(
   ReviewApi api,
   FactoryScope scope,
   String lotId,
-  String kloterCode,
-) async {
+  String kloterCode, {
+  bool correction = false,
+}) async {
   Future<Json?> read() async {
     final cost = await api.lotCosts(scope, lotId);
-    if (cost?['frozen'] == true) {
+    if (!correction && cost?['frozen'] == true) {
       throw const ReviewApiError(
         409,
         code: 'LOT_COST_FROZEN',
@@ -869,6 +870,13 @@ Future<Json?> showLotCostsForm(
     return null;
   }
   if (!context.mounted) return null;
+  if (correction && cost == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Biaya awal kloter belum tersedia.')),
+    );
+    return null;
+  }
+  final requestId = correction ? ReviewApi.requestUuid() : null;
 
   const labels = [
     'Biaya tebu (Rp)',
@@ -884,7 +892,9 @@ Future<Json?> showLotCostsForm(
   ];
   return _form(
     context,
-    'Biaya kloter $kloterCode',
+    correction
+        ? 'Koreksi biaya kloter $kloterCode'
+        : 'Biaya kloter $kloterCode',
     [
       for (final (index, key) in keys.indexed)
         _Field(
@@ -892,14 +902,23 @@ Future<Json?> showLotCostsForm(
           kind: _Input.money,
           initial: cost?[key]?.toString() ?? '',
         ),
+      if (correction) const _Field('Alasan koreksi', kind: _Input.reason),
     ],
-    (values) => api.saveLotCosts(scope, lotId, {
-      'version': cost?['version'] ?? 0,
-      'caneCostRupiah': values[0],
-      'operationalCostRupiah': values[1],
-      'ingredientCostRupiah': values[2],
-      'otherCostRupiah': values[3],
-    }),
+    (values) {
+      final payload = {
+        'version': cost?['version'] ?? 0,
+        'caneCostRupiah': values[0],
+        'operationalCostRupiah': values[1],
+        'ingredientCostRupiah': values[2],
+        'otherCostRupiah': values[3],
+      };
+      return requestId == null
+          ? api.saveLotCosts(scope, lotId, payload)
+          : api.requestLotCostCorrection(scope, lotId, requestId, {
+              ...payload,
+              'reason': values[4],
+            });
+    },
     reloadOnConflict: () async {
       cost = await read();
       return [

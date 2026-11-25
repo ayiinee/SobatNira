@@ -10,6 +10,7 @@ import '../kloter/demo_production.dart';
 import '../kloter/official_batch_workflow.dart';
 import '../laporan/connected_reports.dart';
 import '../pekerjaan/review_api.dart';
+import 'cost_correction_inbox.dart';
 import 'settings_widgets.dart';
 
 class ConnectedExpensesPage extends StatefulWidget {
@@ -95,6 +96,21 @@ class _ConnectedExpensesPageState extends State<ConnectedExpensesPage> {
     _production.refresh();
   }
 
+  Future<void> _requestCorrection(Json lot) async {
+    final proposed = await showLotCostsForm(
+      context,
+      _production.api,
+      _production.scope,
+      lot['lotId'] as String,
+      lot['code'] as String,
+      correction: true,
+    );
+    if (!mounted || proposed == null) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Koreksi dikirim untuk persetujuan owner.')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.fromSettings && _production.scope.role != 'owner') {
@@ -152,6 +168,23 @@ class _ConnectedExpensesPageState extends State<ConnectedExpensesPage> {
         if (_synthetic) 'Data sintetis',
       ].join(' · '),
       children: [
+        if (!_synthetic)
+          OutlinedButton(
+            onPressed: () async {
+              final changed = await Navigator.of(context).push<bool>(
+                MaterialPageRoute(
+                  builder: (_) => CostCorrectionInbox(
+                    api: _production.api,
+                    scope: _production.scope,
+                  ),
+                ),
+              );
+              if (!mounted || changed != true) return;
+              setState(() => _report = _load());
+              _production.refresh();
+            },
+            child: const Text('Pengajuan koreksi biaya'),
+          ),
         if (snapshot.connectionState != ConnectionState.done)
           const NiraLoading(label: 'Memuat biaya…')
         else if (snapshot.hasError)
@@ -279,6 +312,11 @@ class _ConnectedExpensesPageState extends State<ConnectedExpensesPage> {
           _heading('Komponen biaya'),
           for (final (key, label) in _costFields)
             _amountRow(label, _costValue(costs?[key])),
+          if (!_synthetic)
+            TextButton(
+              onPressed: () => _requestCorrection(lot),
+              child: const Text('Ajukan koreksi biaya'),
+            ),
           if (prices.isNotEmpty) ...[
             const Divider(height: NiraSpace.xl, color: niraLine),
             _heading('Harga jual per grade'),
@@ -295,6 +333,11 @@ class _ConnectedExpensesPageState extends State<ConnectedExpensesPage> {
       children: [
         for (final (key, label) in _costFields)
           ListTile(title: Text(label), subtitle: Text(_costValue(costs?[key]))),
+        if (!_synthetic)
+          TextButton(
+            onPressed: () => _requestCorrection(lot),
+            child: const Text('Ajukan koreksi biaya'),
+          ),
         for (final (code, price) in prices)
           ListTile(
             title: Text('Grade $code'),

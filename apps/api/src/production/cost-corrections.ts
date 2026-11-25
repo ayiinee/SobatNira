@@ -1,4 +1,4 @@
-import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, Injectable, Param, Post } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, Injectable, Param, Post, Query } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { CurrentFactory, FactoryRoles } from '../auth/auth.decorators';
 import { FactoryAccess } from '../auth/auth.types';
@@ -6,7 +6,7 @@ import { JuiceRepository } from '../juice/juice.repository';
 import { DatabaseService } from '../database/database.service';
 import { FACTORY_SCOPE_CTE } from '../auth/access.sql';
 import { calculateProductionPreview } from './calculation';
-import { found, object, scopeValues, text, uuid } from './production.dto';
+import { found, object, parsePage, scopeValues, text, uuid } from './production.dto';
 import { rebuildSnapshots } from './snapshots';
 
 @Injectable()
@@ -20,6 +20,23 @@ export class CostCorrections {
       FROM sobatnira.lot_production_costs c
       JOIN authorized_scope a ON (c.tenant_id,c.factory_id)=(a."tenantId",a."factoryId")
       WHERE c.lot_id=$4`, [...scopeValues(access), lotId])).rows[0]);
+  }
+
+  async list(access: FactoryAccess, query: unknown) {
+    const { limit, offset } = parsePage(query);
+    const { rows } = await this.db.query(`WITH ${FACTORY_SCOPE_CTE}
+      SELECT c.id,c.lot_id AS "lotId",COALESCE(l.display_code,l.id::text) AS "lotCode",
+        c.reason,c.proposed_data AS proposed,c.expected_version AS version,c.created_at AS "createdAt",
+        CASE WHEN c.status='approved' THEN 'approved'
+             WHEN c.expected_version=v.version THEN 'pending' ELSE 'stale' END AS status
+      FROM sobatnira.production_cost_corrections c
+      JOIN authorized_scope a ON (c.tenant_id,c.factory_id)=(a."tenantId",a."factoryId")
+        AND (a.role='owner' OR (a.role='admin' AND c.created_by=a."userId"))
+      JOIN sobatnira.lots l ON (l.tenant_id,l.factory_id,l.id)=(c.tenant_id,c.factory_id,c.lot_id)
+      JOIN sobatnira.lot_production_costs v ON (v.tenant_id,v.factory_id,v.lot_id)=(c.tenant_id,c.factory_id,c.lot_id)
+      ORDER BY (c.status='draft' AND c.expected_version=v.version) DESC,c.created_at DESC,c.id DESC
+      LIMIT $4 OFFSET $5`, [...scopeValues(access), limit + 1, offset]);
+    return { items: rows.slice(0, limit), nextOffset: rows.length > limit ? offset + limit : null };
   }
 
   request(access: FactoryAccess, lotId: string, id: string, body: unknown) {
@@ -79,19 +96,23 @@ export class CostCorrections {
   }
 }
 
-@Controller('tenants/:tenantId/factories/:factoryId/production/lots/:lotId/cost-corrections')
+@Controller('tenants/:tenantId/factories/:factoryId/production')
 @FactoryRoles('admin', 'owner')
 export class CostCorrectionsController {
   constructor(private readonly costs: CostCorrections) {}
-  @Get()
+  @Get('cost-corrections')
+  list(@CurrentFactory() a: FactoryAccess, @Query() query: unknown) {
+    return this.costs.list(a, query);
+  }
+  @Get('lots/:lotId/cost-corrections')
   current(@CurrentFactory() a: FactoryAccess, @Param('lotId') lot: string) {
     return this.costs.current(a, uuid(lot));
   }
-  @Post(':id')
+  @Post('lots/:lotId/cost-corrections/:id')
   request(@CurrentFactory() a: FactoryAccess, @Param('lotId') lot: string, @Param('id') id: string, @Body() b: unknown) {
     return this.costs.request(a, uuid(lot), uuid(id), b);
   }
-  @Post(':id/approve')
+  @Post('lots/:lotId/cost-corrections/:id/approve')
   @FactoryRoles('owner')
   approve(@CurrentFactory() a: FactoryAccess, @Param('lotId') lot: string, @Param('id') id: string) {
     return this.costs.approve(a, uuid(lot), uuid(id));

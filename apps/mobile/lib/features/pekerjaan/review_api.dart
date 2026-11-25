@@ -545,6 +545,40 @@ class ReviewApi {
         expectedStatus: 200,
       );
 
+  Future<Json> lotCostCorrections(FactoryScope scope, {int offset = 0}) =>
+      _productionGet(
+        [...scope._base, 'production', 'cost-corrections'],
+        query: {'offset': '$offset'},
+      );
+
+  Future<Json> requestLotCostCorrection(
+    FactoryScope scope,
+    String lotId,
+    String requestId,
+    Json values,
+  ) => writeProduction([
+    ...scope._base,
+    'production',
+    'lots',
+    lotId,
+    'cost-corrections',
+    requestId,
+  ], values);
+
+  Future<Json> approveLotCostCorrection(
+    FactoryScope scope,
+    String lotId,
+    String requestId,
+  ) => writeProduction([
+    ...scope._base,
+    'production',
+    'lots',
+    lotId,
+    'cost-corrections',
+    requestId,
+    'approve',
+  ], const {});
+
   Future<Json> reserveBatchJuice(
     FactoryScope scope,
     String lotId,
