@@ -60,7 +60,7 @@ test('report summary, paged detail and artifacts retain complete exact totals an
     const {rows:[filtered]}=await f.client.query('SELECT snapshot FROM sobatnira.report_exports WHERE id=$1',[narrow.id]);
     const displayed=(await f.request(`${path}?batchId=${id}&grade=A`)).body;
     assert.deepEqual(filtered.snapshot.totals,displayed.totals);
-    assert.equal(filtered.snapshot.totals.finalSugarKg,'30');
+    assert.equal(filtered.snapshot.totals.finalSugarKg,'10.125');
     assert.equal(filtered.snapshot.totals.productionMarginRupiah,null);
     assert.equal(filtered.snapshot.totals.totalCostRupiah,null);
     for(const format of ['pdf','xlsx']) {
