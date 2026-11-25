@@ -50,6 +50,13 @@ void main() {
           if (request.url.queryParameters['view'] == 'summary') {
             return response(summary());
           }
+          if (request.url.path.endsWith('/sugar')) {
+            return response({
+              'active': false,
+              'sources': [],
+              'limitation': 'Pengiriman belum dicatat.',
+            });
+          }
           details++;
           return response({'message': 'Persempit periode laporan.'}, 400);
         }),

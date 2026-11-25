@@ -134,6 +134,7 @@ class ReviewApi {
   final String baseUrl;
   final _pendingTransfers = <String, JuiceTransferRequest>{};
   final _pendingReservations = <String, Json>{};
+  final _pendingInventory = <String, Json>{};
   bool _supportsLotReport = true;
   bool _supportsSyntheticLotPage = true;
   void Function()? onSessionExpired;
@@ -523,6 +524,51 @@ class ReviewApi {
   Future<Json> batchSources(FactoryScope scope, String lotId) => _productionGet(
     [...scope._base, 'production', 'lots', lotId, 'batch-sources'],
   );
+
+  Future<Json> sugarStock(FactoryScope scope, {bool synthetic = false}) =>
+      getProduction(
+        [...scope.basePath, 'production', 'sugar'],
+        query: {'synthetic': '$synthetic'},
+      );
+
+  Json? pendingInventory(FactoryScope scope) =>
+      _pendingInventory[_transferKey(scope, 'sugar')];
+
+  Future<Json> inventoryCommand(
+    FactoryScope scope,
+    List<String> path,
+    Json body,
+  ) async {
+    final key = _transferKey(scope, 'sugar');
+    final pending = _pendingInventory.putIfAbsent(
+      key,
+      () => {
+        'path': path,
+        'body': {'requestId': requestUuid(), ...body},
+      },
+    );
+    try {
+      final result = await writeProduction(
+        (pending['path'] as List).cast<String>(),
+        pending['body'] as Json,
+      );
+      _pendingInventory.remove(key);
+      return result;
+    } on ReviewApiError catch (error) {
+      if (error.status == 400 || error.status == 409) {
+        _pendingInventory.remove(key);
+      }
+      rethrow;
+    }
+  }
+
+  Future<Json> batchTrace(FactoryScope scope, String id) => getProduction([
+    ...scope.basePath,
+    'production',
+    'batches',
+    id,
+    'traceability',
+  ]);
 
   Future<Json> saveLotCosts(FactoryScope scope, String lotId, Json costs) =>
       writeProduction(

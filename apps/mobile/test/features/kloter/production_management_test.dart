@@ -376,6 +376,16 @@ void main() {
         'fixture',
         client: MockClient((request) async {
           paths.add(request.url.path);
+          if (request.url.path.endsWith('/sugar')) {
+            return http.Response(
+              jsonEncode({
+                'active': false,
+                'sources': [],
+                'limitation': 'Pengiriman belum dicatat.',
+              }),
+              200,
+            );
+          }
           if (request.url.path == '/auth/me') {
             return http.Response(
               jsonEncode({

@@ -108,7 +108,14 @@ export class ProductionRework {
     const net=units(String(batch.physical_weight_kg))-units(used);
     const allocations=(await this.db.query(`SELECT event_id AS "eventId",version,origin_lot_id AS "originLotId",grade_code AS "gradeCode",weight_kg::text AS "weightKg"
       FROM sobatnira.production_output_allocations WHERE tenant_id=$1 AND factory_id=$2 AND batch_id=$3 ORDER BY version,origin_lot_id,grade_code`,[...keys(access),batchId])).rows;
-    return {batchId,kind:batch.kind,status:batch.status,inputs,recipients,allocations,
+    const juice=(await this.db.query(`SELECT r.request_id AS "requestId",r.origin_lot_id AS "originLotId",l.display_code AS "lotCode",r.quantity_ml::text AS "quantityMl",r.state
+      FROM sobatnira.juice_reservations r JOIN sobatnira.lots l ON l.id=r.origin_lot_id
+      WHERE r.tenant_id=$1 AND r.factory_id=$2 AND r.batch_id=$3 ORDER BY r.origin_lot_id,r.request_id`,[...keys(access),batchId])).rows;
+    const corrections=(await this.db.query(`SELECT id,version,status,reason,before_data AS "before",proposed_data AS "after",created_at AS "createdAt",updated_at AS "updatedAt"
+      FROM sobatnira.production_batch_corrections WHERE batch_id=$1 ORDER BY created_at,id`,[batchId])).rows;
+    return {batchId,kind:batch.kind,status:batch.status,inputs,recipients,allocations,juice,corrections,
+      source:batch.source_document_id?{documentId:batch.source_document_id,revisionId:batch.source_revision_id,block:batch.source_block,rowReference:batch.source_row}:null,
+      masterReferences:batch.master_references,
       grossWeightKg:String(batch.physical_weight_kg),reusedWeightKg:used,netAdditionalKg:(net<0n?'-':'')+kilograms(net<0n?-net:net),
       financialStatus:(await reworkAffectedLots(this.db,access,batch.is_synthetic)).includes(batch.lot_id)?'REWORK_FINANCIALS_PENDING':'available'};
   }

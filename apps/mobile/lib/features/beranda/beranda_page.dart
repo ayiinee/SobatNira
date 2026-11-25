@@ -26,6 +26,7 @@ class BerandaPage extends StatefulWidget {
     this.period = 'Semua tanggal',
     this.reportStatus,
     this.statusMessage,
+    this.stockSummary,
     this.pager,
     super.key,
   });
@@ -39,6 +40,7 @@ class BerandaPage extends StatefulWidget {
   final String? profile;
   final ({String cane, String lots})? summary;
   final Widget? statusMessage;
+  final Widget? stockSummary;
   final Widget? reportStatus;
   final String? profit;
   final ConnectedLotPager? pager;
@@ -110,6 +112,8 @@ class _BerandaPageState extends State<BerandaPage> {
                       showEmpty ? _emptyList() : _card(items[index]),
                 ),
               ),
+              if (widget.stockSummary case final stock?)
+                SliverToBoxAdapter(child: stock),
               if (widget.pager case final pager?)
                 SliverToBoxAdapter(child: LotPageFooter(pager)),
             ],
@@ -226,8 +230,14 @@ class _BerandaPageState extends State<BerandaPage> {
                               ),
                               itemCount:
                                   (showEmpty ? 1 : items.length) +
-                                  (widget.pager == null ? 0 : 1),
-                              itemBuilder: (context, index) => showEmpty
+                                  (widget.pager == null ? 0 : 1) +
+                                  (widget.stockSummary == null ? 0 : 1),
+                              itemBuilder: (context, index) =>
+                                  index ==
+                                      (showEmpty ? 1 : items.length) +
+                                          (widget.pager == null ? 0 : 1)
+                                  ? widget.stockSummary!
+                                  : showEmpty
                                   ? (index == 0
                                         ? _emptyList()
                                         : LotPageFooter(widget.pager!))

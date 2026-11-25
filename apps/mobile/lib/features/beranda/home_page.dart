@@ -1,3 +1,4 @@
+import '../kloter/sugar_stock_page.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/nira_loading.dart';
@@ -147,11 +148,14 @@ class _NiraHomeState extends State<NiraHome> {
                   reports: _live.reports.summary,
                   compact: true,
                 ),
-          statusMessage:
-              _loadStatus() ??
-              (_live != null && _lots.isEmpty
-                  ? const Text('Belum ada kloter di pabrik ini.')
-                  : null),
+          statusMessage: _loadStatus(),
+          stockSummary: _live == null
+              ? null
+              : SugarStockCard(
+                  api: _live.api,
+                  scope: _live.scope,
+                  synthetic: _live.reports.synthetic,
+                ),
         ),
         NiraTab.kloter => KloterListPage(
           key: ValueKey(
@@ -566,9 +570,17 @@ class _LotDetailState extends State<_LotDetail> {
           reportLink: _production,
         ),
         loadStock: () => _api.juice(_scope, _id, synthetic: _synthetic),
-        statusMessage: snapshot.hasError
-            ? _LoadFailed(snapshot.error!, _reload)
-            : null,
+        statusMessage: Column(
+          children: [
+            SugarStockCard(
+              api: _api,
+              scope: _scope,
+              synthetic: _synthetic,
+              lotId: _id,
+            ),
+            if (snapshot.hasError) _LoadFailed(snapshot.error!, _reload),
+          ],
+        ),
       );
     },
   );
