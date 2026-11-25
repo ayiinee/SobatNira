@@ -317,9 +317,9 @@ class _NiraHomeState extends State<NiraHome> {
   @override
   void dispose() {
     _tab.dispose();
+    _analytics.dispose();
     _demo.dispose();
     _live?.dispose();
-    _analytics.dispose();
     _settings.dispose();
     super.dispose();
   }
@@ -366,7 +366,12 @@ class _NiraHomeState extends State<NiraHome> {
         MaterialPageRoute<void>(
           builder: (_) {
             if (action != QuickActionKind.expenses) {
-              return BantuanPage(onNavigate: _navigate);
+              return BantuanPage(
+                onNavigate: _navigate,
+                loadProfile: _live == null
+                    ? null
+                    : () => _live.api.getProduction(_live.scope.basePath),
+              );
             }
             if (_live case final live?) {
               return ConnectedExpensesPage(

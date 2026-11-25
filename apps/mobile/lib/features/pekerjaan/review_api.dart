@@ -233,6 +233,25 @@ class ReviewApi {
     return ReviewApi(token);
   }
 
+  static Future<void> completeInvitation(
+    String accessToken,
+    String password,
+  ) async {
+    if (invalidConfiguration.isNotEmpty) throw const ReviewApiError(503);
+    final response = await http
+        .put(
+          Uri.parse(supabaseProject).replace(path: '/auth/v1/user'),
+          headers: {
+            'apikey': supabasePublicKey,
+            'Authorization': 'Bearer $accessToken',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({'password': password}),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (response.statusCode != 200) throw ReviewApiError(response.statusCode);
+  }
+
   static bool _validOrigin(String value) {
     final uri = Uri.tryParse(value);
     return uri != null &&

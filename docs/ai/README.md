@@ -240,7 +240,7 @@ Jalankan gateway, NestJS dan FastAPI pada host yang sama untuk memakai alamat lo
 
    Sajikan `build/web` dari origin yang terdaftar di `CORS_ORIGINS`. Masuk dengan akun Supabase. Beranda membuka pabrik pertama yang dapat diakses. Jika akun mempunyai akses ke beberapa pabrik, gunakan pemilih di profil Beranda. Buka **Pekerjaan** untuk meninjau nota, **Kloter** untuk detail dan saldo nira, atau **Laporan** dan aksi **Rekap** untuk melihat data yang sudah disahkan.
 
-   Jika probe privasi R2 gagal karena koneksi ke hostname lama terputus, cocokkan hostname dengan daftar domain publik bucket di dashboard R2 dan ulangi `check-media-privacy` dari host deployment. Bila hostname lama sudah dihapus dan dashboard menunjukkan seluruh akses publik dinonaktifkan, `R2_PUBLIC_BASE_URL` boleh dikosongkan. Verifikasi ini terpisah dari pemeriksaan akses S3.
+   Jika probe privasi R2 gagal, cocokkan hostname dengan konfigurasi bucket dan ulangi `check-media-privacy` dari host deployment. API mewajibkan `R2_PUBLIC_BASE_URL` ketika `REPORT_EXPORT_ENABLED=true` pada production/connected. Jika belum ada target probe privat yang dapat diverifikasi, biarkan worker ekspor nonaktif dan selesaikan konfigurasi bersama pengelola storage. Bucket dan objek tetap privat. Verifikasi ini terpisah dari pemeriksaan akses S3.
 
 ### Smoke test setelah pairing
 

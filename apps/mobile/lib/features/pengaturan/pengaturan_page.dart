@@ -76,14 +76,20 @@ class PengaturanPage extends StatelessWidget {
 
   Widget _profile() => Column(
     children: [
-      ClipOval(
-        child: Image.asset(
-          'assets/sobatnira/art/profil-demo.png',
-          width: 64,
-          height: 64,
-          excludeFromSemantics: true,
+      if (connectedProfile case final profile?)
+        CircleAvatar(
+          radius: 32,
+          child: Text(profile.characters.first.toUpperCase()),
+        )
+      else
+        ClipOval(
+          child: Image.asset(
+            'assets/sobatnira/art/profil-demo.png',
+            width: 64,
+            height: 64,
+            excludeFromSemantics: true,
+          ),
         ),
-      ),
       const SizedBox(height: NiraSpace.xs),
       Text(
         connectedProfile ?? settings.accounts.first.value.name,

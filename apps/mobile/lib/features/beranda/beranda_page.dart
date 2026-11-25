@@ -352,14 +352,20 @@ class _ProfileState extends State<_Profile> {
     ),
     child: Row(
       children: [
-        ClipOval(
-          child: Image.asset(
-            'assets/sobatnira/art/profil-demo.png',
-            width: 40,
-            height: 40,
-            excludeFromSemantics: true,
+        if (widget.profile case final profile?)
+          CircleAvatar(
+            radius: 20,
+            child: Text(profile.characters.first.toUpperCase()),
+          )
+        else
+          ClipOval(
+            child: Image.asset(
+              'assets/sobatnira/art/profil-demo.png',
+              width: 40,
+              height: 40,
+              excludeFromSemantics: true,
+            ),
           ),
-        ),
         const SizedBox(width: NiraSpace.md),
         Expanded(
           child: Column(
