@@ -1,5 +1,5 @@
-import { BadRequestException, Body, CanActivate, Controller, ExecutionContext, Get, Header, Headers,
-  HttpCode, Injectable, Module, NotFoundException, Param, Patch, Post, Query, ServiceUnavailableException, StreamableFile,
+import { BadRequestException, Body, CanActivate, Controller, Delete, ExecutionContext, Get, Header, Headers,
+  HttpCode, Injectable, Module, NotFoundException, Param, Patch, Post, Put, Query, ServiceUnavailableException, StreamableFile,
   UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Public } from '../auth/auth.decorators';
@@ -12,6 +12,7 @@ import { validateEvidence } from '../evidence/evidence.validation';
 import { imageVariant, renderImageVariant } from '../evidence/image-variant';
 import { DocumentProcessor } from './processing';
 import { Review } from './review';
+import { ReviewPush } from './review-push';
 import { Notices } from './notices';
 import { TruckIntake } from './truck-intake';
 import { MillingModule } from '../milling/milling.module';
@@ -141,7 +142,17 @@ class OcrMediaController {
 @Public()
 @Controller('api/v1/mobile')
 class MobileReviewController {
-  constructor(private readonly review: Review, private readonly media: MediaStorage) {}
+  constructor(private readonly review: Review, private readonly media: MediaStorage, private readonly push: ReviewPush) {}
+
+  @Put('review-push')
+  async registerPush(@Headers('authorization') token: string, @Body('installation_id') id: unknown, @Body('factory_id') factory: unknown) {
+    return this.push.register(await this.review.user(token), id, factory);
+  }
+
+  @Delete('review-push')
+  async revokePush(@Headers('authorization') token: string, @Body('installation_id') id: unknown) {
+    return this.push.revoke(await this.review.user(token), id);
+  }
 
   @Get('review-notifications')
   @Header('Cache-Control', 'private, no-store')
@@ -232,7 +243,7 @@ class MobileReviewController {
 @Module({
   imports: [MillingModule],
   controllers: [WhatsAppController, OcrMediaController, MobileReviewController, OperatorsController],
-  providers: [AdapterGuard, Database, DocumentProcessor, Intake, MediaStorage, Notices, Review, TruckIntake,
+  providers: [AdapterGuard, Database, DocumentProcessor, Intake, MediaStorage, Notices, Review, ReviewPush, TruckIntake,
     ProductionMilling, StockReconciliation, Operators],
   exports: [MediaStorage, Review],
 })

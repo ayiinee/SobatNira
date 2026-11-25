@@ -28,6 +28,132 @@ class ConnectedSettingsPage extends StatefulWidget {
 
 class _ConnectedSettingsPageState extends State<ConnectedSettingsPage> {
   late Future<List<Widget>> _content = _load();
+  bool _saving = false;
+
+  Future<void> _save(
+    Future<Json> Function() action,
+    String Function(Json) notice,
+  ) async {
+    if (_saving) return;
+    _saving = true;
+    try {
+      final result = await action();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(notice(result))));
+      setState(() => _content = _load());
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error is ReviewApiError
+                  ? error.detail ?? error.message
+                  : 'Pengaturan gagal disimpan.',
+            ),
+          ),
+        );
+        setState(() => _content = _load());
+      }
+    } finally {
+      _saving = false;
+    }
+  }
+
+  Future<void> _profile(Json factory) async {
+    if (_saving) return;
+    final values = await showSettingsEditor(
+      context,
+      title: 'Edit profil pabrik',
+      fields: [
+        SettingsField(
+          'Kode pabrik',
+          initial: factory['displayCode'] as String? ?? '',
+          optional: true,
+        ),
+        SettingsField(
+          'Cabang',
+          initial: factory['branchName'] as String? ?? '',
+          optional: true,
+        ),
+        SettingsField(
+          'WhatsApp bantuan',
+          initial: factory['supportPhone'] as String? ?? '',
+          optional: true,
+          keyboardType: TextInputType.phone,
+          hint: '+62…',
+          validator: (value) => RegExp(r'^\+[1-9][0-9]{7,14}$').hasMatch(value)
+              ? null
+              : 'Pakai format internasional, misalnya +62…',
+        ),
+      ],
+    );
+    if (values == null || !mounted) return;
+    String? optional(String key) {
+      final value = values[key]!.trim();
+      return value.isEmpty ? null : value;
+    }
+
+    await _save(
+      () => widget.api.writeProduction(widget.scope.basePath, {
+        'version': factory['version'],
+        'displayCode': optional('Kode pabrik'),
+        'branchName': optional('Cabang'),
+        'supportPhone': optional('WhatsApp bantuan'),
+      }, id: 'profile'),
+      (_) => 'Profil pabrik diperbarui.',
+    );
+  }
+
+  Future<void> _inviteAdmin() async {
+    if (_saving) return;
+    final values = await showSettingsEditor(
+      context,
+      title: 'Tambahkan admin pabrik',
+      fields: [
+        SettingsField(
+          'Email admin',
+          keyboardType: TextInputType.emailAddress,
+          validator: (value) =>
+              RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value)
+              ? null
+              : 'Periksa email admin.',
+        ),
+      ],
+      confirmation: (value) =>
+          'Berikan akses admin pabrik ini kepada ${value['Email admin']}?',
+    );
+    if (values == null || !mounted) return;
+    await _save(
+      () => widget.api.writeProduction(
+        [...widget.scope.basePath, 'memberships', 'admin'],
+        {'email': values['Email admin']},
+      ),
+      (result) => result['inviteSent'] == true
+          ? 'Undangan admin dikirim.'
+          : 'Akun mendapat akses admin pabrik.',
+    );
+  }
+
+  Future<void> _setAdminActive(Json member, bool active) async {
+    if (_saving) return;
+    final confirmed = await confirmSettingsChange(
+      context,
+      active
+          ? 'Aktifkan kembali akses admin ini?'
+          : 'Nonaktifkan akses admin ini pada pabrik ini?',
+    );
+    if (!confirmed || !mounted) return;
+    await _save(
+      () => widget.api.writeProduction(
+        [...widget.scope.basePath, 'memberships'],
+        {'isActive': active},
+        id: member['userId'] as String,
+      ),
+      (_) => active ? 'Akses admin diaktifkan.' : 'Akses admin dinonaktifkan.',
+    );
+  }
 
   Future<List<Widget>> _load() async {
     final scope = widget.scope;
@@ -49,7 +175,19 @@ class _ConnectedSettingsPageState extends State<ConnectedSettingsPage> {
               title: 'Peran Anda',
               description: _role(factory['role']),
             ),
+            for (final (key, title, icon) in const [
+              ('displayCode', 'Kode pabrik', Icons.tag),
+              ('branchName', 'Cabang', Icons.place_outlined),
+              ('supportPhone', 'WhatsApp bantuan', Icons.support_agent),
+            ])
+              if (factory[key] case final String value)
+                SettingsInfoRow(icon: icon, title: title, description: value),
           ]),
+          if (factory['role'] == 'owner' && factory['version'] is int)
+            TextButton(
+              onPressed: () => _profile(factory),
+              child: const Text('Edit profil pabrik'),
+            ),
         ];
       case SettingSection.access:
         if (scope.role != 'owner') throw const ReviewApiError(403);
@@ -59,6 +197,10 @@ class _ConnectedSettingsPageState extends State<ConnectedSettingsPage> {
         ]);
         final members = (data['memberships'] as List).cast<Json>();
         return [
+          OutlinedButton(
+            onPressed: _inviteAdmin,
+            child: const Text('Tambahkan admin'),
+          ),
           if (members.isEmpty)
             const SettingsMessage(
               icon: Icons.people_outline,
@@ -67,11 +209,28 @@ class _ConnectedSettingsPageState extends State<ConnectedSettingsPage> {
           else
             _group([
               for (final member in members)
-                SettingsInfoRow(
-                  icon: Icons.person_outline,
-                  title: _role(member['role']),
-                  description: 'ID akun ${member['userId'] as String}',
-                  status: _status(member['isActive'] as bool),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SettingsInfoRow(
+                      icon: Icons.person_outline,
+                      title: _role(member['role']),
+                      description:
+                          member['email'] as String? ??
+                          'ID akun ${member['userId'] as String}',
+                      status: _status(member['isActive'] as bool),
+                    ),
+                    if (member['role'] == 'admin')
+                      TextButton(
+                        onPressed: () =>
+                            _setAdminActive(member, member['isActive'] != true),
+                        child: Text(
+                          member['isActive'] == true
+                              ? 'Nonaktifkan admin'
+                              : 'Aktifkan admin',
+                        ),
+                      ),
+                  ],
                 ),
             ]),
         ];

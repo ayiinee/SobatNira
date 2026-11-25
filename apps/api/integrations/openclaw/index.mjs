@@ -48,6 +48,7 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
         result.status === 429 ? 'Terlalu banyak kiriman. Tunggu sebentar dan coba lagi.' :
         reason === 'DOCUMENT_REFERENCE_REQUIRED' || reason === 'DOCUMENT_REFERENCE_CONFLICT' ? 'Untuk lanjutan, balas ringkasan nota sebelumnya dengan foto. Untuk nota baru, kirim terpisah dengan caption BARU.' :
         reason === 'OCR_RETRY_UNAVAILABLE' ? 'Foto ini sudah diproses atau belum bisa dicoba ulang. Ketik STATUS untuk melihat hasil terbaru.' :
+        reason === 'OPERATOR_DOCUMENT_TYPE_UNAVAILABLE' ? 'Pilihan jenis nota sudah ditutup. Ketik STATUS untuk melihat langkah berikutnya.' :
         reason === 'OPERATOR_CLARIFICATION_REQUIRED' ? 'Masih ada data yang perlu diperiksa. Balas ringkasan nota dengan STATUS untuk melihat pertanyaan yang aktif.' :
         reason === 'OPERATOR_DOCUMENT_BLOCKED' ? 'Draf perlu diperiksa sebelum dikonfirmasi. Balas ringkasan nota dengan STATUS untuk melihat langkah berikutnya.' :
         reason === 'OPERATOR_ANSWER_INVALID' || reason === 'Field atau nilai koreksi tidak valid' ?
@@ -180,7 +181,7 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
         return { text: 'Siap. Ketik STATUS kapan saja untuk melihat nota terakhir.' };
       }
       let parsed = command.exec(content);
-      const shortAction = !parsed && /^(KONFIRMASI|JAWAB|COBA LAGI)(?:\s+(.+))?$/i.exec(content);
+      const shortAction = !parsed && /^(KONFIRMASI|JAWAB|COBA LAGI|JENIS)(?:\s+(.+))?$/i.exec(content);
       if (shortAction) {
         const [, verb, value] = shortAction;
         const target = quote && await contextFor(phone, chatId, quote, true);
@@ -206,6 +207,10 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
             return { text: `Periksa kembali nilainya pada nota. Contoh JAWAB ${answerExample(path)}.` };
           }
           tail = `${active.pending_question.id} ${JSON.stringify(normalized)}`;
+        } else if (verb.toUpperCase() === 'JENIS') {
+          const type = value?.trim().toUpperCase();
+          tail = type === 'TRUK' ? 'TRUCK_ARRIVAL_NOTE' : type === 'PRODUKSI' ? 'PRODUCTION_NOTE' : null;
+          if (!tail) return { text: 'Balas ringkasan dengan JENIS TRUK atau JENIS PRODUKSI sesuai foto.' };
         } else if (value) return { text: `Balas ringkasan hanya dengan ${verb.toUpperCase()}.` };
         parsed = [null, verb, target.document_id, target.revision_id, tail];
       }
@@ -214,6 +219,7 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
       if (verb.toUpperCase() === 'STATUS') return { text: await showStatus(phone, chatId, document, revision, Number(tail ?? 1)) };
       const action = { action: verb.toUpperCase() === 'COBA LAGI' ? 'RETRY_OCR' : 'CONFIRM',
         document_id: document.toLowerCase(), revision_id: revision.toLowerCase() };
+      if (verb.toUpperCase() === 'JENIS') Object.assign(action, { action: 'SELECT_DOCUMENT_TYPE', value: tail });
       if (verb.toUpperCase() === 'KOREKSI') {
         const correction = /^([a-z0-9_.]+)=(.+)$/i.exec(tail ?? '');
         if (!correction) return { text: 'Gunakan KOREKSI <dokumen> <revisi> <field_path>=<nilai JSON>.' };
@@ -228,7 +234,9 @@ export function createBridge({ apiUrl, token, mediaDir, request = fetch, classif
       }
       const result = await call('text-events', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ event: { ...metadata, message_type: 'TEXT' }, action }) }, messageId);
-      if (action.action === 'RETRY_OCR') return { text: 'Foto asli masuk antrean pembacaan ulang. Saya akan mengirim ringkasannya di sini.' };
+      if (['RETRY_OCR', 'SELECT_DOCUMENT_TYPE'].includes(action.action)) {
+        return { text: 'Foto asli masuk antrean pembacaan ulang. Saya akan mengirim ringkasannya di sini.' };
+      }
       return { text: action.action === 'CONFIRM' ? 'Draf dikonfirmasi dan masuk antrean admin.' :
         shortAction ? 'Jawaban tersimpan. Saya akan mengirim ringkasan terbaru.' :
           summary(await status(phone, document, result.revision_id), 1, { fromStatus: true }) };

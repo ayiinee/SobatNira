@@ -98,7 +98,7 @@ Panggilan pertama PaddleOCR mengunduh model. Gunakan `PADDLE_PDX_CACHE_HOME` unt
    - Buka tugas dari **Perlu tinjauan manual**. Lengkapi tanggal `2026-11-16`, pemasok `PEMASOK DEMO`, jenis tebu `BL`, berat `1250` dan catatan pemeriksaan. Simpan draf dan sahkan ke kloter `OCR-B-UJI`.
    - Buka **Nota Produksi** revisi kedua. Validasi blok `DEMO-A` ke kloter A dengan `90` L dan blok `DEMO-B` ke kloter B dengan `85` L. Isi waktu penggilingan `2026-11-16T09:00:00+07:00` pada kedua blok. Angka liter berasal dari input eksplisit pengujian.
 
-5. Buka **Kloter** dan pilih kloter A. Periksa berat 1250 kg, nira tersedia 90 L, serta referensi dan foto kedua nota sah. Pilih **Tambah batch**, kode `SMOKE-UJI`, wajan 1, waktu masak `2026-11-16T10:00:00+07:00`, 40000 mL nira, hasil fisik 26 kg, grade A 25 kg dan Rp20000/kg. Isi biaya tebu, operasional, bahan dan lainnya masing-masing Rp100000, Rp20000, Rp5000 dan Rp0. Pilih **Reservasi nira**, lalu **Validasi** di Detail Batch.
+5. Buka **Kloter** dan pilih kloter A. Periksa berat 1250 kg, nira tersedia 90 L, serta referensi dan foto kedua nota sah. Pilih **Tambah batch**, kode `SMOKE-UJI`, wajan 1, waktu masak `2026-11-16T10:00:00+07:00`, 40000 mL nira, hasil fisik 25 kg, grade A 25 kg dan Rp20000/kg. Isi biaya tebu, operasional, bahan dan lainnya masing-masing Rp100000, Rp20000, Rp5000 dan Rp0. Pilih **Reservasi nira**, lalu **Validasi** di Detail Batch.
 6. Di **Laporan**, pilih semua tanggal atau 16 November 2026 dan cocokkan angka pada tabel. Dari **Beranda → Rekap**, gunakan **Simpan PDF** dan periksa periode, `SMOKE-UJI` dan 25 kg gula final. Simpan bukti visual Detail Kloter, Laporan, dan Pengaturan pada ukuran 418 × 966. Bandingkan dengan build acuan UI tim pada ukuran yang sama, dengan memperhitungkan data fixture dan aksi yang bergantung pada akun. Simpan PDF serta hasil terminal `Smoke Flutter dan PostgreSQL lulus` dari setiap checkout. Tekan Ctrl+C sebelum menjalankan checkout berikutnya.
 
    | Pemeriksaan | Hasil yang diharapkan |
@@ -140,6 +140,16 @@ npm.cmd run local:stack -- --web
 Gunakan `--smoke` untuk menguji foto ambigu dan foto ulang. Mode `--smoke` mencetak kode kloter dan batch yang dibuat untuk putaran tersebut. Tes PostgreSQL komponen juga memeriksa lease kedaluwarsa akibat restart dan kegagalan provider yang menuju antrean **Perlu tinjauan manual**.
 
 Untuk menguji sampai antrean **Pekerjaan** dengan PaddleOCR CPU lokal tanpa membuka Flutter, jalankan `npm run local:stack -- --ocr-smoke` dari `apps/api` memakai database pengembangan sintetis. Perintah memeriksa foto truk, dua revisi produksi, penolakan konfirmasi saat klarifikasi masih terbuka, penolakan format angka ambigu, foto ulang, dan tinjauan manual. Layanan yang dimulai oleh perintah ini ditutup setelah tes selesai.
+
+Jika ringkasan menyatakan template belum terbaca, operator dapat membalas ringkasan otomatis yang aktif dengan `JENIS TRUK` atau `JENIS PRODUKSI`. SobatNira mencoba membaca ulang foto asli dengan jenis nota tersebut sebagai petunjuk. Pilihan berlaku sekali per foto. Foto yang tetap tidak terbaca tersedia untuk tinjauan manual di antrean Pekerjaan.
+
+### Notifikasi Pekerjaan di Android
+
+1. Di staging, terapkan migrasi OCR `010_android_review_push.sql` lewat `npm run db:migrate:ocr`. Atur `ANDROID_REVIEW_PUSH_PROJECT_ID` dan kredensial Google untuk pengiriman FCM HTTP v1 melalui workload identity atau secret file `GOOGLE_APPLICATION_CREDENTIALS`. Samakan proyek dengan `apps/mobile/android/app/google-services.json` yang hanya tersedia di lingkungan build staging. [Setup Android](https://firebase.google.com/docs/android/setup) · [Otorisasi FCM](https://firebase.google.com/docs/cloud-messaging/send/v1-api)
+2. Tambahkan `--dart-define=SOBATNIRA_ANDROID_PUSH=true` pada build Android staging. Masukkan nama alias, berkas keystore, dan dua kata sandi melalui `SOBATNIRA_ANDROID_KEY_ALIAS`, `SOBATNIRA_ANDROID_KEYSTORE`, `SOBATNIRA_ANDROID_STORE_PASSWORD`, dan `SOBATNIRA_ANDROID_KEY_PASSWORD`. Gunakan `SOBATNIRA_ANDROID_SIGNING_REQUIRED=true` pada build distribusi supaya build berhenti jika secret tim belum lengkap. Build lokal tanpa secret tetap menggunakan kunci debug.
+3. Setelah memeriksa konfigurasi, aktifkan `ANDROID_REVIEW_PUSH_ENABLED=true` pada API dan `DOCUMENT_WORKER_ENABLED=true` pada proses yang menjalankan pengiriman. Masuk sebagai admin pabrik uji dan nyalakan **Notifikasi pekerjaan Android** di Pengaturan. Konfirmasi satu nota sintetis dari WhatsApp saat aplikasi di latar belakang, lalu ketuk notifikasi untuk membuka Pekerjaan. Ulangi setelah keluar, setelah admin dinonaktifkan, dan setelah API mendapat respons sementara gagal dari FCM. Web tetap menampilkan badge di dalam aplikasi.
+
+Antrean memakai satu pengiriman per tugas dan instalasi, dengan maksimal tiga percobaan dalam 15 menit. Pesan Android memakai tag yang sama agar notifikasi berulang menggantikan pemberitahuan sebelumnya. NestJS memeriksa anggota aktif dan status pekerjaan saat pengiriman. Isi pesan di layar kunci bersifat umum. Jika telepon sedang offline saat keluar, pencabutan di server dan Firebase baru dapat dikonfirmasi ketika tersedia koneksi.
 
 ### Percakapan operator
 
@@ -240,7 +250,7 @@ Jalankan gateway, NestJS dan FastAPI pada host yang sama untuk memakai alamat lo
 
    Sajikan `build/web` dari origin yang terdaftar di `CORS_ORIGINS`. Masuk dengan akun Supabase. Beranda membuka pabrik pertama yang dapat diakses. Jika akun mempunyai akses ke beberapa pabrik, gunakan pemilih di profil Beranda. Buka **Pekerjaan** untuk meninjau nota, **Kloter** untuk detail dan saldo nira, atau **Laporan** dan aksi **Rekap** untuk melihat data yang sudah disahkan.
 
-   Jika probe privasi R2 gagal karena koneksi ke hostname lama terputus, cocokkan hostname dengan daftar domain publik bucket di dashboard R2 dan ulangi `check-media-privacy` dari host deployment. Bila hostname lama sudah dihapus dan dashboard menunjukkan seluruh akses publik dinonaktifkan, `R2_PUBLIC_BASE_URL` boleh dikosongkan. Verifikasi ini terpisah dari pemeriksaan akses S3.
+   Jika probe privasi R2 gagal, cocokkan hostname dengan konfigurasi bucket dan ulangi `check-media-privacy` dari host deployment. API mewajibkan `R2_PUBLIC_BASE_URL` ketika `REPORT_EXPORT_ENABLED=true` pada production/connected. Jika belum ada target probe privat yang dapat diverifikasi, biarkan worker ekspor nonaktif dan selesaikan konfigurasi bersama pengelola storage. Bucket dan objek tetap privat. Verifikasi ini terpisah dari pemeriksaan akses S3.
 
 ### Smoke test setelah pairing
 
