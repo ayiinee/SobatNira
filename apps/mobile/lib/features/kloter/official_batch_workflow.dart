@@ -9,6 +9,7 @@ import 'demo_production.dart';
 import 'juice_volume.dart';
 import 'batch_juice_reservation_page.dart';
 import 'batch_draft_page.dart';
+import 'sugar_stock_page.dart';
 import 'kloter_detail_widgets.dart';
 import 'kloter_detail_page.dart';
 import '../laporan/connected_reports.dart';
@@ -635,6 +636,47 @@ class _OfficialBatchDetailState extends State<_OfficialBatchDetail> {
           ],
         ),
       ],
+      DocumentLink(
+        'Asal hasil dan riwayat rework',
+        () => Navigator.of(context).push<void>(
+          MaterialPageRoute(
+            builder: (_) => BatchTracePage(
+              api: widget.api,
+              scope: widget.scope,
+              batchId: _id,
+            ),
+          ),
+        ),
+      ),
+      if (batch['source_document_id'] != null)
+        Text(
+          'Sumber nota: ${batch['source_document_id']} ? ${batch['source_block']} ? ${batch['source_row']} ? revisi ${batch['source_revision_id']}',
+        ),
+      if (batch['financialStatus'] == 'REWORK_FINANCIALS_PENDING')
+        const Text('Nilai dan margin belum tersedia karena rework.'),
+      if (batch['status'] == 'draft' &&
+          batch['kind'] == 'rework' &&
+          widget.scope.role == 'admin')
+        TextButton(
+          onPressed: _busy
+              ? null
+              : () async {
+                  await Navigator.of(context).push<void>(
+                    MaterialPageRoute(
+                      builder: (_) => SugarStockPage(
+                        api: widget.api,
+                        scope: widget.scope,
+                        reworkBatchId: _id,
+                      ),
+                    ),
+                  );
+                  if (mounted) {
+                    widget.onChanged();
+                    _reload();
+                  }
+                },
+          child: const Text('Pilih gula sumber rework'),
+        ),
       if (batch['status'] == 'approved')
         DocumentLink(
           'Nilai produksi dan margin kloter',

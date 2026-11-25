@@ -50,6 +50,8 @@ class _BatchDraftState extends State<BatchDraftPage> {
     widget.scope,
     widget.lotId,
   );
+  late final Future<Json> _stock = widget.api.sugarStock(widget.scope);
+  String _kind = 'normal';
   Json? _source;
   String? _error;
   bool _busy = false;
@@ -127,6 +129,7 @@ class _BatchDraftState extends State<BatchDraftPage> {
       }
       _pending ??= {
         'id': _id,
+        'kind': _kind,
         'lotId': widget.lotId,
         'code': _code.text.trim(),
         'wokNumber': wok,
@@ -207,6 +210,35 @@ class _BatchDraftState extends State<BatchDraftPage> {
                 ],
               );
             },
+          ),
+          FutureBuilder<Json>(
+            future: _stock,
+            builder: (context, snapshot) => Column(
+              children: [
+                if (snapshot.data?['reworkEnabled'] == true)
+                  DropdownButtonFormField<String>(
+                    initialValue: _kind,
+                    decoration: const InputDecoration(labelText: 'Jenis batch'),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'normal',
+                        child: Text('Produksi biasa'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'rework',
+                        child: Text('Rework dengan nira baru'),
+                      ),
+                    ],
+                    onChanged: _busy || _pending != null
+                        ? null
+                        : (v) => setState(() => _kind = v!),
+                  )
+                else
+                  const Text(
+                    'Rework belum diaktifkan setelah integrasi laporan.',
+                  ),
+              ],
+            ),
           ),
           _field('Kode batch', _code),
           _field('Nomor wajan', _wok, number: true),

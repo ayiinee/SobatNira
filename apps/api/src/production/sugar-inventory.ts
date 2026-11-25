@@ -41,7 +41,17 @@ export class SugarInventory {
         ON (a."tenantId",a."factoryId")=(s.tenant_id,s.factory_id)
       LEFT JOIN sobatnira.lots l ON (l.tenant_id,l.factory_id,l.id)=(s.tenant_id,s.factory_id,s.origin_lot_id)
       WHERE s.is_synthetic=$4 ORDER BY s.grade_code,s.quality,s.id`,scope)).rows;
-    return {active:!!state,version:state?.version ?? 0,activatedAt:state?.activated_at ?? null,
+    const totals=(await this.db.query(`WITH ${FACTORY_SCOPE_CTE} SELECT
+      COALESCE((SELECT sum(b.physical_weight_kg) FROM sobatnira.production_batches b WHERE b.tenant_id=a."tenantId" AND b.factory_id=a."factoryId"
+        AND b.is_synthetic=$4 AND b.status='approved' AND b.approved_at >= $5::timestamptz),0)::text AS "grossWeightKg",
+      COALESCE((SELECT sum(r.weight_kg) FROM sobatnira.production_rework_reservations r WHERE r.tenant_id=a."tenantId" AND r.factory_id=a."factoryId"
+        AND r.is_synthetic=$4 AND r.state='consumed'),0)::text AS "reusedWeightKg",
+      COALESCE((SELECT sum(c.quantity_delta_kg) FROM sobatnira.cane_stock_entries c WHERE c.tenant_id=a."tenantId" AND c.factory_id=a."factoryId" AND c.is_synthetic=$4),0)::text AS "caneKg",
+      COALESCE((SELECT sum(j.on_hand_ml) FROM sobatnira.juice_balance_entries j WHERE j.tenant_id=a."tenantId" AND j.factory_id=a."factoryId" AND j.is_synthetic=$4),0)::text AS "juiceOnHandMl"
+      FROM authorized_scope a`,[...scopeValues(access),synthetic,state?.activated_at ?? null])).rows[0];
+    const gross=units(totals?.grossWeightKg ?? '0'), reused=units(totals?.reusedWeightKg ?? '0');
+    const net=gross-reused;
+    return {totals:{...totals,netAdditionalKg:(net<0n?'-':'')+kilograms(net<0n?-net:net)},active:!!state,version:state?.version ?? 0,activatedAt:state?.activated_at ?? null,
       synthetic,reworkEnabled:state?.rework_enabled ?? false,limitation:INVENTORY_LIMITATION,sources};
   }
 
