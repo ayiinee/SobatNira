@@ -168,8 +168,9 @@ class _ConnectedExpensesPageState extends State<ConnectedExpensesPage> {
         if (_synthetic) 'Data sintetis',
       ].join(' · '),
       children: [
-        if (!_synthetic)
-          OutlinedButton(
+        if (!_synthetic) ...[
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(minimumSize: const Size(48, 48)),
             onPressed: () async {
               final changed = await Navigator.of(context).push<bool>(
                 MaterialPageRoute(
@@ -183,8 +184,11 @@ class _ConnectedExpensesPageState extends State<ConnectedExpensesPage> {
               setState(() => _report = _load());
               _production.refresh();
             },
-            child: const Text('Pengajuan koreksi biaya'),
+            icon: const Icon(Icons.receipt_long_outlined, size: 20),
+            label: const Text('Pengajuan koreksi biaya'),
           ),
+          const SizedBox(height: NiraSpace.xl),
+        ],
         if (snapshot.connectionState != ConnectionState.done)
           const NiraLoading(label: 'Memuat biaya…')
         else if (snapshot.hasError)
@@ -200,13 +204,12 @@ class _ConnectedExpensesPageState extends State<ConnectedExpensesPage> {
           )
         else ...[
           if (widget.fromSettings) ...[
-            const SettingsMessage(
-              icon: Icons.receipt_long_outlined,
-              title: 'Rincian per kloter',
-              message:
-                  'Buka kloter untuk melihat rincian harga jual dan biaya dari produksi yang sudah disahkan.',
+            _heading('Rincian per kloter', section: true),
+            Text(
+              'Pilih kloter untuk melihat biaya dan harga jual dari produksi yang sudah disahkan.',
+              style: niraText(NiraType.body, color: niraLeaf),
             ),
-            const SizedBox(height: NiraSpace.md),
+            const SizedBox(height: NiraSpace.lg),
           ],
           if (editable.isEmpty &&
               approved.isEmpty &&
@@ -287,6 +290,7 @@ class _ConnectedExpensesPageState extends State<ConnectedExpensesPage> {
     };
     if (widget.fromSettings) {
       return ExpansionTile(
+        internalAddSemanticForOnTap: true,
         tilePadding: const EdgeInsets.symmetric(horizontal: NiraSpace.lg),
         childrenPadding: const EdgeInsets.fromLTRB(
           NiraSpace.lg,
@@ -306,22 +310,25 @@ class _ConnectedExpensesPageState extends State<ConnectedExpensesPage> {
           lot['supplier'] as String,
           style: niraText(NiraType.body, color: niraLeaf),
         ),
+        minTileHeight: 68,
         expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Divider(height: NiraSpace.lg, color: niraLine),
           _heading('Komponen biaya'),
           for (final (key, label) in _costFields)
             _amountRow(label, _costValue(costs?[key])),
-          if (!_synthetic)
-            TextButton(
-              onPressed: () => _requestCorrection(lot),
-              child: const Text('Ajukan koreksi biaya'),
-            ),
           if (prices.isNotEmpty) ...[
             const Divider(height: NiraSpace.xl, color: niraLine),
             _heading('Harga jual per grade'),
             for (final (code, price) in prices)
               _amountRow('Grade $code', '${reportMoney(price)}/kg'),
+          ],
+          if (!_synthetic) ...[
+            const SizedBox(height: NiraSpace.md),
+            OutlinedButton(
+              onPressed: () => _requestCorrection(lot),
+              child: const Text('Ajukan koreksi biaya'),
+            ),
           ],
         ],
       );
@@ -354,9 +361,19 @@ class _ConnectedExpensesPageState extends State<ConnectedExpensesPage> {
     ('otherRupiah', 'Biaya lain'),
   ];
 
-  Widget _heading(String title) => Padding(
+  Widget _heading(String title, {bool section = false}) => Padding(
     padding: const EdgeInsets.only(bottom: NiraSpace.xs),
-    child: Text(title, style: niraText(NiraType.body, weight: FontWeight.w700)),
+    child: Semantics(
+      container: true,
+      headingLevel: section ? 2 : 3,
+      child: Text(
+        title,
+        style: niraText(
+          section ? NiraType.section : NiraType.body,
+          weight: FontWeight.w700,
+        ),
+      ),
+    ),
   );
 
   Widget _amountRow(String label, String amount) => Padding(

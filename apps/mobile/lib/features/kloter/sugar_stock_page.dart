@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
+
+import '../../sobatnira_ui.dart';
+import '../../widgets/adaptive_value.dart';
+import '../../widgets/nira_loading.dart';
+import '../../widgets/page_frame.dart';
+import '../laporan/connected_reports.dart';
 import '../pekerjaan/review_api.dart';
+import '../pengaturan/settings_widgets.dart';
 import 'batch_draft_page.dart';
+import 'demo_production.dart';
 import 'juice_volume.dart';
 
 String stockErrorText(Object error) => error is ReviewApiError
@@ -38,80 +46,209 @@ class _StockCardState extends State<SugarStockCard> {
   }
 
   @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Stok dan penelusuran produksi'),
-          FutureBuilder<Json>(
-            future: _data,
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return Text(
-                  snapshot.hasError
-                      ? 'Saldo belum tersedia. Buka stok untuk mencoba lagi.'
-                      : 'Memuat saldo…',
+  Widget build(BuildContext context) => SettingsPanel(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: NiraSpace.md,
+      children: [
+        const SettingsInfoRow(
+          icon: Icons.inventory_2_outlined,
+          title: 'Stok dan penelusuran produksi',
+        ),
+        FutureBuilder<Json>(
+          future: _data,
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return snapshot.hasError
+                  ? const SettingsMessage(
+                      icon: Icons.info_outline,
+                      message:
+                          'Saldo belum tersedia. Buka stok untuk mencoba lagi.',
+                    )
+                  : const NiraLoading(label: 'Memuat saldo…', compact: true);
+            }
+            final stock = snapshot.requireData;
+            final sources = (stock['sources'] as List).cast<Json>().where(
+              (r) => widget.lotId == null || r['originLotId'] == widget.lotId,
+            );
+            BigInt total(String quality) => sources
+                .where((r) => r['quality'] == quality)
+                .fold(
+                  BigInt.zero,
+                  (a, r) => a + productionWeightUnits(r['onHandKg'] as String)!,
                 );
-              }
-              final stock = snapshot.requireData;
-              final sources = (stock['sources'] as List).cast<Json>().where(
-                (r) => widget.lotId == null || r['originLotId'] == widget.lotId,
-              );
-              BigInt total(String quality) => sources
-                  .where((r) => r['quality'] == quality)
-                  .fold(
-                    BigInt.zero,
-                    (a, r) =>
-                        a + productionWeightUnits(r['onHandKg'] as String)!,
-                  );
-              final totals = stock['totals'] as Json?;
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    stock['active'] == true
-                        ? 'Gula baik: ${productionWeight(total('good'))} kg · Gula gagal: ${productionWeight(total('failed'))} kg'
-                        : 'Saldo awal gula belum dicatat.',
+            final totals = stock['totals'] as Json?;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              spacing: NiraSpace.md,
+              children: [
+                if (stock['active'] == true)
+                  Row(
+                    spacing: NiraSpace.sm,
+                    children: [
+                      Expanded(
+                        child: _StockMetric(
+                          'Gula baik',
+                          _kg(productionWeight(total('good'))),
+                        ),
+                      ),
+                      Expanded(
+                        child: _StockMetric(
+                          'Gula gagal',
+                          _kg(productionWeight(total('failed'))),
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  const SettingsMessage(
+                    icon: Icons.info_outline,
+                    message: 'Saldo awal gula belum dicatat.',
+                    pending: true,
                   ),
-                  if (widget.lotId == null && totals != null)
-                    Text(
-                      'Stok tebu: ${totals['caneKg']} kg · Nira: ${millilitersToLiters(totals['juiceOnHandMl'] as String)} L',
-                    ),
-                  Text(stock['limitation'] as String),
-                ],
-              );
-            },
-          ),
-          TextButton(
-            onPressed: () async {
-              await Navigator.of(context).push<void>(
-                MaterialPageRoute(
-                  builder: (_) => SugarStockPage(
-                    api: widget.api,
-                    scope: widget.scope,
-                    synthetic: widget.synthetic,
-                    lotId: widget.lotId,
+                if (widget.lotId == null && totals != null)
+                  Row(
+                    spacing: NiraSpace.sm,
+                    children: [
+                      Expanded(
+                        child: _StockMetric('Stok tebu', _kg(totals['caneKg'])),
+                      ),
+                      Expanded(
+                        child: _StockMetric(
+                          'Stok nira',
+                          '${reportNumber(millilitersToLiters(totals['juiceOnHandMl'] as String))} L',
+                        ),
+                      ),
+                    ],
                   ),
+                Text(
+                  stock['limitation'] as String,
+                  style: niraText(NiraType.body, color: niraLeaf),
+                ),
+              ],
+            );
+          },
+        ),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(minimumSize: const Size(48, 48)),
+          onPressed: () async {
+            await Navigator.of(context).push<void>(
+              MaterialPageRoute(
+                builder: (_) => SugarStockPage(
+                  api: widget.api,
+                  scope: widget.scope,
+                  synthetic: widget.synthetic,
+                  lotId: widget.lotId,
+                ),
+              ),
+            );
+            if (mounted) {
+              setState(
+                () => _data = widget.api.sugarStock(
+                  widget.scope,
+                  synthetic: widget.synthetic,
                 ),
               );
-              if (mounted) {
-                setState(
-                  () => _data = widget.api.sugarStock(
-                    widget.scope,
-                    synthetic: widget.synthetic,
-                  ),
-                );
-              }
-            },
-            child: const Text('Buka stok gula dan riwayat'),
+            }
+          },
+          label: const Text('Buka stok gula dan riwayat'),
+          icon: const Icon(Icons.arrow_forward, size: 18),
+          iconAlignment: IconAlignment.end,
+        ),
+      ],
+    ),
+  );
+}
+
+String _kg(Object? value) => value == null ? '—' : '${reportNumber(value)} kg';
+
+class _StockMetric extends StatelessWidget {
+  const _StockMetric(this.label, this.value);
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: niraGreen.withValues(alpha: .06),
+      borderRadius: BorderRadius.circular(niraRadius),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.all(NiraSpace.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: NiraSpace.xs,
+        children: [
+          Text(label, style: niraText(NiraType.caption, color: niraLeaf)),
+          NiraValue(
+            value,
+            label: label,
+            style: niraText(NiraType.title, weight: FontWeight.w700),
           ),
         ],
       ),
     ),
   );
 }
+
+class _StockHeading extends StatelessWidget {
+  const _StockHeading(this.title);
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    container: true,
+    headingLevel: 2,
+    child: Text(
+      title,
+      style: niraText(NiraType.section, weight: FontWeight.w700),
+    ),
+  );
+}
+
+class _StockAmount extends StatelessWidget {
+  const _StockAmount(this.label, this.value);
+
+  final String label;
+  final Object? value;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    spacing: NiraSpace.md,
+    children: [
+      Expanded(flex: 2, child: Text(label, style: niraText(NiraType.body))),
+      Expanded(
+        child: NiraValue(
+          _kg(value),
+          label: label,
+          alignment: Alignment.centerRight,
+          style: niraText(NiraType.body, weight: FontWeight.w700),
+        ),
+      ),
+    ],
+  );
+}
+
+String _stockDate(BuildContext context, Object? value) {
+  final date = value is String ? DateTime.tryParse(value)?.toLocal() : null;
+  if (date == null) return 'Waktu tidak tersedia';
+  final time = MaterialLocalizations.of(
+    context,
+  ).formatTimeOfDay(TimeOfDay.fromDateTime(date), alwaysUse24HourFormat: true);
+  return '${formatDate(date)} · $time';
+}
+
+String _movementLabel(Object? kind) => switch (kind) {
+  'opening' => 'Saldo awal',
+  'production' => 'Hasil produksi',
+  'correction' => 'Koreksi produksi',
+  'adjustment' => 'Penyesuaian stok',
+  'quality' => 'Perubahan kualitas',
+  'rework' => 'Masak ulang',
+  _ => 'Mutasi stok',
+};
 
 class SugarStockPage extends StatefulWidget {
   const SugarStockPage({
@@ -366,62 +503,125 @@ class _SugarStockState extends State<SugarStockPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: Text(
-        widget.reworkBatchId == null
-            ? 'Stok gula dan riwayat'
-            : 'Gula sumber rework',
-      ),
-      actions: [
-        IconButton(
-          onPressed: _busy ? null : () => setState(() => _data = _load()),
-          icon: const Icon(Icons.refresh),
-          tooltip: 'Muat ulang stok',
-        ),
-      ],
+  Widget build(BuildContext context) => NiraPageScaffold(
+    title: Text(
+      widget.reworkBatchId == null
+          ? 'Stok gula dan riwayat'
+          : 'Gula sumber rework',
     ),
+    actions: [
+      IconButton(
+        onPressed: _busy ? null : () => setState(() => _data = _load()),
+        icon: const Icon(Icons.refresh),
+        tooltip: 'Muat ulang stok',
+      ),
+    ],
     body: FutureBuilder<List<Json>>(
       future: _data,
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return Center(
             child: snapshot.hasError
-                ? TextButton(
-                    onPressed: () => setState(() => _data = _load()),
-                    child: Text(_errorText(snapshot.error!)),
+                ? Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: niraPageInset(context),
+                    ),
+                    child: SettingsLoadError(
+                      accessDenied: switch (snapshot.error) {
+                        ReviewApiError(status: 403) => true,
+                        _ => false,
+                      },
+                      message: _errorText(snapshot.error!),
+                      onRetry: () => setState(() => _data = _load()),
+                    ),
                   )
-                : const CircularProgressIndicator(),
+                : const NiraLoading(label: 'Memuat stok gula…'),
           );
         }
         final [state, history] = snapshot.requireData;
         final pending = widget.api.pendingInventory(widget.scope);
         final canEdit = _manage && !_busy && pending == null;
+        final active = state['active'] == true;
         final totals = state['totals'] as Json?;
+        final movements = (history['items'] as List).cast<Json>();
         final sources = (state['sources'] as List).cast<Json>().where(
           (s) => widget.lotId == null || s['originLotId'] == widget.lotId,
         );
         return ListView(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.fromLTRB(
+            niraPageInset(context),
+            NiraSpace.md,
+            niraPageInset(context),
+            NiraSpace.xl,
+          ),
           children: [
-            Text(widget.scope.factoryName),
-            Text(state['limitation'] as String),
-            Text('Aktif sejak: ${state['activatedAt'] ?? 'Belum aktif'}'),
-            if (totals != null) ...[
-              Text(
-                'Hasil produksi bruto sejak aktivasi: ${totals['grossWeightKg']} kg',
+            SettingsPanel(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                spacing: NiraSpace.md,
+                children: [
+                  SettingsInfoRow(
+                    icon: Icons.factory_outlined,
+                    title: widget.scope.factoryName,
+                    description: active
+                        ? 'Stok aktif sejak ${_stockDate(context, state['activatedAt'])}'
+                        : 'Saldo awal gula belum dicatat.',
+                  ),
+                  const Divider(height: 1, color: niraLine),
+                  Text(
+                    state['limitation'] as String,
+                    style: niraText(NiraType.body, color: niraLeaf),
+                  ),
+                ],
               ),
-              Text('Gula lama terpakai: ${totals['reusedWeightKg']} kg'),
-              Text(
-                'Tambahan bersih rework dan produksi: ${totals['netAdditionalKg']} kg',
+            ),
+            if (totals != null) ...[
+              const SizedBox(height: NiraSpace.lg),
+              const _StockHeading('Ringkasan sejak aktivasi'),
+              const SizedBox(height: NiraSpace.sm),
+              SettingsPanel(
+                child: Column(
+                  spacing: NiraSpace.md,
+                  children: [
+                    _StockAmount(
+                      'Hasil produksi bruto',
+                      totals['grossWeightKg'],
+                    ),
+                    _StockAmount(
+                      'Gula lama terpakai',
+                      totals['reusedWeightKg'],
+                    ),
+                    const Divider(height: 1, color: niraLine),
+                    _StockAmount('Tambahan bersih', totals['netAdditionalKg']),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Tambahan bersih berasal dari produksi dan rework.',
+                        style: niraText(NiraType.caption, color: niraLeaf),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
-            if (_error != null) Text(_error!),
-            if (pending != null) ...[
-              Text(
-                'Permintaan belum terkonfirmasi: ${(pending['body'] as Json)['requestId']}',
+            if (_error != null) ...[
+              const SizedBox(height: NiraSpace.lg),
+              SettingsMessage(
+                icon: Icons.info_outline,
+                message: _error!,
+                pending: true,
               ),
-              Text('Alasan: ${(pending['body'] as Json)['reason']}'),
+            ],
+            if (pending != null) ...[
+              const SizedBox(height: NiraSpace.lg),
+              SettingsMessage(
+                icon: Icons.schedule_outlined,
+                title: 'Permintaan belum terkonfirmasi',
+                message:
+                    '${(pending['body'] as Json)['reason']}\nID permintaan ${(pending['body'] as Json)['requestId']}',
+                pending: true,
+              ),
+              const SizedBox(height: NiraSpace.md),
               FilledButton(
                 onPressed: _busy
                     ? null
@@ -432,27 +632,40 @@ class _SugarStockState extends State<SugarStockPage> {
                 child: const Text('Coba lagi permintaan yang sama'),
               ),
             ],
-            if (state['active'] != true && canEdit)
-              FilledButton(
+            if (!active && canEdit) ...[
+              const SizedBox(height: NiraSpace.lg),
+              FilledButton.icon(
                 onPressed: () => _opening(state),
-                child: const Text('Catat saldo awal'),
+                icon: const Icon(Icons.add),
+                label: const Text('Catat saldo awal'),
               ),
-            for (final source in sources)
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
+            ],
+            if (active || sources.isNotEmpty) ...[
+              const SizedBox(height: NiraSpace.xl),
+              const _StockHeading('Sumber gula'),
+              const SizedBox(height: NiraSpace.sm),
+              if (sources.isEmpty)
+                const SettingsMessage(
+                  icon: Icons.inventory_2_outlined,
+                  message: 'Belum ada sumber gula untuk ditampilkan.',
+                ),
+              for (final source in sources) ...[
+                SettingsPanel(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    spacing: NiraSpace.md,
                     children: [
-                      Text(
-                        '${source['gradeCode']} · ${source['quality'] == 'good' ? 'Gula baik' : 'Gula gagal'}',
+                      SettingsInfoRow(
+                        icon: Icons.inventory_2_outlined,
+                        title:
+                            '${source['gradeCode']} · ${source['quality'] == 'good' ? 'Gula baik' : 'Gula gagal'}',
+                        description:
+                            'Asal: ${source['lotCode'] ?? source['originLotId'] ?? 'Belum diketahui (saldo awal)'}',
                       ),
-                      Text(
-                        'Saldo ${source['onHandKg']} kg · Dipesan ${source['reservedKg']} kg · Tersedia ${source['availableKg']} kg',
-                      ),
-                      Text(
-                        'Asal: ${source['lotCode'] ?? source['originLotId'] ?? 'Belum diketahui (saldo awal)'}',
-                      ),
+                      const Divider(height: 1, color: niraLine),
+                      _StockAmount('Tersedia', source['availableKg']),
+                      _StockAmount('Saldo', source['onHandKg']),
+                      _StockAmount('Dipesan', source['reservedKg']),
                       if (source['batchId'] != null)
                         TextButton(
                           onPressed: () => Navigator.of(context).push<void>(
@@ -468,7 +681,8 @@ class _SugarStockState extends State<SugarStockPage> {
                         ),
                       if (canEdit)
                         Wrap(
-                          spacing: 8,
+                          spacing: NiraSpace.sm,
+                          runSpacing: NiraSpace.sm,
                           children: [
                             if (widget.reworkBatchId != null)
                               TextButton(
@@ -493,39 +707,69 @@ class _SugarStockState extends State<SugarStockPage> {
                     ],
                   ),
                 ),
-              ),
-            const Text('Riwayat mutasi stok'),
-            for (final row in (history['items'] as List).cast<Json>())
-              ListTile(
-                title: Text(
-                  '${row['gradeCode']} · ${row['quantityDeltaKg']} kg · ${row['kind']}',
-                ),
-                subtitle: Text(
-                  '${row['reason']}\n${row['createdAt']} · ${row['actorId']}',
-                ),
-              ),
-            Row(
-              children: [
-                TextButton(
-                  onPressed: _offset == 0
-                      ? null
-                      : () => setState(() {
-                          _offset -= 20;
-                          _data = _load();
-                        }),
-                  child: const Text('Sebelumnya'),
-                ),
-                TextButton(
-                  onPressed: (history['items'] as List).length < 20
-                      ? null
-                      : () => setState(() {
-                          _offset += 20;
-                          _data = _load();
-                        }),
-                  child: const Text('Berikutnya'),
-                ),
+                const SizedBox(height: NiraSpace.md),
               ],
-            ),
+            ],
+            const SizedBox(height: NiraSpace.xl),
+            const _StockHeading('Riwayat mutasi stok'),
+            const SizedBox(height: NiraSpace.sm),
+            if (movements.isEmpty)
+              const SettingsMessage(
+                icon: Icons.history,
+                message: 'Belum ada mutasi stok untuk ditampilkan.',
+              ),
+            for (final row in movements) ...[
+              SettingsPanel(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  spacing: NiraSpace.sm,
+                  children: [
+                    _StockAmount(
+                      _movementLabel(row['kind']),
+                      row['quantityDeltaKg'],
+                    ),
+                    Text(
+                      'Grade ${row['gradeCode']} · ${_stockDate(context, row['createdAt'])}',
+                      style: niraText(NiraType.body, color: niraLeaf),
+                    ),
+                    Text(
+                      row['reason'] as String,
+                      style: niraText(NiraType.body),
+                    ),
+                    Text(
+                      'ID akun ${row['actorId']}',
+                      style: niraText(NiraType.caption, color: niraLeaf),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: NiraSpace.sm),
+            ],
+            if (_offset > 0 || movements.length >= 20)
+              Wrap(
+                spacing: NiraSpace.sm,
+                runSpacing: NiraSpace.sm,
+                children: [
+                  TextButton(
+                    onPressed: _offset == 0
+                        ? null
+                        : () => setState(() {
+                            _offset -= 20;
+                            _data = _load();
+                          }),
+                    child: const Text('Sebelumnya'),
+                  ),
+                  TextButton(
+                    onPressed: movements.length < 20
+                        ? null
+                        : () => setState(() {
+                            _offset += 20;
+                            _data = _load();
+                          }),
+                    child: const Text('Berikutnya'),
+                  ),
+                ],
+              ),
             if (_busy) const LinearProgressIndicator(),
           ],
         );

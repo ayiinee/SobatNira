@@ -198,10 +198,22 @@ class _ConnectedSettingsPageState extends State<ConnectedSettingsPage> {
         ]);
         final members = (data['memberships'] as List).cast<Json>();
         return [
-          OutlinedButton(
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(minimumSize: const Size(48, 48)),
             onPressed: _inviteAdmin,
-            child: const Text('Tambahkan admin'),
+            icon: const Icon(Icons.person_add_outlined, size: 20),
+            label: const Text('Tambahkan admin'),
           ),
+          const SizedBox(height: NiraSpace.xl),
+          Semantics(
+            container: true,
+            headingLevel: 2,
+            child: Text(
+              'Anggota pabrik',
+              style: niraText(NiraType.section, weight: FontWeight.w700),
+            ),
+          ),
+          const SizedBox(height: NiraSpace.md),
           if (members.isEmpty)
             const SettingsMessage(
               icon: Icons.people_outline,
@@ -221,41 +233,56 @@ class _ConnectedSettingsPageState extends State<ConnectedSettingsPage> {
                           'ID akun ${member['userId'] as String}',
                       status: _status(member['isActive'] as bool),
                     ),
-                    if (member['role'] == 'admin')
-                      TextButton(
-                        onPressed: () =>
-                            _setAdminActive(member, member['isActive'] != true),
-                        child: Text(
-                          member['isActive'] == true
-                              ? 'Nonaktifkan admin'
-                              : 'Aktifkan admin',
+                    if (member['role'] == 'admin') ...[
+                      const SizedBox(height: NiraSpace.sm),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 36 + NiraSpace.md),
+                        child: TextButton(
+                          style: TextButton.styleFrom(
+                            minimumSize: const Size(48, 44),
+                          ),
+                          onPressed: () => _setAdminActive(
+                            member,
+                            member['isActive'] != true,
+                          ),
+                          child: Text(
+                            member['isActive'] == true
+                                ? 'Nonaktifkan admin'
+                                : 'Aktifkan admin',
+                          ),
                         ),
                       ),
+                    ],
                   ],
                 ),
             ]),
         ];
       case SettingSection.facilities:
       case SettingSection.grades:
+        final facilities = widget.entry.section == SettingSection.facilities;
         return [
-          const SettingsMessage(
-            icon: Icons.history,
-            message: 'Master resmi per pabrik, dengan riwayat versi.',
+          SettingsMessage(
+            icon: facilities ? Icons.factory_outlined : Icons.category_outlined,
+            title: facilities ? 'Daftar wajan' : 'Daftar grade',
+            message: facilities
+                ? 'Lihat kapasitas, status aktif, dan riwayat perubahan wajan di pabrik ini.'
+                : 'Lihat kode, status aktif, dan riwayat perubahan grade di pabrik ini.',
           ),
-          FilledButton(
+          const SizedBox(height: NiraSpace.lg),
+          FilledButton.icon(
             onPressed: () => Navigator.of(context).push<void>(
               MaterialPageRoute(
                 builder: (_) => ProductionMastersPage(
                   api: api,
                   scope: scope,
                   synthetic: widget.synthetic,
-                  kind: widget.entry.section == SettingSection.facilities
-                      ? 'wok'
-                      : 'grade',
+                  kind: facilities ? 'wok' : 'grade',
                 ),
               ),
             ),
-            child: const Text('Kelola master produksi'),
+            icon: const Icon(Icons.arrow_forward, size: 18),
+            iconAlignment: IconAlignment.end,
+            label: const Text('Kelola master produksi'),
           ),
         ];
       case SettingSection.shifts:
@@ -406,7 +433,9 @@ class _ConnectedSettingsPageState extends State<ConnectedSettingsPage> {
   Widget build(BuildContext context) => FutureBuilder<List<Widget>>(
     future: _content,
     builder: (context, snapshot) {
-      final history = widget.entry.section == SettingSection.facilities;
+      final master =
+          widget.entry.section == SettingSection.facilities ||
+          widget.entry.section == SettingSection.grades;
       return SettingsPageFrame(
         title: widget.entry.title,
         keepTitleVisible: true,
@@ -414,8 +443,7 @@ class _ConnectedSettingsPageState extends State<ConnectedSettingsPage> {
             ? null
             : [
                 widget.scope.factoryName,
-                if (history) 'Semua tanggal',
-                if (history && widget.synthetic) 'Data sintetis',
+                if (master && widget.synthetic) 'Data sintetis',
               ].join(' · '),
         onNavigate: widget.onNavigate,
         children: [

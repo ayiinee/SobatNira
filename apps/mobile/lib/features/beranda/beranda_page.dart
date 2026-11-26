@@ -115,7 +115,12 @@ class _BerandaPageState extends State<BerandaPage> {
                 ),
               ),
               if (widget.stockSummary case final stock?)
-                SliverToBoxAdapter(child: stock),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: inset),
+                    child: stock,
+                  ),
+                ),
               if (widget.pager case final pager?)
                 SliverToBoxAdapter(child: LotPageFooter(pager)),
             ],
@@ -238,7 +243,12 @@ class _BerandaPageState extends State<BerandaPage> {
                                   index ==
                                       (showEmpty ? 1 : items.length) +
                                           (widget.pager == null ? 0 : 1)
-                                  ? widget.stockSummary!
+                                  ? Padding(
+                                      padding: const EdgeInsets.only(
+                                        top: NiraSpace.lg,
+                                      ),
+                                      child: widget.stockSummary!,
+                                    )
                                   : showEmpty
                                   ? (index == 0
                                         ? _emptyList()
